@@ -3,116 +3,230 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ScooterBoy Dubai</title>
+  <title>BARD - Storytelling Meme Coin on Solana</title>
 
-  <!-- Favicon (browser tab icon) – use relative path after uploading image -->
+  <!-- Favicon - uses your uploaded bard-creature.png -->
   <link rel="icon" type="image/png" href="bard-creature.png">
 
   <style>
     :root {
-      --bg: #0a0a23;
-      --text: white;
-      --accent: #ffd93d;
-      --header-bg: linear-gradient(to right, #ff6b6b, #ffd93d);
+      --bg: #d0c0ff;
+      --text: #2a0040;
+      --accent: #8a2be2;
+      --section-bg: rgba(200, 184, 255, 0.15);
+      --border: rgba(138, 43, 226, 0.2);
+      --link-bg: rgba(138, 43, 226, 0.12);
     }
+    [data-theme="dark"] {
+      --bg: #0a001f;
+      --text: #e0d0ff;
+      --accent: #c084fc;
+      --section-bg: rgba(30, 10, 60, 0.6);
+      --border: rgba(192, 132, 252, 0.3);
+      --link-bg: rgba(192, 132, 252, 0.15);
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
-      margin: 0;
-      font-family: Arial, sans-serif;
       background: var(--bg);
       color: var(--text);
+      font-family: system-ui, -apple-system, sans-serif;
       text-align: center;
-      min-height: 100vh;
-    }
-    header {
-      background: var(--header-bg);
-      padding: 100px 20px;
       position: relative;
+      min-height: 100vh;
+      transition: background 0.4s, color 0.4s;
     }
-    h1 {
-      font-size: 4em;
-      margin: 0;
-      color: #000;
-      text-shadow: 2px 2px #fff;
+    .hero {
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      position: relative;
+      overflow: hidden;
     }
-    .subtitle {
-      font-size: 1.8em;
-      margin: 20px 0;
+    .title {
+      font-size: clamp(4rem, 12vw, 8rem);
+      font-weight: 900;
+      letter-spacing: 0.5em;
+      text-transform: uppercase;
+      margin-bottom: 40px;
+      text-shadow: 0 0 40px rgba(138, 43, 226, 0.5);
+      opacity: 0.92;
     }
-    .logo {
-      max-width: 300px;
-      margin: 30px auto;
-      filter: drop-shadow(0 0 20px #ffd93d);
+    .creature {
+      max-width: 50vw;
+      max-height: 50vh;
+      filter: drop-shadow(0 20px 80px rgba(75, 0, 130, 0.7)) drop-shadow(0 0 50px rgba(138, 43, 226, 0.5));
+      animation: gentle-bob 16s infinite ease-in-out;
+    }
+    @keyframes gentle-bob {
+      0%, 100% { transform: translateY(0) scale(1); }
+      50% { transform: translateY(-25px) scale(1.02); }
+    }
+    nav {
+      position: absolute;
+      bottom: 60px;
+      z-index: 10;
+    }
+    nav a {
+      color: var(--text);
+      text-decoration: none;
+      font-size: 1.1rem;
+      margin: 0 15px;
+      letter-spacing: 0.1em;
+      opacity: 0.85;
+      transition: opacity 0.3s;
+    }
+    nav a:hover { opacity: 1; }
+    section {
+      padding: 80px 20px;
+      max-width: 900px;
+      margin: 0 auto;
+      background: var(--section-bg);
+      border-top: 1px solid var(--border);
+    }
+    h2 {
+      font-size: 2.5rem;
+      margin-bottom: 30px;
+      letter-spacing: 0.2em;
+      text-shadow: 0 0 20px var(--accent);
+    }
+    p, ul {
+      font-size: 1.1rem;
+      line-height: 1.6;
+      margin-bottom: 25px;
+      opacity: 0.9;
+    }
+    ul {
+      list-style-type: none;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 20px;
+    }
+    .meme-link {
+      display: inline-block;
+      padding: 14px 28px;
+      background: var(--link-bg);
+      border: 1px solid var(--accent);
+      border-radius: 50px;
+      color: var(--accent);
+      text-decoration: none;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      transition: all 0.4s ease;
+      box-shadow: 0 0 15px rgba(138, 43, 226, 0.3);
+      position: relative;
+      overflow: hidden;
+    }
+    .meme-link:hover {
+      background: rgba(138, 43, 226, 0.25);
+      box-shadow: 0 0 35px var(--accent);
+      transform: translateY(-3px) scale(1.05);
+      color: #fff;
+    }
+    footer {
+      padding: 40px 20px;
+      font-size: 0.9rem;
+      color: var(--text);
+      opacity: 0.7;
     }
     #theme-toggle {
       position: absolute;
-      top: 20px;
-      right: 20px;
-      background: rgba(0,0,0,0.4);
-      border: 2px solid var(--accent);
-      color: white;
-      padding: 10px 16px;
+      top: 25px;
+      right: 25px;
+      background: rgba(255,255,255,0.2);
+      border: 1px solid var(--accent);
+      color: var(--text);
+      padding: 10px 18px;
       border-radius: 50px;
       cursor: pointer;
-      font-size: 1.1rem;
+      font-size: 1rem;
+      transition: all 0.3s;
+      backdrop-filter: blur(8px);
+      z-index: 100;
     }
-    main, footer {
-      padding: 60px 20px;
-    }
-    footer {
-      background: #000;
-      font-size: 0.9em;
+    [data-theme="dark"] #theme-toggle {
+      background: rgba(0,0,0,0.3);
     }
   </style>
 </head>
 <body>
 
-  <header>
-    <h1>ScooterBoy</h1>
-    <p class="subtitle">Electric Vibes • Dubai Streets • @MHelapy</p>
+  <div class="hero">
+    <div class="title">BARD</div>
     
-    <!-- Your logo – will show once uploaded to repo -->
-    <img src="bard-creature.png" alt="ScooterBoy Logo" class="logo">
+    <!-- Your uploaded bard-creature.png (with safe fallback) -->
+    <img src="bard-creature.png" 
+         alt="Bard creature" 
+         class="creature"
+         onerror="this.src='https://pbs.twimg.com/profile_images/2023982637669556224/xP2xeTkY.jpg';">
 
+    <nav>
+      <a href="#home">HOME</a> •
+      <a href="#explore">EXPLORE</a> •
+      <a href="#create">CREATE</a> •
+      <a href="#about">ABOUT</a>
+    </nav>
+    
     <button id="theme-toggle">🌙 Dark Mode</button>
-  </header>
+  </div>
 
-  <main>
-    <h2>Welcome to the Ride</h2>
-    <p>Coming soon – epic scooter adventures in Dubai! Palm rides, desert drifts, Sheikh Zayed nights.</p>
-  </main>
+  <section id="home">
+    <h2>Welcome to BARD</h2>
+    <p>The storytelling meme coin on Solana. Pre-launch – no CA yet. Join the cosmic adventure!</p>
+  </section>
+
+  <section id="explore">
+    <h2>Explore the Universe</h2>
+    <p>Dive into our latest cosmic drops:</p>
+    <ul>
+      <li><a href="https://x.com/BardTokenSol/status/2024914384506814965" class="meme-link">Intro to BARD</a></li>
+      <li><a href="https://x.com/BardTokenSol/status/2025583555838202355" class="meme-link">Vesting Mechanics</a></li>
+      <li><a href="https://x.com/BardTokenSol/status/2025583700935860398" class="meme-link">Tokenomics Breakdown</a></li>
+    </ul>
+    <p>Follow @BardTokenSol for more memes, tales, and chaos.</p>
+  </section>
+
+  <section id="create">
+    <h2>Create Your Story</h2>
+    <p>BARD is about weaving wild tales in the Solana cosmos. Drop your memes or ideas on X – tag @BardTokenSol to join the legend!</p>
+    <p>Community-driven vibes: Airdrops, contests, and rewards on the horizon.</p>
+    <p><a href="https://x.com/i/communities/2024059681740587301" class="meme-link">Join the X Community Group</a></p>
+  </section>
+
+  <section id="about">
+    <h2>About BARD</h2>
+    <p>Bard likes stories. A community-driven meme coin on Solana, mixing epic narratives, dank memes, and crypto magic. Inspired by ancient bards, $BARD spins legendary tales in the blockchain realm.</p>
+    
+    <h3>Vesting Mechanics</h3>
+    <p>Locked for fairness: Team tokens – 6-month cliff + linear unlock over 12 months. Advisors follow suit. Community rewards unlock on milestones. No rug pulls here.</p>
+    
+    <h3>Tokenomics</h3>
+    <p>Total Supply: 1,000,000,000 $BARD. Liquidity Pool: 50%. Marketing & Community: 20%. Team (Vested): 10%. Burned: 10%. Airdrops & Rewards: 10%. Zero taxes, pure vibes.</p>
+  </section>
 
   <footer>
-    <p>© 2026 ScooterBoy • Dubai-born • Hosted on Cloudflare Pages</p>
+    © 2026 BARD • Dubai-born cosmic chaos • Hosted on Cloudflare Pages
   </footer>
 
   <script>
     const toggle = document.getElementById('theme-toggle');
     const html = document.documentElement;
-
-    function setTheme(isDark) {
-      if (isDark) {
-        html.style.backgroundColor = '#000';
-        html.style.color = '#e0e0e0';
-        toggle.textContent = '☀️ Light Mode';
-      } else {
-        html.style.backgroundColor = '#0a0a23';
-        html.style.color = 'white';
-        toggle.textContent = '🌙 Dark Mode';
-      }
-      localStorage.setItem('darkMode', isDark);
+    function setTheme(theme) {
+      html.setAttribute('data-theme', theme);
+      localStorage.setItem('theme', theme);
+      toggle.textContent = theme === 'dark' ? '☀️ Light Mode' : '🌙 Dark Mode';
     }
-
-    // Load preference
-    const saved = localStorage.getItem('darkMode');
-    if (saved === 'true' || (saved === null && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-      setTheme(true);
+    if (localStorage.getItem('theme')) {
+      setTheme(localStorage.getItem('theme'));
+    } else {
+      setTheme(window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
     }
-
     toggle.addEventListener('click', () => {
-      const isDark = html.style.backgroundColor === 'rgb(0, 0, 0)';
-      setTheme(!isDark);
+      const current = html.getAttribute('data-theme');
+      setTheme(current === 'dark' ? 'light' : 'dark');
     });
   </script>
-
 </body>
 </html>
