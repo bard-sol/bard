@@ -99,13 +99,6 @@
       margin-top: 20px;
     }
 
-    .countdown-title {
-      font-size: 1.8rem;
-      margin-bottom: 16px;
-      opacity: 0.9;
-      letter-spacing: 0.1em;
-    }
-
     .countdown {
       display: flex;
       justify-content: center;
@@ -118,7 +111,7 @@
     }
 
     .countdown-number {
-      font-size: 4.5rem;
+      font-size: 5rem;
       font-weight: 900;
       line-height: 1;
       color: var(--accent);
@@ -240,9 +233,8 @@
          class="creature"
          onerror="this.src='https://pbs.twimg.com/profile_images/2023982637669556224/xP2xeTkY.jpg';">
 
-    <!-- Countdown placed right under the image -->
+    <!-- Countdown placed directly under the image (no extra text) -->
     <div class="countdown-container">
-      <div class="countdown-title">Next Friday 11 PM</div>
       <div class="countdown">
         <div class="countdown-item">
           <div id="days" class="countdown-number">--</div>
@@ -333,10 +325,10 @@
       setTheme(current === 'dark' ? 'light' : 'dark');
     });
 
-    // Countdown to next Friday 11 PM Dubai time (UTC+4)
+    // Countdown to next Friday 11 PM Dubai time (UTC+4) — no extra text
     function updateCountdown() {
       const now = new Date();
-      const dubaiOffsetMs = 4 * 60 * 60 * 1000; // UTC+4
+      const dubaiOffsetMs = 4 * 60 * 60 * 1000;
       const utcNow = now.getTime() + now.getTimezoneOffset() * 60 * 1000;
       const dubaiNow = new Date(utcNow + dubaiOffsetMs);
 
