@@ -44,7 +44,7 @@
       flex-direction: column;
       justify-content: center;
       align-items: center;
-      gap: 40px;               /* consistent spacing between title and image */
+      gap: 40px;
       position: relative;
       overflow: hidden;
       padding: 20px;
@@ -57,7 +57,7 @@
       text-transform: uppercase;
       text-shadow: 0 0 40px rgba(138, 43, 226, 0.5);
       opacity: 0.92;
-      line-height: 0.9;        /* tighter line height for better visual balance */
+      line-height: 0.9;
     }
 
     .creature {
@@ -65,10 +65,18 @@
       max-height: 45vh;
       width: auto;
       height: auto;
-      object-fit: contain;     /* prevents stretching/distortion */
+      object-fit: contain;
       filter: drop-shadow(0 20px 80px rgba(75, 0, 130, 0.7)) 
               drop-shadow(0 0 50px rgba(138, 43, 226, 0.5));
       animation: gentle-bob 16s infinite ease-in-out;
+      cursor: grab;
+      user-select: none;
+      -webkit-user-drag: none;
+      touch-action: pan-y; /* improves touch behavior */
+    }
+
+    .creature:active {
+      cursor: grabbing;
     }
 
     @keyframes gentle-bob {
@@ -195,8 +203,6 @@
     <button id="theme-toggle">🌙 Dark Mode</button>
   </div>
 
-  <!-- The rest of your sections remain unchanged -->
-
   <section id="home">
     <h2>Welcome to BARD</h2>
     <p>The storytelling meme coin on Solana. Pre-launch – no CA yet. Join the cosmic adventure!</p>
@@ -236,6 +242,7 @@
   </footer>
 
   <script>
+    // Theme toggle
     const toggle = document.getElementById('theme-toggle');
     const html = document.documentElement;
     function setTheme(theme) {
@@ -252,6 +259,67 @@
       const current = html.getAttribute('data-theme');
       setTheme(current === 'dark' ? 'light' : 'dark');
     });
+
+    // Draggable creature (left/right only, snaps back on release)
+    const creature = document.querySelector('.creature');
+
+    if (creature) {
+      let isDragging = false;
+      let startX = 0;
+      let currentTranslate = 0;
+      let prevTranslate = 0;
+
+      creature.addEventListener('mousedown', startDrag);
+      creature.addEventListener('touchstart', startDrag, { passive: false });
+
+      document.addEventListener('mousemove', onDrag);
+      document.addEventListener('touchmove', onDrag, { passive: false });
+
+      document.addEventListener('mouseup', endDrag);
+      document.addEventListener('mouseleave', endDrag);
+      document.addEventListener('touchend', endDrag);
+      document.addEventListener('touchcancel', endDrag);
+
+      function startDrag(e) {
+        e.preventDefault();
+        isDragging = true;
+
+        if (e.type === 'touchstart') {
+          startX = e.touches[0].clientX;
+        } else {
+          startX = e.clientX;
+        }
+
+        creature.style.transition = 'none';
+      }
+
+      function onDrag(e) {
+        if (!isDragging) return;
+
+        let currentX;
+        if (e.type === 'touchmove') {
+          currentX = e.touches[0].clientX;
+        } else {
+          currentX = e.clientX;
+        }
+
+        currentTranslate = prevTranslate + (currentX - startX);
+
+        // Apply horizontal transform only
+        creature.style.transform = `translateX(${currentTranslate}px)`;
+      }
+
+      function endDrag() {
+        if (!isDragging) return;
+        isDragging = false;
+
+        // Snap back to center with smooth animation
+        creature.style.transition = 'transform 0.45s cubic-bezier(0.175, 0.885, 0.32, 1.275)';
+        creature.style.transform = 'translateX(0px)';
+
+        prevTranslate = 0;
+      }
+    }
   </script>
 </body>
 </html>
