@@ -16,6 +16,8 @@
       --section-bg: rgba(200, 184, 255, 0.15);
       --border: rgba(138, 43, 226, 0.2);
       --link-bg: rgba(138, 43, 226, 0.12);
+      --countdown-bg: rgba(0,0,0,0.4);
+      --countdown-text: #fff;
     }
     [data-theme="dark"] {
       --bg: #0a001f;
@@ -24,6 +26,8 @@
       --section-bg: rgba(30, 10, 60, 0.6);
       --border: rgba(192, 132, 252, 0.3);
       --link-bg: rgba(192, 132, 252, 0.15);
+      --countdown-bg: rgba(255,255,255,0.08);
+      --countdown-text: #e0d0ff;
     }
 
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -44,7 +48,7 @@
       flex-direction: column;
       justify-content: center;
       align-items: center;
-      gap: 40px;               /* consistent spacing between title and image */
+      gap: 30px;
       position: relative;
       overflow: hidden;
       padding: 20px;
@@ -57,7 +61,7 @@
       text-transform: uppercase;
       text-shadow: 0 0 40px rgba(138, 43, 226, 0.5);
       opacity: 0.92;
-      line-height: 0.9;        /* tighter line height for better visual balance */
+      line-height: 0.9;
     }
 
     .creature {
@@ -65,15 +69,66 @@
       max-height: 45vh;
       width: auto;
       height: auto;
-      object-fit: contain;     /* prevents stretching/distortion */
+      object-fit: contain;
       filter: drop-shadow(0 20px 80px rgba(75, 0, 130, 0.7)) 
               drop-shadow(0 0 50px rgba(138, 43, 226, 0.5));
       animation: gentle-bob 16s infinite ease-in-out;
+      cursor: grab;
+      user-select: none;
+      -webkit-user-drag: none;
+      touch-action: pan-y;
+      pointer-events: auto;
+    }
+
+    .creature:active, .creature.grabbing {
+      cursor: grabbing;
     }
 
     @keyframes gentle-bob {
       0%, 100% { transform: translateY(0) scale(1); }
       50%      { transform: translateY(-25px) scale(1.02); }
+    }
+
+    .countdown-container {
+      background: var(--countdown-bg);
+      padding: 20px 40px;
+      border-radius: 16px;
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(138, 43, 226, 0.3);
+      box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+      margin-top: 20px;
+    }
+
+    .countdown-title {
+      font-size: 1.8rem;
+      margin-bottom: 16px;
+      opacity: 0.9;
+      letter-spacing: 0.1em;
+    }
+
+    .countdown {
+      display: flex;
+      justify-content: center;
+      gap: 24px;
+      flex-wrap: wrap;
+    }
+
+    .countdown-item {
+      min-width: 90px;
+    }
+
+    .countdown-number {
+      font-size: 4.5rem;
+      font-weight: 900;
+      line-height: 1;
+      color: var(--accent);
+      text-shadow: 0 0 20px rgba(138, 43, 226, 0.5);
+    }
+
+    .countdown-label {
+      font-size: 1.1rem;
+      opacity: 0.8;
+      margin-top: 4px;
     }
 
     nav {
@@ -185,6 +240,29 @@
          class="creature"
          onerror="this.src='https://pbs.twimg.com/profile_images/2023982637669556224/xP2xeTkY.jpg';">
 
+    <!-- Countdown placed right under the image -->
+    <div class="countdown-container">
+      <div class="countdown-title">Next Friday 11 PM</div>
+      <div class="countdown">
+        <div class="countdown-item">
+          <div id="days" class="countdown-number">--</div>
+          <div class="countdown-label">days</div>
+        </div>
+        <div class="countdown-item">
+          <div id="hours" class="countdown-number">--</div>
+          <div class="countdown-label">hours</div>
+        </div>
+        <div class="countdown-item">
+          <div id="minutes" class="countdown-number">--</div>
+          <div class="countdown-label">minutes</div>
+        </div>
+        <div class="countdown-item">
+          <div id="seconds" class="countdown-number">--</div>
+          <div class="countdown-label">seconds</div>
+        </div>
+      </div>
+    </div>
+
     <nav>
       <a href="#home">HOME</a> •
       <a href="#explore">EXPLORE</a> •
@@ -194,8 +272,6 @@
 
     <button id="theme-toggle">🌙 Dark Mode</button>
   </div>
-
-  <!-- The rest of your sections remain unchanged -->
 
   <section id="home">
     <h2>Welcome to BARD</h2>
@@ -236,22 +312,58 @@
   </footer>
 
   <script>
+    // Theme toggle
     const toggle = document.getElementById('theme-toggle');
     const html = document.documentElement;
+
     function setTheme(theme) {
       html.setAttribute('data-theme', theme);
       localStorage.setItem('theme', theme);
       toggle.textContent = theme === 'dark' ? '☀️ Light Mode' : '🌙 Dark Mode';
     }
+
     if (localStorage.getItem('theme')) {
       setTheme(localStorage.getItem('theme'));
     } else {
       setTheme(window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
     }
+
     toggle.addEventListener('click', () => {
       const current = html.getAttribute('data-theme');
       setTheme(current === 'dark' ? 'light' : 'dark');
     });
+
+    // Countdown to next Friday 11 PM Dubai time (UTC+4)
+    function updateCountdown() {
+      const now = new Date();
+      const dubaiOffsetMs = 4 * 60 * 60 * 1000; // UTC+4
+      const utcNow = now.getTime() + now.getTimezoneOffset() * 60 * 1000;
+      const dubaiNow = new Date(utcNow + dubaiOffsetMs);
+
+      let daysUntilFriday = (5 - dubaiNow.getUTCDay() + 7) % 7;
+      if (daysUntilFriday === 0 && dubaiNow.getUTCHours() >= 23) {
+        daysUntilFriday = 7;
+      }
+
+      const target = new Date(utcNow + dubaiOffsetMs);
+      target.setUTCDate(target.getUTCDate() + daysUntilFriday);
+      target.setUTCHours(23, 0, 0, 0);
+
+      let diff = target - dubaiNow;
+
+      const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+      const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+      const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+      const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+
+      document.getElementById('days').textContent = String(days).padStart(2, '0');
+      document.getElementById('hours').textContent = String(hours).padStart(2, '0');
+      document.getElementById('minutes').textContent = String(minutes).padStart(2, '0');
+      document.getElementById('seconds').textContent = String(seconds).padStart(2, '0');
+    }
+
+    updateCountdown();
+    setInterval(updateCountdown, 1000);
   </script>
 </body>
 </html>
