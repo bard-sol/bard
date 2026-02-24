@@ -4,37 +4,115 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ScooterBoy Dubai</title>
+
+  <!-- Favicon (browser tab icon) – use relative path after uploading image -->
+  <link rel="icon" type="image/png" href="bard-creature.png">
+
   <style>
+    :root {
+      --bg: #0a0a23;
+      --text: white;
+      --accent: #ffd93d;
+      --header-bg: linear-gradient(to right, #ff6b6b, #ffd93d);
+    }
     body {
       margin: 0;
       font-family: Arial, sans-serif;
-      background-color: #0a0a23;
-      color: white;
+      background: var(--bg);
+      color: var(--text);
       text-align: center;
+      min-height: 100vh;
     }
     header {
-      background: linear-gradient(to right, #ff6b6b, #ffd93d);
-      padding: 80px 20px;
+      background: var(--header-bg);
+      padding: 100px 20px;
+      position: relative;
     }
     h1 {
-      font-size: 3.5em;
+      font-size: 4em;
       margin: 0;
+      color: #000;
+      text-shadow: 2px 2px #fff;
+    }
+    .subtitle {
+      font-size: 1.8em;
+      margin: 20px 0;
+    }
+    .logo {
+      max-width: 300px;
+      margin: 30px auto;
+      filter: drop-shadow(0 0 20px #ffd93d);
+    }
+    #theme-toggle {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      background: rgba(0,0,0,0.4);
+      border: 2px solid var(--accent);
+      color: white;
+      padding: 10px 16px;
+      border-radius: 50px;
+      cursor: pointer;
+      font-size: 1.1rem;
+    }
+    main, footer {
+      padding: 60px 20px;
+    }
+    footer {
+      background: #000;
+      font-size: 0.9em;
     }
   </style>
 </head>
 <body>
+
   <header>
     <h1>ScooterBoy</h1>
-    <p>Electric Vibes • Dubai Streets • @MHelapy</p>
+    <p class="subtitle">Electric Vibes • Dubai Streets • @MHelapy</p>
+    
+    <!-- Your logo – will show once uploaded to repo -->
+    <img src="bard-creature.png" alt="ScooterBoy Logo" class="logo">
+
+    <button id="theme-toggle">🌙 Dark Mode</button>
   </header>
 
   <main>
     <h2>Welcome to the Ride</h2>
-    <p>Coming soon – epic scooter adventures in Dubai!</p>
+    <p>Coming soon – epic scooter adventures in Dubai! Palm rides, desert drifts, Sheikh Zayed nights.</p>
   </main>
 
   <footer>
-    <p>© 2026 ScooterBoy</p>
+    <p>© 2026 ScooterBoy • Dubai-born • Hosted on Cloudflare Pages</p>
   </footer>
+
+  <script>
+    const toggle = document.getElementById('theme-toggle');
+    const html = document.documentElement;
+
+    function setTheme(isDark) {
+      if (isDark) {
+        html.style.backgroundColor = '#000';
+        html.style.color = '#e0e0e0';
+        toggle.textContent = '☀️ Light Mode';
+      } else {
+        html.style.backgroundColor = '#0a0a23';
+        html.style.color = 'white';
+        toggle.textContent = '🌙 Dark Mode';
+      }
+      localStorage.setItem('darkMode', isDark);
+    }
+
+    // Load preference
+    const saved = localStorage.getItem('darkMode');
+    if (saved === 'true' || (saved === null && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+      setTheme(true);
+    }
+
+    toggle.addEventListener('click', () => {
+      const isDark = html.style.backgroundColor === 'rgb(0, 0, 0)';
+      setTheme(!isDark);
+    });
+  </script>
+
 </body>
 </html>
