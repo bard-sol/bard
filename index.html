@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>BARD - Storytelling Meme Coin on Solana</title>
 
+  <!-- Favicon -->
   <link rel="icon" type="image/png" href="bard-creature.png">
 
   <style>
@@ -43,7 +44,7 @@
       flex-direction: column;
       justify-content: center;
       align-items: center;
-      gap: 40px;
+      gap: 40px;               /* consistent spacing between title and image */
       position: relative;
       overflow: hidden;
       padding: 20px;
@@ -56,7 +57,7 @@
       text-transform: uppercase;
       text-shadow: 0 0 40px rgba(138, 43, 226, 0.5);
       opacity: 0.92;
-      line-height: 0.9;
+      line-height: 0.9;        /* tighter line height for better visual balance */
     }
 
     .creature {
@@ -64,19 +65,10 @@
       max-height: 45vh;
       width: auto;
       height: auto;
-      object-fit: contain;
+      object-fit: contain;     /* prevents stretching/distortion */
       filter: drop-shadow(0 20px 80px rgba(75, 0, 130, 0.7)) 
               drop-shadow(0 0 50px rgba(138, 43, 226, 0.5));
       animation: gentle-bob 16s infinite ease-in-out;
-      cursor: grab;
-      user-select: none;
-      -webkit-user-drag: none;
-      touch-action: pan-y;
-      pointer-events: auto;
-    }
-
-    .creature:active, .creature.grabbing {
-      cursor: grabbing;
     }
 
     @keyframes gentle-bob {
@@ -84,7 +76,12 @@
       50%      { transform: translateY(-25px) scale(1.02); }
     }
 
-    nav { position: absolute; bottom: 60px; z-index: 10; }
+    nav {
+      position: absolute;
+      bottom: 60px;
+      z-index: 10;
+    }
+
     nav a {
       color: var(--text);
       text-decoration: none;
@@ -94,6 +91,7 @@
       opacity: 0.85;
       transition: opacity 0.3s;
     }
+
     nav a:hover { opacity: 1; }
 
     section {
@@ -104,9 +102,19 @@
       border-top: 1px solid var(--border);
     }
 
-    h2 { font-size: 2.5rem; margin-bottom: 30px; letter-spacing: 0.2em; text-shadow: 0 0 20px var(--accent); }
+    h2 {
+      font-size: 2.5rem;
+      margin-bottom: 30px;
+      letter-spacing: 0.2em;
+      text-shadow: 0 0 20px var(--accent);
+    }
 
-    p, ul { font-size: 1.1rem; line-height: 1.6; margin-bottom: 25px; opacity: 0.9; }
+    p, ul {
+      font-size: 1.1rem;
+      line-height: 1.6;
+      margin-bottom: 25px;
+      opacity: 0.9;
+    }
 
     ul {
       list-style-type: none;
@@ -187,88 +195,62 @@
     <button id="theme-toggle">🌙 Dark Mode</button>
   </div>
 
-  <!-- Your sections here (unchanged) -->
-  <section id="home">...</section>
-  <section id="explore">...</section>
-  <section id="create">...</section>
-  <section id="about">...</section>
+  <!-- The rest of your sections remain unchanged -->
+
+  <section id="home">
+    <h2>Welcome to BARD</h2>
+    <p>The storytelling meme coin on Solana. Pre-launch – no CA yet. Join the cosmic adventure!</p>
+  </section>
+
+  <section id="explore">
+    <h2>Explore the Universe</h2>
+    <p>Dive into our latest cosmic drops:</p>
+    <ul>
+      <li><a href="https://x.com/BardTokenSol/status/2024914384506814965" class="meme-link">Intro to BARD</a></li>
+      <li><a href="https://x.com/BardTokenSol/status/2025583555838202355" class="meme-link">Vesting Mechanics</a></li>
+      <li><a href="https://x.com/BardTokenSol/status/2025583700935860398" class="meme-link">Tokenomics Breakdown</a></li>
+    </ul>
+    <p>Follow @BardTokenSol for more memes, tales, and chaos.</p>
+  </section>
+
+  <section id="create">
+    <h2>Create Your Story</h2>
+    <p>BARD is about weaving wild tales in the Solana cosmos. Drop your memes or ideas on X – tag @BardTokenSol to join the legend!</p>
+    <p>Community-driven vibes: Airdrops, contests, and rewards on the horizon.</p>
+    <p><a href="https://x.com/i/communities/2024059681740587301" class="meme-link">Join the X Community Group</a></p>
+  </section>
+
+  <section id="about">
+    <h2>About BARD</h2>
+    <p>Bard likes stories. A community-driven meme coin on Solana, mixing epic narratives, dank memes, and crypto magic. Inspired by ancient bards, $BARD spins legendary tales in the blockchain realm.</p>
+    
+    <h3>Vesting Mechanics</h3>
+    <p>Locked for fairness: Team tokens – 6-month cliff + linear unlock over 12 months. Advisors follow suit. Community rewards unlock on milestones. No rug pulls here.</p>
+    
+    <h3>Tokenomics</h3>
+    <p>Total Supply: 1,000,000,000 $BARD. Liquidity Pool: 50%. Marketing & Community: 20%. Team (Vested): 10%. Burned: 10%. Airdrops & Rewards: 10%. Zero taxes, pure vibes.</p>
+  </section>
 
   <footer>
     © 2026 BARD • Dubai-born cosmic chaos • Hosted on Cloudflare Pages
   </footer>
 
   <script>
-    document.addEventListener('DOMContentLoaded', () => {
-      // Theme toggle (unchanged)
-      const toggle = document.getElementById('theme-toggle');
-      const html = document.documentElement;
-
-      function setTheme(theme) {
-        html.setAttribute('data-theme', theme);
-        localStorage.setItem('theme', theme);
-        toggle.textContent = theme === 'dark' ? '☀️ Light Mode' : '🌙 Dark Mode';
-      }
-
-      if (localStorage.getItem('theme')) {
-        setTheme(localStorage.getItem('theme'));
-      } else {
-        setTheme(window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
-      }
-
-      toggle.addEventListener('click', () => {
-        const current = html.getAttribute('data-theme');
-        setTheme(current === 'dark' ? 'light' : 'dark');
-      });
-
-      // Draggable creature
-      const creature = document.querySelector('.creature');
-
-      if (creature) {
-        let isDragging = false;
-        let startX = 0;
-        let currentTranslate = 0;
-        let prevTranslate = 0;
-
-        const startDrag = (e) => {
-          isDragging = true;
-          startX = e.type.includes('mouse') ? e.clientX : e.touches[0].clientX;
-          creature.style.transition = 'none';
-          creature.classList.add('grabbing');
-          e.preventDefault(); // prevent scroll/text select
-        };
-
-        const onDrag = (e) => {
-          if (!isDragging) return;
-          const currentX = e.type.includes('mouse') ? e.clientX : e.touches[0].clientX;
-          currentTranslate = prevTranslate + currentX - startX;
-          creature.style.transform = `translateX(${currentTranslate}px)`;
-        };
-
-        const endDrag = () => {
-          if (!isDragging) return;
-          isDragging = false;
-          creature.style.transition = 'transform 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275)';
-          creature.style.transform = 'translateX(0px)';
-          creature.classList.remove('grabbing');
-          prevTranslate = 0;
-        };
-
-        // Mouse events
-        creature.addEventListener('mousedown', startDrag);
-        document.addEventListener('mousemove', onDrag);
-        document.addEventListener('mouseup', endDrag);
-        document.addEventListener('mouseleave', endDrag);
-
-        // Touch events
-        creature.addEventListener('touchstart', startDrag, { passive: false });
-        document.addEventListener('touchmove', onDrag, { passive: false });
-        document.addEventListener('touchend', endDrag);
-        document.addEventListener('touchcancel', endDrag);
-
-        console.log('Draggable script attached to creature');
-      } else {
-        console.log('Creature element not found');
-      }
+    const toggle = document.getElementById('theme-toggle');
+    const html = document.documentElement;
+    function setTheme(theme) {
+      html.setAttribute('data-theme', theme);
+      localStorage.setItem('theme', theme);
+      toggle.textContent = theme === 'dark' ? '☀️ Light Mode' : '🌙 Dark Mode';
+    }
+    if (localStorage.getItem('theme')) {
+      setTheme(localStorage.getItem('theme'));
+    } else {
+      setTheme(window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    }
+    toggle.addEventListener('click', () => {
+      const current = html.getAttribute('data-theme');
+      setTheme(current === 'dark' ? 'light' : 'dark');
     });
   </script>
 </body>
