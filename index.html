@@ -277,39 +277,34 @@
       setTheme(current === 'dark' ? 'light' : 'dark');
     });
 
-    // FIXED COUNTDOWN - Next Friday 11:00 PM Dubai time (UTC+4)
-    function updateCountdown() {
-      const now = new Date();
-      const dubaiNow = new Date(now.getTime() + (4 * 60 * 60 * 1000) + (now.getTimezoneOffset() * 60 * 1000));
+    // Countdown: exactly 5 hours 15 minutes from page load / refresh
+    function startCountdown() {
+      const targetTime = Date.now() + (5 * 60 * 60 * 1000) + (15 * 60 * 1000);
 
-      let day = dubaiNow.getDay();           // 0 = Sun, 5 = Fri
-      let daysToAdd = 5 - day;
-      if (daysToAdd <= 0) daysToAdd += 7;    // if Friday or later → next Friday
+      function update() {
+        const now = Date.now();
+        let remaining = targetTime - now;
 
-      // If today is Friday and it's already past 11 PM, go to next Friday
-      if (day === 5 && dubaiNow.getHours() >= 23) {
-        daysToAdd = 7;
+        if (remaining <= 0) {
+          remaining = 0;
+        }
+
+        const days = Math.floor(remaining / (1000 * 60 * 60 * 24));
+        const hours = Math.floor((remaining % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+        const minutes = Math.floor((remaining % (1000 * 60 * 60)) / (1000 * 60));
+        const seconds = Math.floor((remaining % (1000 * 60)) / 1000);
+
+        document.getElementById('days').textContent = String(days).padStart(2, '0');
+        document.getElementById('hours').textContent = String(hours).padStart(2, '0');
+        document.getElementById('minutes').textContent = String(minutes).padStart(2, '0');
+        document.getElementById('seconds').textContent = String(seconds).padStart(2, '0');
       }
 
-      const target = new Date(dubaiNow);
-      target.setDate(target.getDate() + daysToAdd);
-      target.setHours(23, 0, 0, 0);
-
-      let diff = target - dubaiNow;
-
-      const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-      const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-      const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-      const seconds = Math.floor((diff % (1000 * 60)) / 1000);
-
-      document.getElementById('days').textContent = String(days).padStart(2, '0');
-      document.getElementById('hours').textContent = String(hours).padStart(2, '0');
-      document.getElementById('minutes').textContent = String(minutes).padStart(2, '0');
-      document.getElementById('seconds').textContent = String(seconds).padStart(2, '0');
+      update();
+      setInterval(update, 1000);
     }
 
-    updateCountdown();
-    setInterval(updateCountdown, 1000);
+    startCountdown();
   </script>
 </body>
 </html>
