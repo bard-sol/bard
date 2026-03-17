@@ -16,6 +16,22 @@
 <style>
   *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 
+  html, body {
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+  }
+
+  img {
+    -webkit-user-drag: none;
+    -khtml-user-drag: none;
+    -moz-user-drag: none;
+    -o-user-drag: none;
+    user-drag: none;
+    pointer-events: none;
+  }
+
   :root {
     --black: #000000;
     --purple-glow: #9b7fe8;
@@ -1046,12 +1062,17 @@
 <script>
   // Cursor
   const cursor = document.getElementById('cursor');
+  let mouseX = 0, mouseY = 0;
   document.addEventListener('mousemove', e => {
-    cursor.style.left = e.clientX + 'px';
-    cursor.style.top = e.clientY + 'px';
+    mouseX = e.clientX;
+    mouseY = e.clientY;
+    cursor.style.left = mouseX + 'px';
+    cursor.style.top = mouseY + 'px';
   });
   document.addEventListener('mouseleave', () => cursor.style.opacity = '0');
   document.addEventListener('mouseenter', () => cursor.style.opacity = '1');
+  document.addEventListener('mousedown', () => cursor.style.transform = 'translate(-50%, -50%) scale(1.8)');
+  document.addEventListener('mouseup', () => cursor.style.transform = 'translate(-50%, -50%) scale(1)');
 
   // Scroll fade-in
   const observer = new IntersectionObserver(entries => {
