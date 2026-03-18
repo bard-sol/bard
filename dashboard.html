@@ -620,42 +620,25 @@ async function connectX() {
     return;
   }
 
-  // Store wallet in localStorage so we can retrieve it after OAuth redirect
+  // Store wallet so worker can retrieve it via state param
   localStorage.setItem('bard_wallet', walletAddress);
 
-  // Supabase handles OAuth — this will redirect to X and back
-  const { error } = await db.auth.signInWithOAuth({
-    provider: 'twitter',
-    options: {
-      redirectTo: window.location.origin + '/dashboard.html?auth=callback'
-    }
-  });
-
-  if (error) {
-    console.error('X auth error:', error);
-    alert('X login failed. Please try again.');
-  }
+  // Redirect to Cloudflare Worker which handles X OAuth 2.0
+  window.location.href = `https://bard-auth.bardsoltoken.workers.dev/auth/x/start?wallet=${encodeURIComponent(walletAddress)}`;
 }
 
 // ─── HANDLE OAUTH CALLBACK ─────────────────────────────────────────────────
 async function handleAuthCallback() {
-  const { data: { session }, error } = await db.auth.getSession();
-  if (!session) return;
+  const params = new URLSearchParams(window.location.search);
+  const authStatus = params.get('auth');
+  const handle = params.get('handle');
+  const wallet = params.get('wallet');
 
-  const user = session.user;
-  xHandle = user.user_metadata?.preferred_username || user.user_metadata?.name || 'unknown';
-  walletAddress = localStorage.getItem('bard_wallet');
+  if (authStatus === 'success' && handle && wallet) {
+    walletAddress = wallet;
+    xHandle = handle;
 
-  if (walletAddress) {
     await refreshBalance(walletAddress);
-
-    await db.from('members').upsert({
-      wallet_address: walletAddress,
-      x_handle: '@' + xHandle,
-      x_id: user.id,
-      token_balance: tokenBalance,
-      last_seen: new Date().toISOString()
-    }, { onConflict: 'wallet_address' });
 
     stepsDone[1] = true;
     stepsDone[2] = true;
@@ -664,8 +647,13 @@ async function handleAuthCallback() {
     document.getElementById('s2').classList.add('done');
     document.getElementById('s2n').textContent = '✓';
 
-    // Auto-enter dashboard
-    setTimeout(() => enterDashboard(), 800);
+    // Clean URL and enter dashboard
+    window.history.replaceState({}, '', '/dashboard.html');
+    setTimeout(() => enterDashboard(), 600);
+
+  } else if (authStatus === 'error') {
+    alert('X login failed. Please try again.');
+    window.history.replaceState({}, '', '/dashboard.html');
   }
 }
 
@@ -738,7 +726,7 @@ setInterval(() => {
 // ─── INIT ──────────────────────────────────────────────────────────────────
 window.addEventListener('load', () => {
   const params = new URLSearchParams(window.location.search);
-  if (params.get('auth') === 'callback') handleAuthCallback();
+  handleAuthCallback();
 });
 </script>
 </body>
