@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>$BARD — Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=DM+Mono:wght@300;400&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { -webkit-user-select: none; user-select: none; height: 100%; }
+:root {
+  --bg: #080808; --surface: #0e0e0e; --surface2: #141414; --surface3: #1a1a1a;
+  --border: rgba(155,127,232,0.12); --border2: rgba(155,127,232,0.22);
+  --purple: #9b7fe8; --purple-dim: rgba(155,127,232,0.12);
+  --white: #fff; --w60: rgba(255,255,255,0.6); --w30: rgba(255,255,255,0.3); --w08: rgba(255,255,255,0.07);
+  --green: #4ade80; --red: #f87171; --sidebar: 220px;
+}
+body { background: var(--bg); color: var(--white); font-family: 'Outfit', sans-serif; display: flex; min-height: 100vh; cursor: none; }
+.cursor { position: fixed; width: 7px; height: 7px; background: var(--purple); border-radius: 50%; pointer-events: none; z-index: 9999; transform: translate(-50%,-50%); mix-blend-mode: screen; transition: transform 0.15s; }
+
+/* CONNECT SCREEN */
+.connect-screen { position: fixed; inset: 0; background: var(--bg); z-index: 200; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 2rem; }
+.connect-glow { position: absolute; width: 500px; height: 500px; background: radial-gradient(circle, rgba(107,70,193,0.1) 0%, transparent 70%); pointer-events: none; }
+.c-logo { display: flex; align-items: center; gap: 0.8rem; margin-bottom: 2.5rem; }
+.c-logo-text { font-size: 1.4rem; font-weight: 700; letter-spacing: 0.2em; }
+.c-title { font-size: 1.5rem; font-weight: 600; margin-bottom: 0.5rem; }
+.c-sub { font-family: 'DM Mono', monospace; font-size: 0.72rem; color: var(--w30); text-align: center; margin-bottom: 2rem; line-height: 1.8; letter-spacing: 0.05em; }
+.c-steps { display: flex; flex-direction: column; gap: 0.7rem; width: 100%; max-width: 340px; margin-bottom: 1.5rem; }
+.c-step { display: flex; align-items: center; gap: 0.9rem; padding: 0.9rem 1.1rem; background: var(--surface); border: 1px solid var(--border); cursor: pointer; transition: all 0.2s; }
+.c-step:hover { border-color: var(--purple); background: var(--purple-dim); }
+.c-step.done { border-color: rgba(74,222,128,0.3); }
+.c-step-num { width: 22px; height: 22px; border-radius: 50%; background: var(--purple-dim); border: 1px solid var(--border2); display: flex; align-items: center; justify-content: center; font-family: 'DM Mono', monospace; font-size: 0.62rem; color: var(--purple); flex-shrink: 0; }
+.c-step.done .c-step-num { background: rgba(74,222,128,0.1); border-color: rgba(74,222,128,0.3); color: var(--green); }
+.c-step-label { font-size: 0.83rem; font-weight: 500; }
+.c-step-sub { font-family: 'DM Mono', monospace; font-size: 0.6rem; color: var(--w30); margin-top: 0.1rem; }
+.c-btn { width: 100%; max-width: 340px; padding: 0.9rem; background: var(--purple); color: #000; border: none; font-family: 'Outfit', sans-serif; font-size: 0.82rem; font-weight: 600; letter-spacing: 0.08em; cursor: pointer; transition: all 0.2s; text-transform: uppercase; margin-bottom: 2rem; }
+.c-btn:hover { background: var(--white); }
+.tier-table { width: 100%; max-width: 340px; }
+.tier-row { display: flex; justify-content: space-between; padding: 0.55rem 0; border-bottom: 1px solid rgba(155,127,232,0.06); font-family: 'DM Mono', monospace; font-size: 0.62rem; }
+.tier-row:last-child { border-bottom: none; }
+
+/* SIDEBAR */
+.sidebar { width: var(--sidebar); min-height: 100vh; background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; position: fixed; top: 0; left: 0; bottom: 0; z-index: 50; }
+.sb-logo { padding: 1.5rem 1.3rem 1.1rem; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 0.65rem; }
+.sb-logo-text { font-size: 1.05rem; font-weight: 700; letter-spacing: 0.15em; }
+.sb-wallet { padding: 0.9rem 1.3rem; border-bottom: 1px solid var(--border); }
+.sb-tier { display: inline-flex; align-items: center; gap: 0.35rem; font-family: 'DM Mono', monospace; font-size: 0.58rem; letter-spacing: 0.18em; text-transform: uppercase; color: var(--purple); background: var(--purple-dim); padding: 0.2rem 0.55rem; margin-bottom: 0.55rem; }
+.sb-addr { font-family: 'DM Mono', monospace; font-size: 0.65rem; color: var(--w30); margin-bottom: 0.25rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sb-bal { font-size: 0.95rem; font-weight: 600; }
+.sb-bal span { font-family: 'DM Mono', monospace; font-size: 0.62rem; color: var(--w30); margin-left: 0.25rem; font-weight: 400; }
+.sb-x { display: flex; align-items: center; gap: 0.35rem; margin-top: 0.45rem; font-family: 'DM Mono', monospace; font-size: 0.62rem; color: var(--w30); }
+.x-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--green); flex-shrink: 0; animation: blink 2s ease-in-out infinite; }
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+.sb-nav { flex: 1; padding: 0.8rem 0; overflow-y: auto; }
+.nav-lbl { font-family: 'DM Mono', monospace; font-size: 0.52rem; letter-spacing: 0.3em; color: rgba(255,255,255,0.18); text-transform: uppercase; padding: 0.7rem 1.3rem 0.35rem; }
+.nav-item { display: flex; align-items: center; gap: 0.65rem; padding: 0.6rem 1.3rem; cursor: pointer; transition: all 0.18s; border-left: 2px solid transparent; font-size: 0.82rem; font-weight: 400; color: var(--w60); }
+.nav-item:hover { color: var(--white); background: var(--w08); }
+.nav-item.active { color: var(--purple); border-left-color: var(--purple); background: var(--purple-dim); font-weight: 500; }
+.nav-icon { width: 15px; height: 15px; opacity: 0.65; flex-shrink: 0; }
+.nav-item.active .nav-icon { opacity: 1; }
+.nav-badge { margin-left: auto; background: var(--purple); color: #000; font-family: 'DM Mono', monospace; font-size: 0.52rem; font-weight: 700; padding: 0.12rem 0.38rem; border-radius: 20px; }
+.sb-bottom { padding: 0.9rem 1.3rem; border-top: 1px solid var(--border); }
+.disc-btn { width: 100%; background: transparent; border: 1px solid var(--border2); color: var(--w30); font-family: 'DM Mono', monospace; font-size: 0.62rem; letter-spacing: 0.15em; text-transform: uppercase; padding: 0.55rem; cursor: pointer; transition: all 0.2s; }
+.disc-btn:hover { border-color: var(--red); color: var(--red); }
+
+/* MAIN */
+.main { margin-left: var(--sidebar); flex: 1; min-height: 100vh; display: flex; flex-direction: column; }
+.topbar { padding: 1.1rem 1.8rem; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; background: var(--surface); position: sticky; top: 0; z-index: 40; }
+.topbar-title { font-size: 0.9rem; font-weight: 600; }
+.topbar-meta { font-family: 'DM Mono', monospace; font-size: 0.62rem; color: var(--w30); margin-top: 0.1rem; }
+.live-pill { display: flex; align-items: center; gap: 0.35rem; font-family: 'DM Mono', monospace; font-size: 0.6rem; color: var(--green); }
+.live-pill::before { content:''; width:5px; height:5px; border-radius:50%; background:var(--green); animation: blink 2s ease-in-out infinite; }
+
+/* PAGES */
+.page { display: none; padding: 1.8rem; animation: fadeIn 0.25s ease; }
+.page.active { display: block; }
+@keyframes fadeIn { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
+
+/* STATS GRID */
+.stats-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 1px; background: var(--border); border: 1px solid var(--border); margin-bottom: 1.8rem; }
+.stat-card { background: var(--surface); padding: 1.3rem 1.5rem; transition: background 0.18s; }
+.stat-card:hover { background: var(--surface2); }
+.stat-lbl { font-family: 'DM Mono', monospace; font-size: 0.58rem; letter-spacing: 0.22em; color: var(--w30); text-transform: uppercase; margin-bottom: 0.55rem; }
+.stat-val { font-size: 1.4rem; font-weight: 600; line-height: 1; margin-bottom: 0.28rem; }
+.stat-sub { font-family: 'DM Mono', monospace; font-size: 0.6rem; color: var(--w30); }
+.stat-val.p { color: var(--purple); } .stat-val.g { color: var(--green); } .stat-val.r { color: var(--red); }
+
+/* CARDS */
+.card { background: var(--surface); border: 1px solid var(--border); padding: 1.4rem; margin-bottom: 0.9rem; }
+.card-sm { background: var(--surface); border: 1px solid var(--border); padding: 1.1rem 1.3rem; }
+.sec-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.1rem; }
+.sec-title { font-size: 0.75rem; font-weight: 600; letter-spacing: 0.06em; color: var(--w60); text-transform: uppercase; }
+.sec-action { font-family: 'DM Mono', monospace; font-size: 0.6rem; color: var(--purple); letter-spacing: 0.1em; cursor: pointer; background: none; border: none; text-transform: uppercase; }
+
+/* TABLE */
+.dt { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+.dt th { font-family: 'DM Mono', monospace; font-size: 0.56rem; letter-spacing: 0.2em; color: var(--w30); text-transform: uppercase; padding: 0.65rem 0.9rem; text-align: left; border-bottom: 1px solid var(--border); font-weight: 400; }
+.dt td { padding: 0.8rem 0.9rem; border-bottom: 1px solid rgba(155,127,232,0.05); vertical-align: middle; }
+.dt tr:last-child td { border-bottom: none; }
+.dt tr:hover td { background: var(--w08); }
+
+/* BADGES */
+.badge { display: inline-block; font-family: 'DM Mono', monospace; font-size: 0.56rem; letter-spacing: 0.15em; text-transform: uppercase; padding: 0.18rem 0.5rem; border-radius: 2px; }
+.bp { background: var(--purple-dim); color: var(--purple); }
+.bg { background: rgba(74,222,128,0.1); color: var(--green); }
+.br { background: rgba(248,113,113,0.1); color: var(--red); }
+.bw { background: var(--w08); color: var(--w30); }
+
+/* MISC */
+.rank { font-family: 'DM Mono', monospace; font-size: 0.72rem; color: var(--w30); min-width: 22px; }
+.rank.gold { color: #f59e0b; } .rank.silver { color: #94a3b8; } .rank.bronze { color: #b45309; }
+.avatar { width: 28px; height: 28px; border-radius: 50%; background: var(--purple-dim); border: 1px solid var(--border2); display: flex; align-items: center; justify-content: center; font-size: 0.6rem; font-weight: 600; color: var(--purple); flex-shrink: 0; }
+.bar-wrap { height: 3px; background: rgba(255,255,255,0.05); border-radius: 2px; overflow: hidden; }
+.bar { height: 100%; background: var(--purple); border-radius: 2px; }
+.mono { font-family: 'DM Mono', monospace; }
+
+/* OVERVIEW 2-col */
+.ov-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem; }
+.mini-lb { display: flex; align-items: center; gap: 0.7rem; padding: 0.65rem 0; border-bottom: 1px solid rgba(155,127,232,0.05); }
+.mini-lb:last-child { border-bottom: none; }
+.mini-pts { margin-left: auto; font-family: 'DM Mono', monospace; font-size: 0.7rem; color: var(--purple); }
+.vp-bar { background: var(--surface); border: 1px solid var(--border); padding: 1rem 1.3rem; display: flex; align-items: center; gap: 1.2rem; }
+.vp-lbl { font-family: 'DM Mono', monospace; font-size: 0.58rem; letter-spacing: 0.18em; color: var(--w30); text-transform: uppercase; flex-shrink: 0; }
+.vp-track { flex: 1; height: 3px; background: rgba(255,255,255,0.05); border-radius: 2px; overflow: hidden; }
+.vp-fill { height: 100%; background: var(--purple); }
+.vp-val { font-family: 'DM Mono', monospace; font-size: 0.72rem; color: var(--purple); flex-shrink: 0; }
+
+/* STAKING */
+.stake-panel { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--border); border: 1px solid var(--border); margin-bottom: 1.8rem; }
+.stake-side { background: var(--surface); padding: 1.6rem; }
+.stake-lbl { font-family: 'DM Mono', monospace; font-size: 0.58rem; letter-spacing: 0.22em; color: var(--w30); text-transform: uppercase; margin-bottom: 1rem; }
+.apy-wrap { display: flex; align-items: baseline; gap: 0.4rem; margin-bottom: 1.3rem; }
+.apy-val { font-size: 2.3rem; font-weight: 700; color: var(--green); line-height: 1; }
+.apy-lbl { font-family: 'DM Mono', monospace; font-size: 0.62rem; color: var(--w30); }
+.inp-wrap { display: flex; align-items: center; border: 1px solid var(--border2); margin-bottom: 0.6rem; transition: border-color 0.2s; }
+.inp-wrap:focus-within { border-color: var(--purple); }
+.inp { flex: 1; background: transparent; border: none; outline: none; padding: 0.7rem 0.9rem; color: var(--white); font-family: 'DM Mono', monospace; font-size: 0.88rem; cursor: text; }
+.inp::placeholder { color: var(--w30); }
+.inp-max { font-family: 'DM Mono', monospace; font-size: 0.58rem; color: var(--purple); padding: 0 0.9rem; cursor: pointer; background: none; border: none; text-transform: uppercase; }
+.stake-btn { width: 100%; padding: 0.75rem; background: var(--purple); color: #000; border: none; font-family: 'Outfit', sans-serif; font-size: 0.8rem; font-weight: 600; letter-spacing: 0.08em; cursor: pointer; transition: all 0.2s; text-transform: uppercase; }
+.stake-btn:hover { background: var(--white); }
+.stake-btn.out { background: transparent; color: var(--w60); border: 1px solid var(--border2); }
+.stake-btn.out:hover { border-color: var(--red); color: var(--red); background: transparent; }
+
+/* VOTING */
+.vote-card { background: var(--surface); border: 1px solid var(--border); padding: 1.3rem 1.5rem; margin-bottom: 1px; transition: background 0.18s; }
+.vote-card:hover { background: var(--surface2); }
+.vote-title { font-size: 0.88rem; font-weight: 500; margin-bottom: 0.35rem; }
+.vote-meta { font-family: 'DM Mono', monospace; font-size: 0.6rem; color: var(--w30); margin-bottom: 0.9rem; }
+.vote-bar-wrap { height: 3px; background: rgba(255,255,255,0.05); border-radius: 2px; overflow: hidden; margin-bottom: 0.4rem; }
+.vote-bar-yes { height: 100%; background: var(--green); }
+.vote-stats { display: flex; justify-content: space-between; font-family: 'DM Mono', monospace; font-size: 0.6rem; color: var(--w30); margin-bottom: 0.9rem; }
+.vote-acts { display: flex; gap: 0.5rem; }
+.vbtn { flex: 1; padding: 0.5rem; border: 1px solid var(--border2); background: transparent; color: var(--w60); font-family: 'Outfit', sans-serif; font-size: 0.76rem; font-weight: 500; cursor: pointer; transition: all 0.18s; }
+.vbtn.yes:hover { border-color: var(--green); color: var(--green); background: rgba(74,222,128,0.05); }
+.vbtn.no:hover { border-color: var(--red); color: var(--red); background: rgba(248,113,113,0.05); }
+
+/* TREASURY */
+.trow { display: grid; grid-template-columns: 1.6fr 1fr 1fr 1fr 130px; align-items: center; padding: 0.9rem 1.1rem; border-bottom: 1px solid rgba(155,127,232,0.05); transition: background 0.15s; }
+.trow:hover { background: var(--w08); }
+.trow.hdr { font-family: 'DM Mono', monospace; font-size: 0.55rem; letter-spacing: 0.2em; color: var(--w30); text-transform: uppercase; padding: 0.55rem 1.1rem; border-bottom: 1px solid var(--border); }
+.trow.hdr:hover { background: transparent; }
+.tname { font-size: 0.82rem; font-weight: 500; }
+.tmono { font-family: 'DM Mono', monospace; font-size: 0.72rem; }
+
+/* BURN */
+.burn-box { text-align: center; padding: 1.8rem; border: 1px solid var(--border); background: var(--surface); margin-bottom: 1.2rem; }
+.burn-num { font-size: 2.8rem; font-weight: 700; color: var(--red); line-height: 1; margin-bottom: 0.35rem; letter-spacing: -0.02em; }
+.burn-lbl { font-family: 'DM Mono', monospace; font-size: 0.62rem; color: var(--w30); letter-spacing: 0.2em; text-transform: uppercase; }
+
+/* CLAIMS */
+.claim-card { background: var(--surface); border: 1px solid var(--border); padding: 1.4rem; margin-bottom: 1px; transition: background 0.18s; }
+.claim-card:hover { background: var(--surface2); }
+
+/* MODAL */
+.modal-ov { position: fixed; inset: 0; background: rgba(0,0,0,0.88); z-index: 300; display: none; align-items: center; justify-content: center; padding: 2rem; }
+.modal-ov.open { display: flex; }
+.modal { background: var(--surface); border: 1px solid var(--border2); width: 100%; max-width: 540px; max-height: 80vh; overflow-y: auto; animation: fadeIn 0.2s ease; }
+.modal-hdr { display: flex; align-items: center; justify-content: space-between; padding: 1.1rem 1.4rem; border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--surface); }
+.modal-title { font-size: 0.88rem; font-weight: 600; }
+.modal-close { background: none; border: none; color: var(--w30); cursor: pointer; font-size: 1.1rem; line-height: 1; }
+.modal-close:hover { color: var(--white); }
+.modal-body { padding: 1.2rem 1.4rem; }
+.pts-bk { background: var(--surface2); border: 1px solid var(--border); padding: 0.9rem 1.1rem; margin-bottom: 1rem; }
+.pts-row { display: flex; justify-content: space-between; align-items: center; padding: 0.45rem 0; border-bottom: 1px solid rgba(155,127,232,0.05); font-family: 'DM Mono', monospace; font-size: 0.68rem; }
+.pts-row:last-child { border-bottom: none; }
+.shill-item { padding: 0.85rem 0; border-bottom: 1px solid rgba(155,127,232,0.05); }
+.shill-item:last-child { border-bottom: none; }
+.shill-txt { font-size: 0.8rem; color: var(--w60); line-height: 1.5; margin-bottom: 0.45rem; }
+.shill-stats { display: flex; gap: 0.9rem; font-family: 'DM Mono', monospace; font-size: 0.58rem; color: var(--w30); }
+.shill-pts { color: var(--purple); margin-left: auto; }
+
+select { background: var(--surface2); border: 1px solid var(--border2); color: var(--white); padding: 0.7rem 0.8rem; font-family: 'Outfit', sans-serif; font-size: 0.8rem; outline: none; cursor: pointer; width: 100%; }
+textarea { width: 100%; background: var(--surface2); border: 1px solid var(--border2); color: var(--white); padding: 0.75rem 0.9rem; font-family: 'DM Mono', monospace; font-size: 0.72rem; resize: vertical; min-height: 75px; outline: none; line-height: 1.6; }
+</style>
+</head>
+<body>
+<div class="cursor" id="cursor"></div>
+
+<!-- CONNECT -->
+<div class="connect-screen" id="cs">
+  <div class="connect-glow"></div>
+  <div class="c-logo">
+    <svg width="30" height="18" viewBox="0 0 30 18" fill="none"><path d="M2 2 Q15 16 28 2" stroke="#9b7fe8" stroke-width="2.5" fill="none" stroke-linecap="round"/></svg>
+    <span class="c-logo-text">$BARD</span>
+  </div>
+  <h1 class="c-title">Enter the Dashboard</h1>
+  <p class="c-sub">Connect your wallet and link your X account<br>to access the Bard member area.</p>
+  <div class="c-steps">
+    <div class="c-step" id="s1" onclick="doStep(1)">
+      <div class="c-step-num" id="s1n">1</div>
+      <div><div class="c-step-label">Connect Wallet</div><div class="c-step-sub">Phantom · Trust · Solflare</div></div>
+    </div>
+    <div class="c-step" id="s2" onclick="doStep(2)">
+      <div class="c-step-num" id="s2n">2</div>
+      <div><div class="c-step-label">Link X Account</div><div class="c-step-sub">Authorize via OAuth</div></div>
+    </div>
+  </div>
+  <button class="c-btn" onclick="enter()">Enter Dashboard</button>
+  <div class="mono" style="font-size:0.65rem;color:var(--w30);text-align:center;line-height:1.8;letter-spacing:0.05em">Hold at least 1 $BARD for full access.<br>All features available to every holder.</div>
+</div>
+
+<!-- MODAL -->
+<div class="modal-ov" id="mo">
+  <div class="modal">
+    <div class="modal-hdr">
+      <div><div class="modal-title" id="mu">@cryptobard_</div><div class="mono" style="font-size:0.6rem;color:var(--w30);margin-top:0.15rem;">March 2025 · 4,820 pts total</div></div>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="pts-bk">
+        <div class="pts-row"><span style="color:var(--w30)">X Posts & Engagement</span><span style="color:var(--green)">+3,240 pts</span></div>
+        <div class="pts-row"><span style="color:var(--w30)">Token Buys (4.2 SOL)</span><span style="color:var(--green)">+1,680 pts</span></div>
+        <div class="pts-row"><span style="color:var(--w30)">Token Sells (0.25 SOL)</span><span style="color:var(--red)">−100 pts</span></div>
+        <div class="pts-row" style="font-weight:600"><span style="color:var(--w60)">Total</span><span style="color:var(--purple)">4,820 pts</span></div>
+      </div>
+      <div class="mono" style="font-size:0.58rem;letter-spacing:0.2em;color:var(--w30);text-transform:uppercase;margin-bottom:0.7rem;">This Month's Shills</div>
+      <div class="shill-item">
+        <div class="shill-txt">"$BARD is the only project that actually makes sense to me right now. The smile is already in my head rent free."</div>
+        <div class="shill-stats"><span>847 likes</span><span>312 RTs</span><span>2.1M reach</span><span class="shill-pts">+480 pts</span></div>
+      </div>
+      <div class="shill-item">
+        <div class="shill-txt">"Been in crypto 4 years. $BARD is the first meme project with an actual mechanism. DYOR but this one's different."</div>
+        <div class="shill-stats"><span>523 likes</span><span>198 RTs</span><span>1.4M reach</span><span class="shill-pts">+310 pts</span></div>
+      </div>
+      <div class="shill-item">
+        <div class="shill-txt">"The Elon pool has been sitting unclaimed for 3 weeks. Someone's going to be very rich soon. $BARD"</div>
+        <div class="shill-stats"><span>291 likes</span><span>87 RTs</span><span>780K reach</span><span class="shill-pts">+175 pts</span></div>
+      </div>
+      <div style="text-align:center;padding-top:1rem;"><button class="sec-action" style="font-size:0.65rem;">Challenge a Point Allocation ↗</button></div>
+    </div>
+  </div>
+</div>
+
+<!-- DASHBOARD -->
+<div id="app" style="display:none;width:100%;">
+
+<aside class="sidebar">
+  <div class="sb-logo">
+    <svg width="26" height="16" viewBox="0 0 26 16" fill="none"><path d="M1 1 Q13 15 25 1" stroke="#9b7fe8" stroke-width="2" fill="none" stroke-linecap="round"/></svg>
+    <span class="sb-logo-text">$BARD</span>
+  </div>
+  <div class="sb-wallet">
+    <div class="sb-tier">● Holder</div>
+    <div class="sb-addr">7xKp...3mNq</div>
+    <div class="sb-bal">2,450,000 <span>$BARD</span></div>
+    <div class="sb-x"><div class="x-dot"></div>@your_handle</div>
+  </div>
+  <nav class="sb-nav">
+    <div class="nav-lbl">Main</div>
+    <div class="nav-item active" onclick="go('overview',this)">
+      <svg class="nav-icon" viewBox="0 0 16 16" fill="none"><rect x="1" y="1" width="6" height="6" rx="1" stroke="currentColor" stroke-width="1.2"/><rect x="9" y="1" width="6" height="6" rx="1" stroke="currentColor" stroke-width="1.2"/><rect x="1" y="9" width="6" height="6" rx="1" stroke="currentColor" stroke-width="1.2"/><rect x="9" y="9" width="6" height="6" rx="1" stroke="currentColor" stroke-width="1.2"/></svg>
+      Overview
+    </div>
+    <div class="nav-item" onclick="go('leaderboard',this)">
+      <svg class="nav-icon" viewBox="0 0 16 16" fill="none"><path d="M8 1l1.5 4.5H14l-3.5 2.5 1.5 4.5L8 10l-4 2.5 1.5-4.5L2 5.5h4.5z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg>
+      Leaderboard <span class="nav-badge">LIVE</span>
+    </div>
+    <div class="nav-item" onclick="go('pools',this)">
+      <svg class="nav-icon" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.2"/><path d="M8 4v4l3 2" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+      Pools
+    </div>
+    <div class="nav-lbl">Member</div>
+    <div class="nav-item" onclick="go('staking',this)">
+      <svg class="nav-icon" viewBox="0 0 16 16" fill="none"><path d="M2 12l4-8 3 5 2-3 3 6" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      Staking
+    </div>
+    <div class="nav-item" onclick="go('voting',this)">
+      <svg class="nav-icon" viewBox="0 0 16 16" fill="none"><rect x="1" y="3" width="14" height="10" rx="1" stroke="currentColor" stroke-width="1.2"/><path d="M5 8l2 2 4-4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      Voting <span class="nav-badge">3</span>
+    </div>
+    <div class="nav-item" onclick="go('claims',this)">
+      <svg class="nav-icon" viewBox="0 0 16 16" fill="none"><path d="M8 1v9M4 6l4 4 4-4M2 12h12" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      Claims <span class="nav-badge">1</span>
+    </div>
+    <div class="nav-item" onclick="go('treasury',this)">
+      <svg class="nav-icon" viewBox="0 0 16 16" fill="none"><rect x="1" y="4" width="14" height="10" rx="1" stroke="currentColor" stroke-width="1.2"/><path d="M1 7h14M5 10h2M9 10h2" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+      Treasury
+    </div>
+  </nav>
+  <div class="sb-bottom">
+    <button class="disc-btn" onclick="document.getElementById('cs').style.display='flex';document.getElementById('app').style.display='none'">Disconnect</button>
+  </div>
+</aside>
+
+<div class="main">
+  <div class="topbar">
+    <div><div class="topbar-title" id="tt">Overview</div><div class="topbar-meta" id="tm">Week 3 of 36 · Vesting active</div></div>
+    <div class="live-pill">Live</div>
+  </div>
+
+  <!-- OVERVIEW -->
+  <div class="page active" id="pg-overview">
+    <div class="stats-grid">
+      <div class="stat-card"><div class="stat-lbl">My Holdings</div><div class="stat-val p">2.45M</div><div class="stat-sub">1.8M wallet · 650K staked</div></div>
+      <div class="stat-card"><div class="stat-lbl">Voting Power</div><div class="stat-val">2,612,500</div><div class="stat-sub">Staked tokens ×1.25 weight</div></div>
+      <div class="stat-card"><div class="stat-lbl">My Points</div><div class="stat-val p">3,240</div><div class="stat-sub">Rank #4 this month</div></div>
+      <div class="stat-card"><div class="stat-lbl">Total Burned</div><div class="stat-val g">8.33M</div><div class="stat-sub">3 of 36 weekly burns done</div></div>
+    </div>
+    <div class="ov-grid">
+      <div>
+        <div class="sec-head"><div class="sec-title">Top Leaderboard</div><button class="sec-action" onclick="go('leaderboard',document.querySelectorAll('.nav-item')[1])">View All</button></div>
+        <div class="card-sm">
+          <div class="mini-lb"><div class="rank gold">01</div><div class="avatar">CB</div><div><div style="font-size:0.8rem;font-weight:500">@cryptobard_</div><div class="mono" style="font-size:0.58rem;color:var(--w30)">4,820 pts</div></div><div class="mini-pts">4,820</div></div>
+          <div class="mini-lb"><div class="rank silver">02</div><div class="avatar">SM</div><div><div style="font-size:0.8rem;font-weight:500">@smile_maxi</div><div class="mono" style="font-size:0.58rem;color:var(--w30)">3,910 pts</div></div><div class="mini-pts">3,910</div></div>
+          <div class="mini-lb"><div class="rank bronze">03</div><div class="avatar">BH</div><div><div style="font-size:0.8rem;font-weight:500">@bard_hunter</div><div class="mono" style="font-size:0.58rem;color:var(--w30)">3,380 pts</div></div><div class="mini-pts">3,380</div></div>
+          <div class="mini-lb"><div class="rank" style="color:var(--purple)">04</div><div class="avatar" style="border-color:var(--purple)">YO</div><div><div style="font-size:0.8rem;font-weight:500">@your_handle <span style="font-size:0.58rem;color:var(--purple)">· you</span></div><div class="mono" style="font-size:0.58rem;color:var(--w30)">3,240 pts</div></div><div class="mini-pts">3,240</div></div>
+        </div>
+      </div>
+      <div>
+        <div class="sec-head"><div class="sec-title">Pool Snapshot</div><button class="sec-action" onclick="go('pools',document.querySelectorAll('.nav-item')[2])">View All</button></div>
+        <div class="card-sm">
+          <div style="display:flex;flex-direction:column;gap:0.9rem">
+            <div><div style="display:flex;justify-content:space-between;margin-bottom:0.18rem"><span style="font-size:0.8rem;font-weight:500">Elon Pool</span><span class="mono" style="font-size:0.68rem;color:var(--purple)">15,000,000</span></div><div class="bar-wrap"><div class="bar" style="width:30%"></div></div></div>
+            <div><div style="display:flex;justify-content:space-between;margin-bottom:0.18rem"><span style="font-size:0.8rem;font-weight:500">Viral Pool</span><span class="mono" style="font-size:0.68rem;color:var(--purple)">10,500,000</span></div><div class="bar-wrap"><div class="bar" style="width:30%"></div></div></div>
+            <div><div style="display:flex;justify-content:space-between;margin-bottom:0.18rem"><span style="font-size:0.8rem;font-weight:500">Interaction Pool</span><span class="mono" style="font-size:0.68rem;color:var(--purple)">7,500,000</span></div><div class="bar-wrap"><div class="bar" style="width:30%"></div></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="vp-bar"><span class="vp-lbl">Your Voting Power</span><div class="vp-track"><div class="vp-fill" style="width:22%"></div></div><span class="vp-val">2,612,500 VP</span></div>
+  </div>
+
+  <!-- LEADERBOARD -->
+  <div class="page" id="pg-leaderboard">
+    <div class="stats-grid">
+      <div class="stat-card"><div class="stat-lbl">Your Rank</div><div class="stat-val p">#4</div><div class="stat-sub">Top 5% this month</div></div>
+      <div class="stat-card"><div class="stat-lbl">Your Points</div><div class="stat-val">3,240</div><div class="stat-sub">X posts + buys combined</div></div>
+      <div class="stat-card"><div class="stat-lbl">From X Activity</div><div class="stat-val p">1,560</div><div class="stat-sub">11 eligible posts tracked</div></div>
+      <div class="stat-card"><div class="stat-lbl">From Buys</div><div class="stat-val g">1,680</div><div class="stat-sub">4.2 SOL purchased</div></div>
+    </div>
+    <div class="sec-head"><div class="sec-title">March 2025 · 18 days remaining</div><span class="badge bp">Live Rankings</span></div>
+    <div class="card" style="padding:0">
+      <table class="dt">
+        <thead><tr><th style="width:44px">#</th><th>Member</th><th>X Points</th><th>Buy Points</th><th>Total</th><th>Prize</th></tr></thead>
+        <tbody>
+          <tr style="cursor:pointer" onclick="openModal('@cryptobard_')"><td><span class="rank gold">01</span></td><td><div style="display:flex;align-items:center;gap:0.6rem"><div class="avatar">CB</div><div><div style="font-weight:500;font-size:0.82rem">@cryptobard_</div><div class="mono" style="font-size:0.58rem;color:var(--w30)">3.2M $BARD</div></div></div></td><td><span class="mono" style="font-size:0.72rem">3,240</span></td><td><span class="mono" style="font-size:0.72rem;color:var(--green)">+1,580</span></td><td><span class="mono" style="font-size:0.82rem;font-weight:600;color:var(--purple)">4,820</span></td><td><span class="badge bp">500K tokens</span></td></tr>
+          <tr style="cursor:pointer" onclick="openModal('@smile_maxi')"><td><span class="rank silver">02</span></td><td><div style="display:flex;align-items:center;gap:0.6rem"><div class="avatar">SM</div><div><div style="font-weight:500;font-size:0.82rem">@smile_maxi</div><div class="mono" style="font-size:0.58rem;color:var(--w30)">1.8M $BARD</div></div></div></td><td><span class="mono" style="font-size:0.72rem">2,910</span></td><td><span class="mono" style="font-size:0.72rem;color:var(--green)">+1,000</span></td><td><span class="mono" style="font-size:0.82rem;font-weight:600;color:var(--purple)">3,910</span></td><td><span class="badge bw">250K tokens</span></td></tr>
+          <tr style="cursor:pointer" onclick="openModal('@bard_hunter')"><td><span class="rank bronze">03</span></td><td><div style="display:flex;align-items:center;gap:0.6rem"><div class="avatar">BH</div><div><div style="font-weight:500;font-size:0.82rem">@bard_hunter</div><div class="mono" style="font-size:0.58rem;color:var(--w30)">900K $BARD</div></div></div></td><td><span class="mono" style="font-size:0.72rem">2,580</span></td><td><span class="mono" style="font-size:0.72rem;color:var(--green)">+800</span></td><td><span class="mono" style="font-size:0.82rem;font-weight:600;color:var(--purple)">3,380</span></td><td><span class="badge bw">150K tokens</span></td></tr>
+          <tr style="cursor:pointer;background:rgba(155,127,232,0.04)" onclick="openModal('@your_handle')"><td><span class="rank" style="color:var(--purple)">04</span></td><td><div style="display:flex;align-items:center;gap:0.6rem"><div class="avatar" style="border-color:var(--purple)">YO</div><div><div style="font-weight:500;font-size:0.82rem">@your_handle <span style="font-size:0.6rem;color:var(--purple)">· you</span></div><div class="mono" style="font-size:0.58rem;color:var(--w30)">2.45M $BARD</div></div></div></td><td><span class="mono" style="font-size:0.72rem">1,560</span></td><td><span class="mono" style="font-size:0.72rem;color:var(--green)">+1,680</span></td><td><span class="mono" style="font-size:0.82rem;font-weight:600;color:var(--purple)">3,240</span></td><td><span class="badge bg">You</span></td></tr>
+          <tr style="cursor:pointer" onclick="openModal('@sol_smiler')"><td><span class="rank">05</span></td><td><div style="display:flex;align-items:center;gap:0.6rem"><div class="avatar">SS</div><div><div style="font-weight:500;font-size:0.82rem">@sol_smiler</div><div class="mono" style="font-size:0.58rem;color:var(--w30)">540K $BARD</div></div></div></td><td><span class="mono" style="font-size:0.72rem">2,100</span></td><td><span class="mono" style="font-size:0.72rem;color:var(--green)">+640</span></td><td><span class="mono" style="font-size:0.82rem;font-weight:600;color:var(--purple)">2,740</span></td><td><span class="badge bw">—</span></td></tr>
+          <tr style="cursor:pointer" onclick="openModal('@grin_labs')"><td><span class="rank">06</span></td><td><div style="display:flex;align-items:center;gap:0.6rem"><div class="avatar">GL</div><div><div style="font-weight:500;font-size:0.82rem">@grin_labs</div><div class="mono" style="font-size:0.58rem;color:var(--w30)">210K $BARD</div></div></div></td><td><span class="mono" style="font-size:0.72rem">1,820</span></td><td><span class="mono" style="font-size:0.72rem;color:var(--green)">+400</span></td><td><span class="mono" style="font-size:0.82rem;font-weight:600;color:var(--purple)">2,220</span></td><td><span class="badge bw">—</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="mono" style="font-size:0.6rem;color:var(--w30);text-align:center;padding:0.8rem">Click any member to see their full activity · Challenges close 24hrs before month end</div>
+  </div>
+
+  <!-- POOLS -->
+  <div class="page" id="pg-pools">
+    <div class="burn-box"><div class="burn-num">8,333,333</div><div class="burn-lbl">$BARD Burned To Date · Week 3 of 36</div></div>
+    <div class="sec-head" style="margin-bottom:1rem"><div class="sec-title">Active Reward Pools</div><span class="badge bp">Week 3 · Accumulating</span></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--border);border:1px solid var(--border);margin-bottom:1.8rem">
+      <div class="stat-card" style="position:relative;overflow:hidden"><div style="position:absolute;top:0;left:0;right:0;height:2px;background:var(--purple)"></div><div class="stat-lbl">Elon Pool</div><div class="stat-val p">15,000,000</div><div class="stat-sub">$BARD accumulated · Unclaimed</div><div class="bar-wrap" style="margin-top:0.9rem"><div class="bar" style="width:30%"></div></div><div class="mono" style="display:flex;justify-content:space-between;font-size:0.58rem;color:var(--w30);margin-top:0.3rem"><span>30% of 50M vested</span><span>Resets on winner only</span></div></div>
+      <div class="stat-card" style="position:relative;overflow:hidden"><div style="position:absolute;top:0;left:0;right:0;height:2px;background:var(--purple)"></div><div class="stat-lbl">Viral Pool</div><div class="stat-val p">10,500,000</div><div class="stat-sub">$BARD accumulated · Unclaimed</div><div class="bar-wrap" style="margin-top:0.9rem"><div class="bar" style="width:30%"></div></div><div class="mono" style="display:flex;justify-content:space-between;font-size:0.58rem;color:var(--w30);margin-top:0.3rem"><span>30% of 35M vested</span><span>Resets on winner only</span></div></div>
+      <div class="stat-card" style="position:relative;overflow:hidden"><div style="position:absolute;top:0;left:0;right:0;height:2px;background:var(--purple)"></div><div class="stat-lbl">Interaction Pool</div><div class="stat-val p">7,500,000</div><div class="stat-sub">$BARD accumulated · Unclaimed</div><div class="bar-wrap" style="margin-top:0.9rem"><div class="bar" style="width:30%"></div></div><div class="mono" style="display:flex;justify-content:space-between;font-size:0.58rem;color:var(--w30);margin-top:0.3rem"><span>30% of 25M vested</span><span>Resets on winner only</span></div></div>
+      <div class="stat-card" style="position:relative;overflow:hidden"><div style="position:absolute;top:0;left:0;right:0;height:2px;background:var(--green)"></div><div class="stat-lbl">Leaderboard Pool</div><div class="stat-val g">4,725,000</div><div class="stat-sub">$BARD · Pays out end of month</div><div class="bar-wrap" style="margin-top:0.9rem"><div class="bar" style="width:30%;background:var(--green)"></div></div><div class="mono" style="display:flex;justify-content:space-between;font-size:0.58rem;color:var(--w30);margin-top:0.3rem"><span>30% of 15.75M vested</span><span>Auto-airdrop monthly</span></div></div>
+    </div>
+    <div class="sec-head"><div class="sec-title">Next Unlock</div></div>
+    <div class="card" style="display:flex;align-items:center;justify-content:space-between">
+      <div><div style="font-size:0.83rem;font-weight:500;margin-bottom:0.2rem">Week 4 vest unlocks in</div><div class="mono" style="font-size:0.6rem;color:var(--w30)">All pools receive their weekly allocation simultaneously</div></div>
+      <div style="text-align:right"><div class="mono" style="font-size:1.7rem;font-weight:700;color:var(--purple)" id="cd">04 : 22 : 17</div><div class="mono" style="font-size:0.58rem;color:var(--w30);margin-top:0.15rem">DAYS · HRS · MINS</div></div>
+    </div>
+  </div>
+
+  <!-- STAKING -->
+  <div class="page" id="pg-staking">
+    <div class="stats-grid">
+      <div class="stat-card"><div class="stat-lbl">My Staked</div><div class="stat-val p">650,000</div><div class="stat-sub">$BARD staked</div></div>
+      <div class="stat-card"><div class="stat-lbl">Current APY</div><div class="stat-val g">34.2%</div><div class="stat-sub">Dynamic · updates weekly</div></div>
+      <div class="stat-card"><div class="stat-lbl">Rewards Earned</div><div class="stat-val">18,420</div><div class="stat-sub">$BARD claimable now</div></div>
+      <div class="stat-card"><div class="stat-lbl">Total Staked (All)</div><div class="stat-val">124.5M</div><div class="stat-sub">12.45% of supply</div></div>
+    </div>
+    <div class="stake-panel">
+      <div class="stake-side">
+        <div class="stake-lbl">Stake $BARD</div>
+        <div class="apy-wrap"><div class="apy-val">34.2%</div><div class="apy-lbl">Current APY</div></div>
+        <div class="inp-wrap"><input class="inp" type="number" placeholder="0"><button class="inp-max">Max</button></div>
+        <div class="mono" style="font-size:0.6rem;color:var(--w30);margin-bottom:0.9rem">Available: 1,800,000 $BARD</div>
+        <button class="stake-btn">Stake Tokens</button>
+      </div>
+      <div class="stake-side">
+        <div class="stake-lbl">Unstake $BARD</div>
+        <div style="margin-bottom:1.2rem"><div class="mono" style="font-size:0.6rem;color:var(--w30);margin-bottom:0.35rem">Currently staked</div><div style="font-size:1.3rem;font-weight:600;color:var(--purple)">650,000 <span style="font-size:0.72rem;color:var(--w30);font-weight:400">$BARD</span></div></div>
+        <div class="inp-wrap"><input class="inp" type="number" placeholder="0"><button class="inp-max">Max</button></div>
+        <div class="mono" style="font-size:0.6rem;color:var(--w30);margin-bottom:0.9rem">Note: unstaking reduces your voting weight</div>
+        <button class="stake-btn out">Unstake Tokens</button>
+      </div>
+    </div>
+    <div class="sec-head"><div class="sec-title">Claimable Rewards</div></div>
+    <div class="card" style="display:flex;align-items:center;justify-content:space-between">
+      <div><div style="font-size:1.1rem;font-weight:600;margin-bottom:0.25rem">18,420 <span style="font-size:0.78rem;color:var(--w30);font-weight:400">$BARD</span></div><div class="mono" style="font-size:0.6rem;color:var(--w30)">From staking rewards · Accruing continuously</div></div>
+      <button class="stake-btn" style="width:auto;padding:0.65rem 1.6rem">Claim Rewards</button>
+    </div>
+  </div>
+
+  <!-- VOTING -->
+  <div class="page" id="pg-voting">
+    <div style="margin-bottom:1.5rem;padding:1rem 1.2rem;background:var(--surface);border:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
+      <div><div style="font-size:0.83rem;font-weight:500;margin-bottom:0.18rem">Your Voting Power</div><div class="mono" style="font-size:0.6rem;color:var(--w30)">Every holder votes. Power = wallet tokens + (staked tokens × 1.25)</div></div>
+      <div class="mono" style="font-size:1.1rem;font-weight:600;color:var(--purple)">2,612,500 VP</div>
+    </div>
+    <div class="sec-head"><div class="sec-title">Active Proposals · 3 open</div><button class="sec-action">Submit Proposal ↗</button></div>
+    <div style="background:var(--border);display:flex;flex-direction:column;gap:1px">
+      <div class="vote-card">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:0.35rem"><div><div class="vote-title">Add a weekly Bard meme template drop for community use</div><div class="vote-meta">Submitted by @bardbuilder_ · 4 days remaining · 847 voters</div></div><span class="badge bp">Active</span></div>
+        <div class="vote-bar-wrap"><div class="vote-bar-yes" style="width:72%"></div></div>
+        <div class="vote-stats"><span style="color:var(--green)">72% Yes · 1.84B VP</span><span>28% No · 714M VP</span></div>
+        <div class="vote-acts"><button class="vbtn yes">Vote Yes</button><button class="vbtn no">Vote No</button></div>
+      </div>
+      <div class="vote-card">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:0.35rem"><div><div class="vote-title">Extend leaderboard challenge window from 24hrs to 48hrs</div><div class="vote-meta">Submitted by @smile_maxi · 6 days remaining · 523 voters</div></div><span class="badge bp">Active</span></div>
+        <div class="vote-bar-wrap"><div class="vote-bar-yes" style="width:58%"></div></div>
+        <div class="vote-stats"><span style="color:var(--green)">58% Yes · 1.2B VP</span><span>42% No · 870M VP</span></div>
+        <div class="vote-acts"><button class="vbtn yes">Vote Yes</button><button class="vbtn no">Vote No</button></div>
+      </div>
+      <div class="vote-card">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:0.35rem"><div><div class="vote-title">Launch a Bard sticker pack on Telegram as a community onboarding tool</div><div class="vote-meta">Submitted by @grin_labs · 9 days remaining · 312 voters</div></div><span class="badge bp">Active</span></div>
+        <div class="vote-bar-wrap"><div class="vote-bar-yes" style="width:83%"></div></div>
+        <div class="vote-stats"><span style="color:var(--green)">83% Yes · 2.1B VP</span><span>17% No · 430M VP</span></div>
+        <div class="vote-acts"><button class="vbtn yes">Vote Yes</button><button class="vbtn no">Vote No</button></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CLAIMS -->
+  <div class="page" id="pg-claims">
+    <div style="padding:0.9rem 1.1rem;background:rgba(155,127,232,0.05);border:1px solid var(--border2);margin-bottom:1.4rem;mono:font-family;font-family:'DM Mono',monospace;font-size:0.7rem;color:var(--w60);line-height:1.75">
+      Pool claims go to community vote. If approved, payout fires automatically — 90% to winner, 10% burned. Claims that fail keep the pool accumulating. Every token holder can vote.
+    </div>
+    <div class="sec-head"><div class="sec-title">Open Claims · 1 active</div></div>
+    <div class="claim-card">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:0.7rem">
+        <div><div style="font-size:0.88rem;font-weight:600;margin-bottom:0.2rem">Viral Pool Claim</div><div class="mono" style="font-size:0.6rem;color:var(--w30)">Submitted by @normiebreak_ · 2 days ago</div></div>
+        <span class="badge bp">Voting Open · 5 days left</span>
+      </div>
+      <div class="mono" style="font-size:0.7rem;color:var(--w60);line-height:1.8;margin-bottom:0.9rem">Claims this $BARD post broke containment on TikTok reaching 2.4M views, 180K likes, predominantly non-crypto audience.</div>
+      <button style="font-family:'DM Mono',monospace;font-size:0.63rem;color:var(--purple);background:none;border:none;cursor:pointer;text-decoration:underline;text-underline-offset:3px;margin-bottom:0.9rem">View Proof → tiktok.com/@normiebreak_/bard-post</button>
+      <div style="display:flex;align-items:center;gap:0.9rem;margin-bottom:0.8rem">
+        <div class="bar-wrap" style="flex:1;margin:0"><div class="bar" style="width:67%;background:var(--green)"></div></div>
+        <span class="mono" style="font-size:0.62rem;color:var(--green);white-space:nowrap">67% Approve</span>
+      </div>
+      <div class="vote-acts"><button class="vbtn yes">Approve Claim</button><button class="vbtn no">Reject Claim</button></div>
+    </div>
+    <div class="sec-head" style="margin-top:1.4rem"><div class="sec-title">Past Claims</div></div>
+    <div class="card" style="padding:0;margin-bottom:1.4rem">
+      <table class="dt"><thead><tr><th>Pool</th><th>Submitted by</th><th>Result</th><th>Date</th></tr></thead>
+      <tbody><tr><td>Interaction Pool</td><td><span class="mono" style="font-size:0.72rem">@cryptobard_</span></td><td><span class="badge br">Rejected</span></td><td><span class="mono" style="font-size:0.62rem;color:var(--w30)">Mar 3</span></td></tr></tbody></table>
+    </div>
+    <div class="sec-head"><div class="sec-title">Submit a Claim</div></div>
+    <div class="card">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:0.9rem">
+        <div><div class="mono" style="font-size:0.58rem;color:var(--w30);letter-spacing:0.2em;text-transform:uppercase;margin-bottom:0.45rem">Pool</div><select><option>Elon Pool</option><option>Viral Pool</option><option>Interaction Pool</option></select></div>
+        <div><div class="mono" style="font-size:0.58rem;color:var(--w30);letter-spacing:0.2em;text-transform:uppercase;margin-bottom:0.45rem">Proof Link</div><div class="inp-wrap" style="margin:0"><input class="inp" type="text" placeholder="https://" style="font-size:0.8rem"></div></div>
+      </div>
+      <div class="mono" style="font-size:0.58rem;color:var(--w30);letter-spacing:0.2em;text-transform:uppercase;margin-bottom:0.45rem">Description</div>
+      <textarea style="margin-bottom:0.9rem" placeholder="Describe why this qualifies..."></textarea>
+      <button class="stake-btn" style="width:auto;padding:0.65rem 1.8rem">Submit Claim for Vote</button>
+    </div>
+  </div>
+
+  <!-- TREASURY -->
+  <div class="page" id="pg-treasury">
+    <div class="stats-grid">
+      <div class="stat-card"><div class="stat-lbl">Total Vested So Far</div><div class="stat-val p">38.25M</div><div class="stat-sub">Week 3 of 36</div></div>
+      <div class="stat-card"><div class="stat-lbl">Total Remaining</div><div class="stat-val">422.75M</div><div class="stat-sub">91.7% still vesting</div></div>
+      <div class="stat-card"><div class="stat-lbl">Total Burned</div><div class="stat-val g">8.33M</div><div class="stat-sub">of 100M burn allocation</div></div>
+      <div class="stat-card"><div class="stat-lbl">Next Weekly Vest</div><div class="stat-val">12.75M</div><div class="stat-sub">In 4 days 22 hrs</div></div>
+    </div>
+    <div class="sec-head"><div class="sec-title">Allocation Breakdown</div><span class="badge bw">Week 3 · 8.33% vested</span></div>
+    <div class="card" style="padding:0;margin-bottom:1.5rem">
+      <div class="trow hdr"><div>Allocation</div><div>Total</div><div>Vested</div><div>Remaining</div><div>Progress</div></div>
+      <div class="trow"><div class="tname">🔥 Weekly Burns</div><div class="tmono" style="color:var(--w60)">100,000,000</div><div class="tmono" style="color:var(--purple)">8,333,333</div><div class="tmono" style="color:var(--w30)">91,666,667</div><div><div class="bar-wrap" style="margin:0"><div class="bar" style="width:8.33%;background:var(--red)"></div></div></div></div>
+      <div class="trow"><div class="tname">📈 Staking Reserve</div><div class="tmono" style="color:var(--w60)">125,000,000</div><div class="tmono" style="color:var(--purple)">10,416,667</div><div class="tmono" style="color:var(--w30)">114,583,333</div><div><div class="bar-wrap" style="margin:0"><div class="bar" style="width:8.33%"></div></div></div></div>
+      <div class="trow"><div class="tname">📢 Marketing & Ops</div><div class="tmono" style="color:var(--w60)">100,000,000</div><div class="tmono" style="color:var(--purple)">8,333,333</div><div class="tmono" style="color:var(--w30)">91,666,667</div><div><div class="bar-wrap" style="margin:0"><div class="bar" style="width:8.33%"></div></div></div></div>
+      <div class="trow"><div class="tname">⚡ Elon Pool</div><div class="tmono" style="color:var(--w60)">50,000,000</div><div class="tmono" style="color:var(--purple)">4,166,667</div><div class="tmono" style="color:var(--w30)">45,833,333</div><div><div class="bar-wrap" style="margin:0"><div class="bar" style="width:8.33%"></div></div></div></div>
+      <div class="trow"><div class="tname">🌊 Viral Pool</div><div class="tmono" style="color:var(--w60)">35,000,000</div><div class="tmono" style="color:var(--purple)">2,916,667</div><div class="tmono" style="color:var(--w30)">32,083,333</div><div><div class="bar-wrap" style="margin:0"><div class="bar" style="width:8.33%"></div></div></div></div>
+      <div class="trow"><div class="tname">🤝 Interaction Pool</div><div class="tmono" style="color:var(--w60)">25,000,000</div><div class="tmono" style="color:var(--purple)">2,083,333</div><div class="tmono" style="color:var(--w30)">22,916,667</div><div><div class="bar-wrap" style="margin:0"><div class="bar" style="width:8.33%"></div></div></div></div>
+      <div class="trow"><div class="tname">🏆 Leaderboard</div><div class="tmono" style="color:var(--w60)">15,750,000</div><div class="tmono" style="color:var(--purple)">1,312,500</div><div class="tmono" style="color:var(--w30)">14,437,500</div><div><div class="bar-wrap" style="margin:0"><div class="bar" style="width:8.33%;background:var(--green)"></div></div></div></div>
+      <div class="trow" style="border:none"><div class="tname">🛡 Buffer</div><div class="tmono" style="color:var(--w60)">11,000,000</div><div class="tmono" style="color:var(--purple)">916,667</div><div class="tmono" style="color:var(--w30)">10,083,333</div><div><div class="bar-wrap" style="margin:0"><div class="bar" style="width:8.33%"></div></div></div></div>
+    </div>
+    <div class="sec-head"><div class="sec-title">Burn History</div></div>
+    <div class="card" style="padding:0">
+      <table class="dt"><thead><tr><th>Week</th><th>Burned</th><th>Cumulative</th><th>Tx Hash</th></tr></thead>
+      <tbody>
+        <tr><td><span class="mono" style="font-size:0.72rem">Week 3</span></td><td><span class="mono" style="font-size:0.72rem;color:var(--red)">2,777,778</span></td><td><span class="mono" style="font-size:0.72rem">8,333,333</span></td><td><span class="mono" style="font-size:0.62rem;color:var(--purple)">7xKp...3mNq</span></td></tr>
+        <tr><td><span class="mono" style="font-size:0.72rem">Week 2</span></td><td><span class="mono" style="font-size:0.72rem;color:var(--red)">2,777,778</span></td><td><span class="mono" style="font-size:0.72rem">5,555,556</span></td><td><span class="mono" style="font-size:0.62rem;color:var(--purple)">9qRs...7hJk</span></td></tr>
+        <tr><td><span class="mono" style="font-size:0.72rem">Week 1</span></td><td><span class="mono" style="font-size:0.72rem;color:var(--red)">2,777,778</span></td><td><span class="mono" style="font-size:0.72rem">2,777,778</span></td><td><span class="mono" style="font-size:0.62rem;color:var(--purple)">2mNp...4vWx</span></td></tr>
+      </tbody></table>
+    </div>
+  </div>
+
+</div><!-- /main -->
+</div><!-- /app -->
+
+<script>
+const cursor = document.getElementById('cursor');
+document.addEventListener('mousemove', e => { cursor.style.left = e.clientX+'px'; cursor.style.top = e.clientY+'px'; });
+document.addEventListener('mousedown', () => cursor.style.transform = 'translate(-50%,-50%) scale(1.8)');
+document.addEventListener('mouseup', () => cursor.style.transform = 'translate(-50%,-50%) scale(1)');
+document.addEventListener('mouseleave', () => cursor.style.opacity='0');
+document.addEventListener('mouseenter', () => cursor.style.opacity='1');
+
+function doStep(n) {
+  const el = document.getElementById('s'+n);
+  el.classList.add('done');
+  document.getElementById('s'+n+'n').textContent = '✓';
+}
+function enter() {
+  document.getElementById('cs').style.display = 'none';
+  document.getElementById('app').style.display = 'flex';
+}
+
+const titles = { overview:'Overview', leaderboard:'Leaderboard', pools:'Pools', staking:'Staking', voting:'Voting', claims:'Claims', treasury:'Treasury' };
+const metas = { overview:'Week 3 of 36 · Vesting active', leaderboard:'March 2025 · Automated point tracking', pools:'All pools accumulating · Week 3', staking:'Dynamic APY · 34.2% current', voting:'All holders can vote', claims:'Community-verified payouts', treasury:'Full on-chain transparency' };
+
+function go(name, el) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('pg-'+name).classList.add('active');
+  if (el) el.classList.add('active');
+  document.getElementById('tt').textContent = titles[name] || name;
+  document.getElementById('tm').textContent = metas[name] || '';
+}
+
+function openModal(handle) {
+  document.getElementById('mu').textContent = handle;
+  document.getElementById('mo').classList.add('open');
+}
+function closeModal() { document.getElementById('mo').classList.remove('open'); }
+document.getElementById('mo').addEventListener('click', function(e) { if(e.target===this) closeModal(); });
+
+let secs = 4*86400 + 22*3600 + 17*60;
+setInterval(() => {
+  if (secs <= 0) return; secs--;
+  const d = Math.floor(secs/86400), h = Math.floor((secs%86400)/3600), m = Math.floor((secs%3600)/60);
+  const el = document.getElementById('cd');
+  if (el) el.textContent = String(d).padStart(2,'0')+' : '+String(h).padStart(2,'0')+' : '+String(m).padStart(2,'0');
+}, 1000);
+</script>
+</body>
+</html>
