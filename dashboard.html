@@ -424,19 +424,19 @@ textarea { width: 100%; background: var(--surface2); border: 1px solid var(--bor
       <div><div style="font-size:0.83rem;font-weight:500;margin-bottom:0.18rem">Your Voting Power</div><div class="mono" style="font-size:0.6rem;color:var(--w30)">Every holder votes. Power = wallet tokens + (staked tokens × 1.25)</div></div>
       <div class="mono" style="font-size:1.1rem;font-weight:600;color:var(--purple)">2,612,500 VP</div>
     </div>
-    <div class="sec-head"><div class="sec-title">Active Proposals · 3 open</div><button class="sec-action">Submit Proposal ↗</button></div>
+    <div class="sec-head"><div class="sec-title">Active Proposals · 3 open</div><button class="sec-action" onclick="openProposalModal()">Submit Proposal ↗</button></div>
     <div style="background:var(--border);display:flex;flex-direction:column;gap:1px">
       <div class="vote-card">
         <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:0.35rem"><div><div class="vote-title">Add a weekly Bard meme template drop for community use</div><div class="vote-meta">Submitted by @bardbuilder_ · 4 days remaining · 847 voters</div></div><span class="badge bp">Active</span></div>
         <div class="vote-bar-wrap"><div class="vote-bar-yes" style="width:72%"></div></div>
         <div class="vote-stats"><span style="color:var(--green)">72% Yes · 1.84B VP</span><span>28% No · 714M VP</span></div>
-        <div class="vote-acts"><button class="vbtn yes">Vote Yes</button><button class="vbtn no">Vote No</button></div>
+        <div class="vote-acts"><button class="vbtn yes" onclick="castVote('proposal-1','yes')">Vote Yes</button><button class="vbtn no" onclick="castVote('proposal-1','no')">Vote No</button></div>
       </div>
       <div class="vote-card">
         <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:0.35rem"><div><div class="vote-title">Extend leaderboard challenge window from 24hrs to 48hrs</div><div class="vote-meta">Submitted by @smile_maxi · 6 days remaining · 523 voters</div></div><span class="badge bp">Active</span></div>
         <div class="vote-bar-wrap"><div class="vote-bar-yes" style="width:58%"></div></div>
         <div class="vote-stats"><span style="color:var(--green)">58% Yes · 1.2B VP</span><span>42% No · 870M VP</span></div>
-        <div class="vote-acts"><button class="vbtn yes">Vote Yes</button><button class="vbtn no">Vote No</button></div>
+        <div class="vote-acts"><button class="vbtn yes" onclick="castVote('proposal-2','yes')">Vote Yes</button><button class="vbtn no" onclick="castVote('proposal-2','no')">Vote No</button></div>
       </div>
       <div class="vote-card">
         <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:0.35rem"><div><div class="vote-title">Launch a Bard sticker pack on Telegram as a community onboarding tool</div><div class="vote-meta">Submitted by @grin_labs · 9 days remaining · 312 voters</div></div><span class="badge bp">Active</span></div>
@@ -464,7 +464,7 @@ textarea { width: 100%; background: var(--surface2); border: 1px solid var(--bor
         <div class="bar-wrap" style="flex:1;margin:0"><div class="bar" style="width:67%;background:var(--green)"></div></div>
         <span class="mono" style="font-size:0.62rem;color:var(--green);white-space:nowrap">67% Approve</span>
       </div>
-      <div class="vote-acts"><button class="vbtn yes">Approve Claim</button><button class="vbtn no">Reject Claim</button></div>
+      <div class="vote-acts"><button class="vbtn yes" onclick="castClaimVote('claim-1','yes')">Approve Claim</button><button class="vbtn no" onclick="castClaimVote('claim-1','no')">Reject Claim</button></div>
     </div>
     <div class="sec-head" style="margin-top:1.4rem"><div class="sec-title">Past Claims</div></div>
     <div class="card" style="padding:0;margin-bottom:1.4rem">
@@ -479,7 +479,7 @@ textarea { width: 100%; background: var(--surface2); border: 1px solid var(--bor
       </div>
       <div class="mono" style="font-size:0.58rem;color:var(--w30);letter-spacing:0.2em;text-transform:uppercase;margin-bottom:0.45rem">Description</div>
       <textarea style="margin-bottom:0.9rem" placeholder="Describe why this qualifies..."></textarea>
-      <button class="stake-btn" style="width:auto;padding:0.65rem 1.8rem">Submit Claim for Vote</button>
+      <button class="stake-btn" style="width:auto;padding:0.65rem 1.8rem" onclick="submitClaim()">Submit Claim for Vote</button>
     </div>
   </div>
 
@@ -686,6 +686,7 @@ function enterDashboard() {
   const vp = tokenBalance + (stakedBalance * 1.25);
   document.getElementById('cs').style.display = 'none';
   document.getElementById('app').style.display = 'flex';
+  initDashboardData();
 }
 
 // ─── DISCONNECT ────────────────────────────────────────────────────────────
@@ -735,11 +736,290 @@ setInterval(() => {
   if (el) el.textContent = String(d).padStart(2,'0')+' : '+String(h).padStart(2,'0')+' : '+String(m).padStart(2,'0');
 }, 1000);
 
+
+// ─── LOAD PROPOSALS FROM SUPABASE ──────────────────────────────────────────
+async function loadProposals() {
+  const { data, error } = await db.from('proposals')
+    .select('*')
+    .eq('status', 'active')
+    .order('created_at', { ascending: false });
+
+  if (error || !data || data.length === 0) return;
+
+  const container = document.querySelector('#pg-voting .vote-card')?.parentElement;
+  if (!container) return;
+
+  // Clear existing hardcoded cards
+  const existingCards = container.querySelectorAll('.vote-card');
+  existingCards.forEach(c => c.remove());
+
+  data.forEach(p => {
+    const total = (p.yes_power || 0) + (p.no_power || 0);
+    const yesPct = total > 0 ? Math.round((p.yes_power / total) * 100) : 0;
+    const card = document.createElement('div');
+    card.className = 'vote-card';
+    card.id = `proposal-${p.id}`;
+    card.innerHTML = `
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:0.35rem">
+        <div>
+          <div class="vote-title">${p.title}</div>
+          <div class="vote-meta">Submitted by ${p.submitted_by || 'community'} · ${formatDate(p.ends_at)} · ${Math.round(total / 1000000)}M VP cast</div>
+        </div>
+        <span class="badge bp">Active</span>
+      </div>
+      <div class="vote-bar-wrap"><div class="vote-bar-yes" style="width:${yesPct}%"></div></div>
+      <div class="vote-stats"><span style="color:var(--green)">${yesPct}% Yes</span><span>${100 - yesPct}% No</span></div>
+      <div class="vote-acts">
+        <button class="vbtn yes" onclick="castVote('${p.id}','yes')">Vote Yes</button>
+        <button class="vbtn no" onclick="castVote('${p.id}','no')">Vote No</button>
+      </div>`;
+    container.appendChild(card);
+  });
+}
+
+// ─── CAST VOTE ──────────────────────────────────────────────────────────────
+async function castVote(proposalId, vote) {
+  if (!walletAddress) { alert('Connect your wallet first.'); return; }
+
+  const vp = tokenBalance + (stakedBalance * 1.25);
+
+  // Check not already voted
+  const { data: existing } = await db.from('votes')
+    .select('id')
+    .eq('proposal_id', proposalId)
+    .eq('wallet_address', walletAddress)
+    .single();
+
+  if (existing) { alert('You have already voted on this proposal.'); return; }
+
+  // Insert vote
+  const { error } = await db.from('votes').insert({
+    proposal_id: proposalId,
+    wallet_address: walletAddress,
+    vote: vote,
+    voting_power: vp
+  });
+
+  if (error) { alert('Vote failed. Please try again.'); return; }
+
+  // Update proposal yes/no power
+  const field = vote === 'yes' ? 'yes_power' : 'no_power';
+  const { data: proposal } = await db.from('proposals').select(field).eq('id', proposalId).single();
+  const newPower = (proposal?.[field] || 0) + vp;
+  await db.from('proposals').update({ [field]: newPower }).eq('id', proposalId);
+
+  // Visual feedback
+  const card = document.getElementById(`proposal-${proposalId}`);
+  if (card) {
+    const btns = card.querySelectorAll('.vbtn');
+    btns.forEach(b => { b.disabled = true; b.style.opacity = '0.4'; });
+    const label = vote === 'yes' ? '✓ Voted Yes' : '✓ Voted No';
+    btns[vote === 'yes' ? 0 : 1].textContent = label;
+    btns[vote === 'yes' ? 0 : 1].style.opacity = '1';
+    btns[vote === 'yes' ? 0 : 1].style.color = vote === 'yes' ? 'var(--green)' : 'var(--red)';
+  }
+}
+
+// ─── SUBMIT PROPOSAL ───────────────────────────────────────────────────────
+async function openProposalModal() {
+  if (!walletAddress) { alert('Connect your wallet first.'); return; }
+  document.getElementById('proposalModal').classList.add('open');
+}
+
+async function submitProposal() {
+  const title = document.getElementById('proposalTitle').value.trim();
+  const desc = document.getElementById('proposalDesc').value.trim();
+
+  if (!title) { alert('Please enter a title.'); return; }
+  if (!walletAddress) { alert('Connect your wallet first.'); return; }
+
+  const { error } = await db.from('proposals').insert({
+    title: title,
+    description: desc,
+    submitted_by: xHandle || walletAddress,
+    approved_by_admin: false,
+    status: 'pending',
+    ends_at: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString()
+  });
+
+  if (error) { alert('Submission failed. Please try again.'); return; }
+
+  document.getElementById('proposalModal').classList.remove('open');
+  document.getElementById('proposalTitle').value = '';
+  document.getElementById('proposalDesc').value = '';
+  alert('Proposal submitted for review. It will appear once approved.');
+}
+
+// ─── LOAD CLAIMS FROM SUPABASE ──────────────────────────────────────────────
+async function loadClaims() {
+  const { data, error } = await db.from('claims')
+    .select('*')
+    .eq('status', 'open')
+    .order('created_at', { ascending: false });
+
+  if (error || !data) return;
+
+  // Update claims badge count
+  const badge = document.querySelectorAll('.nav-badge')[1];
+  if (badge) badge.textContent = data.length;
+}
+
+// ─── CAST CLAIM VOTE ────────────────────────────────────────────────────────
+async function castClaimVote(claimId, vote) {
+  if (!walletAddress) { alert('Connect your wallet first.'); return; }
+
+  const vp = tokenBalance + (stakedBalance * 1.25);
+
+  const { data: existing } = await db.from('claim_votes')
+    .select('id')
+    .eq('claim_id', claimId)
+    .eq('wallet_address', walletAddress)
+    .single();
+
+  if (existing) { alert('You have already voted on this claim.'); return; }
+
+  const { error } = await db.from('claim_votes').insert({
+    claim_id: claimId,
+    wallet_address: walletAddress,
+    vote: vote,
+    voting_power: vp
+  });
+
+  if (error) { alert('Vote failed. Please try again.'); return; }
+
+  alert(vote === 'yes' ? '✓ Claim approved — vote recorded.' : '✓ Rejection recorded.');
+}
+
+// ─── SUBMIT CLAIM ───────────────────────────────────────────────────────────
+async function submitClaim() {
+  if (!walletAddress) { alert('Connect your wallet first.'); return; }
+
+  const pool = document.querySelector('#pg-claims select')?.value;
+  const proofUrl = document.querySelector('#pg-claims .inp[type="text"]')?.value?.trim();
+  const desc = document.querySelector('#pg-claims textarea')?.value?.trim();
+
+  if (!proofUrl) { alert('Please provide a proof link.'); return; }
+  if (!desc) { alert('Please describe your claim.'); return; }
+
+  const poolMap = { 'Elon Pool': 'elon', 'Viral Pool': 'viral', 'Interaction Pool': 'interaction' };
+
+  const { error } = await db.from('claims').insert({
+    pool_name: poolMap[pool] || pool.toLowerCase(),
+    submitted_by: walletAddress,
+    proof_url: proofUrl,
+    description: desc,
+    status: 'open'
+  });
+
+  if (error) { alert('Submission failed. Please try again.'); return; }
+
+  alert('Claim submitted! The community will now vote on it.');
+  document.querySelector('#pg-claims .inp[type="text"]').value = '';
+  document.querySelector('#pg-claims textarea').value = '';
+}
+
+// ─── LOAD TREASURY FROM SUPABASE ────────────────────────────────────────────
+async function loadTreasury() {
+  const { data: burns, error } = await db.from('burn_log')
+    .select('*')
+    .order('week_number', { ascending: false });
+
+  if (error || !burns || burns.length === 0) return;
+
+  // Update burn counter
+  const latest = burns[0];
+  const burnEl = document.querySelector('.burn-num');
+  if (burnEl) burnEl.textContent = Number(latest.cumulative).toLocaleString();
+
+  // Update burn history table
+  const tbody = document.querySelector('#pg-treasury .dt tbody');
+  if (tbody) {
+    tbody.innerHTML = burns.map(b => `
+      <tr>
+        <td><span class="mono" style="font-size:0.72rem">Week ${b.week_number}</span></td>
+        <td><span class="mono" style="font-size:0.72rem;color:var(--red)">${Number(b.amount).toLocaleString()}</span></td>
+        <td><span class="mono" style="font-size:0.72rem">${Number(b.cumulative).toLocaleString()}</span></td>
+        <td><span class="mono" style="font-size:0.62rem;color:var(--purple)">${b.tx_signature || '—'}</span></td>
+      </tr>`).join('');
+  }
+}
+
+// ─── LOAD LEADERBOARD FROM SUPABASE ────────────────────────────────────────
+async function loadLeaderboard() {
+  const { data, error } = await db.from('members')
+    .select('wallet_address, x_handle, points, token_balance, staked_balance')
+    .order('points', { ascending: false })
+    .limit(20);
+
+  if (error || !data || data.length === 0) return;
+
+  const tbody = document.querySelector('#pg-leaderboard .dt tbody');
+  if (!tbody) return;
+
+  const medals = ['gold', 'silver', 'bronze'];
+  const prizes = ['500K tokens', '250K tokens', '150K tokens'];
+
+  tbody.innerHTML = data.map((m, i) => {
+    const isYou = m.wallet_address === walletAddress;
+    const rankClass = medals[i] || '';
+    const handle = m.x_handle || m.wallet_address.slice(0,6) + '...' + m.wallet_address.slice(-4);
+    const initials = handle.replace('@','').slice(0,2).toUpperCase();
+    return `<tr style="cursor:pointer${isYou ? ';background:rgba(155,127,232,0.04)' : ''}" onclick="openModal('${handle}')">
+      <td><span class="rank ${rankClass}">${String(i+1).padStart(2,'0')}</span></td>
+      <td><div style="display:flex;align-items:center;gap:0.6rem">
+        <div class="avatar" ${isYou ? 'style="border-color:var(--purple)"' : ''}>${initials}</div>
+        <div><div style="font-weight:500;font-size:0.82rem">${handle}${isYou ? ' <span style="font-size:0.6rem;color:var(--purple)">· you</span>' : ''}</div>
+        <div class="mono" style="font-size:0.58rem;color:var(--w30)">${Number(m.token_balance).toLocaleString()} $BARD</div></div>
+      </div></td>
+      <td><span class="mono" style="font-size:0.72rem">${m.points || 0}</span></td>
+      <td><span class="mono" style="font-size:0.72rem;color:var(--green)">0</span></td>
+      <td><span class="mono" style="font-size:0.82rem;font-weight:600;color:var(--purple)">${m.points || 0}</span></td>
+      <td>${prizes[i] ? `<span class="badge ${i === 0 ? 'bp' : 'bw'}">${prizes[i]}</span>` : '<span class="badge bw">—</span>'}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ─── HELPER ─────────────────────────────────────────────────────────────────
+function formatDate(dateStr) {
+  if (!dateStr) return '';
+  const d = new Date(dateStr);
+  const diff = Math.ceil((d - Date.now()) / (1000 * 60 * 60 * 24));
+  return diff > 0 ? `${diff} days remaining` : 'Ended';
+}
+
+// ─── INIT ALL DATA ──────────────────────────────────────────────────────────
+async function initDashboardData() {
+  await Promise.all([
+    loadProposals(),
+    loadClaims(),
+    loadTreasury(),
+    loadLeaderboard()
+  ]);
+}
+
 // ─── INIT ──────────────────────────────────────────────────────────────────
 window.addEventListener('load', () => {
   const params = new URLSearchParams(window.location.search);
   handleAuthCallback();
 });
 </script>
+
+<!-- PROPOSAL MODAL -->
+<div class="modal-ov" id="proposalModal">
+  <div class="modal">
+    <div class="modal-hdr">
+      <div class="modal-title">Submit a Proposal</div>
+      <button class="modal-close" onclick="document.getElementById('proposalModal').classList.remove('open')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="mono" style="font-size:0.62rem;color:var(--w30);margin-bottom:1rem;line-height:1.7">Proposals go to admin review before going live for community voting.</div>
+      <div class="mono" style="font-size:0.58rem;color:var(--w30);letter-spacing:0.2em;text-transform:uppercase;margin-bottom:0.45rem">Title</div>
+      <div class="inp-wrap" style="margin-bottom:0.9rem"><input class="inp" type="text" id="proposalTitle" placeholder="Proposal title..." style="font-size:0.82rem"></div>
+      <div class="mono" style="font-size:0.58rem;color:var(--w30);letter-spacing:0.2em;text-transform:uppercase;margin-bottom:0.45rem">Description</div>
+      <textarea id="proposalDesc" style="margin-bottom:1rem" placeholder="Describe your proposal in detail..."></textarea>
+      <button class="stake-btn" onclick="submitProposal()">Submit for Review</button>
+    </div>
+  </div>
+</div>
 </body>
 </html>
