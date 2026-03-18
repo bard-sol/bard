@@ -620,11 +620,23 @@ async function connectX() {
     return;
   }
 
-  // Store wallet so worker can retrieve it via state param
   localStorage.setItem('bard_wallet', walletAddress);
 
-  // Redirect to Cloudflare Worker which handles X OAuth 2.0
-  window.location.href = `https://bard-auth.bardsoltoken.workers.dev/auth/x/start?wallet=${encodeURIComponent(walletAddress)}`;
+  try {
+    // Ask worker to generate the OAuth URL and PKCE verifier
+    const res = await fetch(`https://bard-auth.bardsoltoken.workers.dev/auth/x/start?wallet=${encodeURIComponent(walletAddress)}`);
+    const { authUrl, codeVerifier } = await res.json();
+
+    // Store code verifier in localStorage for the callback
+    localStorage.setItem('bard_cv', codeVerifier);
+
+    // Browser does the redirect — X sees existing session, no re-login needed
+    window.location.href = authUrl;
+
+  } catch (err) {
+    console.error('X auth error:', err);
+    alert('X login failed. Please try again.');
+  }
 }
 
 // ─── HANDLE OAUTH CALLBACK ─────────────────────────────────────────────────
