@@ -7,6 +7,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=DM+Mono:wght@300;400&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/@solana/web3.js@1.87.6/lib/index.iife.min.js"></script>
 <style>
 *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 html, body { -webkit-user-select: none; user-select: none; height: 100%; }
@@ -301,7 +303,7 @@ textarea { width: 100%; background: var(--surface2); border: 1px solid var(--bor
     </div>
   </nav>
   <div class="sb-bottom">
-    <button class="disc-btn" onclick="document.getElementById('cs').style.display='flex';document.getElementById('app').style.display='none'">Disconnect</button>
+    <button class="disc-btn" onclick="disconnect()">Disconnect</button>
   </div>
 </aside>
 
@@ -516,6 +518,22 @@ textarea { width: 100%; background: var(--surface2); border: 1px solid var(--bor
 </div><!-- /app -->
 
 <script>
+// ─── CONFIG ───────────────────────────────────────────────────────────────
+const SUPABASE_URL = 'https://pxdiyukxgnphhxlknhmke.supabase.co';
+const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB4ZGl5dWt4Z25waHhsa25obWtlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM4NTg2NDAsImV4cCI6MjA4OTQzNDY0MH0.eOJ8I7UBCywHDMWdPbcWFURbfoDgMUHFD_cSAZA8Hk4';
+const BARD_MINT = 'REPLACE_WITH_TOKEN_MINT_ADDRESS'; // ← paste contract address here after launch
+const RPC = 'https://api.mainnet-beta.solana.com';
+
+const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+
+// ─── STATE ─────────────────────────────────────────────────────────────────
+let walletAddress = null;
+let xHandle = null;
+let tokenBalance = 0;
+let stakedBalance = 0;
+let stepsDone = { 1: false, 2: false };
+
+// ─── CURSOR ────────────────────────────────────────────────────────────────
 const cursor = document.getElementById('cursor');
 document.addEventListener('mousemove', e => { cursor.style.left = e.clientX+'px'; cursor.style.top = e.clientY+'px'; });
 document.addEventListener('mousedown', () => cursor.style.transform = 'translate(-50%,-50%) scale(1.8)');
@@ -523,18 +541,173 @@ document.addEventListener('mouseup', () => cursor.style.transform = 'translate(-
 document.addEventListener('mouseleave', () => cursor.style.opacity='0');
 document.addEventListener('mouseenter', () => cursor.style.opacity='1');
 
-function doStep(n) {
-  const el = document.getElementById('s'+n);
-  el.classList.add('done');
-  document.getElementById('s'+n+'n').textContent = '✓';
+// ─── STEP 1: WALLET CONNECT ────────────────────────────────────────────────
+async function doStep(n) {
+  if (n === 1) await connectWallet();
+  if (n === 2) await connectX();
 }
-function enter() {
+
+async function connectWallet() {
+  try {
+    // Detect wallet — Phantom first, then Solflare
+    const provider = window.phantom?.solana || window.solflare || window.solana;
+    if (!provider) {
+      alert('No Solana wallet detected. Please install Phantom or Solflare.');
+      return;
+    }
+
+    const resp = await provider.connect();
+    walletAddress = resp.publicKey.toString();
+
+    // Read token balance
+    await refreshBalance(walletAddress);
+
+    // Check they hold at least 1 BARD
+    if (tokenBalance < 1 && BARD_MINT !== 'REPLACE_WITH_TOKEN_MINT_ADDRESS') {
+      alert('You need to hold at least 1 $BARD to access the dashboard.');
+      walletAddress = null;
+      return;
+    }
+
+    // Mark step done
+    stepsDone[1] = true;
+    document.getElementById('s1').classList.add('done');
+    document.getElementById('s1n').textContent = '✓';
+
+    // Upsert member into Supabase
+    await db.from('members').upsert({
+      wallet_address: walletAddress,
+      token_balance: tokenBalance,
+      last_seen: new Date().toISOString()
+    }, { onConflict: 'wallet_address' });
+
+  } catch (err) {
+    console.error('Wallet connect error:', err);
+    alert('Wallet connection failed. Please try again.');
+  }
+}
+
+// ─── READ TOKEN BALANCE FROM SOLANA ───────────────────────────────────────
+async function refreshBalance(address) {
+  try {
+    if (BARD_MINT === 'REPLACE_WITH_TOKEN_MINT_ADDRESS') {
+      // Token not deployed yet — use placeholder
+      tokenBalance = 2450000;
+      stakedBalance = 650000;
+      return;
+    }
+
+    const connection = new solanaWeb3.Connection(RPC, 'confirmed');
+    const owner = new solanaWeb3.PublicKey(address);
+    const mint = new solanaWeb3.PublicKey(BARD_MINT);
+
+    const accounts = await connection.getParsedTokenAccountsByOwner(owner, { mint });
+    if (accounts.value.length > 0) {
+      tokenBalance = accounts.value[0].account.data.parsed.info.tokenAmount.uiAmount || 0;
+    } else {
+      tokenBalance = 0;
+    }
+  } catch (err) {
+    console.error('Balance fetch error:', err);
+    tokenBalance = 0;
+  }
+}
+
+// ─── STEP 2: X OAUTH ──────────────────────────────────────────────────────
+async function connectX() {
+  if (!walletAddress) {
+    alert('Please connect your wallet first.');
+    return;
+  }
+
+  // Store wallet in localStorage so we can retrieve it after OAuth redirect
+  localStorage.setItem('bard_wallet', walletAddress);
+
+  // Supabase handles OAuth — this will redirect to X and back
+  const { error } = await db.auth.signInWithOAuth({
+    provider: 'twitter',
+    options: {
+      redirectTo: window.location.origin + '/dashboard.html?auth=callback'
+    }
+  });
+
+  if (error) {
+    console.error('X auth error:', error);
+    alert('X login failed. Please try again.');
+  }
+}
+
+// ─── HANDLE OAUTH CALLBACK ─────────────────────────────────────────────────
+async function handleAuthCallback() {
+  const { data: { session }, error } = await db.auth.getSession();
+  if (!session) return;
+
+  const user = session.user;
+  xHandle = user.user_metadata?.preferred_username || user.user_metadata?.name || 'unknown';
+  walletAddress = localStorage.getItem('bard_wallet');
+
+  if (walletAddress) {
+    await refreshBalance(walletAddress);
+
+    await db.from('members').upsert({
+      wallet_address: walletAddress,
+      x_handle: '@' + xHandle,
+      x_id: user.id,
+      token_balance: tokenBalance,
+      last_seen: new Date().toISOString()
+    }, { onConflict: 'wallet_address' });
+
+    stepsDone[1] = true;
+    stepsDone[2] = true;
+    document.getElementById('s1').classList.add('done');
+    document.getElementById('s1n').textContent = '✓';
+    document.getElementById('s2').classList.add('done');
+    document.getElementById('s2n').textContent = '✓';
+
+    // Auto-enter dashboard
+    setTimeout(() => enterDashboard(), 800);
+  }
+}
+
+// ─── ENTER DASHBOARD ───────────────────────────────────────────────────────
+async function enter() {
+  if (!walletAddress) { alert('Please connect your wallet first.'); return; }
+  if (!stepsDone[2]) { alert('Please link your X account first.'); return; }
+  enterDashboard();
+}
+
+function enterDashboard() {
+  // Update sidebar with real data
+  document.querySelector('.sb-addr').textContent = walletAddress.slice(0,4) + '...' + walletAddress.slice(-4);
+  document.querySelector('.sb-bal').innerHTML = Number(tokenBalance).toLocaleString() + ' <span>$BARD</span>';
+  document.querySelector('.sb-x').innerHTML = '<div class="x-dot"></div>' + (xHandle ? '@'+xHandle : 'linked');
+
+  // Update overview stats
+  const vp = tokenBalance + (stakedBalance * 1.25);
   document.getElementById('cs').style.display = 'none';
   document.getElementById('app').style.display = 'flex';
 }
 
+// ─── DISCONNECT ────────────────────────────────────────────────────────────
+async function disconnect() {
+  await db.auth.signOut();
+  localStorage.removeItem('bard_wallet');
+  walletAddress = null;
+  xHandle = null;
+  tokenBalance = 0;
+  stakedBalance = 0;
+  stepsDone = { 1: false, 2: false };
+  document.getElementById('s1').classList.remove('done');
+  document.getElementById('s2').classList.remove('done');
+  document.getElementById('s1n').textContent = '1';
+  document.getElementById('s2n').textContent = '2';
+  document.getElementById('cs').style.display = 'flex';
+  document.getElementById('app').style.display = 'none';
+}
+
+// ─── PAGE NAV ──────────────────────────────────────────────────────────────
 const titles = { overview:'Overview', leaderboard:'Leaderboard', pools:'Pools', staking:'Staking', voting:'Voting', claims:'Claims', treasury:'Treasury' };
-const metas = { overview:'Week 3 of 36 · Vesting active', leaderboard:'March 2025 · Automated point tracking', pools:'All pools accumulating · Week 3', staking:'Dynamic APY · 34.2% current', voting:'All holders can vote', claims:'Community-verified payouts', treasury:'Full on-chain transparency' };
+const metas  = { overview:'Week 3 of 36 · Vesting active', leaderboard:'March 2025 · Automated point tracking', pools:'All pools accumulating · Week 3', staking:'Dynamic APY · 34.2% current', voting:'All holders can vote', claims:'Community-verified payouts', treasury:'Full on-chain transparency' };
 
 function go(name, el) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
@@ -545,6 +718,7 @@ function go(name, el) {
   document.getElementById('tm').textContent = metas[name] || '';
 }
 
+// ─── MODAL ─────────────────────────────────────────────────────────────────
 function openModal(handle) {
   document.getElementById('mu').textContent = handle;
   document.getElementById('mo').classList.add('open');
@@ -552,6 +726,7 @@ function openModal(handle) {
 function closeModal() { document.getElementById('mo').classList.remove('open'); }
 document.getElementById('mo').addEventListener('click', function(e) { if(e.target===this) closeModal(); });
 
+// ─── COUNTDOWN ─────────────────────────────────────────────────────────────
 let secs = 4*86400 + 22*3600 + 17*60;
 setInterval(() => {
   if (secs <= 0) return; secs--;
@@ -559,6 +734,12 @@ setInterval(() => {
   const el = document.getElementById('cd');
   if (el) el.textContent = String(d).padStart(2,'0')+' : '+String(h).padStart(2,'0')+' : '+String(m).padStart(2,'0');
 }, 1000);
+
+// ─── INIT ──────────────────────────────────────────────────────────────────
+window.addEventListener('load', () => {
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('auth') === 'callback') handleAuthCallback();
+});
 </script>
 </body>
 </html>
