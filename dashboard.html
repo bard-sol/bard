@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=DM+Mono:wght@300;400&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="https://cdn.jsdelivr.net/npm/@solana/web3.js@1.87.6/lib/index.iife.min.js"></script>
+<script src="https://unpkg.com/@solana/web3.js@1.87.6/lib/index.iife.min.js"></script>
 <style>
 *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 html, body { -webkit-user-select: none; user-select: none; height: 100%; }
@@ -516,6 +516,24 @@ textarea { width: 100%; background: var(--surface2); border: 1px solid var(--bor
 
 </div><!-- /main -->
 </div><!-- /app -->
+<!-- PROPOSAL MODAL -->
+<div class="modal-ov" id="proposalModal">
+  <div class="modal">
+    <div class="modal-hdr">
+      <div class="modal-title">Submit a Proposal</div>
+      <button class="modal-close" onclick="document.getElementById('proposalModal').classList.remove('open')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="mono" style="font-size:0.62rem;color:var(--w30);margin-bottom:1rem;line-height:1.7">Proposals go to admin review before going live for community voting.</div>
+      <div class="mono" style="font-size:0.58rem;color:var(--w30);letter-spacing:0.2em;text-transform:uppercase;margin-bottom:0.45rem">Title</div>
+      <div class="inp-wrap" style="margin-bottom:0.9rem"><input class="inp" type="text" id="proposalTitle" placeholder="Proposal title..." style="font-size:0.82rem"></div>
+      <div class="mono" style="font-size:0.58rem;color:var(--w30);letter-spacing:0.2em;text-transform:uppercase;margin-bottom:0.45rem">Description</div>
+      <textarea id="proposalDesc" style="margin-bottom:1rem" placeholder="Describe your proposal in detail..."></textarea>
+      <button class="stake-btn" onclick="submitProposal()">Submit for Review</button>
+    </div>
+  </div>
+</div>
+
 
 <script>
 // ─── CONFIG ───────────────────────────────────────────────────────────────
@@ -999,27 +1017,12 @@ async function initDashboardData() {
 
 // ─── INIT ──────────────────────────────────────────────────────────────────
 window.addEventListener('load', () => {
-  const params = new URLSearchParams(window.location.search);
-  handleAuthCallback();
+  try {
+    handleAuthCallback();
+  } catch(e) {
+    console.error('Init error:', e);
+  }
 });
 </script>
-
-<!-- PROPOSAL MODAL -->
-<div class="modal-ov" id="proposalModal">
-  <div class="modal">
-    <div class="modal-hdr">
-      <div class="modal-title">Submit a Proposal</div>
-      <button class="modal-close" onclick="document.getElementById('proposalModal').classList.remove('open')">✕</button>
-    </div>
-    <div class="modal-body">
-      <div class="mono" style="font-size:0.62rem;color:var(--w30);margin-bottom:1rem;line-height:1.7">Proposals go to admin review before going live for community voting.</div>
-      <div class="mono" style="font-size:0.58rem;color:var(--w30);letter-spacing:0.2em;text-transform:uppercase;margin-bottom:0.45rem">Title</div>
-      <div class="inp-wrap" style="margin-bottom:0.9rem"><input class="inp" type="text" id="proposalTitle" placeholder="Proposal title..." style="font-size:0.82rem"></div>
-      <div class="mono" style="font-size:0.58rem;color:var(--w30);letter-spacing:0.2em;text-transform:uppercase;margin-bottom:0.45rem">Description</div>
-      <textarea id="proposalDesc" style="margin-bottom:1rem" placeholder="Describe your proposal in detail..."></textarea>
-      <button class="stake-btn" onclick="submitProposal()">Submit for Review</button>
-    </div>
-  </div>
-</div>
 </body>
 </html>
