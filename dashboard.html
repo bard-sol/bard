@@ -860,6 +860,13 @@ async function submitProposal() {
   if (!activeWallet) { alert('Connect your wallet first.'); return; }
 
   console.log('Submitting with wallet:', activeWallet, 'handle:', activeHandle);
+
+  // Ensure member exists in Supabase before inserting proposal
+  await db.from('members').upsert({
+    wallet_address: activeWallet,
+    x_handle: activeHandle ? '@' + activeHandle.replace('@','') : null,
+    last_seen: new Date().toISOString()
+  }, { onConflict: 'wallet_address' });
   
   const { data, error } = await db.from('proposals').insert({
     title: title,
