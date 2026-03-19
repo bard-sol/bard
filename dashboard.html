@@ -574,9 +574,9 @@ async function connectWallet() {
 async function refreshBalance(address) {
   try {
     if (BARD_MINT === 'REPLACE_WITH_TOKEN_MINT_ADDRESS') {
-      // Token not deployed yet — use placeholder
-      tokenBalance = 2450000;
-      stakedBalance = 650000;
+      // Token not deployed yet — show zero
+      tokenBalance = 0;
+      stakedBalance = 0;
       return;
     }
 
