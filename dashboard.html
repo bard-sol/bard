@@ -859,16 +859,24 @@ async function submitProposal() {
   const activeHandle = xHandle || localStorage.getItem('bard_xhandle');
   if (!activeWallet) { alert('Connect your wallet first.'); return; }
 
-  const { error } = await db.from('proposals').insert({
+  console.log('Submitting with wallet:', activeWallet, 'handle:', activeHandle);
+  
+  const { data, error } = await db.from('proposals').insert({
     title: title,
     description: desc,
     submitted_by: activeHandle || activeWallet,
     approved_by_admin: false,
     status: 'pending',
     ends_at: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString()
-  });
+  }).select();
 
-  if (error) { alert('Submission failed. Please try again.'); return; }
+  if (error) { 
+    console.error('Proposal error:', JSON.stringify(error));
+    alert('Submission failed: ' + error.message); 
+    return; 
+  }
+  
+  console.log('Proposal submitted:', data);
 
   document.getElementById('proposalModal').classList.remove('open');
   document.getElementById('proposalTitle').value = '';
