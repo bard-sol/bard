@@ -853,12 +853,16 @@ async function submitProposal() {
   const desc = document.getElementById('proposalDesc').value.trim();
 
   if (!title) { alert('Please enter a title.'); return; }
-  if (!walletAddress) { alert('Connect your wallet first.'); return; }
+
+  // Fallback to localStorage if walletAddress not in memory
+  const activeWallet = walletAddress || localStorage.getItem('bard_wallet');
+  const activeHandle = xHandle || localStorage.getItem('bard_xhandle');
+  if (!activeWallet) { alert('Connect your wallet first.'); return; }
 
   const { error } = await db.from('proposals').insert({
     title: title,
     description: desc,
-    submitted_by: xHandle || walletAddress,
+    submitted_by: activeHandle || activeWallet,
     approved_by_admin: false,
     status: 'pending',
     ends_at: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString()
