@@ -762,7 +762,7 @@ setInterval(() => {
 // ─── LOAD PROPOSALS FROM SUPABASE ──────────────────────────────────────────
 async function loadProposals() {
   const { data, error } = await db.from('proposals')
-    .select('*')
+    .select('*, members(x_handle)')
     .eq('status', 'active')
     .order('created_at', { ascending: false });
 
@@ -785,7 +785,7 @@ async function loadProposals() {
       <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:0.35rem">
         <div>
           <div class="vote-title">${p.title}</div>
-          <div class="vote-meta">Submitted by ${p.submitted_by || 'community'} · ${formatDate(p.ends_at)} · ${Math.round(total / 1000000)}M VP cast</div>
+          <div class="vote-meta">Submitted by ${p.members?.x_handle || p.submitted_by?.slice(0,6)+'...'+p.submitted_by?.slice(-4) || 'community'} · ${formatDate(p.ends_at)} · ${Math.round(total / 1000000)}M VP cast</div>
         </div>
         <span class="badge bp">Active</span>
       </div>
