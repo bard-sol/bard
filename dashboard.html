@@ -862,11 +862,13 @@ async function submitProposal() {
   console.log('Submitting with wallet:', activeWallet, 'handle:', activeHandle);
 
   // Ensure member exists in Supabase before inserting proposal
-  await db.from('members').upsert({
+  const memberRes = await db.from('members').upsert({
     wallet_address: activeWallet,
     x_handle: activeHandle ? '@' + activeHandle.replace('@','') : null,
+    token_balance: tokenBalance || 0,
     last_seen: new Date().toISOString()
-  }, { onConflict: 'wallet_address' });
+  }, { onConflict: 'wallet_address', ignoreDuplicates: false });
+  console.log('Member upsert result:', JSON.stringify(memberRes));
   
   const { data, error } = await db.from('proposals').insert({
     title: title,
