@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>$BARD — Admin</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=DM+Mono:wght@300;400&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { height: 100%; -webkit-user-select: none; user-select: none; }
+:root {
+  --bg: #080808; --surface: #0e0e0e; --surface2: #141414;
+  --border: rgba(155,127,232,0.12); --border2: rgba(155,127,232,0.22);
+  --purple: #9b7fe8; --purple-dim: rgba(155,127,232,0.12);
+  --white: #fff; --w60: rgba(255,255,255,0.6); --w30: rgba(255,255,255,0.3); --w08: rgba(255,255,255,0.07);
+  --green: #4ade80; --red: #f87171; --amber: #fbbf24; --sidebar: 200px;
+}
+body { background: var(--bg); color: var(--white); font-family: 'Outfit', sans-serif; display: flex; min-height: 100vh; }
+
+.login-screen { position: fixed; inset: 0; background: var(--bg); z-index: 200; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.8rem; }
+.login-tag { font-family: 'DM Mono', monospace; font-size: 0.65rem; color: var(--purple); letter-spacing: 0.3em; margin-bottom: 0.5rem; }
+.login-title { font-size: 1rem; font-weight: 600; margin-bottom: 0.3rem; }
+.login-sub { font-family: 'DM Mono', monospace; font-size: 0.62rem; color: var(--w30); margin-bottom: 0.8rem; }
+.login-inp { width: 280px; background: var(--surface); border: 1px solid var(--border2); color: var(--white); padding: 0.75rem 1rem; font-family: 'DM Mono', monospace; font-size: 0.85rem; outline: none; }
+.login-inp:focus { border-color: var(--purple); }
+.login-btn { width: 280px; background: var(--purple); color: #000; border: none; padding: 0.75rem; font-family: 'Outfit', sans-serif; font-size: 0.82rem; font-weight: 600; cursor: pointer; letter-spacing: 0.08em; text-transform: uppercase; transition: background 0.2s; }
+.login-btn:hover { background: var(--white); }
+.login-err { font-family: 'DM Mono', monospace; font-size: 0.62rem; color: var(--red); display: none; }
+
+.sidebar { width: var(--sidebar); min-height: 100vh; background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; position: fixed; top: 0; left: 0; bottom: 0; z-index: 50; }
+.sb-head { padding: 1.3rem 1.2rem 1rem; border-bottom: 1px solid var(--border); }
+.sb-title { font-size: 0.9rem; font-weight: 700; letter-spacing: 0.12em; }
+.sb-badge { display: inline-block; font-family: 'DM Mono', monospace; font-size: 0.48rem; letter-spacing: 0.2em; color: var(--amber); background: rgba(251,191,36,0.1); padding: 0.15rem 0.45rem; margin-top: 0.3rem; text-transform: uppercase; border: 1px solid rgba(251,191,36,0.2); }
+.sb-nav { flex: 1; padding: 0.7rem 0; overflow-y: auto; }
+.nav-lbl { font-family: 'DM Mono', monospace; font-size: 0.48rem; letter-spacing: 0.3em; color: rgba(255,255,255,0.18); text-transform: uppercase; padding: 0.65rem 1.2rem 0.3rem; }
+.nav-item { display: flex; align-items: center; gap: 0.55rem; padding: 0.52rem 1.2rem; cursor: pointer; transition: all 0.18s; border-left: 2px solid transparent; font-size: 0.78rem; color: var(--w60); }
+.nav-item:hover { color: var(--white); background: var(--w08); }
+.nav-item.active { color: var(--purple); border-left-color: var(--purple); background: var(--purple-dim); font-weight: 500; }
+.nav-count { margin-left: auto; font-family: 'DM Mono', monospace; font-size: 0.52rem; background: var(--amber); color: #000; padding: 0.1rem 0.35rem; border-radius: 10px; font-weight: 700; }
+.nav-count.red { background: var(--red); }
+.sb-bottom { padding: 0.9rem 1.2rem; border-top: 1px solid var(--border); }
+.logout-btn { width: 100%; background: transparent; border: 1px solid var(--border2); color: var(--w30); font-family: 'DM Mono', monospace; font-size: 0.58rem; letter-spacing: 0.15em; text-transform: uppercase; padding: 0.5rem; cursor: pointer; transition: all 0.2s; }
+.logout-btn:hover { border-color: var(--red); color: var(--red); }
+
+.main { margin-left: var(--sidebar); flex: 1; min-height: 100vh; display: flex; flex-direction: column; }
+.topbar { padding: 1rem 1.8rem; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; background: var(--surface); position: sticky; top: 0; z-index: 40; }
+.topbar-title { font-size: 0.88rem; font-weight: 600; }
+.topbar-meta { font-family: 'DM Mono', monospace; font-size: 0.58rem; color: var(--w30); margin-top: 0.1rem; }
+.live { display: flex; align-items: center; gap: 0.35rem; font-family: 'DM Mono', monospace; font-size: 0.58rem; color: var(--green); }
+.live::before { content:''; width:5px; height:5px; border-radius:50%; background:var(--green); }
+
+.page { display: none; padding: 1.8rem; animation: fi 0.2s ease; }
+.page.active { display: block; }
+@keyframes fi { from{opacity:0;transform:translateY(5px)} to{opacity:1;transform:translateY(0)} }
+
+.stats-row { display: grid; grid-template-columns: repeat(4,1fr); gap: 1px; background: var(--border); border: 1px solid var(--border); margin-bottom: 1.8rem; }
+.stat { background: var(--surface); padding: 1.2rem 1.4rem; }
+.stat-lbl { font-family: 'DM Mono', monospace; font-size: 0.52rem; letter-spacing: 0.2em; color: var(--w30); text-transform: uppercase; margin-bottom: 0.5rem; }
+.stat-val { font-size: 1.3rem; font-weight: 600; }
+.stat-val.p { color: var(--purple); } .stat-val.g { color: var(--green); } .stat-val.a { color: var(--amber); } .stat-val.r { color: var(--red); }
+
+.card { background: var(--surface); border: 1px solid var(--border); margin-bottom: 1rem; }
+.card-head { padding: 1.1rem 1.4rem; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+.card-body { padding: 1.4rem; }
+.sec-title { font-size: 0.7rem; font-weight: 600; letter-spacing: 0.06em; color: var(--w60); text-transform: uppercase; }
+
+.dt { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+.dt th { font-family: 'DM Mono', monospace; font-size: 0.52rem; letter-spacing: 0.18em; color: var(--w30); text-transform: uppercase; padding: 0.6rem 1rem; text-align: left; border-bottom: 1px solid var(--border); font-weight: 400; }
+.dt td { padding: 0.8rem 1rem; border-bottom: 1px solid rgba(155,127,232,0.05); vertical-align: middle; }
+.dt tr:last-child td { border-bottom: none; }
+.dt tr:hover td { background: var(--w08); }
+
+.badge { display: inline-block; font-family: 'DM Mono', monospace; font-size: 0.52rem; letter-spacing: 0.12em; text-transform: uppercase; padding: 0.18rem 0.5rem; border-radius: 2px; }
+.bp { background: var(--purple-dim); color: var(--purple); }
+.bg { background: rgba(74,222,128,0.1); color: var(--green); }
+.br { background: rgba(248,113,113,0.1); color: var(--red); }
+.ba { background: rgba(251,191,36,0.1); color: var(--amber); }
+.bw { background: var(--w08); color: var(--w30); }
+
+.btn { padding: 0.42rem 0.9rem; border: none; font-family: 'Outfit', sans-serif; font-size: 0.72rem; font-weight: 500; cursor: pointer; transition: all 0.18s; }
+.btn-p { background: var(--purple); color: #000; }
+.btn-p:hover { background: var(--white); }
+.btn-g { background: rgba(74,222,128,0.12); color: var(--green); border: 1px solid rgba(74,222,128,0.25); }
+.btn-g:hover { background: rgba(74,222,128,0.22); }
+.btn-r { background: rgba(248,113,113,0.12); color: var(--red); border: 1px solid rgba(248,113,113,0.25); }
+.btn-r:hover { background: rgba(248,113,113,0.22); }
+.btn-ghost { background: transparent; color: var(--w60); border: 1px solid var(--border2); }
+.btn-ghost:hover { border-color: var(--purple); color: var(--purple); }
+
+.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem; }
+.fg { display: flex; flex-direction: column; gap: 0.4rem; }
+.fg.full { grid-column: 1 / -1; }
+.fl { font-family: 'DM Mono', monospace; font-size: 0.54rem; letter-spacing: 0.18em; color: var(--w30); text-transform: uppercase; }
+.fi { background: var(--surface2); border: 1px solid var(--border2); color: var(--white); padding: 0.62rem 0.85rem; font-family: 'DM Mono', monospace; font-size: 0.8rem; outline: none; transition: border-color 0.2s; width: 100%; }
+.fi:focus { border-color: var(--purple); }
+.fs { background: var(--surface2); border: 1px solid var(--border2); color: var(--white); padding: 0.62rem 0.85rem; font-family: 'Outfit', sans-serif; font-size: 0.8rem; outline: none; width: 100%; cursor: pointer; }
+.fta { background: var(--surface2); border: 1px solid var(--border2); color: var(--white); padding: 0.62rem 0.85rem; font-family: 'DM Mono', monospace; font-size: 0.72rem; outline: none; width: 100%; resize: vertical; min-height: 65px; line-height: 1.6; }
+
+.toast { position: fixed; bottom: 1.5rem; right: 1.5rem; background: var(--surface); border: 1px solid var(--border2); padding: 0.75rem 1.1rem; font-family: 'DM Mono', monospace; font-size: 0.68rem; z-index: 1000; opacity: 0; transform: translateY(8px); transition: all 0.3s; pointer-events: none; max-width: 320px; }
+.toast.show { opacity: 1; transform: translateY(0); }
+.toast.s { border-color: rgba(74,222,128,0.4); color: var(--green); }
+.toast.e { border-color: rgba(248,113,113,0.4); color: var(--red); }
+
+.empty { text-align:center; padding:2rem; font-family:'DM Mono',monospace; font-size:0.68rem; color:var(--w30); }
+.mono { font-family: 'DM Mono', monospace; }
+</style>
+</head>
+<body>
+
+<div id="ls" class="login-screen">
+  <div class="login-tag">$BARD · ADMIN</div>
+  <div class="login-title">Admin Access</div>
+  <div class="login-sub">Enter your admin password to continue</div>
+  <input class="login-inp" type="password" id="pwd" placeholder="Password">
+  <button class="login-btn" id="loginBtn">Enter</button>
+  <div class="login-err" id="lerr">Incorrect password</div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<div id="app" style="display:none;width:100%">
+<aside class="sidebar">
+  <div class="sb-head">
+    <div class="sb-title">$BARD</div>
+    <div class="sb-badge">Admin Panel</div>
+  </div>
+  <nav class="sb-nav">
+    <div class="nav-lbl">Overview</div>
+    <div class="nav-item active" id="nav-overview" onclick="go('overview',this)">
+      <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><rect x="1" y="1" width="6" height="6" rx="1" stroke="currentColor" stroke-width="1.3"/><rect x="9" y="1" width="6" height="6" rx="1" stroke="currentColor" stroke-width="1.3"/><rect x="1" y="9" width="6" height="6" rx="1" stroke="currentColor" stroke-width="1.3"/><rect x="9" y="9" width="6" height="6" rx="1" stroke="currentColor" stroke-width="1.3"/></svg>
+      Dashboard
+    </div>
+    <div class="nav-lbl">Manage</div>
+    <div class="nav-item" onclick="go('proposals',this)">
+      <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><rect x="1" y="3" width="14" height="10" rx="1" stroke="currentColor" stroke-width="1.3"/><path d="M5 8l2 2 4-4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      Proposals <span class="nav-count" id="n-p">0</span>
+    </div>
+    <div class="nav-item" onclick="go('claims',this)">
+      <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M8 1v9M4 6l4 4 4-4M2 12h12" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      Claims <span class="nav-count red" id="n-c">0</span>
+    </div>
+    <div class="nav-item" onclick="go('members',this)">
+      <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="5" r="3" stroke="currentColor" stroke-width="1.3"/><path d="M2 14c0-3 2.7-5 6-5s6 2 6 5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+      Members
+    </div>
+    <div class="nav-lbl">Treasury</div>
+    <div class="nav-item" onclick="go('burns',this)">
+      <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M8 2c0 3-4 4-4 7a4 4 0 008 0c0-3-4-4-4-7z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>
+      Record Burn
+    </div>
+    <div class="nav-item" onclick="go('pools',this)">
+      <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.3"/><path d="M8 4v4l3 2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+      Update Pools
+    </div>
+  </nav>
+  <div class="sb-bottom">
+    <button class="logout-btn" id="logoutBtn">Log Out</button>
+  </div>
+</aside>
+
+<div class="main">
+  <div class="topbar">
+    <div><div class="topbar-title" id="tt">Dashboard</div><div class="topbar-meta">$BARD Admin Panel</div></div>
+    <div class="live">Supabase Connected</div>
+  </div>
+
+  <!-- OVERVIEW -->
+  <div class="page active" id="pg-overview">
+    <div class="stats-row">
+      <div class="stat"><div class="stat-lbl">Pending Proposals</div><div class="stat-val a" id="ov-p">—</div></div>
+      <div class="stat"><div class="stat-lbl">Open Claims</div><div class="stat-val r" id="ov-c">—</div></div>
+      <div class="stat"><div class="stat-lbl">Total Members</div><div class="stat-val p" id="ov-m">—</div></div>
+      <div class="stat"><div class="stat-lbl">Total Burned</div><div class="stat-val g" id="ov-b">—</div></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
+      <div class="card">
+        <div class="card-head"><div class="sec-title">Pending Proposals</div></div>
+        <div class="card-body" id="ov-pl"><div class="mono" style="font-size:0.65rem;color:var(--w30)">None pending</div></div>
+      </div>
+      <div class="card">
+        <div class="card-head"><div class="sec-title">Open Claims</div></div>
+        <div class="card-body" id="ov-cl"><div class="mono" style="font-size:0.65rem;color:var(--w30)">None open</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PROPOSALS -->
+  <div class="page" id="pg-proposals">
+    <div class="card" style="margin-bottom:1.2rem">
+      <div class="card-head"><div class="sec-title">Pending Approval</div><span class="badge ba">Needs review</span></div>
+      <table class="dt"><thead><tr><th>Title</th><th>Submitted by</th><th>Date</th><th>Actions</th></tr></thead>
+      <tbody id="tb-pending"><tr><td colspan="4" class="empty">Loading...</td></tr></tbody></table>
+    </div>
+    <div class="card">
+      <div class="card-head"><div class="sec-title">Active Proposals</div></div>
+      <table class="dt"><thead><tr><th>Title</th><th>Yes VP</th><th>No VP</th><th>Ends</th><th>Actions</th></tr></thead>
+      <tbody id="tb-active"><tr><td colspan="5" class="empty">Loading...</td></tr></tbody></table>
+    </div>
+  </div>
+
+  <!-- CLAIMS -->
+  <div class="page" id="pg-claims">
+    <div class="card" style="margin-bottom:1.2rem">
+      <div class="card-head"><div class="sec-title">Open Claims</div><span class="badge br">Awaiting vote</span></div>
+      <table class="dt"><thead><tr><th>Pool</th><th>By</th><th>Proof</th><th>Approve %</th><th>Actions</th></tr></thead>
+      <tbody id="tb-claims"><tr><td colspan="5" class="empty">Loading...</td></tr></tbody></table>
+    </div>
+    <div class="card">
+      <div class="card-head"><div class="sec-title">Past Claims</div></div>
+      <table class="dt"><thead><tr><th>Pool</th><th>By</th><th>Result</th><th>Date</th></tr></thead>
+      <tbody id="tb-past-claims"><tr><td colspan="4" class="empty">Loading...</td></tr></tbody></table>
+    </div>
+  </div>
+
+  <!-- MEMBERS -->
+  <div class="page" id="pg-members">
+    <div class="card">
+      <div class="card-head"><div class="sec-title">All Members</div><span class="badge bp" id="mb-count">0 members</span></div>
+      <table class="dt"><thead><tr><th>X Handle</th><th>Wallet</th><th>Balance</th><th>Points</th><th>Last Seen</th><th></th></tr></thead>
+      <tbody id="tb-members"><tr><td colspan="6" class="empty">Loading...</td></tr></tbody></table>
+    </div>
+  </div>
+
+  <!-- BURNS -->
+  <div class="page" id="pg-burns">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
+      <div class="card">
+        <div class="card-head"><div class="sec-title">Record Weekly Burn</div></div>
+        <div class="card-body">
+          <div class="form-grid">
+            <div class="fg"><label class="fl">Week Number</label><input class="fi" type="number" id="b-week" placeholder="e.g. 4" min="1" max="36"></div>
+            <div class="fg"><label class="fl">Amount Burned</label><input class="fi" type="number" id="b-amount" value="2777778"></div>
+            <div class="fg full"><label class="fl">Transaction Hash</label><input class="fi" type="text" id="b-tx" placeholder="Solana tx signature..."></div>
+          </div>
+          <button class="btn btn-p" style="width:100%" id="burnBtn">Record Burn</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-head"><div class="sec-title">Burn History</div></div>
+        <table class="dt"><thead><tr><th>Week</th><th>Amount</th><th>Cumulative</th><th>Tx</th></tr></thead>
+        <tbody id="tb-burns"><tr><td colspan="4" class="empty">No burns yet</td></tr></tbody></table>
+      </div>
+    </div>
+  </div>
+
+  <!-- POOLS -->
+  <div class="page" id="pg-pools">
+    <div class="card" style="margin-bottom:1rem">
+      <div class="card-head"><div class="sec-title">Update Pool Balances</div></div>
+      <div class="card-body">
+        <p class="mono" style="font-size:0.63rem;color:var(--w30);margin-bottom:1.3rem;line-height:1.8">Set the current accumulated balance for each pool. Update weekly after each vest unlock fires. Members see these numbers on their dashboard.</p>
+        <div class="form-grid">
+          <div class="fg"><label class="fl">Elon Pool</label><input class="fi" type="number" id="p-elon" placeholder="0"></div>
+          <div class="fg"><label class="fl">Viral Pool</label><input class="fi" type="number" id="p-viral" placeholder="0"></div>
+          <div class="fg"><label class="fl">Interaction Pool</label><input class="fi" type="number" id="p-interaction" placeholder="0"></div>
+          <div class="fg"><label class="fl">Leaderboard Pool</label><input class="fi" type="number" id="p-leaderboard" placeholder="0"></div>
+          <div class="fg"><label class="fl">Current Week</label><input class="fi" type="number" id="p-week" placeholder="e.g. 4" min="1" max="36"></div>
+        </div>
+        <button class="btn btn-p" style="width:100%;margin-top:0.3rem" id="poolsBtn">Update Pool Balances</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-head"><div class="sec-title">Current Pool State</div></div>
+      <table class="dt"><thead><tr><th>Pool</th><th>Current Balance</th><th>Total Allocation</th><th>Status</th></tr></thead>
+      <tbody id="tb-pools"><tr><td colspan="4" class="empty">Loading...</td></tr></tbody></table>
+    </div>
+  </div>
+
+</div>
+</div>
+
+<script>
+const SUPABASE_URL = 'https://pxdiyukxgnphxlknhmke.supabase.co';
+const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB4ZGl5dWt4Z25waHhsa25obWtlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM4NTg2NDAsImV4cCI6MjA4OTQzNDY0MH0.eOJ8I7UBCywHDMWdPbcWFURbfoDgMUHFD_cSAZA8Hk4';
+const ADMIN_PWD = 'BARD_ADMIN_2025';
+
+const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+
+// ── AUTH ──────────────────────────────────────────────────────────────────
+document.getElementById('loginBtn').addEventListener('click', login);
+document.getElementById('pwd').addEventListener('keydown', e => { if(e.key==='Enter') login(); });
+document.getElementById('logoutBtn').addEventListener('click', () => { sessionStorage.removeItem('ba'); location.reload(); });
+
+function login() {
+  if (document.getElementById('pwd').value === ADMIN_PWD) {
+    sessionStorage.setItem('ba', '1');
+    document.getElementById('ls').style.display = 'none';
+    document.getElementById('app').style.display = 'flex';
+    loadAll();
+  } else {
+    document.getElementById('lerr').style.display = 'block';
+  }
+}
+
+window.addEventListener('load', () => {
+  if (sessionStorage.getItem('ba') === '1') {
+    document.getElementById('ls').style.display = 'none';
+    document.getElementById('app').style.display = 'flex';
+    loadAll();
+  }
+});
+
+// ── NAV ───────────────────────────────────────────────────────────────────
+const titles = { overview:'Dashboard', proposals:'Proposals', claims:'Claims', members:'Members', burns:'Record Burn', pools:'Update Pools' };
+function go(name, el) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('pg-'+name).classList.add('active');
+  if (el) el.classList.add('active');
+  document.getElementById('tt').textContent = titles[name] || name;
+}
+
+// ── TOAST ──────────────────────────────────────────────────────────────────
+function toast(msg, type='s') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = `toast show ${type}`;
+  setTimeout(() => t.className = 'toast', 3000);
+}
+
+// ── LOAD ALL ──────────────────────────────────────────────────────────────
+async function loadAll() {
+  await Promise.all([loadProposals(), loadClaims(), loadMembers(), loadBurns(), loadPools()]);
+}
+
+// ── FORMAT DATE ──────────────────────────────────────────────────────────
+function fd(str) {
+  if (!str) return '—';
+  return new Date(str).toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' });
+}
+
+// ── PROPOSALS ─────────────────────────────────────────────────────────────
+async function loadProposals() {
+  const { data } = await db.from('proposals').select('*, members(x_handle)').order('created_at', { ascending: false });
+  if (!data) return;
+
+  const pending = data.filter(p => p.status === 'pending');
+  const active = data.filter(p => p.status === 'active');
+
+  document.getElementById('n-p').textContent = pending.length;
+  document.getElementById('ov-p').textContent = pending.length;
+
+  const pb = document.getElementById('tb-pending');
+  pb.innerHTML = pending.length === 0
+    ? '<tr><td colspan="4" class="empty">No pending proposals</td></tr>'
+    : pending.map(p => `<tr>
+        <td><div style="font-weight:500;font-size:0.82rem">${p.title}</div><div class="mono" style="font-size:0.58rem;color:var(--w30);margin-top:0.2rem">${(p.description||'').slice(0,70)}${(p.description||'').length>70?'...':''}</div></td>
+        <td><span class="mono" style="font-size:0.7rem">${p.members?.x_handle || (p.submitted_by||'').slice(0,8)+'...'}</span></td>
+        <td><span class="mono" style="font-size:0.62rem;color:var(--w30)">${fd(p.created_at)}</span></td>
+        <td><div style="display:flex;gap:0.4rem">
+          <button class="btn btn-g" onclick="approveP('${p.id}')">Approve</button>
+          <button class="btn btn-r" onclick="rejectP('${p.id}')">Reject</button>
+        </div></td>
+      </tr>`).join('');
+
+  const ab = document.getElementById('tb-active');
+  ab.innerHTML = active.length === 0
+    ? '<tr><td colspan="5" class="empty">No active proposals</td></tr>'
+    : active.map(p => `<tr>
+        <td style="font-weight:500;font-size:0.82rem">${p.title}</td>
+        <td><span class="mono" style="font-size:0.7rem;color:var(--green)">${Number(p.yes_power||0).toLocaleString()}</span></td>
+        <td><span class="mono" style="font-size:0.7rem;color:var(--red)">${Number(p.no_power||0).toLocaleString()}</span></td>
+        <td><span class="mono" style="font-size:0.62rem;color:var(--w30)">${fd(p.ends_at)}</span></td>
+        <td><button class="btn btn-ghost" onclick="closeP('${p.id}')">Close</button></td>
+      </tr>`).join('');
+
+  const ol = document.getElementById('ov-pl');
+  ol.innerHTML = pending.length === 0
+    ? '<div class="mono" style="font-size:0.65rem;color:var(--w30)">None pending</div>'
+    : pending.slice(0,3).map(p => `
+        <div style="padding:0.6rem 0;border-bottom:1px solid rgba(155,127,232,0.06)">
+          <div style="font-size:0.8rem;font-weight:500;margin-bottom:0.5rem">${p.title}</div>
+          <div style="display:flex;gap:0.4rem">
+            <button class="btn btn-g" style="font-size:0.65rem;padding:0.3rem 0.6rem" onclick="approveP('${p.id}')">Approve</button>
+            <button class="btn btn-r" style="font-size:0.65rem;padding:0.3rem 0.6rem" onclick="rejectP('${p.id}')">Reject</button>
+          </div>
+        </div>`).join('');
+}
+
+async function approveP(id) {
+  const ends = new Date(Date.now() + 14*24*60*60*1000).toISOString();
+  const { error } = await db.from('proposals').update({ status:'active', approved_by_admin:true, ends_at:ends }).eq('id', id);
+  if (error) { toast('Failed: '+error.message, 'e'); return; }
+  toast('Proposal approved — now live on dashboard');
+  loadProposals();
+}
+
+async function rejectP(id) {
+  if (!confirm('Reject and remove this proposal?')) return;
+  await db.from('proposals').delete().eq('id', id);
+  toast('Proposal rejected');
+  loadProposals();
+}
+
+async function closeP(id) {
+  if (!confirm('Close voting on this proposal?')) return;
+  await db.from('proposals').update({ status:'closed' }).eq('id', id);
+  toast('Proposal closed');
+  loadProposals();
+}
+
+// ── CLAIMS ────────────────────────────────────────────────────────────────
+async function loadClaims() {
+  const { data } = await db.from('claims').select('*, members(x_handle)').order('created_at', { ascending: false });
+  if (!data) return;
+
+  const open = data.filter(c => c.status === 'open');
+  const past = data.filter(c => c.status !== 'open');
+
+  document.getElementById('n-c').textContent = open.length;
+  document.getElementById('ov-c').textContent = open.length;
+
+  const cb = document.getElementById('tb-claims');
+  cb.innerHTML = open.length === 0
+    ? '<tr><td colspan="5" class="empty">No open claims</td></tr>'
+    : open.map(c => {
+        const total = (c.yes_power||0) + (c.no_power||0);
+        const pct = total > 0 ? Math.round((c.yes_power/total)*100) : 0;
+        return `<tr>
+          <td><span class="badge bp">${c.pool_name}</span></td>
+          <td><span class="mono" style="font-size:0.7rem">${c.members?.x_handle || (c.submitted_by||'').slice(0,8)+'...'}</span></td>
+          <td><a href="${c.proof_url}" target="_blank" style="font-family:'DM Mono',monospace;font-size:0.62rem;color:var(--purple);text-decoration:underline">View →</a></td>
+          <td><span class="mono" style="font-size:0.7rem;color:${pct>=50?'var(--green)':'var(--red)'}">${pct}%</span></td>
+          <td><div style="display:flex;gap:0.4rem">
+            <button class="btn btn-g" onclick="approveC('${c.id}')">Pay Out</button>
+            <button class="btn btn-r" onclick="rejectC('${c.id}')">Reject</button>
+          </div></td>
+        </tr>`;}).join('');
+
+  const pcb = document.getElementById('tb-past-claims');
+  pcb.innerHTML = past.length === 0
+    ? '<tr><td colspan="4" class="empty">No past claims</td></tr>'
+    : past.map(c => `<tr>
+        <td><span class="badge bw">${c.pool_name}</span></td>
+        <td><span class="mono" style="font-size:0.7rem">${c.members?.x_handle || '—'}</span></td>
+        <td><span class="badge ${c.status==='approved'?'bg':'br'}">${c.status}</span></td>
+        <td><span class="mono" style="font-size:0.62rem;color:var(--w30)">${fd(c.created_at)}</span></td>
+      </tr>`).join('');
+
+  const ocl = document.getElementById('ov-cl');
+  ocl.innerHTML = open.length === 0
+    ? '<div class="mono" style="font-size:0.65rem;color:var(--w30)">None open</div>'
+    : open.slice(0,3).map(c => {
+        const total = (c.yes_power||0)+(c.no_power||0);
+        const pct = total > 0 ? Math.round((c.yes_power/total)*100) : 0;
+        return `<div style="padding:0.6rem 0;border-bottom:1px solid rgba(155,127,232,0.06)">
+          <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.4rem">
+            <span class="badge bp">${c.pool_name}</span>
+            <span class="mono" style="font-size:0.62rem;color:var(--w30)">${c.members?.x_handle||'—'} · ${pct}% approve</span>
+          </div>
+          <div style="display:flex;gap:0.4rem">
+            <button class="btn btn-g" style="font-size:0.65rem;padding:0.3rem 0.6rem" onclick="approveC('${c.id}')">Pay Out</button>
+            <button class="btn btn-r" style="font-size:0.65rem;padding:0.3rem 0.6rem" onclick="rejectC('${c.id}')">Reject</button>
+          </div>
+        </div>`;}).join('');
+}
+
+async function approveC(id) {
+  if (!confirm('Mark as paid out? Remember to execute the on-chain payout manually.')) return;
+  await db.from('claims').update({ status:'approved' }).eq('id', id);
+  toast('Claim approved — execute on-chain payout now');
+  loadClaims();
+}
+
+async function rejectC(id) {
+  if (!confirm('Reject this claim? Pool keeps accumulating.')) return;
+  await db.from('claims').update({ status:'rejected' }).eq('id', id);
+  toast('Claim rejected');
+  loadClaims();
+}
+
+// ── MEMBERS ───────────────────────────────────────────────────────────────
+async function loadMembers() {
+  const { data, count } = await db.from('members').select('*', { count:'exact' }).order('points', { ascending:false });
+  if (!data) return;
+
+  const total = count || data.length;
+  document.getElementById('ov-m').textContent = total;
+  document.getElementById('mb-count').textContent = total + ' members';
+
+  const mb = document.getElementById('tb-members');
+  mb.innerHTML = data.length === 0
+    ? '<tr><td colspan="6" class="empty">No members yet</td></tr>'
+    : data.map(m => `<tr>
+        <td><span class="mono" style="font-size:0.78rem">${m.x_handle||'—'}</span></td>
+        <td><span class="mono" style="font-size:0.62rem;color:var(--w30)">${(m.wallet_address||'').slice(0,6)}...${(m.wallet_address||'').slice(-4)}</span></td>
+        <td><span class="mono" style="font-size:0.7rem">${Number(m.token_balance||0).toLocaleString()}</span></td>
+        <td><span class="mono" style="font-size:0.7rem;color:var(--purple)">${m.points||0}</span></td>
+        <td><span class="mono" style="font-size:0.62rem;color:var(--w30)">${fd(m.last_seen)}</span></td>
+        <td><button class="btn btn-ghost" style="font-size:0.65rem;padding:0.3rem 0.6rem" onclick="removeM('${m.wallet_address}')">Remove</button></td>
+      </tr>`).join('');
+}
+
+async function removeM(wallet) {
+  if (!confirm('Remove this member?')) return;
+  await db.from('members').delete().eq('wallet_address', wallet);
+  toast('Member removed');
+  loadMembers();
+}
+
+// ── BURNS ─────────────────────────────────────────────────────────────────
+document.getElementById('burnBtn').addEventListener('click', recordBurn);
+
+async function loadBurns() {
+  const { data } = await db.from('burn_log').select('*').order('week_number', { ascending:false });
+  if (!data) return;
+
+  if (data.length > 0) document.getElementById('ov-b').textContent = Number(data[0].cumulative).toLocaleString();
+
+  const bb = document.getElementById('tb-burns');
+  bb.innerHTML = data.length === 0
+    ? '<tr><td colspan="4" class="empty">No burns recorded</td></tr>'
+    : data.map(b => `<tr>
+        <td><span class="mono" style="font-size:0.7rem">Week ${b.week_number}</span></td>
+        <td><span class="mono" style="font-size:0.7rem;color:var(--red)">${Number(b.amount).toLocaleString()}</span></td>
+        <td><span class="mono" style="font-size:0.7rem">${Number(b.cumulative).toLocaleString()}</span></td>
+        <td><span class="mono" style="font-size:0.6rem;color:var(--purple)">${(b.tx_signature||'—').slice(0,16)}${b.tx_signature&&b.tx_signature.length>16?'...':''}</span></td>
+      </tr>`).join('');
+}
+
+async function recordBurn() {
+  const week = parseInt(document.getElementById('b-week').value);
+  const amount = parseInt(document.getElementById('b-amount').value);
+  const tx = document.getElementById('b-tx').value.trim();
+
+  if (!week || !amount) { toast('Please enter week and amount', 'e'); return; }
+
+  const { data: prev } = await db.from('burn_log').select('cumulative').order('week_number', { ascending:false }).limit(1);
+  const cumulative = (prev?.[0]?.cumulative || 0) + amount;
+
+  const { error } = await db.from('burn_log').insert({ week_number:week, amount, cumulative, tx_signature:tx||null });
+  if (error) { toast('Failed: '+error.message, 'e'); return; }
+
+  toast('Week '+week+' burn recorded');
+  document.getElementById('b-week').value = '';
+  document.getElementById('b-tx').value = '';
+  loadBurns();
+}
+
+// ── POOLS ─────────────────────────────────────────────────────────────────
+document.getElementById('poolsBtn').addEventListener('click', updatePools);
+
+const POOL_CONFIG = [
+  { key:'elon', name:'Elon Pool', total:50000000 },
+  { key:'viral', name:'Viral Pool', total:35000000 },
+  { key:'interaction', name:'Interaction Pool', total:25000000 },
+  { key:'leaderboard', name:'Leaderboard Pool', total:15750000 },
+];
+
+async function loadPools() {
+  const { data } = await db.from('pool_balances').select('*');
+  const tb = document.getElementById('tb-pools');
+
+  if (!data || data.length === 0) {
+    tb.innerHTML = POOL_CONFIG.map(p => `<tr>
+      <td style="font-weight:500">${p.name}</td>
+      <td><span class="mono" style="color:var(--w30)">—</span></td>
+      <td><span class="mono" style="color:var(--w30)">${Number(p.total).toLocaleString()}</span></td>
+      <td><span class="badge bw">Not set</span></td>
+    </tr>`).join('');
+    return;
+  }
+
+  const map = {};
+  data.forEach(d => { map[d.pool_name] = d; });
+
+  tb.innerHTML = POOL_CONFIG.map(p => {
+    const bal = map[p.key]?.balance || 0;
+    const pct = Math.round((bal/p.total)*100);
+    return `<tr>
+      <td style="font-weight:500">${p.name}</td>
+      <td><span class="mono" style="color:var(--purple)">${Number(bal).toLocaleString()}</span></td>
+      <td><span class="mono" style="color:var(--w30)">${Number(p.total).toLocaleString()}</span></td>
+      <td><span class="badge ${pct>0?'bg':'bw'}">${pct}% vested</span></td>
+    </tr>`;}).join('');
+
+  // Pre-fill form
+  data.forEach(d => {
+    const el = document.getElementById('p-'+d.pool_name);
+    if (el) el.value = d.balance;
+  });
+  if (data[0]?.week_number) document.getElementById('p-week').value = data[0].week_number;
+}
+
+async function updatePools() {
+  const week = parseInt(document.getElementById('p-week').value) || 1;
+  const upserts = POOL_CONFIG.map(p => ({
+    pool_name: p.key,
+    balance: parseInt(document.getElementById('p-'+p.key).value) || 0,
+    week_number: week,
+    updated_at: new Date().toISOString()
+  }));
+
+  const { error } = await db.from('pool_balances').upsert(upserts, { onConflict:'pool_name' });
+  if (error) { toast('Failed: '+error.message, 'e'); return; }
+  toast('Pool balances updated');
+  loadPools();
+}
+</script>
+</body>
+</html>
