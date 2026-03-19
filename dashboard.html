@@ -873,7 +873,7 @@ async function submitProposal() {
   const { data, error } = await db.from('proposals').insert({
     title: title,
     description: desc,
-    submitted_by: activeHandle || activeWallet,
+    submitted_by: activeWallet,
     approved_by_admin: false,
     status: 'pending',
     ends_at: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString()
