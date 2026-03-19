@@ -521,7 +521,7 @@ textarea { width: 100%; background: var(--surface2); border: 1px solid var(--bor
   <div class="modal">
     <div class="modal-hdr">
       <div class="modal-title">Submit a Proposal</div>
-      <button class="modal-close" onclick="document.getElementById('proposalModal').classList.remove('open')">✕</button>
+      <button class="modal-close" id="closeProposalBtn">✕</button>
     </div>
     <div class="modal-body">
       <div class="mono" style="font-size:0.62rem;color:var(--w30);margin-bottom:1rem;line-height:1.7">Proposals go to admin review before going live for community voting.</div>
@@ -529,7 +529,7 @@ textarea { width: 100%; background: var(--surface2); border: 1px solid var(--bor
       <div class="inp-wrap" style="margin-bottom:0.9rem"><input class="inp" type="text" id="proposalTitle" placeholder="Proposal title..." style="font-size:0.82rem"></div>
       <div class="mono" style="font-size:0.58rem;color:var(--w30);letter-spacing:0.2em;text-transform:uppercase;margin-bottom:0.45rem">Description</div>
       <textarea id="proposalDesc" style="margin-bottom:1rem" placeholder="Describe your proposal in detail..."></textarea>
-      <button class="stake-btn" onclick="submitProposal()">Submit for Review</button>
+      <button class="stake-btn" id="submitProposalFormBtn">Submit for Review</button>
     </div>
   </div>
 </div>
@@ -1022,6 +1022,23 @@ window.addEventListener('load', () => {
   } catch(e) {
     console.error('Init error:', e);
   }
+
+  // Wire up proposal buttons via addEventListener
+  document.getElementById('submitProposalBtn')?.addEventListener('click', () => {
+    if (!walletAddress) { alert('Connect your wallet first.'); return; }
+    document.getElementById('proposalModal').classList.add('open');
+  });
+
+  document.getElementById('closeProposalBtn')?.addEventListener('click', () => {
+    document.getElementById('proposalModal').classList.remove('open');
+  });
+
+  document.getElementById('submitProposalFormBtn')?.addEventListener('click', submitProposal);
+
+  // Close modal on overlay click
+  document.getElementById('proposalModal')?.addEventListener('click', function(e) {
+    if (e.target === this) this.classList.remove('open');
+  });
 });
 </script>
 </body>
