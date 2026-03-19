@@ -64,8 +64,8 @@ body { background: var(--bg); color: var(--white); font-family: 'Outfit', sans-s
 .nav-item.active .nav-icon { opacity: 1; }
 .nav-badge { margin-left: auto; background: var(--purple); color: #000; font-family: 'DM Mono', monospace; font-size: 0.52rem; font-weight: 700; padding: 0.12rem 0.38rem; border-radius: 20px; }
 .sb-bottom { padding: 0.9rem 1.3rem; border-top: 1px solid var(--border); }
-.disc-btn { width: 100%; background: transparent; border: 1px solid var(--border2); color: var(--w30); font-family: 'DM Mono', monospace; font-size: 0.62rem; letter-spacing: 0.15em; text-transform: uppercase; padding: 0.55rem; cursor: pointer; transition: all 0.2s; }
-.disc-btn:hover { border-color: var(--red); color: var(--red); }
+.disc-btn { width: 100%; background: var(--purple); border: 1px solid var(--purple); color: #000; font-family: 'DM Mono', monospace; font-size: 0.62rem; letter-spacing: 0.15em; text-transform: uppercase; padding: 0.55rem; cursor: pointer; transition: all 0.2s; font-weight: 600; }
+.disc-btn:hover { background: var(--red); border-color: var(--red); color: #000; }
 
 /* MAIN */
 .main { margin-left: var(--sidebar); flex: 1; min-height: 100vh; display: flex; flex-direction: column; }
@@ -706,15 +706,24 @@ function enterDashboard() {
 
   // Update overview stats
   const vp = tokenBalance + (stakedBalance * 1.25);
+  // Save session to localStorage
+  if (walletAddress) localStorage.setItem('bard_wallet', walletAddress);
+  if (xHandle) localStorage.setItem('bard_xhandle', xHandle);
+  localStorage.setItem('bard_session_at', Date.now().toString());
+
   document.getElementById('cs').style.display = 'none';
   document.getElementById('app').style.display = 'flex';
   initDashboardData();
+  resetInactivityTimer();
 }
 
 // ─── DISCONNECT ────────────────────────────────────────────────────────────
 async function disconnect() {
   await db.auth.signOut();
   localStorage.removeItem('bard_wallet');
+  localStorage.removeItem('bard_xhandle');
+  localStorage.removeItem('bard_session_at');
+  clearTimeout(inactivityTimer);
   walletAddress = null;
   xHandle = null;
   tokenBalance = 0;
@@ -1041,6 +1050,25 @@ async function initDashboardData() {
 }
 
 // ─── INIT ──────────────────────────────────────────────────────────────────
+// ─── INACTIVITY TIMER ──────────────────────────────────────────────────────
+const INACTIVE_LIMIT = 30 * 60 * 1000; // 30 minutes
+let inactivityTimer = null;
+
+function resetInactivityTimer() {
+  clearTimeout(inactivityTimer);
+  inactivityTimer = setTimeout(() => {
+    if (walletAddress) {
+      disconnect();
+      alert('You have been signed out due to 30 minutes of inactivity.');
+    }
+  }, INACTIVE_LIMIT);
+}
+
+// Track user activity
+['mousemove', 'keydown', 'click', 'scroll', 'touchstart'].forEach(evt => {
+  document.addEventListener(evt, resetInactivityTimer, { passive: true });
+});
+
 window.addEventListener('load', async () => {
   try {
     handleAuthCallback();
@@ -1048,18 +1076,31 @@ window.addEventListener('load', async () => {
     console.error('Init error:', e);
   }
 
-  // Auto-reconnect wallet if already connected
-  try {
-    const provider = window.phantom?.solana || window.solflare || window.solana;
-    if (provider && provider.isConnected) {
-      const resp = await provider.connect({ onlyIfTrusted: true });
-      walletAddress = resp.publicKey.toString();
-      await refreshBalance(walletAddress);
-      // Restore xHandle from localStorage
-      xHandle = localStorage.getItem('bard_xhandle') || null;
+  // Restore session from localStorage on page load
+  const savedWallet = localStorage.getItem('bard_wallet');
+  const savedHandle = localStorage.getItem('bard_xhandle');
+  const savedAt = localStorage.getItem('bard_session_at');
+
+  // Check session isn't older than 30 minutes
+  const sessionAge = savedAt ? Date.now() - parseInt(savedAt) : Infinity;
+
+  if (savedWallet && savedHandle && sessionAge < INACTIVE_LIMIT) {
+    try {
+      const provider = window.phantom?.solana || window.solflare || window.solana;
+      if (provider) {
+        const resp = await provider.connect({ onlyIfTrusted: true });
+        walletAddress = resp.publicKey.toString();
+        xHandle = savedHandle;
+        await refreshBalance(walletAddress);
+        enterDashboard();
+        resetInactivityTimer();
+      }
+    } catch(e) {
+      // Phantom not connected silently, stay on connect screen
+      localStorage.removeItem('bard_wallet');
+      localStorage.removeItem('bard_xhandle');
+      localStorage.removeItem('bard_session_at');
     }
-  } catch(e) {
-    // Not previously connected, ignore
   }
 
   // Wire up proposal buttons via addEventListener
