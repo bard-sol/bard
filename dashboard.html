@@ -232,25 +232,14 @@ textarea { width: 100%; background: var(--surface2); border: 1px solid var(--bor
       <button class="modal-close" onclick="closeModal()">✕</button>
     </div>
     <div class="modal-body">
-      <div class="pts-bk">
-        <div class="pts-row"><span style="color:var(--w30)">X Posts & Engagement</span><span style="color:var(--green)">+3,240 pts</span></div>
-        <div class="pts-row"><span style="color:var(--w30)">Token Buys (4.2 SOL)</span><span style="color:var(--green)">+1,680 pts</span></div>
-        <div class="pts-row"><span style="color:var(--w30)">Token Sells (0.25 SOL)</span><span style="color:var(--red)">−100 pts</span></div>
-        <div class="pts-row" style="font-weight:600"><span style="color:var(--w60)">Total</span><span style="color:var(--purple)">4,820 pts</span></div>
+      <div class="pts-bk" id="modal-pts-breakdown">
+        <div class="pts-row"><span style="color:var(--w30)">X Posts & Engagement</span><span style="color:var(--green)" id="modal-x-pts">— pts</span></div>
+        <div class="pts-row"><span style="color:var(--w30)">Token Buys</span><span style="color:var(--green)" id="modal-buy-pts">— pts</span></div>
+        <div class="pts-row"><span style="color:var(--w30)">Token Sells</span><span style="color:var(--red)" id="modal-sell-pts">— pts</span></div>
+        <div class="pts-row" style="font-weight:600"><span style="color:var(--w60)">Total</span><span style="color:var(--purple)" id="modal-total-pts">— pts</span></div>
       </div>
       <div class="mono" style="font-size:0.58rem;letter-spacing:0.2em;color:var(--w30);text-transform:uppercase;margin-bottom:0.7rem;">This Month's Shills</div>
-      <div class="shill-item">
-        <div class="shill-txt">"$BARD is the only project that actually makes sense to me right now. The smile is already in my head rent free."</div>
-        <div class="shill-stats"><span>847 likes</span><span>312 RTs</span><span>2.1M reach</span><span class="shill-pts">+480 pts</span></div>
-      </div>
-      <div class="shill-item">
-        <div class="shill-txt">"Been in crypto 4 years. $BARD is the first meme project with an actual mechanism. DYOR but this one's different."</div>
-        <div class="shill-stats"><span>523 likes</span><span>198 RTs</span><span>1.4M reach</span><span class="shill-pts">+310 pts</span></div>
-      </div>
-      <div class="shill-item">
-        <div class="shill-txt">"The Elon pool has been sitting unclaimed for 3 weeks. Someone's going to be very rich soon. $BARD"</div>
-        <div class="shill-stats"><span>291 likes</span><span>87 RTs</span><span>780K reach</span><span class="shill-pts">+175 pts</span></div>
-      </div>
+      <div id="modal-shills" style="font-family:'DM Mono',monospace;font-size:0.7rem;color:var(--w30);padding:1rem 0;text-align:center">No shills tracked yet</div>
       <div style="text-align:center;padding-top:1rem;"><button class="sec-action" style="font-size:0.65rem;">Challenge a Point Allocation ↗</button></div>
     </div>
   </div>
@@ -266,9 +255,9 @@ textarea { width: 100%; background: var(--surface2); border: 1px solid var(--bor
   </div>
   <div class="sb-wallet">
     <div class="sb-tier">● Holder</div>
-    <div class="sb-addr">7xKp...3mNq</div>
-    <div class="sb-bal">2,450,000 <span>$BARD</span></div>
-    <div class="sb-x"><div class="x-dot"></div>@your_handle</div>
+    <div class="sb-addr" id="sb-addr">Not connected</div>
+    <div class="sb-bal" id="sb-bal">— <span>$BARD</span></div>
+    <div class="sb-x" id="sb-x"><div class="x-dot"></div>Not linked</div>
   </div>
   <nav class="sb-nav">
     <div class="nav-lbl">Main</div>
@@ -316,54 +305,46 @@ textarea { width: 100%; background: var(--surface2); border: 1px solid var(--bor
   <!-- OVERVIEW -->
   <div class="page active" id="pg-overview">
     <div class="stats-grid">
-      <div class="stat-card"><div class="stat-lbl">My Holdings</div><div class="stat-val p">2.45M</div><div class="stat-sub">1.8M wallet · 650K staked</div></div>
-      <div class="stat-card"><div class="stat-lbl">Voting Power</div><div class="stat-val">2,612,500</div><div class="stat-sub">Staked tokens ×1.25 weight</div></div>
-      <div class="stat-card"><div class="stat-lbl">My Points</div><div class="stat-val p">3,240</div><div class="stat-sub">Rank #4 this month</div></div>
-      <div class="stat-card"><div class="stat-lbl">Total Burned</div><div class="stat-val g">8.33M</div><div class="stat-sub">3 of 36 weekly burns done</div></div>
+      <div class="stat-card"><div class="stat-lbl">My Holdings</div><div class="stat-val p" id="ov-holdings">—</div><div class="stat-sub" id="ov-holdings-sub">Connect wallet to view</div></div>
+      <div class="stat-card"><div class="stat-lbl">Voting Power</div><div class="stat-val" id="ov-vp">—</div><div class="stat-sub">Wallet + staked ×1.25</div></div>
+      <div class="stat-card"><div class="stat-lbl">My Points</div><div class="stat-val p" id="ov-points">—</div><div class="stat-sub" id="ov-rank">This month</div></div>
+      <div class="stat-card"><div class="stat-lbl">Total Burned</div><div class="stat-val g" id="ov-burned">—</div><div class="stat-sub">Weekly burns</div></div>
     </div>
     <div class="ov-grid">
       <div>
         <div class="sec-head"><div class="sec-title">Top Leaderboard</div><button class="sec-action" onclick="go('leaderboard',document.querySelectorAll('.nav-item')[1])">View All</button></div>
         <div class="card-sm">
-          <div class="mini-lb"><div class="rank gold">01</div><div class="avatar">CB</div><div><div style="font-size:0.8rem;font-weight:500">@cryptobard_</div><div class="mono" style="font-size:0.58rem;color:var(--w30)">4,820 pts</div></div><div class="mini-pts">4,820</div></div>
-          <div class="mini-lb"><div class="rank silver">02</div><div class="avatar">SM</div><div><div style="font-size:0.8rem;font-weight:500">@smile_maxi</div><div class="mono" style="font-size:0.58rem;color:var(--w30)">3,910 pts</div></div><div class="mini-pts">3,910</div></div>
-          <div class="mini-lb"><div class="rank bronze">03</div><div class="avatar">BH</div><div><div style="font-size:0.8rem;font-weight:500">@bard_hunter</div><div class="mono" style="font-size:0.58rem;color:var(--w30)">3,380 pts</div></div><div class="mini-pts">3,380</div></div>
-          <div class="mini-lb"><div class="rank" style="color:var(--purple)">04</div><div class="avatar" style="border-color:var(--purple)">YO</div><div><div style="font-size:0.8rem;font-weight:500">@your_handle <span style="font-size:0.58rem;color:var(--purple)">· you</span></div><div class="mono" style="font-size:0.58rem;color:var(--w30)">3,240 pts</div></div><div class="mini-pts">3,240</div></div>
+          <div id="ov-lb-list" style="font-family:'DM Mono',monospace;font-size:0.7rem;color:var(--w30);padding:1rem 0;text-align:center">No activity yet</div>
         </div>
       </div>
       <div>
         <div class="sec-head"><div class="sec-title">Pool Snapshot</div><button class="sec-action" onclick="go('pools',document.querySelectorAll('.nav-item')[2])">View All</button></div>
         <div class="card-sm">
           <div style="display:flex;flex-direction:column;gap:0.9rem">
-            <div><div style="display:flex;justify-content:space-between;margin-bottom:0.18rem"><span style="font-size:0.8rem;font-weight:500">Elon Pool</span><span class="mono" style="font-size:0.68rem;color:var(--purple)">15,000,000</span></div><div class="bar-wrap"><div class="bar" style="width:30%"></div></div></div>
-            <div><div style="display:flex;justify-content:space-between;margin-bottom:0.18rem"><span style="font-size:0.8rem;font-weight:500">Viral Pool</span><span class="mono" style="font-size:0.68rem;color:var(--purple)">10,500,000</span></div><div class="bar-wrap"><div class="bar" style="width:30%"></div></div></div>
-            <div><div style="display:flex;justify-content:space-between;margin-bottom:0.18rem"><span style="font-size:0.8rem;font-weight:500">Interaction Pool</span><span class="mono" style="font-size:0.68rem;color:var(--purple)">7,500,000</span></div><div class="bar-wrap"><div class="bar" style="width:30%"></div></div></div>
+            <div><div style="display:flex;justify-content:space-between;margin-bottom:0.18rem"><span style="font-size:0.8rem;font-weight:500">Elon Pool</span><span class="mono" style="font-size:0.68rem;color:var(--purple)" id="ov-elon-pool">—</span></div><div class="bar-wrap"><div class="bar" style="width:30%"></div></div></div>
+            <div><div style="display:flex;justify-content:space-between;margin-bottom:0.18rem"><span style="font-size:0.8rem;font-weight:500">Viral Pool</span><span class="mono" style="font-size:0.68rem;color:var(--purple)" id="ov-viral-pool">—</span></div><div class="bar-wrap"><div class="bar" style="width:30%"></div></div></div>
+            <div><div style="display:flex;justify-content:space-between;margin-bottom:0.18rem"><span style="font-size:0.8rem;font-weight:500">Interaction Pool</span><span class="mono" style="font-size:0.68rem;color:var(--purple)" id="ov-interaction-pool">—</span></div><div class="bar-wrap"><div class="bar" style="width:30%"></div></div></div>
           </div>
         </div>
       </div>
     </div>
-    <div class="vp-bar"><span class="vp-lbl">Your Voting Power</span><div class="vp-track"><div class="vp-fill" style="width:22%"></div></div><span class="vp-val">2,612,500 VP</span></div>
+    <div class="vp-bar"><span class="vp-lbl">Your Voting Power</span><div class="vp-track"><div class="vp-fill" id="vp-fill-bar" style="width:0%"></div></div><span class="vp-val" id="vp-val-display">0 VP</span></div>
   </div>
 
   <!-- LEADERBOARD -->
   <div class="page" id="pg-leaderboard">
     <div class="stats-grid">
-      <div class="stat-card"><div class="stat-lbl">Your Rank</div><div class="stat-val p">#4</div><div class="stat-sub">Top 5% this month</div></div>
-      <div class="stat-card"><div class="stat-lbl">Your Points</div><div class="stat-val">3,240</div><div class="stat-sub">X posts + buys combined</div></div>
-      <div class="stat-card"><div class="stat-lbl">From X Activity</div><div class="stat-val p">1,560</div><div class="stat-sub">11 eligible posts tracked</div></div>
-      <div class="stat-card"><div class="stat-lbl">From Buys</div><div class="stat-val g">1,680</div><div class="stat-sub">4.2 SOL purchased</div></div>
+      <div class="stat-card"><div class="stat-lbl">Your Rank</div><div class="stat-val p" id="lb-rank">—</div><div class="stat-sub">This month</div></div>
+      <div class="stat-card"><div class="stat-lbl">Your Points</div><div class="stat-val" id="lb-points">—</div><div class="stat-sub">X posts + buys combined</div></div>
+      <div class="stat-card"><div class="stat-lbl">From X Activity</div><div class="stat-val p" id="lb-x-pts">—</div><div class="stat-sub">Eligible posts tracked</div></div>
+      <div class="stat-card"><div class="stat-lbl">From Buys</div><div class="stat-val g" id="lb-buy-pts">—</div><div class="stat-sub">SOL spent on $BARD</div></div>
     </div>
-    <div class="sec-head"><div class="sec-title">March 2025 · 18 days remaining</div><span class="badge bp">Live Rankings</span></div>
+    <div class="sec-head"><div class="sec-title" id="lb-month-title">This Month</div><span class="badge bp">Live Rankings</span></div>
     <div class="card" style="padding:0">
       <table class="dt">
         <thead><tr><th style="width:44px">#</th><th>Member</th><th>X Points</th><th>Buy Points</th><th>Total</th><th>Prize</th></tr></thead>
         <tbody>
-          <tr style="cursor:pointer" onclick="openModal('@cryptobard_')"><td><span class="rank gold">01</span></td><td><div style="display:flex;align-items:center;gap:0.6rem"><div class="avatar">CB</div><div><div style="font-weight:500;font-size:0.82rem">@cryptobard_</div><div class="mono" style="font-size:0.58rem;color:var(--w30)">3.2M $BARD</div></div></div></td><td><span class="mono" style="font-size:0.72rem">3,240</span></td><td><span class="mono" style="font-size:0.72rem;color:var(--green)">+1,580</span></td><td><span class="mono" style="font-size:0.82rem;font-weight:600;color:var(--purple)">4,820</span></td><td><span class="badge bp">500K tokens</span></td></tr>
-          <tr style="cursor:pointer" onclick="openModal('@smile_maxi')"><td><span class="rank silver">02</span></td><td><div style="display:flex;align-items:center;gap:0.6rem"><div class="avatar">SM</div><div><div style="font-weight:500;font-size:0.82rem">@smile_maxi</div><div class="mono" style="font-size:0.58rem;color:var(--w30)">1.8M $BARD</div></div></div></td><td><span class="mono" style="font-size:0.72rem">2,910</span></td><td><span class="mono" style="font-size:0.72rem;color:var(--green)">+1,000</span></td><td><span class="mono" style="font-size:0.82rem;font-weight:600;color:var(--purple)">3,910</span></td><td><span class="badge bw">250K tokens</span></td></tr>
-          <tr style="cursor:pointer" onclick="openModal('@bard_hunter')"><td><span class="rank bronze">03</span></td><td><div style="display:flex;align-items:center;gap:0.6rem"><div class="avatar">BH</div><div><div style="font-weight:500;font-size:0.82rem">@bard_hunter</div><div class="mono" style="font-size:0.58rem;color:var(--w30)">900K $BARD</div></div></div></td><td><span class="mono" style="font-size:0.72rem">2,580</span></td><td><span class="mono" style="font-size:0.72rem;color:var(--green)">+800</span></td><td><span class="mono" style="font-size:0.82rem;font-weight:600;color:var(--purple)">3,380</span></td><td><span class="badge bw">150K tokens</span></td></tr>
-          <tr style="cursor:pointer;background:rgba(155,127,232,0.04)" onclick="openModal('@your_handle')"><td><span class="rank" style="color:var(--purple)">04</span></td><td><div style="display:flex;align-items:center;gap:0.6rem"><div class="avatar" style="border-color:var(--purple)">YO</div><div><div style="font-weight:500;font-size:0.82rem">@your_handle <span style="font-size:0.6rem;color:var(--purple)">· you</span></div><div class="mono" style="font-size:0.58rem;color:var(--w30)">2.45M $BARD</div></div></div></td><td><span class="mono" style="font-size:0.72rem">1,560</span></td><td><span class="mono" style="font-size:0.72rem;color:var(--green)">+1,680</span></td><td><span class="mono" style="font-size:0.82rem;font-weight:600;color:var(--purple)">3,240</span></td><td><span class="badge bg">You</span></td></tr>
-          <tr style="cursor:pointer" onclick="openModal('@sol_smiler')"><td><span class="rank">05</span></td><td><div style="display:flex;align-items:center;gap:0.6rem"><div class="avatar">SS</div><div><div style="font-weight:500;font-size:0.82rem">@sol_smiler</div><div class="mono" style="font-size:0.58rem;color:var(--w30)">540K $BARD</div></div></div></td><td><span class="mono" style="font-size:0.72rem">2,100</span></td><td><span class="mono" style="font-size:0.72rem;color:var(--green)">+640</span></td><td><span class="mono" style="font-size:0.82rem;font-weight:600;color:var(--purple)">2,740</span></td><td><span class="badge bw">—</span></td></tr>
-          <tr style="cursor:pointer" onclick="openModal('@grin_labs')"><td><span class="rank">06</span></td><td><div style="display:flex;align-items:center;gap:0.6rem"><div class="avatar">GL</div><div><div style="font-weight:500;font-size:0.82rem">@grin_labs</div><div class="mono" style="font-size:0.58rem;color:var(--w30)">210K $BARD</div></div></div></td><td><span class="mono" style="font-size:0.72rem">1,820</span></td><td><span class="mono" style="font-size:0.72rem;color:var(--green)">+400</span></td><td><span class="mono" style="font-size:0.82rem;font-weight:600;color:var(--purple)">2,220</span></td><td><span class="badge bw">—</span></td></tr>
+          <tr id="lb-empty-row"><td colspan="6" style="text-align:center;font-family:'DM Mono',monospace;font-size:0.7rem;color:var(--w30);padding:2rem">No members yet — be the first to join</td></tr>
         </tbody>
       </table>
     </div>
@@ -390,22 +371,22 @@ textarea { width: 100%; background: var(--surface2); border: 1px solid var(--bor
   <!-- STAKING -->
   <div class="page" id="pg-staking">
     <div class="stats-grid">
-      <div class="stat-card"><div class="stat-lbl">My Staked</div><div class="stat-val p">650,000</div><div class="stat-sub">$BARD staked</div></div>
-      <div class="stat-card"><div class="stat-lbl">Current APY</div><div class="stat-val g">34.2%</div><div class="stat-sub">Dynamic · updates weekly</div></div>
-      <div class="stat-card"><div class="stat-lbl">Rewards Earned</div><div class="stat-val">18,420</div><div class="stat-sub">$BARD claimable now</div></div>
-      <div class="stat-card"><div class="stat-lbl">Total Staked (All)</div><div class="stat-val">124.5M</div><div class="stat-sub">12.45% of supply</div></div>
+      <div class="stat-card"><div class="stat-lbl">My Staked</div><div class="stat-val p">—</div><div class="stat-sub">Coming after token launch</div></div>
+      <div class="stat-card"><div class="stat-lbl">Current APY</div><div class="stat-val g">—</div><div class="stat-sub">Dynamic · updates weekly</div></div>
+      <div class="stat-card"><div class="stat-lbl">Rewards Earned</div><div class="stat-val">—</div><div class="stat-sub">$BARD claimable</div></div>
+      <div class="stat-card"><div class="stat-lbl">Total Staked (All)</div><div class="stat-val">—</div><div class="stat-sub">% of supply</div></div>
     </div>
     <div class="stake-panel">
       <div class="stake-side">
         <div class="stake-lbl">Stake $BARD</div>
         <div class="apy-wrap"><div class="apy-val">34.2%</div><div class="apy-lbl">Current APY</div></div>
         <div class="inp-wrap"><input class="inp" type="number" placeholder="0"><button class="inp-max">Max</button></div>
-        <div class="mono" style="font-size:0.6rem;color:var(--w30);margin-bottom:0.9rem">Available: 1,800,000 $BARD</div>
+        <div class="mono" style="font-size:0.6rem;color:var(--w30);margin-bottom:0.9rem">Available: — $BARD</div>
         <button class="stake-btn">Stake Tokens</button>
       </div>
       <div class="stake-side">
         <div class="stake-lbl">Unstake $BARD</div>
-        <div style="margin-bottom:1.2rem"><div class="mono" style="font-size:0.6rem;color:var(--w30);margin-bottom:0.35rem">Currently staked</div><div style="font-size:1.3rem;font-weight:600;color:var(--purple)">650,000 <span style="font-size:0.72rem;color:var(--w30);font-weight:400">$BARD</span></div></div>
+        <div style="margin-bottom:1.2rem"><div class="mono" style="font-size:0.6rem;color:var(--w30);margin-bottom:0.35rem">Currently staked</div><div style="font-size:1.3rem;font-weight:600;color:var(--purple)">— <span style="font-size:0.72rem;color:var(--w30);font-weight:400">$BARD</span></div></div>
         <div class="inp-wrap"><input class="inp" type="number" placeholder="0"><button class="inp-max">Max</button></div>
         <div class="mono" style="font-size:0.6rem;color:var(--w30);margin-bottom:0.9rem">Note: unstaking reduces your voting weight</div>
         <button class="stake-btn out">Unstake Tokens</button>
@@ -413,7 +394,7 @@ textarea { width: 100%; background: var(--surface2); border: 1px solid var(--bor
     </div>
     <div class="sec-head"><div class="sec-title">Claimable Rewards</div></div>
     <div class="card" style="display:flex;align-items:center;justify-content:space-between">
-      <div><div style="font-size:1.1rem;font-weight:600;margin-bottom:0.25rem">18,420 <span style="font-size:0.78rem;color:var(--w30);font-weight:400">$BARD</span></div><div class="mono" style="font-size:0.6rem;color:var(--w30)">From staking rewards · Accruing continuously</div></div>
+      <div><div style="font-size:1.1rem;font-weight:600;margin-bottom:0.25rem">— <span style="font-size:0.78rem;color:var(--w30);font-weight:400">$BARD</span></div><div class="mono" style="font-size:0.6rem;color:var(--w30)">From staking rewards · Accruing continuously</div></div>
       <button class="stake-btn" style="width:auto;padding:0.65rem 1.6rem">Claim Rewards</button>
     </div>
   </div>
@@ -422,29 +403,10 @@ textarea { width: 100%; background: var(--surface2); border: 1px solid var(--bor
   <div class="page" id="pg-voting">
     <div style="margin-bottom:1.5rem;padding:1rem 1.2rem;background:var(--surface);border:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
       <div><div style="font-size:0.83rem;font-weight:500;margin-bottom:0.18rem">Your Voting Power</div><div class="mono" style="font-size:0.6rem;color:var(--w30)">Every holder votes. Power = wallet tokens + (staked tokens × 1.25)</div></div>
-      <div class="mono" style="font-size:1.1rem;font-weight:600;color:var(--purple)">2,612,500 VP</div>
+      <div class="mono" style="font-size:1.1rem;font-weight:600;color:var(--purple)" id="voting-vp">— VP</div>
     </div>
     <div class="sec-head"><div class="sec-title">Active Proposals · 3 open</div></div>
-    <div style="background:var(--border);display:flex;flex-direction:column;gap:1px">
-      <div class="vote-card">
-        <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:0.35rem"><div><div class="vote-title">Add a weekly Bard meme template drop for community use</div><div class="vote-meta">Submitted by @bardbuilder_ · 4 days remaining · 847 voters</div></div><span class="badge bp">Active</span></div>
-        <div class="vote-bar-wrap"><div class="vote-bar-yes" style="width:72%"></div></div>
-        <div class="vote-stats"><span style="color:var(--green)">72% Yes · 1.84B VP</span><span>28% No · 714M VP</span></div>
-        <div class="vote-acts"><button class="vbtn yes" onclick="castVote('proposal-1','yes')">Vote Yes</button><button class="vbtn no" onclick="castVote('proposal-1','no')">Vote No</button></div>
-      </div>
-      <div class="vote-card">
-        <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:0.35rem"><div><div class="vote-title">Extend leaderboard challenge window from 24hrs to 48hrs</div><div class="vote-meta">Submitted by @smile_maxi · 6 days remaining · 523 voters</div></div><span class="badge bp">Active</span></div>
-        <div class="vote-bar-wrap"><div class="vote-bar-yes" style="width:58%"></div></div>
-        <div class="vote-stats"><span style="color:var(--green)">58% Yes · 1.2B VP</span><span>42% No · 870M VP</span></div>
-        <div class="vote-acts"><button class="vbtn yes" onclick="castVote('proposal-2','yes')">Vote Yes</button><button class="vbtn no" onclick="castVote('proposal-2','no')">Vote No</button></div>
-      </div>
-      <div class="vote-card">
-        <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:0.35rem"><div><div class="vote-title">Launch a Bard sticker pack on Telegram as a community onboarding tool</div><div class="vote-meta">Submitted by @grin_labs · 9 days remaining · 312 voters</div></div><span class="badge bp">Active</span></div>
-        <div class="vote-bar-wrap"><div class="vote-bar-yes" style="width:83%"></div></div>
-        <div class="vote-stats"><span style="color:var(--green)">83% Yes · 2.1B VP</span><span>17% No · 430M VP</span></div>
-        <div class="vote-acts"><button class="vbtn yes">Vote Yes</button><button class="vbtn no">Vote No</button></div>
-      </div>
-    </div>
+    <div id="proposals-container" style="background:var(--border);display:flex;flex-direction:column;gap:1px"><div style="text-align:center;font-family:'DM Mono',monospace;font-size:0.7rem;color:var(--w30);padding:2.5rem">No active proposals yet</div></div>
     <div style="margin-top:1.2rem">
       <button id="submitProposalBtn" style="background:var(--purple);color:#000;border:none;padding:0.75rem 1.8rem;font-family:'Outfit',sans-serif;font-size:0.82rem;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;cursor:pointer !important;width:100%;pointer-events:all">+ Submit a Proposal</button>
     </div>
@@ -472,7 +434,7 @@ textarea { width: 100%; background: var(--surface2); border: 1px solid var(--bor
     <div class="sec-head" style="margin-top:1.4rem"><div class="sec-title">Past Claims</div></div>
     <div class="card" style="padding:0;margin-bottom:1.4rem">
       <table class="dt"><thead><tr><th>Pool</th><th>Submitted by</th><th>Result</th><th>Date</th></tr></thead>
-      <tbody><tr><td>Interaction Pool</td><td><span class="mono" style="font-size:0.72rem">@cryptobard_</span></td><td><span class="badge br">Rejected</span></td><td><span class="mono" style="font-size:0.62rem;color:var(--w30)">Mar 3</span></td></tr></tbody></table>
+      <tbody id="past-claims-tbody"><tr><td colspan="4" style="text-align:center;font-family:'DM Mono',monospace;font-size:0.7rem;color:var(--w30);padding:1.5rem">No past claims</td></tr></tbody></table>
     </div>
     <div class="sec-head"><div class="sec-title">Submit a Claim</div></div>
     <div class="card">
@@ -704,8 +666,17 @@ function enterDashboard() {
   document.querySelector('.sb-bal').innerHTML = Number(tokenBalance).toLocaleString() + ' <span>$BARD</span>';
   document.querySelector('.sb-x').innerHTML = '<div class="x-dot"></div>' + (xHandle ? '@'+xHandle : 'linked');
 
-  // Update overview stats
+  // Update stats with real data
   const vp = tokenBalance + (stakedBalance * 1.25);
+  const vpFmt = vp >= 1000000 ? (vp/1000000).toFixed(2)+'M' : vp >= 1000 ? (vp/1000).toFixed(1)+'K' : vp.toString();
+  const holdFmt = tokenBalance >= 1000000 ? (tokenBalance/1000000).toFixed(2)+'M' : tokenBalance >= 1000 ? (tokenBalance/1000).toFixed(1)+'K' : tokenBalance.toString();
+
+  document.getElementById('ov-holdings')?.setAttribute('textContent', holdFmt);
+  document.getElementById('ov-holdings') && (document.getElementById('ov-holdings').textContent = holdFmt);
+  document.getElementById('ov-vp') && (document.getElementById('ov-vp').textContent = vpFmt);
+  document.getElementById('ov-vp-fill') && (document.getElementById('ov-vp-fill').style.width = Math.min((vp / 10000000) * 100, 100) + '%');
+  document.getElementById('ov-vp-val') && (document.getElementById('ov-vp-val').textContent = Number(vp).toLocaleString() + ' VP');
+  document.getElementById('voting-vp') && (document.getElementById('voting-vp').textContent = Number(vp).toLocaleString() + ' VP');
   // Save session to localStorage
   if (walletAddress) localStorage.setItem('bard_wallet', walletAddress);
   if (xHandle) localStorage.setItem('bard_xhandle', xHandle);
