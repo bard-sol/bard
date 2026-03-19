@@ -670,6 +670,7 @@ async function handleAuthCallback() {
   if (authStatus === 'success' && handle && wallet) {
     walletAddress = wallet;
     xHandle = handle;
+    localStorage.setItem('bard_xhandle', handle);
 
     await refreshBalance(walletAddress);
 
@@ -1019,11 +1020,25 @@ async function initDashboardData() {
 }
 
 // ─── INIT ──────────────────────────────────────────────────────────────────
-window.addEventListener('load', () => {
+window.addEventListener('load', async () => {
   try {
     handleAuthCallback();
   } catch(e) {
     console.error('Init error:', e);
+  }
+
+  // Auto-reconnect wallet if already connected
+  try {
+    const provider = window.phantom?.solana || window.solflare || window.solana;
+    if (provider && provider.isConnected) {
+      const resp = await provider.connect({ onlyIfTrusted: true });
+      walletAddress = resp.publicKey.toString();
+      await refreshBalance(walletAddress);
+      // Restore xHandle from localStorage
+      xHandle = localStorage.getItem('bard_xhandle') || null;
+    }
+  } catch(e) {
+    // Not previously connected, ignore
   }
 
   // Wire up proposal buttons via addEventListener
