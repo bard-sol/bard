@@ -446,7 +446,7 @@ textarea { width: 100%; background: var(--surface2); border: 1px solid var(--bor
       </div>
     </div>
     <div style="margin-top:1.2rem">
-      <button id="submitProposalBtn" style="background:var(--purple);color:#000;border:none;padding:0.75rem 1.8rem;font-family:'Outfit',sans-serif;font-size:0.82rem;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;cursor:pointer;width:100%">+ Submit a Proposal</button>
+      <button id="submitProposalBtn" style="background:var(--purple);color:#000;border:none;padding:0.75rem 1.8rem;font-family:'Outfit',sans-serif;font-size:0.82rem;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;cursor:pointer !important;width:100%;pointer-events:all">+ Submit a Proposal</button>
     </div>
   </div>
 
@@ -1028,7 +1028,6 @@ window.addEventListener('load', () => {
 
   // Wire up proposal buttons via addEventListener
   document.getElementById('submitProposalBtn')?.addEventListener('click', () => {
-    if (!walletAddress) { alert('Connect your wallet first.'); return; }
     document.getElementById('proposalModal').classList.add('open');
   });
 
