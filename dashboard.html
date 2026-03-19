@@ -353,13 +353,13 @@ textarea { width: 100%; background: var(--surface2); border: 1px solid var(--bor
 
   <!-- POOLS -->
   <div class="page" id="pg-pools">
-    <div class="burn-box"><div class="burn-num">8,333,333</div><div class="burn-lbl">$BARD Burned To Date · Week 3 of 36</div></div>
+    <div class="burn-box"><div class="burn-num" id="burn-counter">—</div><div class="burn-lbl">$BARD Burned To Date</div></div>
     <div class="sec-head" style="margin-bottom:1rem"><div class="sec-title">Active Reward Pools</div><span class="badge bp">Week 3 · Accumulating</span></div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--border);border:1px solid var(--border);margin-bottom:1.8rem">
-      <div class="stat-card" style="position:relative;overflow:hidden"><div style="position:absolute;top:0;left:0;right:0;height:2px;background:var(--purple)"></div><div class="stat-lbl">Elon Pool</div><div class="stat-val p">15,000,000</div><div class="stat-sub">$BARD accumulated · Unclaimed</div><div class="bar-wrap" style="margin-top:0.9rem"><div class="bar" style="width:30%"></div></div><div class="mono" style="display:flex;justify-content:space-between;font-size:0.58rem;color:var(--w30);margin-top:0.3rem"><span>30% of 50M vested</span><span>Resets on winner only</span></div></div>
-      <div class="stat-card" style="position:relative;overflow:hidden"><div style="position:absolute;top:0;left:0;right:0;height:2px;background:var(--purple)"></div><div class="stat-lbl">Viral Pool</div><div class="stat-val p">10,500,000</div><div class="stat-sub">$BARD accumulated · Unclaimed</div><div class="bar-wrap" style="margin-top:0.9rem"><div class="bar" style="width:30%"></div></div><div class="mono" style="display:flex;justify-content:space-between;font-size:0.58rem;color:var(--w30);margin-top:0.3rem"><span>30% of 35M vested</span><span>Resets on winner only</span></div></div>
-      <div class="stat-card" style="position:relative;overflow:hidden"><div style="position:absolute;top:0;left:0;right:0;height:2px;background:var(--purple)"></div><div class="stat-lbl">Interaction Pool</div><div class="stat-val p">7,500,000</div><div class="stat-sub">$BARD accumulated · Unclaimed</div><div class="bar-wrap" style="margin-top:0.9rem"><div class="bar" style="width:30%"></div></div><div class="mono" style="display:flex;justify-content:space-between;font-size:0.58rem;color:var(--w30);margin-top:0.3rem"><span>30% of 25M vested</span><span>Resets on winner only</span></div></div>
-      <div class="stat-card" style="position:relative;overflow:hidden"><div style="position:absolute;top:0;left:0;right:0;height:2px;background:var(--green)"></div><div class="stat-lbl">Leaderboard Pool</div><div class="stat-val g">4,725,000</div><div class="stat-sub">$BARD · Pays out end of month</div><div class="bar-wrap" style="margin-top:0.9rem"><div class="bar" style="width:30%;background:var(--green)"></div></div><div class="mono" style="display:flex;justify-content:space-between;font-size:0.58rem;color:var(--w30);margin-top:0.3rem"><span>30% of 15.75M vested</span><span>Auto-airdrop monthly</span></div></div>
+      <div class="stat-card" style="position:relative;overflow:hidden"><div style="position:absolute;top:0;left:0;right:0;height:2px;background:var(--purple)"></div><div class="stat-lbl">Elon Pool</div><div class="stat-val p" id="pool-elon">—</div><div class="stat-sub">$BARD accumulated · Unclaimed</div><div class="bar-wrap" style="margin-top:0.9rem"><div class="bar" id="pool-elon-bar" style="width:0%"></div></div><div class="mono" style="display:flex;justify-content:space-between;font-size:0.58rem;color:var(--w30);margin-top:0.3rem"><span>of 50M total allocation</span><span>Resets on winner only</span></div></div>
+      <div class="stat-card" style="position:relative;overflow:hidden"><div style="position:absolute;top:0;left:0;right:0;height:2px;background:var(--purple)"></div><div class="stat-lbl">Viral Pool</div><div class="stat-val p" id="pool-viral">—</div><div class="stat-sub">$BARD accumulated · Unclaimed</div><div class="bar-wrap" style="margin-top:0.9rem"><div class="bar" id="pool-viral-bar" style="width:0%"></div></div><div class="mono" style="display:flex;justify-content:space-between;font-size:0.58rem;color:var(--w30);margin-top:0.3rem"><span>of 35M total allocation</span><span>Resets on winner only</span></div></div>
+      <div class="stat-card" style="position:relative;overflow:hidden"><div style="position:absolute;top:0;left:0;right:0;height:2px;background:var(--purple)"></div><div class="stat-lbl">Interaction Pool</div><div class="stat-val p" id="pool-interaction">—</div><div class="stat-sub">$BARD accumulated · Unclaimed</div><div class="bar-wrap" style="margin-top:0.9rem"><div class="bar" id="pool-interaction-bar" style="width:0%"></div></div><div class="mono" style="display:flex;justify-content:space-between;font-size:0.58rem;color:var(--w30);margin-top:0.3rem"><span>of 25M total allocation</span><span>Resets on winner only</span></div></div>
+      <div class="stat-card" style="position:relative;overflow:hidden"><div style="position:absolute;top:0;left:0;right:0;height:2px;background:var(--green)"></div><div class="stat-lbl">Leaderboard Pool</div><div class="stat-val g" id="pool-leaderboard">—</div><div class="stat-sub">$BARD · Pays out end of month</div><div class="bar-wrap" style="margin-top:0.9rem"><div class="bar" id="pool-leaderboard-bar" style="width:0%;background:var(--green)"></div></div><div class="mono" style="display:flex;justify-content:space-between;font-size:0.58rem;color:var(--w30);margin-top:0.3rem"><span>of 15.75M total allocation</span><span>Auto-airdrop monthly</span></div></div>
     </div>
     <div class="sec-head"><div class="sec-title">Next Unlock</div></div>
     <div class="card" style="display:flex;align-items:center;justify-content:space-between">
@@ -451,12 +451,12 @@ textarea { width: 100%; background: var(--surface2); border: 1px solid var(--bor
   <!-- TREASURY -->
   <div class="page" id="pg-treasury">
     <div class="stats-grid">
-      <div class="stat-card"><div class="stat-lbl">Total Vested So Far</div><div class="stat-val p">38.25M</div><div class="stat-sub">Week 3 of 36</div></div>
-      <div class="stat-card"><div class="stat-lbl">Total Remaining</div><div class="stat-val">422.75M</div><div class="stat-sub">91.7% still vesting</div></div>
-      <div class="stat-card"><div class="stat-lbl">Total Burned</div><div class="stat-val g">8.33M</div><div class="stat-sub">of 100M burn allocation</div></div>
-      <div class="stat-card"><div class="stat-lbl">Next Weekly Vest</div><div class="stat-val">12.75M</div><div class="stat-sub">In 4 days 22 hrs</div></div>
+      <div class="stat-card"><div class="stat-lbl">Total Vested So Far</div><div class="stat-val p" id="tr-vested">—</div><div class="stat-sub">of 461M total</div></div>
+      <div class="stat-card"><div class="stat-lbl">Total Remaining</div><div class="stat-val" id="tr-remaining">—</div><div class="stat-sub">Still vesting</div></div>
+      <div class="stat-card"><div class="stat-lbl">Total Burned</div><div class="stat-val g" id="tr-burned">—</div><div class="stat-sub">of 100M burn allocation</div></div>
+      <div class="stat-card"><div class="stat-lbl">Next Weekly Vest</div><div class="stat-val">12.75M</div><div class="stat-sub">Weekly allocation</div></div>
     </div>
-    <div class="sec-head"><div class="sec-title">Allocation Breakdown</div><span class="badge bw">Week 3 · 8.33% vested</span></div>
+    <div class="sec-head"><div class="sec-title">Allocation Breakdown</div><span class="badge bw" id="tr-week-badge">Vesting active</span></div>
     <div class="card" style="padding:0;margin-bottom:1.5rem">
       <div class="trow hdr"><div>Allocation</div><div>Total</div><div>Vested</div><div>Remaining</div><div>Progress</div></div>
       <div class="trow"><div class="tname">🔥 Weekly Burns</div><div class="tmono" style="color:var(--w60)">100,000,000</div><div class="tmono" style="color:var(--purple)">8,333,333</div><div class="tmono" style="color:var(--w30)">91,666,667</div><div><div class="bar-wrap" style="margin:0"><div class="bar" style="width:8.33%;background:var(--red)"></div></div></div></div>
@@ -951,8 +951,10 @@ async function loadTreasury() {
 
   // Update burn counter
   const latest = burns[0];
-  const burnEl = document.querySelector('.burn-num');
-  if (burnEl) burnEl.textContent = Number(latest.cumulative).toLocaleString();
+  ['burn-counter', 'tr-burned', 'ov-burned'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = Number(latest.cumulative).toLocaleString();
+  });
 
   // Update burn history table
   const tbody = document.querySelector('#pg-treasury .dt tbody');
