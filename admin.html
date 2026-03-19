@@ -256,7 +256,6 @@ body { background: var(--bg); color: var(--white); font-family: 'Outfit', sans-s
           <div class="fg"><label class="fl">Elon Pool</label><input class="fi" type="number" id="p-elon" placeholder="0"></div>
           <div class="fg"><label class="fl">Viral Pool</label><input class="fi" type="number" id="p-viral" placeholder="0"></div>
           <div class="fg"><label class="fl">Interaction Pool</label><input class="fi" type="number" id="p-interaction" placeholder="0"></div>
-          <div class="fg"><label class="fl">Leaderboard Pool</label><input class="fi" type="number" id="p-leaderboard" placeholder="0"></div>
           <div class="fg"><label class="fl">Current Week</label><input class="fi" type="number" id="p-week" placeholder="e.g. 4" min="1" max="36"></div>
         </div>
         <button class="btn btn-p" style="width:100%;margin-top:0.3rem" id="poolsBtn">Update Pool Balances</button>
@@ -275,7 +274,7 @@ body { background: var(--bg); color: var(--white); font-family: 'Outfit', sans-s
 <script>
 const SUPABASE_URL = 'https://pxdiyukxgnphxlknhmke.supabase.co';
 const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB4ZGl5dWt4Z25waHhsa25obWtlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM4NTg2NDAsImV4cCI6MjA4OTQzNDY0MH0.eOJ8I7UBCywHDMWdPbcWFURbfoDgMUHFD_cSAZA8Hk4';
-const ADMIN_PWD = 'Michaelboi1776';
+const ADMIN_PWD = 'BARD_ADMIN_2025';
 
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
 
@@ -496,9 +495,16 @@ async function loadMembers() {
 
 async function removeM(wallet) {
   if (!confirm('Remove this member?')) return;
-  await db.from('members').delete().eq('wallet_address', wallet);
+  // Delete related records first to avoid FK constraint errors
+  await db.from('votes').delete().eq('wallet_address', wallet);
+  await db.from('claim_votes').delete().eq('wallet_address', wallet);
+  await db.from('points_ledger').delete().eq('wallet_address', wallet);
+  await db.from('proposals').delete().eq('submitted_by', wallet);
+  await db.from('claims').delete().eq('submitted_by', wallet);
+  const { error } = await db.from('members').delete().eq('wallet_address', wallet);
+  if (error) { toast('Error: ' + error.message); return; }
   toast('Member removed');
-  loadMembers();
+  await loadMembers();
 }
 
 // ── BURNS ─────────────────────────────────────────────────────────────────
@@ -547,7 +553,6 @@ const POOL_CONFIG = [
   { key:'elon', name:'Elon Pool', total:50000000 },
   { key:'viral', name:'Viral Pool', total:35000000 },
   { key:'interaction', name:'Interaction Pool', total:25000000 },
-  { key:'leaderboard', name:'Leaderboard Pool', total:15750000 },
 ];
 
 async function loadPools() {
