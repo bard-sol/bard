@@ -616,8 +616,16 @@ async function adjustPoints() {
 
   if (updateErr) { toast('Failed to update points: ' + updateErr.message, 'e'); return; }
 
+  // Resolve x_handle — prefer DB value, then typed handle, never a wallet address
+  const typedHandle = memberInput.startsWith('@') ? memberInput : (memberInput.length < 44 ? '@' + memberInput : null);
+  const resolvedHandle = data.x_handle || typedHandle;
+
+  if (!resolvedHandle) {
+    toast('Member has no X handle — ask them to connect their X account first', 'e');
+    return;
+  }
+
   // Log to points_log with full tweet context
-  const resolvedHandle = data.x_handle || (memberInput.startsWith('@') ? memberInput : '@' + memberInput);
   const logEntry = {
     wallet_address: data.wallet_address,
     x_handle: resolvedHandle,
@@ -629,9 +637,13 @@ async function adjustPoints() {
   };
 
   const { error: logErr } = await db.from('points_log').insert(logEntry);
-  if (logErr) { console.error('points_log insert failed:', logErr); toast('Points saved but log failed: ' + logErr.message, 'e'); }
+  if (logErr) {
+    console.error('points_log insert failed:', logErr);
+    toast('Log insert failed: ' + logErr.message + ' — check SQL schema', 'e');
+    return;
+  }
 
-  toast(`${amount > 0 ? '+' : ''}${amount} pts applied to ${data.x_handle || data.wallet_address.slice(0,8)+'...'}`);
+  toast(`${amount > 0 ? '+' : ''}${amount} pts applied to ${resolvedHandle}`);
 
   // Clear form
   document.getElementById('pts-member').value    = '';
