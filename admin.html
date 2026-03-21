@@ -353,12 +353,12 @@ const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
 // ── AUTH ──────────────────────────────────────────────────────────────────
 document.getElementById('loginBtn').addEventListener('click', login);
 document.getElementById('pwd').addEventListener('keydown', e => { if(e.key==='Enter') login(); });
-document.getElementById('logoutBtn').addEventListener('click', async () => { await db.auth.signOut(); location.reload(); });
+document.getElementById('logoutBtn').addEventListener('click', () => { sessionStorage.removeItem('admin_auth'); location.reload(); });
 
-async function login() {
+function login() {
   const pwd = document.getElementById('pwd').value;
-  const { error } = await db.auth.signInWithPassword({ email: 'admin@bard.is', password: pwd });
-  if (error) { document.getElementById('lerr').style.display = 'block'; return; }
+  if (pwd !== 'Michaelboi1776') { document.getElementById('lerr').style.display = 'block'; return; }
+  sessionStorage.setItem('admin_auth', '1');
   showApp();
 }
 
@@ -368,9 +368,8 @@ function showApp() {
   loadAll();
 }
 
-window.addEventListener('load', async () => {
-  const { data: { session } } = await db.auth.getSession();
-  if (session) showApp();
+window.addEventListener('load', () => {
+  if (sessionStorage.getItem('admin_auth') === '1') showApp();
 });
 
 // ── NAV ───────────────────────────────────────────────────────────────────
