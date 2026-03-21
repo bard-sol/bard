@@ -120,7 +120,6 @@ body { background: var(--bg); color: var(--white); font-family: 'Outfit', sans-s
   <div class="login-tag">$BARD · ADMIN</div>
   <div class="login-title">Admin Access</div>
   <div class="login-sub">Enter your admin password to continue</div>
-  <input class="login-inp" type="email" id="email" placeholder="Admin email">
   <input class="login-inp" type="password" id="pwd" placeholder="Password">
   <button class="login-btn" id="loginBtn">Enter</button>
   <div class="login-err" id="lerr">Incorrect password</div>
@@ -357,9 +356,8 @@ document.getElementById('pwd').addEventListener('keydown', e => { if(e.key==='En
 document.getElementById('logoutBtn').addEventListener('click', async () => { await db.auth.signOut(); location.reload(); });
 
 async function login() {
-  const email = document.getElementById('email').value.trim();
   const pwd = document.getElementById('pwd').value;
-  const { error } = await db.auth.signInWithPassword({ email, password: pwd });
+  const { error } = await db.auth.signInWithPassword({ email: 'admin@bard.is', password: pwd });
   if (error) { document.getElementById('lerr').style.display = 'block'; return; }
   showApp();
 }
