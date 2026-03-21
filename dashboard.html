@@ -228,15 +228,12 @@ textarea { width: 100%; background: var(--surface2); border: 1px solid var(--bor
 <div class="modal-ov" id="mo">
   <div class="modal">
     <div class="modal-hdr">
-      <div><div class="modal-title" id="mu">@cryptobard_</div><div class="mono" style="font-size:0.6rem;color:var(--w30);margin-top:0.15rem;">March 2025 · 4,820 pts total</div></div>
+      <div><div class="modal-title" id="mu">—</div><div class="mono" style="font-size:0.6rem;color:var(--w30);margin-top:0.15rem;" id="modal-sub">—</div></div>
       <button class="modal-close" onclick="closeModal()">✕</button>
     </div>
     <div class="modal-body">
       <div class="pts-bk" id="modal-pts-breakdown">
-        <div class="pts-row"><span style="color:var(--w30)">X Posts & Engagement</span><span style="color:var(--green)" id="modal-x-pts">— pts</span></div>
-        <div class="pts-row"><span style="color:var(--w30)">Token Buys</span><span style="color:var(--green)" id="modal-buy-pts">— pts</span></div>
-        <div class="pts-row"><span style="color:var(--w30)">Token Sells</span><span style="color:var(--red)" id="modal-sell-pts">— pts</span></div>
-        <div class="pts-row" style="font-weight:600"><span style="color:var(--w60)">Total</span><span style="color:var(--purple)" id="modal-total-pts">— pts</span></div>
+        <div class="pts-row"><span style="color:var(--w30)">Loading...</span></div>
       </div>
       <div class="mono" style="font-size:0.58rem;letter-spacing:0.2em;color:var(--w30);text-transform:uppercase;margin-bottom:0.7rem;">This Month's Shills</div>
       <div id="modal-shills" style="font-family:'DM Mono',monospace;font-size:0.7rem;color:var(--w30);padding:1rem 0;text-align:center">No shills tracked yet</div>
@@ -298,7 +295,7 @@ textarea { width: 100%; background: var(--surface2); border: 1px solid var(--bor
 
 <div class="main">
   <div class="topbar">
-    <div><div class="topbar-title" id="tt">Overview</div><div class="topbar-meta" id="tm">Week 3 of 36 · Vesting active</div></div>
+    <div><div class="topbar-title" id="tt">Overview</div><div class="topbar-meta" id="tm">Loading...</div></div>
     <div class="live-pill">Live</div>
   </div>
 
@@ -354,7 +351,7 @@ textarea { width: 100%; background: var(--surface2); border: 1px solid var(--bor
   <!-- POOLS -->
   <div class="page" id="pg-pools">
     <div class="burn-box"><div class="burn-num" id="burn-counter">—</div><div class="burn-lbl">$BARD Burned To Date</div></div>
-    <div class="sec-head" style="margin-bottom:1rem"><div class="sec-title">Active Reward Pools</div><span class="badge bp">Week 3 · Accumulating</span></div>
+    <div class="sec-head" style="margin-bottom:1rem"><div class="sec-title">Active Reward Pools</div><span class="badge bp" id="pools-week-badge">Week — · Accumulating</span></div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--border);border:1px solid var(--border);margin-bottom:1.8rem">
       <div class="stat-card" style="position:relative;overflow:hidden"><div style="position:absolute;top:0;left:0;right:0;height:2px;background:var(--purple)"></div><div class="stat-lbl">Elon Pool</div><div class="stat-val p" id="pool-elon">—</div><div class="stat-sub">$BARD accumulated · Unclaimed</div><div class="bar-wrap" style="margin-top:0.9rem"><div class="bar" id="pool-elon-bar" style="width:0%"></div></div><div class="mono" style="display:flex;justify-content:space-between;font-size:0.58rem;color:var(--w30);margin-top:0.3rem"><span>of 50M total allocation</span><span>Resets on winner only</span></div></div>
       <div class="stat-card" style="position:relative;overflow:hidden"><div style="position:absolute;top:0;left:0;right:0;height:2px;background:var(--purple)"></div><div class="stat-lbl">Viral Pool</div><div class="stat-val p" id="pool-viral">—</div><div class="stat-sub">$BARD accumulated · Unclaimed</div><div class="bar-wrap" style="margin-top:0.9rem"><div class="bar" id="pool-viral-bar" style="width:0%"></div></div><div class="mono" style="display:flex;justify-content:space-between;font-size:0.58rem;color:var(--w30);margin-top:0.3rem"><span>of 35M total allocation</span><span>Resets on winner only</span></div></div>
@@ -370,32 +367,35 @@ textarea { width: 100%; background: var(--surface2); border: 1px solid var(--bor
 
   <!-- STAKING -->
   <div class="page" id="pg-staking">
+    <div style="padding:0.9rem 1.2rem;background:rgba(251,191,36,0.05);border:1px solid rgba(251,191,36,0.2);margin-bottom:1.8rem;font-family:'DM Mono',monospace;font-size:0.7rem;color:rgba(251,191,36,0.8);letter-spacing:0.05em;line-height:1.75">
+      Staking activates after the token launches on-chain. All controls below are disabled until then.
+    </div>
     <div class="stats-grid">
       <div class="stat-card"><div class="stat-lbl">My Staked</div><div class="stat-val p">—</div><div class="stat-sub">Coming after token launch</div></div>
       <div class="stat-card"><div class="stat-lbl">Current APY</div><div class="stat-val g">—</div><div class="stat-sub">Dynamic · updates weekly</div></div>
       <div class="stat-card"><div class="stat-lbl">Rewards Earned</div><div class="stat-val">—</div><div class="stat-sub">$BARD claimable</div></div>
       <div class="stat-card"><div class="stat-lbl">Total Staked (All)</div><div class="stat-val">—</div><div class="stat-sub">% of supply</div></div>
     </div>
-    <div class="stake-panel">
+    <div class="stake-panel" style="opacity:0.45;pointer-events:none">
       <div class="stake-side">
         <div class="stake-lbl">Stake $BARD</div>
-        <div class="apy-wrap"><div class="apy-val">34.2%</div><div class="apy-lbl">Current APY</div></div>
-        <div class="inp-wrap"><input class="inp" type="number" placeholder="0"><button class="inp-max">Max</button></div>
+        <div class="apy-wrap"><div class="apy-val">—</div><div class="apy-lbl">Current APY</div></div>
+        <div class="inp-wrap"><input class="inp" type="number" placeholder="0" disabled><button class="inp-max" disabled>Max</button></div>
         <div class="mono" style="font-size:0.6rem;color:var(--w30);margin-bottom:0.9rem">Available: — $BARD</div>
-        <button class="stake-btn">Stake Tokens</button>
+        <button class="stake-btn" disabled>Stake Tokens</button>
       </div>
       <div class="stake-side">
         <div class="stake-lbl">Unstake $BARD</div>
         <div style="margin-bottom:1.2rem"><div class="mono" style="font-size:0.6rem;color:var(--w30);margin-bottom:0.35rem">Currently staked</div><div style="font-size:1.3rem;font-weight:600;color:var(--purple)">— <span style="font-size:0.72rem;color:var(--w30);font-weight:400">$BARD</span></div></div>
-        <div class="inp-wrap"><input class="inp" type="number" placeholder="0"><button class="inp-max">Max</button></div>
+        <div class="inp-wrap"><input class="inp" type="number" placeholder="0" disabled><button class="inp-max" disabled>Max</button></div>
         <div class="mono" style="font-size:0.6rem;color:var(--w30);margin-bottom:0.9rem">Note: unstaking reduces your voting weight</div>
-        <button class="stake-btn out">Unstake Tokens</button>
+        <button class="stake-btn out" disabled>Unstake Tokens</button>
       </div>
     </div>
     <div class="sec-head"><div class="sec-title">Claimable Rewards</div></div>
-    <div class="card" style="display:flex;align-items:center;justify-content:space-between">
+    <div class="card" style="display:flex;align-items:center;justify-content:space-between;opacity:0.45;pointer-events:none">
       <div><div style="font-size:1.1rem;font-weight:600;margin-bottom:0.25rem">— <span style="font-size:0.78rem;color:var(--w30);font-weight:400">$BARD</span></div><div class="mono" style="font-size:0.6rem;color:var(--w30)">From staking rewards · Accruing continuously</div></div>
-      <button class="stake-btn" style="width:auto;padding:0.65rem 1.6rem">Claim Rewards</button>
+      <button class="stake-btn" style="width:auto;padding:0.65rem 1.6rem" disabled>Claim Rewards</button>
     </div>
   </div>
 
@@ -414,22 +414,12 @@ textarea { width: 100%; background: var(--surface2); border: 1px solid var(--bor
 
   <!-- CLAIMS -->
   <div class="page" id="pg-claims">
-    <div style="padding:0.9rem 1.1rem;background:rgba(155,127,232,0.05);border:1px solid var(--border2);margin-bottom:1.4rem;mono:font-family;font-family:'DM Mono',monospace;font-size:0.7rem;color:var(--w60);line-height:1.75">
+    <div style="padding:0.9rem 1.1rem;background:rgba(155,127,232,0.05);border:1px solid var(--border2);margin-bottom:1.4rem;font-family:'DM Mono',monospace;font-size:0.7rem;color:var(--w60);line-height:1.75">
       Pool claims go to community vote. If approved, payout fires automatically — 90% to winner, 10% burned. Claims that fail keep the pool accumulating. Every token holder can vote.
     </div>
-    <div class="sec-head"><div class="sec-title">Open Claims · 1 active</div></div>
-    <div class="claim-card">
-      <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:0.7rem">
-        <div><div style="font-size:0.88rem;font-weight:600;margin-bottom:0.2rem">Viral Pool Claim</div><div class="mono" style="font-size:0.6rem;color:var(--w30)">Submitted by @normiebreak_ · 2 days ago</div></div>
-        <span class="badge bp">Voting Open · 5 days left</span>
-      </div>
-      <div class="mono" style="font-size:0.7rem;color:var(--w60);line-height:1.8;margin-bottom:0.9rem">Claims this $BARD post broke containment on TikTok reaching 2.4M views, 180K likes, predominantly non-crypto audience.</div>
-      <button style="font-family:'DM Mono',monospace;font-size:0.63rem;color:var(--purple);background:none;border:none;cursor:pointer;text-decoration:underline;text-underline-offset:3px;margin-bottom:0.9rem">View Proof → tiktok.com/@normiebreak_/bard-post</button>
-      <div style="display:flex;align-items:center;gap:0.9rem;margin-bottom:0.8rem">
-        <div class="bar-wrap" style="flex:1;margin:0"><div class="bar" style="width:67%;background:var(--green)"></div></div>
-        <span class="mono" style="font-size:0.62rem;color:var(--green);white-space:nowrap">67% Approve</span>
-      </div>
-      <div class="vote-acts"><button class="vbtn yes" onclick="castClaimVote('claim-1','yes')">Approve Claim</button><button class="vbtn no" onclick="castClaimVote('claim-1','no')">Reject Claim</button></div>
+    <div class="sec-head"><div class="sec-title" id="claims-open-title">Open Claims</div></div>
+    <div id="open-claims-container" style="margin-bottom:1.4rem">
+      <div style="text-align:center;font-family:'DM Mono',monospace;font-size:0.7rem;color:var(--w30);padding:2rem;background:var(--surface);border:1px solid var(--border)">No open claims</div>
     </div>
     <div class="sec-head" style="margin-top:1.4rem"><div class="sec-title">Past Claims</div></div>
     <div class="card" style="padding:0;margin-bottom:1.4rem">
@@ -471,10 +461,8 @@ textarea { width: 100%; background: var(--surface2); border: 1px solid var(--bor
     <div class="sec-head"><div class="sec-title">Burn History</div></div>
     <div class="card" style="padding:0">
       <table class="dt"><thead><tr><th>Week</th><th>Burned</th><th>Cumulative</th><th>Tx Hash</th></tr></thead>
-      <tbody>
-        <tr><td><span class="mono" style="font-size:0.72rem">Week 3</span></td><td><span class="mono" style="font-size:0.72rem;color:var(--red)">2,777,778</span></td><td><span class="mono" style="font-size:0.72rem">8,333,333</span></td><td><span class="mono" style="font-size:0.62rem;color:var(--purple)">7xKp...3mNq</span></td></tr>
-        <tr><td><span class="mono" style="font-size:0.72rem">Week 2</span></td><td><span class="mono" style="font-size:0.72rem;color:var(--red)">2,777,778</span></td><td><span class="mono" style="font-size:0.72rem">5,555,556</span></td><td><span class="mono" style="font-size:0.62rem;color:var(--purple)">9qRs...7hJk</span></td></tr>
-        <tr><td><span class="mono" style="font-size:0.72rem">Week 1</span></td><td><span class="mono" style="font-size:0.72rem;color:var(--red)">2,777,778</span></td><td><span class="mono" style="font-size:0.72rem">2,777,778</span></td><td><span class="mono" style="font-size:0.62rem;color:var(--purple)">2mNp...4vWx</span></td></tr>
+      <tbody id="treasury-burn-tbody">
+        <tr><td colspan="4" style="text-align:center;font-family:'DM Mono',monospace;font-size:0.7rem;color:var(--w30);padding:1.5rem">No burns recorded yet</td></tr>
       </tbody></table>
     </div>
   </div>
@@ -504,10 +492,19 @@ textarea { width: 100%; background: var(--surface2); border: 1px solid var(--bor
 // ─── CONFIG ───────────────────────────────────────────────────────────────
 const SUPABASE_URL = 'https://pxdiyukxgnphxlknhmke.supabase.co';
 const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB4ZGl5dWt4Z25waHhsa25obWtlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM4NTg2NDAsImV4cCI6MjA4OTQzNDY0MH0.eOJ8I7UBCywHDMWdPbcWFURbfoDgMUHFD_cSAZA8Hk4';
-const BARD_MINT = 'REPLACE_WITH_TOKEN_MINT_ADDRESS'; // ← paste contract address here after launch
+const BARD_MINT = 'REPLACE_WITH_TOKEN_MINT_ADDRESS'; // ← TODO: paste contract address after launch
 const RPC = 'https://api.mainnet-beta.solana.com';
+const LAUNCH_DATE = null; // ← TODO: set to e.g. new Date('2025-03-01') after launch
+const TOTAL_VEST_WEEKS = 36;
 
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+
+// ─── TYPE LABELS ────────────────────────────────────────────────────────────
+const TYPE_LABEL_MAP = {
+  x_post: 'Post', x_reply: 'Reply', x_quote: 'Quote',
+  x_engagement: 'Engagement', x_raid: 'Raid',
+  stake: 'Stake', buy: 'Buy', sell: 'Sell', challenge: 'Manual'
+};
 
 // ─── STATE ─────────────────────────────────────────────────────────────────
 let walletAddress = null;
@@ -682,6 +679,12 @@ function enterDashboard() {
   if (xHandle) localStorage.setItem('bard_xhandle', xHandle);
   localStorage.setItem('bard_session_at', Date.now().toString());
 
+  const week = currentWeek();
+  const tm = document.getElementById('tm');
+  if (tm) tm.textContent = buildMetas().overview;
+  const pwb = document.getElementById('pools-week-badge');
+  if (pwb) pwb.textContent = `Week ${week} · Accumulating`;
+
   document.getElementById('cs').style.display = 'none';
   document.getElementById('app').style.display = 'flex';
   initDashboardData();
@@ -710,7 +713,24 @@ async function disconnect() {
 
 // ─── PAGE NAV ──────────────────────────────────────────────────────────────
 const titles = { overview:'Overview', leaderboard:'Leaderboard', pools:'Pools', staking:'Staking', voting:'Voting', claims:'Claims', treasury:'Treasury' };
-const metas  = { overview:'Week 3 of 36 · Vesting active', leaderboard:'March 2025 · Automated point tracking', pools:'All pools accumulating · Week 3', staking:'Dynamic APY · 34.2% current', voting:'All holders can vote', claims:'Community-verified payouts', treasury:'Full on-chain transparency' };
+function currentWeek() {
+  if (!LAUNCH_DATE) return '—';
+  return Math.min(Math.max(Math.floor((Date.now() - LAUNCH_DATE) / (7*24*60*60*1000)) + 1, 1), TOTAL_VEST_WEEKS);
+}
+
+function buildMetas() {
+  const week = currentWeek();
+  const month = new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  return {
+    overview: `Week ${week} of ${TOTAL_VEST_WEEKS} · Vesting active`,
+    leaderboard: `${month} · Automated point tracking`,
+    pools: `All pools accumulating · Week ${week}`,
+    staking: 'Dynamic APY · Coming after token launch',
+    voting: 'All holders can vote',
+    claims: 'Community-verified payouts',
+    treasury: 'Full on-chain transparency'
+  };
+}
 
 function go(name, el) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
@@ -718,14 +738,80 @@ function go(name, el) {
   document.getElementById('pg-'+name).classList.add('active');
   if (el) el.classList.add('active');
   document.getElementById('tt').textContent = titles[name] || name;
-  document.getElementById('tm').textContent = metas[name] || '';
+  document.getElementById('tm').textContent = buildMetas()[name] || '';
 }
 
 // ─── MODAL ─────────────────────────────────────────────────────────────────
-function openModal(handle) {
+async function openModal(handle) {
+  const mo = document.getElementById('mo');
   document.getElementById('mu').textContent = handle;
-  document.getElementById('mo').classList.add('open');
+  document.getElementById('modal-sub').textContent = 'Loading...';
+  document.getElementById('modal-pts-breakdown').innerHTML = '<div class="pts-row"><span style="color:var(--w30)">Loading...</span></div>';
+  document.getElementById('modal-shills').innerHTML = '<div style="text-align:center;padding:1rem 0;font-family:\'DM Mono\',monospace;font-size:0.7rem;color:var(--w30)">Loading...</div>';
+  mo.classList.add('open');
+
+  const normHandle = handle.startsWith('@') ? handle : '@' + handle;
+
+  const [{ data: member }, { data: logs }] = await Promise.all([
+    db.from('members').select('points, token_balance').eq('x_handle', normHandle).single(),
+    db.from('points_log').select('*').eq('x_handle', normHandle).order('created_at', { ascending: false })
+  ]);
+
+  const month = new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  const total = member?.points || 0;
+  document.getElementById('modal-sub').textContent = `${month} · ${total.toLocaleString()} pts total`;
+
+  // Tally by category
+  const cats = { post: 0, reply: 0, quote: 0, engagement: 0, staking: 0, buy: 0, sell: 0 };
+  (logs || []).forEach(l => {
+    if      (l.type === 'x_post')                               cats.post       += l.points;
+    else if (l.type === 'x_reply')                              cats.reply      += l.points;
+    else if (l.type === 'x_quote')                              cats.quote      += l.points;
+    else if (l.type === 'x_engagement' || l.type === 'x_raid') cats.engagement += l.points;
+    else if (l.type === 'stake')                                cats.staking    += l.points;
+    else if (l.type === 'buy')                                  cats.buy        += l.points;
+    else if (l.type === 'sell')                                 cats.sell       += l.points;
+  });
+
+  const fmtPts = (n) => `<span style="color:${n >= 0 ? 'var(--green)' : 'var(--red)'}">${n > 0 ? '+' : ''}${n.toLocaleString()} pts</span>`;
+
+  document.getElementById('modal-pts-breakdown').innerHTML = `
+    <div class="pts-row"><span style="color:var(--w30)">Posts</span>${fmtPts(cats.post)}</div>
+    <div class="pts-row"><span style="color:var(--w30)">Replies</span>${fmtPts(cats.reply)}</div>
+    <div class="pts-row"><span style="color:var(--w30)">Quotes</span>${fmtPts(cats.quote)}</div>
+    <div class="pts-row"><span style="color:var(--w30)">Engagement & Raids</span>${fmtPts(cats.engagement)}</div>
+    <div class="pts-row"><span style="color:var(--w30)">Staking</span>${fmtPts(cats.staking)}</div>
+    <div class="pts-row"><span style="color:var(--w30)">Buys</span>${fmtPts(cats.buy)}</div>
+    <div class="pts-row"><span style="color:var(--w30)">Sells</span>${fmtPts(cats.sell)}</div>
+    <div class="pts-row" style="font-weight:600"><span style="color:var(--w60)">Total</span><span style="color:var(--purple)">${total.toLocaleString()} pts</span></div>`;
+
+  // Tweet / shill items
+  const tweetLogs = (logs || []).filter(l => l.type && l.type.startsWith('x_') && (l.tweet_text || l.tweet_url));
+  if (tweetLogs.length === 0) {
+    document.getElementById('modal-shills').innerHTML = '<div style="text-align:center;padding:1rem 0;font-family:\'DM Mono\',monospace;font-size:0.7rem;color:var(--w30)">No tweet activity logged yet</div>';
+  } else {
+    document.getElementById('modal-shills').innerHTML = tweetLogs.map(l => {
+      const label   = TYPE_LABEL_MAP[l.type] || l.type;
+      const pts     = (l.points > 0 ? '+' : '') + l.points;
+      const ptsClr  = l.points >= 0 ? 'var(--green)' : 'var(--red)';
+      const dateStr = new Date(l.created_at).toLocaleDateString('en-GB', { day:'2-digit', month:'short' });
+      const link    = l.tweet_url ? `<a href="${l.tweet_url}" target="_blank" style="font-family:'DM Mono',monospace;font-size:0.58rem;color:var(--purple);text-decoration:underline;text-underline-offset:3px">View →</a>` : '';
+      return `<div class="shill-item">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.35rem">
+          <div style="display:flex;align-items:center;gap:0.5rem">
+            <span class="badge bp" style="font-size:0.48rem">${label}</span>
+            <span class="mono" style="font-size:0.58rem;color:var(--w30)">${dateStr}</span>
+            ${link}
+          </div>
+          <span class="mono" style="font-size:0.72rem;font-weight:600;color:${ptsClr}">${pts} pts</span>
+        </div>
+        ${l.tweet_text ? `<div class="shill-txt">"${l.tweet_text}"</div>` : ''}
+        ${l.reason    ? `<div class="mono" style="font-size:0.6rem;color:var(--w30);margin-top:0.3rem">${l.reason}</div>` : ''}
+      </div>`;
+    }).join('');
+  }
 }
+
 function closeModal() { document.getElementById('mo').classList.remove('open'); }
 document.getElementById('mo').addEventListener('click', function(e) { if(e.target===this) closeModal(); });
 
@@ -746,14 +832,19 @@ async function loadProposals() {
     .eq('status', 'active')
     .order('created_at', { ascending: false });
 
+  // Update voting nav badge regardless
+  const voteBadge = document.querySelector('#pg-voting')?.closest('.main')?.querySelector
+    ? document.querySelectorAll('.nav-badge')[0]
+    : null;
+  if (voteBadge) voteBadge.textContent = (data || []).length;
+
   if (error || !data || data.length === 0) return;
 
-  const container = document.querySelector('#pg-voting .vote-card')?.parentElement;
+  const container = document.getElementById('proposals-container');
   if (!container) return;
 
-  // Clear existing hardcoded cards
-  const existingCards = container.querySelectorAll('.vote-card');
-  existingCards.forEach(c => c.remove());
+  // Clear existing cards
+  container.innerHTML = '';
 
   data.forEach(p => {
     const total = (p.yes_power || 0) + (p.no_power || 0);
@@ -876,15 +967,55 @@ async function submitProposal() {
 // ─── LOAD CLAIMS FROM SUPABASE ──────────────────────────────────────────────
 async function loadClaims() {
   const { data, error } = await db.from('claims')
-    .select('*')
+    .select('*, members(x_handle)')
     .eq('status', 'open')
     .order('created_at', { ascending: false });
 
   if (error || !data) return;
 
-  // Update claims badge count
+  // Update nav badge
   const badge = document.querySelectorAll('.nav-badge')[1];
   if (badge) badge.textContent = data.length;
+
+  // Update title
+  const titleEl = document.getElementById('claims-open-title');
+  if (titleEl) titleEl.textContent = `Open Claims${data.length ? ' · ' + data.length + ' active' : ''}`;
+
+  // Render cards
+  const container = document.getElementById('open-claims-container');
+  if (!container) return;
+
+  if (data.length === 0) {
+    container.innerHTML = '<div style="text-align:center;font-family:\'DM Mono\',monospace;font-size:0.7rem;color:var(--w30);padding:2rem;background:var(--surface);border:1px solid var(--border)">No open claims</div>';
+    return;
+  }
+
+  const POOL_LABELS = { elon: 'Elon Pool', viral: 'Viral Pool', interaction: 'Interaction Pool' };
+
+  container.innerHTML = data.map(c => {
+    const total   = (c.yes_power || 0) + (c.no_power || 0);
+    const pct     = total > 0 ? Math.round((c.yes_power / total) * 100) : 0;
+    const handle  = c.members?.x_handle || (c.submitted_by || '').slice(0,6) + '...' + (c.submitted_by || '').slice(-4);
+    const poolLbl = POOL_LABELS[c.pool_name] || c.pool_name;
+    const daysLeft= c.ends_at ? Math.max(0, Math.ceil((new Date(c.ends_at) - Date.now()) / 86400000)) : '—';
+    const proof   = c.proof_url ? `<a href="${c.proof_url}" target="_blank" style="font-family:'DM Mono',monospace;font-size:0.63rem;color:var(--purple);background:none;border:none;cursor:pointer;text-decoration:underline;text-underline-offset:3px;display:inline-block;margin-bottom:0.9rem">View Proof →</a>` : '';
+    return `<div class="claim-card">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:0.7rem">
+        <div><div style="font-size:0.88rem;font-weight:600;margin-bottom:0.2rem">${poolLbl} Claim</div><div class="mono" style="font-size:0.6rem;color:var(--w30)">Submitted by ${handle}</div></div>
+        <span class="badge bp">Voting Open · ${daysLeft} days left</span>
+      </div>
+      ${c.description ? `<div class="mono" style="font-size:0.7rem;color:var(--w60);line-height:1.8;margin-bottom:0.9rem">${c.description}</div>` : ''}
+      ${proof}
+      <div style="display:flex;align-items:center;gap:0.9rem;margin-bottom:0.8rem">
+        <div class="bar-wrap" style="flex:1;margin:0"><div class="bar" style="width:${pct}%;background:var(--green)"></div></div>
+        <span class="mono" style="font-size:0.62rem;color:var(--green);white-space:nowrap">${pct}% Approve</span>
+      </div>
+      <div class="vote-acts">
+        <button class="vbtn yes" onclick="castClaimVote('${c.id}','yes')">Approve Claim</button>
+        <button class="vbtn no"  onclick="castClaimVote('${c.id}','no')">Reject Claim</button>
+      </div>
+    </div>`;
+  }).join('');
 }
 
 // ─── CAST CLAIM VOTE ────────────────────────────────────────────────────────
@@ -957,7 +1088,7 @@ async function loadTreasury() {
   });
 
   // Update burn history table
-  const tbody = document.querySelector('#pg-treasury .dt tbody');
+  const tbody = document.getElementById('treasury-burn-tbody');
   if (tbody) {
     tbody.innerHTML = burns.map(b => `
       <tr>
