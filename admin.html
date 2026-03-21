@@ -295,8 +295,8 @@ body { background: var(--bg); color: var(--white); font-family: 'Outfit', sans-s
     <div class="sec-head"><div class="sec-title">Full Points Ledger</div></div>
     <div class="card" style="padding:0">
       <table class="dt">
-        <thead><tr><th>Member</th><th>Type</th><th>Points</th><th>Reason</th><th>Tweet</th><th>When</th></tr></thead>
-        <tbody id="points-tbody"><tr><td colspan="6" class="empty">Loading...</td></tr></tbody>
+        <thead><tr><th>Member</th><th>Type</th><th>Points</th><th>Content / Reason</th><th>When</th></tr></thead>
+        <tbody id="points-tbody"><tr><td colspan="5" class="empty">Loading...</td></tr></tbody>
       </table>
     </div>
   </div>
@@ -686,7 +686,7 @@ async function loadPointsLedger() {
   const tweetCount = document.getElementById('tweet-count');
 
   if (error || !data || data.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="6" class="empty">No points activity yet</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="5" class="empty">No points activity yet</td></tr>';
     tweetCards.innerHTML = '<div class="empty">No tweet activity yet</div>';
     tweetCount.textContent = '0 tweets';
     return;
@@ -700,24 +700,31 @@ async function loadPointsLedger() {
     tweetCards.innerHTML = '<div class="empty">No tweet activity yet</div>';
   } else {
     tweetCards.innerHTML = tweetEntries.map(p => {
-      const handle = p.x_handle || ((p.wallet_address||'').slice(0,6)+'...'+(p.wallet_address||'').slice(-4));
+      const raw    = p.x_handle || ((p.wallet_address||'').slice(0,6)+'...'+(p.wallet_address||'').slice(-4));
+      const handle = '@' + (raw.startsWith('@') ? raw.slice(1) : raw);
       const label  = TYPE_LABELS[p.type] || p.type;
       const cls    = typeBadgeCls(p.type);
       const pts    = (p.points > 0 ? '+' : '') + p.points;
       const ptsCls = p.points > 0 ? 'var(--green)' : 'var(--red)';
       const link   = p.tweet_url
-        ? `<a href="${p.tweet_url}" target="_blank" style="font-family:'DM Mono',monospace;font-size:0.6rem;color:var(--purple);text-decoration:underline;text-underline-offset:3px">View on X →</a>`
+        ? `<a href="${p.tweet_url}" target="_blank" style="font-family:'DM Mono',monospace;font-size:0.65rem;color:var(--purple);text-decoration:underline;text-underline-offset:3px">View on X →</a>`
         : '';
-      return `<div style="padding:1rem 1.3rem;border-bottom:1px solid rgba(155,127,232,0.05)">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.45rem">
-          <div style="display:flex;align-items:center;gap:0.6rem">
+      return `<div style="padding:1.1rem 1.4rem;border-bottom:1px solid rgba(155,127,232,0.08)">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.5rem">
+          <div style="display:flex;align-items:center;gap:0.7rem">
             <span class="badge ${cls}">${label}</span>
-            <span class="mono" style="font-size:0.72rem;color:var(--purple)">${handle}</span>
-            <span class="mono" style="font-size:0.58rem;color:var(--w30)">${fd(p.created_at)}</span>
+            <span class="mono" style="font-size:0.92rem;font-weight:700;color:var(--purple)">${handle}</span>
           </div>
-          <span class="mono" style="font-size:0.82rem;font-weight:600;color:${ptsCls}">${pts} pts</span>
+          <div style="display:flex;align-items:center;gap:0.8rem">
+            <span class="mono" style="font-size:0.95rem;font-weight:700;color:${ptsCls}">${pts} pts</span>
+            <span class="mono" style="font-size:0.6rem;color:var(--w30)">${fd(p.created_at)}</span>
+          </div>
         </div>
-        ${p.tweet_text ? `<div class="mono" style="font-size:0.72rem;color:var(--w60);line-height:1.7;margin-bottom:${link?'0.5rem':'0'}">"${p.tweet_text}"</div>` : ''}
+        ${p.tweet_text
+          ? `<div style="background:rgba(155,127,232,0.06);border-left:2px solid var(--purple);padding:0.6rem 0.8rem;margin-bottom:${link?'0.5rem':'0'};border-radius:0 4px 4px 0">
+               <span class="mono" style="font-size:0.75rem;color:var(--w60);line-height:1.75;white-space:pre-wrap;word-break:break-word">${p.tweet_text}</span>
+             </div>`
+          : (link ? '' : '<span class="mono" style="font-size:0.65rem;color:var(--w30)">No tweet content recorded</span>')}
         ${link}
       </div>`;
     }).join('');
@@ -725,19 +732,23 @@ async function loadPointsLedger() {
 
   // ── Full ledger table ──────────────────────────────────────────────────
   tbody.innerHTML = data.map(p => {
-    const handle = p.x_handle || ((p.wallet_address||'').slice(0,6)+'...'+(p.wallet_address||'').slice(-4));
+    const raw    = p.x_handle || ((p.wallet_address||'').slice(0,6)+'...'+(p.wallet_address||'').slice(-4));
+    const handle = '@' + (raw.startsWith('@') ? raw.slice(1) : raw);
     const label  = TYPE_LABELS[p.type] || p.type || '—';
     const cls    = typeBadgeCls(p.type);
-    const tweetCell = p.tweet_url
-      ? `<a href="${p.tweet_url}" target="_blank" style="font-family:'DM Mono',monospace;font-size:0.6rem;color:var(--purple);text-decoration:underline;text-underline-offset:3px;max-width:200px;display:inline-block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p.tweet_text || 'View →'}</a>`
-      : `<span class="mono" style="font-size:0.6rem;color:var(--w30);max-width:200px;display:inline-block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p.tweet_text||'—'}</span>`;
+    const content = p.tweet_text
+      ? (p.tweet_url
+          ? `<a href="${p.tweet_url}" target="_blank" style="font-family:'DM Mono',monospace;font-size:0.68rem;color:var(--w60);text-decoration:none;display:block;line-height:1.6;word-break:break-word" title="${p.tweet_text}">${p.tweet_text}</a>`
+          : `<span class="mono" style="font-size:0.68rem;color:var(--w60);display:block;line-height:1.6;word-break:break-word">${p.tweet_text}</span>`)
+      : (p.tweet_url
+          ? `<a href="${p.tweet_url}" target="_blank" style="font-family:'DM Mono',monospace;font-size:0.65rem;color:var(--purple);text-decoration:underline;text-underline-offset:3px">View on X →</a>`
+          : `<span class="mono" style="font-size:0.65rem;color:var(--w30)">${p.reason||'—'}</span>`);
     return `<tr>
-      <td><span class="mono" style="font-size:0.88rem;font-weight:700;color:var(--purple)">@${handle.startsWith('@')?handle.slice(1):handle}</span></td>
+      <td style="min-width:120px"><span class="mono" style="font-size:0.9rem;font-weight:700;color:var(--purple)">${handle}</span></td>
       <td><span class="badge ${cls}">${label}</span></td>
       <td><span class="mono" style="font-size:0.95rem;color:${p.points>0?'var(--green)':'var(--red)'};font-weight:700;letter-spacing:-0.02em">${p.points>0?'+':''}${p.points}</span></td>
-      <td><span class="mono" style="font-size:0.65rem;color:var(--w60)">${p.reason||'—'}</span></td>
-      <td>${tweetCell}</td>
-      <td><span class="mono" style="font-size:0.6rem;color:var(--w30)">${fd(p.created_at)}</span></td>
+      <td style="max-width:340px">${content}</td>
+      <td><span class="mono" style="font-size:0.6rem;color:var(--w30);white-space:nowrap">${fd(p.created_at)}</span></td>
     </tr>`;
   }).join('');
 }
