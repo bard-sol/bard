@@ -66,6 +66,7 @@ body { background: var(--bg); color: var(--white); font-family: 'Outfit', sans-s
 .card-head { padding: 1.1rem 1.4rem; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
 .card-body { padding: 1.4rem; }
 .sec-title { font-size: 0.7rem; font-weight: 600; letter-spacing: 0.06em; color: var(--w60); text-transform: uppercase; }
+.sec-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.8rem; }
 
 .dt { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
 .dt th { font-family: 'DM Mono', monospace; font-size: 0.52rem; letter-spacing: 0.18em; color: var(--w30); text-transform: uppercase; padding: 0.6rem 1rem; text-align: left; border-bottom: 1px solid var(--border); font-weight: 400; }
@@ -91,13 +92,18 @@ body { background: var(--bg); color: var(--white); font-family: 'Outfit', sans-s
 .btn-ghost:hover { border-color: var(--purple); color: var(--purple); }
 
 .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem; }
+.form-group { display: flex; flex-direction: column; gap: 0.4rem; }
+.form-label { font-family: 'DM Mono', monospace; font-size: 0.54rem; letter-spacing: 0.18em; color: var(--w30); text-transform: uppercase; }
+.form-inp { background: var(--surface2); border: 1px solid var(--border2); color: var(--white); padding: 0.62rem 0.85rem; font-family: 'DM Mono', monospace; font-size: 0.8rem; outline: none; transition: border-color 0.2s; width: 100%; }
+.form-inp:focus { border-color: var(--purple); }
+.form-btn { background: var(--purple); color: #000; border: none; padding: 0.65rem 1.4rem; font-family: 'Outfit', sans-serif; font-size: 0.8rem; font-weight: 600; cursor: pointer; transition: background 0.2s; }
+.form-btn:hover { background: var(--white); }
+
 .fg { display: flex; flex-direction: column; gap: 0.4rem; }
 .fg.full { grid-column: 1 / -1; }
 .fl { font-family: 'DM Mono', monospace; font-size: 0.54rem; letter-spacing: 0.18em; color: var(--w30); text-transform: uppercase; }
 .fi { background: var(--surface2); border: 1px solid var(--border2); color: var(--white); padding: 0.62rem 0.85rem; font-family: 'DM Mono', monospace; font-size: 0.8rem; outline: none; transition: border-color 0.2s; width: 100%; }
 .fi:focus { border-color: var(--purple); }
-.fs { background: var(--surface2); border: 1px solid var(--border2); color: var(--white); padding: 0.62rem 0.85rem; font-family: 'Outfit', sans-serif; font-size: 0.8rem; outline: none; width: 100%; cursor: pointer; }
-.fta { background: var(--surface2); border: 1px solid var(--border2); color: var(--white); padding: 0.62rem 0.85rem; font-family: 'DM Mono', monospace; font-size: 0.72rem; outline: none; width: 100%; resize: vertical; min-height: 65px; line-height: 1.6; }
 
 .toast { position: fixed; bottom: 1.5rem; right: 1.5rem; background: var(--surface); border: 1px solid var(--border2); padding: 0.75rem 1.1rem; font-family: 'DM Mono', monospace; font-size: 0.68rem; z-index: 1000; opacity: 0; transform: translateY(8px); transition: all 0.3s; pointer-events: none; max-width: 320px; }
 .toast.show { opacity: 1; transform: translateY(0); }
@@ -146,7 +152,10 @@ body { background: var(--bg); color: var(--white); font-family: 'Outfit', sans-s
       <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="5" r="3" stroke="currentColor" stroke-width="1.3"/><path d="M2 14c0-3 2.7-5 6-5s6 2 6 5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
       Members
     </div>
-    <div class="nav-item" onclick="go('points',this)">Points</div>
+    <div class="nav-item" onclick="go('points',this);loadPointsLedger()">
+      <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.3"/><path d="M8 5v3l2 2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+      Points
+    </div>
     <div class="nav-lbl">Treasury</div>
     <div class="nav-item" onclick="go('burns',this)">
       <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M8 2c0 3-4 4-4 7a4 4 0 008 0c0-3-4-4-4-7z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>
@@ -229,27 +238,29 @@ body { background: var(--bg); color: var(--white); font-family: 'Outfit', sans-s
   <div class="page" id="pg-points">
     <div class="sec-head"><div class="sec-title">Adjust Member Points</div></div>
     <div class="card" style="margin-bottom:1.5rem">
-      <div class="form-grid">
-        <div class="form-group">
-          <label class="form-label">X Handle or Wallet</label>
-          <input type="text" class="form-inp" id="pts-member" placeholder="@handle or wallet address">
+      <div class="card-body">
+        <div class="form-grid">
+          <div class="form-group">
+            <label class="form-label">X Handle or Wallet</label>
+            <input type="text" class="form-inp" id="pts-member" placeholder="@handle or wallet address">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Points (use negative to deduct)</label>
+            <input type="number" class="form-inp" id="pts-amount" placeholder="e.g. 500 or -200">
+          </div>
+          <div class="form-group" style="grid-column:1/-1">
+            <label class="form-label">Reason</label>
+            <input type="text" class="form-inp" id="pts-reason" placeholder="e.g. Manual reward for viral post">
+          </div>
         </div>
-        <div class="form-group">
-          <label class="form-label">Points (use negative to deduct)</label>
-          <input type="number" class="form-inp" id="pts-amount" placeholder="e.g. 500 or -200">
-        </div>
-        <div class="form-group" style="grid-column:1/-1">
-          <label class="form-label">Reason</label>
-          <input type="text" class="form-inp" id="pts-reason" placeholder="e.g. Manual reward for viral post">
-        </div>
+        <button class="form-btn" onclick="adjustPoints()">Apply Points Adjustment</button>
       </div>
-      <button class="form-btn" onclick="adjustPoints()">Apply Points Adjustment</button>
     </div>
 
     <div class="sec-head"><div class="sec-title">Points Ledger</div></div>
     <div class="card" style="padding:0">
       <table class="dt">
-        <thead><tr><th>Member</th><th>Type</th><th>Points</th><th>Reason</th><th>When</th><th>Actions</th></tr></thead>
+        <thead><tr><th>Member</th><th>Type</th><th>Points</th><th>Reason</th><th>Tweet</th><th>When</th></tr></thead>
         <tbody id="points-tbody"><tr><td colspan="6" class="empty">Loading...</td></tr></tbody>
       </table>
     </div>
@@ -353,7 +364,7 @@ function toast(msg, type='s') {
 
 // ── LOAD ALL ──────────────────────────────────────────────────────────────
 async function loadAll() {
-  await Promise.all([loadProposals(), loadClaims(), loadMembers(), loadBurns(), loadPools()]);
+  await Promise.all([loadProposals(), loadClaims(), loadMembers(), loadBurns(), loadPools(), loadPointsLedger()]);
 }
 
 // ── FORMAT DATE ──────────────────────────────────────────────────────────
@@ -526,16 +537,94 @@ async function loadMembers() {
 
 async function removeM(wallet) {
   if (!confirm('Remove this member?')) return;
-  // Delete related records first to avoid FK constraint errors
   await db.from('votes').delete().eq('wallet_address', wallet);
   await db.from('claim_votes').delete().eq('wallet_address', wallet);
-  await db.from('points_ledger').delete().eq('wallet_address', wallet);
+  await db.from('points_log').delete().eq('wallet_address', wallet);
   await db.from('proposals').delete().eq('submitted_by', wallet);
   await db.from('claims').delete().eq('submitted_by', wallet);
   const { error } = await db.from('members').delete().eq('wallet_address', wallet);
-  if (error) { toast('Error: ' + error.message); return; }
+  if (error) { toast('Error: ' + error.message, 'e'); return; }
   toast('Member removed');
-  await loadMembers();
+  loadMembers();
+}
+
+// ── POINTS ────────────────────────────────────────────────────────────────
+async function adjustPoints() {
+  const memberInput = document.getElementById('pts-member').value.trim();
+  const amount = parseInt(document.getElementById('pts-amount').value);
+  const reason = document.getElementById('pts-reason').value.trim();
+
+  if (!memberInput) { toast('Enter an X handle or wallet address', 'e'); return; }
+  if (isNaN(amount) || amount === 0) { toast('Enter a valid point amount', 'e'); return; }
+  if (!reason) { toast('Enter a reason', 'e'); return; }
+
+  // Look up member by handle or wallet
+  let query = db.from('members').select('wallet_address, x_handle, points');
+  if (memberInput.startsWith('@') || !memberInput.startsWith('0x') && memberInput.length < 44) {
+    const handle = memberInput.startsWith('@') ? memberInput : '@' + memberInput;
+    query = query.eq('x_handle', handle);
+  } else {
+    query = query.eq('wallet_address', memberInput);
+  }
+
+  const { data, error } = await query.single();
+
+  if (error || !data) {
+    toast('Member not found — check handle or wallet', 'e');
+    return;
+  }
+
+  const newTotal = (data.points || 0) + amount;
+
+  // Update members table total
+  const { error: updateErr } = await db.from('members')
+    .update({ points: newTotal })
+    .eq('wallet_address', data.wallet_address);
+
+  if (updateErr) { toast('Failed to update points: ' + updateErr.message, 'e'); return; }
+
+  // Log to points_log
+  await db.from('points_log').insert({
+    wallet_address: data.wallet_address,
+    x_handle: data.x_handle,
+    type: 'challenge',
+    points: amount,
+    reason: reason,
+  });
+
+  toast(`${amount > 0 ? '+' : ''}${amount} pts applied to ${data.x_handle || data.wallet_address.slice(0,8)+'...'}`);
+
+  // Clear form
+  document.getElementById('pts-member').value = '';
+  document.getElementById('pts-amount').value = '';
+  document.getElementById('pts-reason').value = '';
+
+  // Reload ledger
+  loadPointsLedger();
+  loadMembers();
+}
+
+async function loadPointsLedger() {
+  const { data, error } = await db.from('points_log')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(100);
+
+  const tbody = document.getElementById('points-tbody');
+
+  if (error || !data || data.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="6" class="empty">No points activity yet</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = data.map(p => `<tr>
+    <td><span class="mono" style="font-size:0.72rem;color:var(--purple)">${p.x_handle || (p.wallet_address||'').slice(0,6)+'...'+(p.wallet_address||'').slice(-4)}</span></td>
+    <td><span class="badge ${p.type==='x_post'||p.type==='x_engagement'||p.type==='x_raid'?'bp':p.type==='stake'?'bg':p.type==='sell'?'br':'bw'}">${p.type||'—'}</span></td>
+    <td><span class="mono" style="font-size:0.78rem;color:${p.points>0?'var(--green)':'var(--red)'};font-weight:600">${p.points>0?'+':''}${p.points}</span></td>
+    <td><span class="mono" style="font-size:0.65rem;color:var(--w60)">${p.reason||'—'}</span></td>
+    <td><span class="mono" style="font-size:0.6rem;color:var(--w30);max-width:200px;display:inline-block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p.tweet_text||'—'}</span></td>
+    <td><span class="mono" style="font-size:0.6rem;color:var(--w30)">${fd(p.created_at)}</span></td>
+  </tr>`).join('');
 }
 
 // ── BURNS ─────────────────────────────────────────────────────────────────
@@ -613,7 +702,6 @@ async function loadPools() {
       <td><span class="badge ${pct>0?'bg':'bw'}">${pct}% vested</span></td>
     </tr>`;}).join('');
 
-  // Pre-fill form
   data.forEach(d => {
     const el = document.getElementById('p-'+d.pool_name);
     if (el) el.value = d.balance;
