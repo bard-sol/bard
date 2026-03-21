@@ -1,3 +1,10 @@
-name = "bard-auth"
+name = "noisysurg11"
 main = "worker.js"
 compatibility_date = "2024-01-01"
+
+[assets]
+directory = "."
+
+# This worker is deployed to bard.is (custom domain: noisysurg11)
+# The bard-auth worker (bard-auth.bardsoltoken.workers.dev) is a separate deployment
+# used for the X OAuth callback redirect URI.
