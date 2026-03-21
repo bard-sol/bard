@@ -126,6 +126,95 @@ export default {
       );
     }
 
+    // Route: /tweets/scan — search X for $BARD mentions and auto-log to points_log
+    if (url.pathname === '/tweets/scan') {
+      if (url.searchParams.get('secret') !== env.SCAN_SECRET) {
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { ...CORS, 'Content-Type': 'application/json' } });
+      }
+
+      // Search X API — $BARD cashtag catches $BARD/$Bard/$bard; keyword "bard" catches Bard/bard
+      const query = encodeURIComponent('($BARD OR bard) -is:retweet lang:en');
+      const searchRes = await fetch(
+        `https://api.twitter.com/2/tweets/search/recent?query=${query}&tweet.fields=author_id,created_at,text&expansions=author_id&user.fields=username&max_results=100`,
+        { headers: { 'Authorization': `Bearer ${env.X_BEARER_TOKEN}` } }
+      );
+      const searchData = await searchRes.json();
+      const tweets = searchData.data || [];
+      const usersById = {};
+      (searchData.includes?.users || []).forEach(u => { usersById[u.id] = u; });
+
+      let logged = 0;
+      for (const tweet of tweets) {
+        const user = usersById[tweet.author_id];
+        if (!user) continue;
+        const xHandle = '@' + user.username;
+
+        // Skip if tweet already logged
+        const dupCheck = await fetch(
+          `${env.SUPABASE_URL}/rest/v1/points_log?tweet_id=eq.${tweet.id}&select=id`,
+          { headers: { 'apikey': env.SUPABASE_ANON, 'Authorization': `Bearer ${env.SUPABASE_ANON}` } }
+        );
+        const dups = await dupCheck.json();
+        if (Array.isArray(dups) && dups.length > 0) continue;
+
+        // Only log if author is a registered member
+        const memberRes = await fetch(
+          `${env.SUPABASE_URL}/rest/v1/members?x_handle=eq.${encodeURIComponent(xHandle)}&select=wallet_address,x_handle,points`,
+          { headers: { 'apikey': env.SUPABASE_ANON, 'Authorization': `Bearer ${env.SUPABASE_ANON}` } }
+        );
+        const members = await memberRes.json();
+        if (!Array.isArray(members) || members.length === 0) continue;
+        const member = members[0];
+
+        // Classify tweet type
+        const tweetText = tweet.text || '';
+        let type = 'x_post';
+        if (tweetText.startsWith('RT ') || tweetText.includes('RT @')) type = 'x_engagement';
+        else if (tweetText.startsWith('@')) type = 'x_reply';
+        else if (tweetText.includes('RT @') || tweetText.includes('"@')) type = 'x_quote';
+        const pts = type === 'x_post' ? 50 : type === 'x_reply' ? 25 : type === 'x_quote' ? 35 : 10;
+
+        // Insert log entry
+        await fetch(`${env.SUPABASE_URL}/rest/v1/points_log`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': env.SUPABASE_ANON,
+            'Authorization': `Bearer ${env.SUPABASE_ANON}`,
+            'Prefer': 'return=minimal',
+          },
+          body: JSON.stringify({
+            wallet_address: member.wallet_address,
+            x_handle: xHandle,
+            type,
+            points: pts,
+            reason: 'Auto-detected tweet',
+            tweet_text: tweetText,
+            tweet_url: `https://x.com/${user.username}/status/${tweet.id}`,
+            tweet_id: tweet.id,
+          }),
+        });
+
+        // Update member points total
+        await fetch(`${env.SUPABASE_URL}/rest/v1/members?wallet_address=eq.${member.wallet_address}`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': env.SUPABASE_ANON,
+            'Authorization': `Bearer ${env.SUPABASE_ANON}`,
+            'Prefer': 'return=minimal',
+          },
+          body: JSON.stringify({ points: (member.points || 0) + pts }),
+        });
+
+        logged++;
+      }
+
+      return new Response(JSON.stringify({ scanned: tweets.length, logged }), {
+        headers: { ...CORS, 'Content-Type': 'application/json' },
+      });
+    }
+
     return new Response('Not found', { status: 404 });
   }
 };

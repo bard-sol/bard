@@ -283,7 +283,10 @@ body { background: var(--bg); color: var(--white); font-family: 'Outfit', sans-s
 
     <div class="sec-head" style="margin-bottom:0.8rem">
       <div class="sec-title">Tweet Activity</div>
-      <span class="badge bw" id="tweet-count">—</span>
+      <div style="display:flex;align-items:center;gap:0.6rem">
+        <span class="badge bw" id="tweet-count">—</span>
+        <button class="btn btn-p" style="padding:0.3rem 0.8rem;font-size:0.68rem" onclick="scanTweets(this)">Scan Tweets</button>
+      </div>
     </div>
     <div class="card" id="tweet-cards" style="padding:0;margin-bottom:1.5rem">
       <div class="empty">Loading...</div>
@@ -614,18 +617,19 @@ async function adjustPoints() {
   if (updateErr) { toast('Failed to update points: ' + updateErr.message, 'e'); return; }
 
   // Log to points_log with full tweet context
+  const resolvedHandle = data.x_handle || (memberInput.startsWith('@') ? memberInput : '@' + memberInput);
   const logEntry = {
     wallet_address: data.wallet_address,
-    x_handle: data.x_handle,
+    x_handle: resolvedHandle,
     type,
     points: amount,
     reason,
+    tweet_url:  tweetUrl  || null,
+    tweet_text: tweetText || null,
   };
-  if (tweetUrl)  logEntry.tweet_url  = tweetUrl;
-  if (tweetText) logEntry.tweet_text = tweetText;
 
   const { error: logErr } = await db.from('points_log').insert(logEntry);
-  if (logErr) { toast('Points saved but log failed: ' + logErr.message, 'e'); }
+  if (logErr) { console.error('points_log insert failed:', logErr); toast('Points saved but log failed: ' + logErr.message, 'e'); }
 
   toast(`${amount > 0 ? '+' : ''}${amount} pts applied to ${data.x_handle || data.wallet_address.slice(0,8)+'...'}`);
 
@@ -638,6 +642,23 @@ async function adjustPoints() {
 
   loadPointsLedger();
   loadMembers();
+}
+
+async function scanTweets(btn) {
+  btn.disabled = true;
+  btn.textContent = 'Scanning...';
+  try {
+    const res = await fetch('https://bard-auth.bardsoltoken.workers.dev/tweets/scan?secret=BARD_SCAN_2026');
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.error || res.status);
+    toast(`Scan complete — ${json.logged} new tweet${json.logged !== 1 ? 's' : ''} logged (${json.scanned} checked)`);
+    loadPointsLedger();
+  } catch (e) {
+    toast('Scan failed: ' + e.message, 'e');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Scan Tweets';
+  }
 }
 
 const TYPE_LABELS = {
@@ -672,7 +693,7 @@ async function loadPointsLedger() {
   }
 
   // ── Tweet activity cards ───────────────────────────────────────────────
-  const tweetEntries = data.filter(p => p.type && p.type.startsWith('x_') && (p.tweet_text || p.tweet_url));
+  const tweetEntries = data.filter(p => p.type && p.type.startsWith('x_'));
   tweetCount.textContent = tweetEntries.length + ' tweet' + (tweetEntries.length !== 1 ? 's' : '');
 
   if (tweetEntries.length === 0) {
