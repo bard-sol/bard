@@ -286,7 +286,7 @@ body { background: var(--bg); color: var(--white); font-family: 'Outfit', sans-s
       <div class="sec-title">Tweet Activity</div>
       <div style="display:flex;align-items:center;gap:0.6rem">
         <span class="badge bw" id="tweet-count">—</span>
-        <button class="btn btn-p" style="padding:0.3rem 0.8rem;font-size:0.68rem" onclick="scanTweets(this)">Scan Tweets</button>
+        <button class="btn btn-p" style="padding:0.3rem 0.8rem;font-size:0.68rem" onclick="triggerScan(this)">Scan Tweets</button>
       </div>
     </div>
     <div class="card" id="tweet-cards" style="padding:0;margin-bottom:1.5rem">
@@ -572,6 +572,8 @@ async function removeM(wallet) {
   await db.from('votes').delete().eq('wallet_address', wallet);
   await db.from('claim_votes').delete().eq('wallet_address', wallet);
   await db.from('points_log').delete().eq('wallet_address', wallet);
+  await db.from('tweets_tracked').delete().eq('wallet_address', wallet);
+  await db.from('staking_positions').delete().eq('wallet_address', wallet);
   await db.from('proposals').delete().eq('submitted_by', wallet);
   await db.from('claims').delete().eq('submitted_by', wallet);
   const { error } = await db.from('members').delete().eq('wallet_address', wallet);
@@ -593,9 +595,8 @@ async function adjustPoints() {
   if (isNaN(amount) || amount === 0) { toast('Enter a valid point amount', 'e'); return; }
   if (!reason) { toast('Enter a reason', 'e'); return; }
 
-  // Look up member by handle or wallet
   let query = db.from('members').select('wallet_address, x_handle, points');
-  if (memberInput.startsWith('@') || !memberInput.startsWith('0x') && memberInput.length < 44) {
+  if (memberInput.startsWith('@') || memberInput.length < 44) {
     const handle = memberInput.startsWith('@') ? memberInput : '@' + memberInput;
     query = query.eq('x_handle', handle);
   } else {
@@ -603,69 +604,45 @@ async function adjustPoints() {
   }
 
   const { data, error } = await query.single();
-
-  if (error || !data) {
-    toast('Member not found — check handle or wallet', 'e');
-    return;
-  }
+  if (error || !data) { toast('Member not found — check handle or wallet', 'e'); return; }
 
   const newTotal = (data.points || 0) + amount;
 
   const { error: updateErr } = await db.from('members')
     .update({ points: newTotal })
     .eq('wallet_address', data.wallet_address);
-
   if (updateErr) { toast('Failed to update points: ' + updateErr.message, 'e'); return; }
 
-  // Resolve x_handle — prefer DB value, then typed handle, never a wallet address
-  const typedHandle = memberInput.startsWith('@') ? memberInput : (memberInput.length < 44 ? '@' + memberInput : null);
-  const resolvedHandle = data.x_handle || typedHandle;
-
-  if (!resolvedHandle) {
-    toast('Member has no X handle — ask them to connect their X account first', 'e');
-    return;
-  }
-
-  // Log to points_log with full tweet context
-  const logEntry = {
+  const { error: logErr } = await db.from('points_log').insert({
     wallet_address: data.wallet_address,
-    x_handle: resolvedHandle,
+    x_handle: data.x_handle,
     type,
     points: amount,
     reason,
     tweet_url:  tweetUrl  || null,
     tweet_text: tweetText || null,
-  };
+  });
+  if (logErr) { toast('Log failed: ' + logErr.message, 'e'); return; }
 
-  const { error: logErr } = await db.from('points_log').insert(logEntry);
-  if (logErr) {
-    console.error('points_log insert failed:', logErr);
-    toast('Log insert failed: ' + logErr.message + ' — check SQL schema', 'e');
-    return;
-  }
-
-  toast(`${amount > 0 ? '+' : ''}${amount} pts applied to ${resolvedHandle}`);
-
-  // Clear form
-  document.getElementById('pts-member').value    = '';
-  document.getElementById('pts-amount').value    = '';
-  document.getElementById('pts-tweet-url').value = '';
-  document.getElementById('pts-tweet-text').value= '';
-  document.getElementById('pts-reason').value    = '';
-
+  toast(`${amount > 0 ? '+' : ''}${amount} pts applied to ${data.x_handle || memberInput}`);
+  document.getElementById('pts-member').value     = '';
+  document.getElementById('pts-amount').value     = '';
+  document.getElementById('pts-tweet-url').value  = '';
+  document.getElementById('pts-tweet-text').value = '';
+  document.getElementById('pts-reason').value     = '';
   loadPointsLedger();
   loadMembers();
 }
 
-async function scanTweets(btn) {
+// ── SCAN TWEETS ───────────────────────────────────────────────────────────
+async function triggerScan(btn) {
   btn.disabled = true;
   btn.textContent = 'Scanning...';
   try {
-    const res = await fetch('https://bard-auth.bardsoltoken.workers.dev/tweets/scan?secret=BARD_SCAN_2026');
-    const json = await res.json();
-    if (!res.ok) throw new Error(json.error || res.status);
-    toast(`Scan complete — ${json.logged} new tweet${json.logged !== 1 ? 's' : ''} logged (${json.scanned} checked)`);
-    loadPointsLedger();
+    const res = await fetch('https://bard-points.bardsoltoken.workers.dev/run/tweets');
+    if (!res.ok) throw new Error('Worker returned ' + res.status);
+    toast('Tweet scan triggered — points will update within a minute');
+    setTimeout(() => loadPointsLedger(), 5000);
   } catch (e) {
     toast('Scan failed: ' + e.message, 'e');
   } finally {
@@ -674,6 +651,7 @@ async function scanTweets(btn) {
   }
 }
 
+// ── POINTS LEDGER ─────────────────────────────────────────────────────────
 const TYPE_LABELS = {
   x_post: 'Post', x_reply: 'Reply', x_quote: 'Quote',
   x_engagement: 'Engagement', x_raid: 'Raid',
@@ -705,7 +683,6 @@ async function loadPointsLedger() {
     return;
   }
 
-  // ── Tweet activity cards ───────────────────────────────────────────────
   const tweetEntries = data.filter(p => p.type && p.type.startsWith('x_'));
   tweetCount.textContent = tweetEntries.length + ' tweet' + (tweetEntries.length !== 1 ? 's' : '');
 
@@ -743,7 +720,6 @@ async function loadPointsLedger() {
     }).join('');
   }
 
-  // ── Full ledger table ──────────────────────────────────────────────────
   tbody.innerHTML = data.map(p => {
     const raw    = p.x_handle || ((p.wallet_address||'').slice(0,6)+'...'+(p.wallet_address||'').slice(-4));
     const handle = '@' + (raw.startsWith('@') ? raw.slice(1) : raw);
@@ -751,7 +727,7 @@ async function loadPointsLedger() {
     const cls    = typeBadgeCls(p.type);
     const content = p.tweet_text
       ? (p.tweet_url
-          ? `<a href="${p.tweet_url}" target="_blank" style="font-family:'DM Mono',monospace;font-size:0.68rem;color:var(--w60);text-decoration:none;display:block;line-height:1.6;word-break:break-word" title="${p.tweet_text}">${p.tweet_text}</a>`
+          ? `<a href="${p.tweet_url}" target="_blank" style="font-family:'DM Mono',monospace;font-size:0.68rem;color:var(--w60);text-decoration:none;display:block;line-height:1.6;word-break:break-word">${p.tweet_text}</a>`
           : `<span class="mono" style="font-size:0.68rem;color:var(--w60);display:block;line-height:1.6;word-break:break-word">${p.tweet_text}</span>`)
       : (p.tweet_url
           ? `<a href="${p.tweet_url}" target="_blank" style="font-family:'DM Mono',monospace;font-size:0.65rem;color:var(--purple);text-decoration:underline;text-underline-offset:3px">View on X →</a>`
@@ -865,18 +841,21 @@ async function updatePools() {
 
 // ── CLEAR ALL DATA ─────────────────────────────────────────────────────────
 async function clearAllData() {
-  const first = confirm('WARNING: This will permanently delete ALL members, points, tweets, votes, proposals, claims, and burn history. This cannot be undone.\n\nAre you sure?');
+  const first = confirm('WARNING: This will permanently delete ALL members, points, tweets, votes, proposals, claims, staking positions, and burn history. This cannot be undone.\n\nAre you sure?');
   if (!first) return;
   const second = confirm('Last chance — delete everything?');
   if (!second) return;
 
-  const tables = ['claim_votes','votes','points_log','claims','proposals','burn_log','pool_balances','members'];
+  const tables = [
+    'claim_votes', 'votes', 'points_log', 'tweets_tracked',
+    'staking_positions', 'referrals', 'claims', 'proposals',
+    'burn_log', 'pool_balances', 'members'
+  ];
   const errors = [];
 
   for (const table of tables) {
     const { error } = await db.from(table).delete().neq('id', '00000000-0000-0000-0000-000000000000');
     if (error) {
-      // Some tables may use non-uuid PKs — try alternate approach
       const { error: e2 } = await db.from(table).delete().gte('created_at', '2000-01-01');
       if (e2) errors.push(`${table}: ${e2.message}`);
     }
