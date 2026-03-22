@@ -114,8 +114,9 @@ body { background: var(--bg); color: var(--white); font-family: 'Outfit', sans-s
 .empty { text-align:center; padding:2rem; font-family:'DM Mono',monospace; font-size:0.68rem; color:var(--w30); }
 .mono { font-family: 'DM Mono', monospace; }
 
-.pt-card { padding: 1.1rem 1.4rem; border-bottom: 1px solid rgba(155,127,232,0.08); }
+.pt-card { padding: 1.1rem 1.4rem; border-bottom: 1px solid rgba(155,127,232,0.08); position: relative; }
 .pt-card:last-child { border-bottom: none; }
+.pt-card:hover { background: rgba(155,127,232,0.03); }
 .pt-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem; }
 .pt-left { display: flex; align-items: center; gap: 0.7rem; }
 .pt-right { display: flex; align-items: center; gap: 0.8rem; }
@@ -123,9 +124,12 @@ body { background: var(--bg); color: var(--white); font-family: 'Outfit', sans-s
 .pt-pts-pos { font-family: 'DM Mono', monospace; font-size: 1rem; font-weight: 700; color: var(--green); }
 .pt-pts-neg { font-family: 'DM Mono', monospace; font-size: 1rem; font-weight: 700; color: var(--red); }
 .pt-date { font-family: 'DM Mono', monospace; font-size: 0.6rem; color: var(--w30); }
-.pt-tweet { background: rgba(155,127,232,0.06); border-left: 2px solid var(--purple); padding: 0.6rem 0.8rem; margin-top: 0.5rem; border-radius: 0 4px 4px 0; font-family: 'DM Mono', monospace; font-size: 0.75rem; color: var(--w60); line-height: 1.75; white-space: pre-wrap; word-break: break-word; }
+.pt-tweet { background: rgba(155,127,232,0.06); border-left: 2px solid var(--purple); padding: 0.6rem 0.8rem; margin-top: 0.5rem; border-radius: 0 4px 4px 0; font-family: 'DM Mono', monospace; font-size: 0.75rem; color: var(--w60); line-height: 1.75; white-space: pre-wrap; word-break: break-word; cursor: pointer; transition: background 0.15s; }
+.pt-tweet:hover { background: rgba(155,127,232,0.12); }
 .pt-reason { font-family: 'DM Mono', monospace; font-size: 0.65rem; color: var(--w30); margin-top: 0.35rem; }
 .pt-link { font-family: 'DM Mono', monospace; font-size: 0.65rem; color: var(--purple); text-decoration: underline; text-underline-offset: 3px; margin-top: 0.35rem; display: inline-block; }
+.pt-del { background: transparent; border: 1px solid rgba(248,113,113,0.25); color: var(--red); font-family: 'DM Mono', monospace; font-size: 0.55rem; letter-spacing: 0.1em; padding: 0.2rem 0.5rem; cursor: pointer; transition: all 0.18s; border-radius: 2px; }
+.pt-del:hover { background: rgba(248,113,113,0.12); }
 </style>
 </head>
 <body>
@@ -309,8 +313,8 @@ body { background: var(--bg); color: var(--white); font-family: 'Outfit', sans-s
     <div class="sec-head"><div class="sec-title">Full Ledger</div></div>
     <div class="card" style="padding:0">
       <table class="dt">
-        <thead><tr><th>Member</th><th>Type</th><th>Points</th><th>Content / Reason</th><th>When</th></tr></thead>
-        <tbody id="points-tbody"><tr><td colspan="5" class="empty">Loading...</td></tr></tbody>
+        <thead><tr><th>Member</th><th>Type</th><th>Points</th><th>Content / Reason</th><th>When</th><th></th></tr></thead>
+        <tbody id="points-tbody"><tr><td colspan="6" class="empty">Loading...</td></tr></tbody>
       </table>
     </div>
   </div>
@@ -423,6 +427,16 @@ function fdt(str) {
   return d.toLocaleDateString('en-GB', { day:'2-digit', month:'short' }) + ' · ' + d.toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
 }
 
+// ── TWEET URL HELPER ──────────────────────────────────────────────────────
+function tweetUrl(p) {
+  if (p.tweet_url) return p.tweet_url;
+  if (p.tweet_id && p.tweet_id.match(/^\d+$/)) {
+    const handle = p.x_handle ? p.x_handle.replace('@','') : 'i';
+    return `https://x.com/${handle}/status/${p.tweet_id}`;
+  }
+  return null;
+}
+
 // ── PROPOSALS ─────────────────────────────────────────────────────────────
 async function loadProposals() {
   const { data } = await db.from('proposals').select('*, members(x_handle)').order('created_at', { ascending: false });
@@ -435,7 +449,7 @@ async function loadProposals() {
   pb.innerHTML = pending.length === 0 ? '<tr><td colspan="4" class="empty">No pending proposals</td></tr>'
     : pending.map(p => `<tr>
         <td><div style="font-weight:500;font-size:0.82rem">${p.title}</div><div class="mono" style="font-size:0.58rem;color:var(--w30);margin-top:0.2rem">${(p.description||'').slice(0,70)}${(p.description||'').length>70?'...':''}</div></td>
-        <td><span class="mono" style="font-size:0.7rem">${p.members?.x_handle || (p.submitted_by||'').slice(0,8)+'...'}</span></td>
+        <td><span class="mono" style="font-size:0.7rem">${p.members?.x_handle||(p.submitted_by||'').slice(0,8)+'...'}</span></td>
         <td><span class="mono" style="font-size:0.62rem;color:var(--w30)">${fd(p.created_at)}</span></td>
         <td><div style="display:flex;gap:0.4rem"><button class="btn btn-g" onclick="approveP('${p.id}')">Approve</button><button class="btn btn-r" onclick="rejectP('${p.id}')">Reject</button></div></td>
       </tr>`).join('');
@@ -491,8 +505,8 @@ async function loadClaims() {
   const cb = document.getElementById('tb-claims');
   cb.innerHTML = open.length === 0 ? '<tr><td colspan="5" class="empty">No open claims</td></tr>'
     : open.map(c => {
-        const total = (c.yes_power||0)+(c.no_power||0);
-        const pct = total > 0 ? Math.round((c.yes_power/total)*100) : 0;
+        const total=(c.yes_power||0)+(c.no_power||0);
+        const pct=total>0?Math.round((c.yes_power/total)*100):0;
         return `<tr>
           <td><span class="badge bp">${c.pool_name}</span></td>
           <td><span class="mono" style="font-size:0.7rem">${c.members?.x_handle||(c.submitted_by||'').slice(0,8)+'...'}</span></td>
@@ -559,7 +573,6 @@ async function loadMembers() {
 
 async function removeM(wallet) {
   if (!confirm('Remove this member and all their data?')) return;
-  // Delete in FK-safe order — dependents first, member last
   const deletes = [
     db.from('votes').delete().eq('wallet_address', wallet),
     db.from('claim_votes').delete().eq('wallet_address', wallet),
@@ -571,9 +584,7 @@ async function removeM(wallet) {
     db.from('claims').delete().eq('submitted_by', wallet),
   ];
   await Promise.all(deletes);
-  // points_log has FK constraint — delete separately after others
   await db.from('points_log').delete().eq('wallet_address', wallet);
-  // Now safe to delete member
   const { error } = await db.from('members').delete().eq('wallet_address', wallet);
   if (error) { toast('Error removing member: ' + error.message, 'e'); return; }
   toast('Member removed');
@@ -585,7 +596,7 @@ async function adjustPoints() {
   const memberInput = document.getElementById('pts-member').value.trim();
   const type        = document.getElementById('pts-type').value;
   const amount      = parseInt(document.getElementById('pts-amount').value);
-  const tweetUrl    = document.getElementById('pts-tweet-url').value.trim();
+  const tweetUrl_   = document.getElementById('pts-tweet-url').value.trim();
   const tweetText   = document.getElementById('pts-tweet-text').value.trim();
   const reason      = document.getElementById('pts-reason').value.trim();
 
@@ -610,13 +621,32 @@ async function adjustPoints() {
     wallet_address: data.wallet_address,
     x_handle: data.x_handle,
     type, points: amount, reason,
-    tweet_url:  tweetUrl  || null,
+    tweet_url:  tweetUrl_  || null,
     tweet_text: tweetText || null,
   });
   if (le) { toast('Log failed: ' + le.message, 'e'); return; }
 
   toast(`${amount > 0 ? '+' : ''}${amount} pts → ${data.x_handle || memberInput}`);
   ['pts-member','pts-amount','pts-tweet-url','pts-tweet-text','pts-reason'].forEach(id => document.getElementById(id).value = '');
+  loadPointsLedger();
+  loadMembers();
+}
+
+// ── DELETE POINT ENTRY ────────────────────────────────────────────────────
+async function deletePointEntry(id, wallet, points) {
+  if (!confirm(`Delete this entry and reverse ${points > 0 ? '-' : '+'}${Math.abs(points)} pts from member?`)) return;
+
+  // Delete the log entry
+  const { error: delErr } = await db.from('points_log').delete().eq('id', id);
+  if (delErr) { toast('Delete failed: ' + delErr.message, 'e'); return; }
+
+  // Reverse the points on the member
+  const { data: member } = await db.from('members').select('points').eq('wallet_address', wallet).single();
+  if (member) {
+    await db.from('members').update({ points: (member.points || 0) - points }).eq('wallet_address', wallet);
+  }
+
+  toast(`Entry deleted · ${points > 0 ? '-' : '+'}${Math.abs(points)} pts reversed`);
   loadPointsLedger();
   loadMembers();
 }
@@ -668,7 +698,7 @@ async function loadPointsLedger() {
 
   if (error || !data || data.length === 0) {
     feed.innerHTML  = '<div class="empty">No point activity yet</div>';
-    tbody.innerHTML = '<tr><td colspan="5" class="empty">No activity yet</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="6" class="empty">No activity yet</td></tr>';
     tCount.textContent = '0 entries';
     return;
   }
@@ -682,7 +712,15 @@ async function loadPointsLedger() {
     const cls     = typeBadgeCls(p.type);
     const ptsSign = p.points > 0 ? '+' : '';
     const ptsCls  = p.points > 0 ? 'pt-pts-pos' : 'pt-pts-neg';
-    const isXType = p.type && p.type.startsWith('x_');
+    const url     = tweetUrl(p);
+
+    const tweetBlock = p.tweet_text
+      ? (url
+          ? `<a href="${url}" target="_blank" class="pt-tweet" style="display:block;text-decoration:none">${p.tweet_text} <span style="color:var(--purple);font-size:0.6rem">↗</span></a>`
+          : `<div class="pt-tweet">${p.tweet_text}</div>`)
+      : (url
+          ? `<a href="${url}" target="_blank" class="pt-link">View on X →</a>`
+          : (p.reason ? `<div class="pt-reason">${p.reason}</div>` : ''));
 
     return `<div class="pt-card">
       <div class="pt-header">
@@ -693,11 +731,10 @@ async function loadPointsLedger() {
         <div class="pt-right">
           <span class="${ptsCls}">${ptsSign}${p.points} pts</span>
           <span class="pt-date">${fdt(p.created_at)}</span>
+          <button class="pt-del" onclick="deletePointEntry('${p.id}','${p.wallet_address}',${p.points})">DELETE</button>
         </div>
       </div>
-      ${p.tweet_text ? `<div class="pt-tweet">${p.tweet_text}</div>` : ''}
-      ${p.tweet_url  ? `<a class="pt-link" href="${p.tweet_url}" target="_blank">View on X →</a>` : ''}
-      ${!p.tweet_text && !p.tweet_url && p.reason ? `<div class="pt-reason">${p.reason}</div>` : ''}
+      ${tweetBlock}
     </div>`;
   }).join('');
 
@@ -706,12 +743,13 @@ async function loadPointsLedger() {
     const handle  = fmtHandle(p);
     const label   = TYPE_LABELS[p.type] || p.type || '—';
     const cls     = typeBadgeCls(p.type);
+    const url     = tweetUrl(p);
     const content = p.tweet_text
-      ? (p.tweet_url
-          ? `<a href="${p.tweet_url}" target="_blank" style="font-family:'DM Mono',monospace;font-size:0.68rem;color:var(--w60);word-break:break-word">${p.tweet_text}</a>`
+      ? (url
+          ? `<a href="${url}" target="_blank" style="font-family:'DM Mono',monospace;font-size:0.68rem;color:var(--w60);word-break:break-word;text-decoration:none">${p.tweet_text} <span style="color:var(--purple)">↗</span></a>`
           : `<span class="mono" style="font-size:0.68rem;color:var(--w60);word-break:break-word">${p.tweet_text}</span>`)
-      : (p.tweet_url
-          ? `<a href="${p.tweet_url}" target="_blank" style="font-family:'DM Mono',monospace;font-size:0.65rem;color:var(--purple);text-decoration:underline">View on X →</a>`
+      : (url
+          ? `<a href="${url}" target="_blank" style="font-family:'DM Mono',monospace;font-size:0.65rem;color:var(--purple);text-decoration:underline">View on X →</a>`
           : `<span class="mono" style="font-size:0.65rem;color:var(--w30)">${p.reason||'—'}</span>`);
     return `<tr>
       <td><span class="mono" style="font-size:0.88rem;font-weight:700;color:var(--purple)">${handle}</span></td>
@@ -719,6 +757,7 @@ async function loadPointsLedger() {
       <td><span class="mono" style="font-size:0.92rem;font-weight:700;color:${p.points>0?'var(--green)':'var(--red)'}">${p.points>0?'+':''}${p.points}</span></td>
       <td style="max-width:320px">${content}</td>
       <td><span class="mono" style="font-size:0.6rem;color:var(--w30);white-space:nowrap">${fd(p.created_at)}</span></td>
+      <td><button class="pt-del" onclick="deletePointEntry('${p.id}','${p.wallet_address}',${p.points})">DEL</button></td>
     </tr>`;
   }).join('');
 }
@@ -809,12 +848,7 @@ async function updatePools() {
 async function clearAllData() {
   if (!confirm('WARNING: Delete ALL members, points, tweets, votes, proposals, claims, staking, burns? Cannot be undone.')) return;
   if (!confirm('Last chance — delete everything?')) return;
-
-  const tables = [
-    'claim_votes','votes','points_log','tweets_tracked',
-    'staking_positions','referrals','claims','proposals',
-    'burn_log','pool_balances','members'
-  ];
+  const tables = ['claim_votes','votes','points_log','tweets_tracked','staking_positions','referrals','claims','proposals','burn_log','pool_balances','members'];
   const errors = [];
   for (const table of tables) {
     const { error } = await db.from(table).delete().neq('id', '00000000-0000-0000-0000-000000000000');
