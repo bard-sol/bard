@@ -365,21 +365,82 @@ body { background: var(--bg); color: var(--white); font-family: 'Outfit', sans-s
 
 </div>
 </div>
-
 <script>
+// ═══════════════════════════════════════════════════════════════════════════
+// $BARD ADMIN PANEL — SECURED
+// Password checked server-side via Worker JWT
+// All writes route through Worker (uses Supabase service key)
+// Reads still use anon key (RLS allows SELECT only)
+// ═══════════════════════════════════════════════════════════════════════════
+
 const SUPABASE_URL = 'https://pxdiyukxgnphxlknhmke.supabase.co';
 const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB4ZGl5dWt4Z25waHhsa25obWtlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM4NTg2NDAsImV4cCI6MjA4OTQzNDY0MH0.eOJ8I7UBCywHDMWdPbcWFURbfoDgMUHFD_cSAZA8Hk4';
+const WORKER_URL = 'https://bard-auth.bardsoltoken.workers.dev';
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+
+// ── ADMIN TOKEN ──────────────────────────────────────────────────────────
+let adminToken = sessionStorage.getItem('admin_token') || null;
+
+function authHeaders() {
+  return { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + adminToken };
+}
+
+async function workerPost(path, body) {
+  const res = await fetch(WORKER_URL + path, {
+    method: 'POST', headers: authHeaders(), body: JSON.stringify(body),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Request failed');
+  return data;
+}
 
 // ── AUTH ──────────────────────────────────────────────────────────────────
 document.getElementById('loginBtn').addEventListener('click', login);
 document.getElementById('pwd').addEventListener('keydown', e => { if(e.key==='Enter') login(); });
-document.getElementById('logoutBtn').addEventListener('click', () => { sessionStorage.removeItem('admin_auth'); location.reload(); });
+document.getElementById('logoutBtn').addEventListener('click', () => {
+  sessionStorage.removeItem('admin_token');
+  adminToken = null;
+  location.reload();
+});
 
-function login() {
-  if (document.getElementById('pwd').value !== 'Michaelboi1776') { document.getElementById('lerr').style.display = 'block'; return; }
-  sessionStorage.setItem('admin_auth', '1');
-  showApp();
+async function login() {
+  const pwd = document.getElementById('pwd').value;
+  const errEl = document.getElementById('lerr');
+  errEl.style.display = 'none';
+
+  try {
+    const res = await fetch(WORKER_URL + '/admin/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: pwd }),
+    });
+    const data = await res.json();
+
+    if (!res.ok || !data.token) {
+      errEl.textContent = data.error || 'Incorrect password';
+      errEl.style.display = 'block';
+      return;
+    }
+
+    adminToken = data.token;
+    sessionStorage.setItem('admin_token', adminToken);
+    showApp();
+  } catch (e) {
+    errEl.textContent = 'Connection failed — check Worker is deployed';
+    errEl.style.display = 'block';
+  }
+}
+
+async function verifySession() {
+  if (!adminToken) return false;
+  try {
+    const res = await fetch(WORKER_URL + '/admin/verify', {
+      headers: { 'Authorization': 'Bearer ' + adminToken },
+    });
+    return res.ok;
+  } catch (e) {
+    return false;
+  }
 }
 
 function showApp() {
@@ -388,8 +449,13 @@ function showApp() {
   loadAll();
 }
 
-window.addEventListener('load', () => {
-  if (sessionStorage.getItem('admin_auth') === '1') showApp();
+window.addEventListener('load', async () => {
+  if (adminToken && await verifySession()) {
+    showApp();
+  } else {
+    sessionStorage.removeItem('admin_token');
+    adminToken = null;
+  }
 });
 
 // ── NAV ───────────────────────────────────────────────────────────────────
@@ -427,17 +493,7 @@ function fdt(str) {
   return d.toLocaleDateString('en-GB', { day:'2-digit', month:'short' }) + ' · ' + d.toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
 }
 
-// ── TWEET URL HELPER ──────────────────────────────────────────────────────
-function tweetUrl(p) {
-  if (p.tweet_url) return p.tweet_url;
-  if (p.tweet_id && p.tweet_id.match(/^\d+$/)) {
-    const handle = p.x_handle ? p.x_handle.replace('@','') : 'i';
-    return `https://x.com/${handle}/status/${p.tweet_id}`;
-  }
-  return null;
-}
-
-// ── PROPOSALS ─────────────────────────────────────────────────────────────
+// ── PROPOSALS (reads from Supabase, writes through Worker) ────────────────
 async function loadProposals() {
   const { data } = await db.from('proposals').select('*, members(x_handle)').order('created_at', { ascending: false });
   if (!data) return;
@@ -448,15 +504,15 @@ async function loadProposals() {
   const pb = document.getElementById('tb-pending');
   pb.innerHTML = pending.length === 0 ? '<tr><td colspan="4" class="empty">No pending proposals</td></tr>'
     : pending.map(p => `<tr>
-        <td><div style="font-weight:500;font-size:0.82rem">${p.title}</div><div class="mono" style="font-size:0.58rem;color:var(--w30);margin-top:0.2rem">${(p.description||'').slice(0,70)}${(p.description||'').length>70?'...':''}</div></td>
-        <td><span class="mono" style="font-size:0.7rem">${p.members?.x_handle||(p.submitted_by||'').slice(0,8)+'...'}</span></td>
+        <td><div style="font-weight:500;font-size:0.82rem">${esc(p.title)}</div><div class="mono" style="font-size:0.58rem;color:var(--w30);margin-top:0.2rem">${esc((p.description||'').slice(0,70))}${(p.description||'').length>70?'...':''}</div></td>
+        <td><span class="mono" style="font-size:0.7rem">${esc(p.members?.x_handle || (p.submitted_by||'').slice(0,8)+'...')}</span></td>
         <td><span class="mono" style="font-size:0.62rem;color:var(--w30)">${fd(p.created_at)}</span></td>
         <td><div style="display:flex;gap:0.4rem"><button class="btn btn-g" onclick="approveP('${p.id}')">Approve</button><button class="btn btn-r" onclick="rejectP('${p.id}')">Reject</button></div></td>
       </tr>`).join('');
   const ab = document.getElementById('tb-active');
   ab.innerHTML = active.length === 0 ? '<tr><td colspan="5" class="empty">No active proposals</td></tr>'
     : active.map(p => `<tr>
-        <td style="font-weight:500;font-size:0.82rem">${p.title}</td>
+        <td style="font-weight:500;font-size:0.82rem">${esc(p.title)}</td>
         <td><span class="mono" style="font-size:0.7rem;color:var(--green)">${Number(p.yes_power||0).toLocaleString()}</span></td>
         <td><span class="mono" style="font-size:0.7rem;color:var(--red)">${Number(p.no_power||0).toLocaleString()}</span></td>
         <td><span class="mono" style="font-size:0.62rem;color:var(--w30)">${fd(p.ends_at)}</span></td>
@@ -465,7 +521,7 @@ async function loadProposals() {
   const ol = document.getElementById('ov-pl');
   ol.innerHTML = pending.length === 0 ? '<div class="mono" style="font-size:0.65rem;color:var(--w30)">None pending</div>'
     : pending.slice(0,3).map(p => `<div style="padding:0.6rem 0;border-bottom:1px solid rgba(155,127,232,0.06)">
-        <div style="font-size:0.8rem;font-weight:500;margin-bottom:0.5rem">${p.title}</div>
+        <div style="font-size:0.8rem;font-weight:500;margin-bottom:0.5rem">${esc(p.title)}</div>
         <div style="display:flex;gap:0.4rem">
           <button class="btn btn-g" style="font-size:0.65rem;padding:0.3rem 0.6rem" onclick="approveP('${p.id}')">Approve</button>
           <button class="btn btn-r" style="font-size:0.65rem;padding:0.3rem 0.6rem" onclick="rejectP('${p.id}')">Reject</button>
@@ -473,28 +529,32 @@ async function loadProposals() {
 }
 
 async function approveP(id) {
-  const ends = new Date(Date.now() + 14*24*60*60*1000).toISOString();
-  const { error } = await db.from('proposals').update({ status:'active', approved_by_admin:true, ends_at:ends }).eq('id', id);
-  if (error) { toast('Failed: '+error.message, 'e'); return; }
-  toast('Proposal approved — now live on dashboard');
-  loadProposals();
+  try {
+    await workerPost('/admin/proposal/approve', { id });
+    toast('Proposal approved — now live on dashboard');
+    loadProposals();
+  } catch (e) { toast('Failed: ' + e.message, 'e'); }
 }
 
 async function rejectP(id) {
   if (!confirm('Reject and remove this proposal?')) return;
-  await db.from('proposals').delete().eq('id', id);
-  toast('Proposal rejected');
-  loadProposals();
+  try {
+    await workerPost('/admin/proposal/reject', { id });
+    toast('Proposal rejected');
+    loadProposals();
+  } catch (e) { toast('Failed: ' + e.message, 'e'); }
 }
 
 async function closeP(id) {
   if (!confirm('Close voting on this proposal?')) return;
-  await db.from('proposals').update({ status:'closed' }).eq('id', id);
-  toast('Proposal closed');
-  loadProposals();
+  try {
+    await workerPost('/admin/proposal/close', { id });
+    toast('Proposal closed');
+    loadProposals();
+  } catch (e) { toast('Failed: ' + e.message, 'e'); }
 }
 
-// ── CLAIMS ────────────────────────────────────────────────────────────────
+// ── CLAIMS (reads from Supabase, writes through Worker) ──────────────────
 async function loadClaims() {
   const { data } = await db.from('claims').select('*, members(x_handle)').order('created_at', { ascending: false });
   if (!data) return;
@@ -505,20 +565,20 @@ async function loadClaims() {
   const cb = document.getElementById('tb-claims');
   cb.innerHTML = open.length === 0 ? '<tr><td colspan="5" class="empty">No open claims</td></tr>'
     : open.map(c => {
-        const total=(c.yes_power||0)+(c.no_power||0);
-        const pct=total>0?Math.round((c.yes_power/total)*100):0;
+        const total = (c.yes_power||0)+(c.no_power||0);
+        const pct = total > 0 ? Math.round((c.yes_power/total)*100) : 0;
         return `<tr>
-          <td><span class="badge bp">${c.pool_name}</span></td>
-          <td><span class="mono" style="font-size:0.7rem">${c.members?.x_handle||(c.submitted_by||'').slice(0,8)+'...'}</span></td>
-          <td><a href="${c.proof_url}" target="_blank" style="font-family:'DM Mono',monospace;font-size:0.62rem;color:var(--purple);text-decoration:underline">View →</a></td>
+          <td><span class="badge bp">${esc(c.pool_name)}</span></td>
+          <td><span class="mono" style="font-size:0.7rem">${esc(c.members?.x_handle||(c.submitted_by||'').slice(0,8)+'...')}</span></td>
+          <td><a href="${esc(c.proof_url)}" target="_blank" style="font-family:'DM Mono',monospace;font-size:0.62rem;color:var(--purple);text-decoration:underline">View →</a></td>
           <td><span class="mono" style="font-size:0.7rem;color:${pct>=50?'var(--green)':'var(--red)'}">${pct}%</span></td>
           <td><div style="display:flex;gap:0.4rem"><button class="btn btn-g" onclick="approveC('${c.id}')">Pay Out</button><button class="btn btn-r" onclick="rejectC('${c.id}')">Reject</button></div></td>
         </tr>`;}).join('');
   const pcb = document.getElementById('tb-past-claims');
   pcb.innerHTML = past.length === 0 ? '<tr><td colspan="4" class="empty">No past claims</td></tr>'
     : past.map(c => `<tr>
-        <td><span class="badge bw">${c.pool_name}</span></td>
-        <td><span class="mono" style="font-size:0.7rem">${c.members?.x_handle||'—'}</span></td>
+        <td><span class="badge bw">${esc(c.pool_name)}</span></td>
+        <td><span class="mono" style="font-size:0.7rem">${esc(c.members?.x_handle||'—')}</span></td>
         <td><span class="badge ${c.status==='approved'?'bg':'br'}">${c.status}</span></td>
         <td><span class="mono" style="font-size:0.62rem;color:var(--w30)">${fd(c.created_at)}</span></td>
       </tr>`).join('');
@@ -529,8 +589,8 @@ async function loadClaims() {
         const pct=total>0?Math.round((c.yes_power/total)*100):0;
         return `<div style="padding:0.6rem 0;border-bottom:1px solid rgba(155,127,232,0.06)">
           <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.4rem">
-            <span class="badge bp">${c.pool_name}</span>
-            <span class="mono" style="font-size:0.62rem;color:var(--w30)">${c.members?.x_handle||'—'} · ${pct}% approve</span>
+            <span class="badge bp">${esc(c.pool_name)}</span>
+            <span class="mono" style="font-size:0.62rem;color:var(--w30)">${esc(c.members?.x_handle||'—')} · ${pct}% approve</span>
           </div>
           <div style="display:flex;gap:0.4rem">
             <button class="btn btn-g" style="font-size:0.65rem;padding:0.3rem 0.6rem" onclick="approveC('${c.id}')">Pay Out</button>
@@ -540,21 +600,25 @@ async function loadClaims() {
 
 async function approveC(id) {
   if (!confirm('Mark as paid out? Remember to execute the on-chain payout manually.')) return;
-  await db.from('claims').update({ status:'approved' }).eq('id', id);
-  toast('Claim approved — execute on-chain payout now');
-  loadClaims();
+  try {
+    await workerPost('/admin/claim/approve', { id });
+    toast('Claim approved — execute on-chain payout now');
+    loadClaims();
+  } catch (e) { toast('Failed: ' + e.message, 'e'); }
 }
 
 async function rejectC(id) {
   if (!confirm('Reject this claim? Pool keeps accumulating.')) return;
-  await db.from('claims').update({ status:'rejected' }).eq('id', id);
-  toast('Claim rejected');
-  loadClaims();
+  try {
+    await workerPost('/admin/claim/reject', { id });
+    toast('Claim rejected');
+    loadClaims();
+  } catch (e) { toast('Failed: ' + e.message, 'e'); }
 }
 
-// ── MEMBERS ───────────────────────────────────────────────────────────────
+// ── MEMBERS (reads from Supabase, delete through Worker) ─────────────────
 async function loadMembers() {
-  const { data, count } = await db.from('members').select('*', { count:'exact' }).order('points', { ascending:false });
+  const { data, count } = await db.from('members').select('wallet_address, x_handle, token_balance, points, last_seen', { count:'exact' }).order('points', { ascending:false });
   if (!data) return;
   const total = count || data.length;
   document.getElementById('ov-m').textContent = total;
@@ -562,7 +626,7 @@ async function loadMembers() {
   const mb = document.getElementById('tb-members');
   mb.innerHTML = data.length === 0 ? '<tr><td colspan="6" class="empty">No members yet</td></tr>'
     : data.map(m => `<tr>
-        <td><span class="mono" style="font-size:0.78rem">${m.x_handle||'—'}</span></td>
+        <td><span class="mono" style="font-size:0.78rem">${esc(m.x_handle||'—')}</span></td>
         <td><span class="mono" style="font-size:0.62rem;color:var(--w30)">${(m.wallet_address||'').slice(0,6)}...${(m.wallet_address||'').slice(-4)}</span></td>
         <td><span class="mono" style="font-size:0.7rem">${Number(m.token_balance||0).toLocaleString()}</span></td>
         <td><span class="mono" style="font-size:0.7rem;color:var(--purple)">${m.points||0}</span></td>
@@ -573,30 +637,19 @@ async function loadMembers() {
 
 async function removeM(wallet) {
   if (!confirm('Remove this member and all their data?')) return;
-  const deletes = [
-    db.from('votes').delete().eq('wallet_address', wallet),
-    db.from('claim_votes').delete().eq('wallet_address', wallet),
-    db.from('tweets_tracked').delete().eq('wallet_address', wallet),
-    db.from('staking_positions').delete().eq('wallet_address', wallet),
-    db.from('referrals').delete().eq('referrer_wallet', wallet),
-    db.from('referrals').delete().eq('referred_wallet', wallet),
-    db.from('proposals').delete().eq('submitted_by', wallet),
-    db.from('claims').delete().eq('submitted_by', wallet),
-  ];
-  await Promise.all(deletes);
-  await db.from('points_log').delete().eq('wallet_address', wallet);
-  const { error } = await db.from('members').delete().eq('wallet_address', wallet);
-  if (error) { toast('Error removing member: ' + error.message, 'e'); return; }
-  toast('Member removed');
-  loadMembers();
+  try {
+    await workerPost('/admin/member/delete', { wallet_address: wallet });
+    toast('Member removed');
+    loadMembers();
+  } catch (e) { toast('Failed: ' + e.message, 'e'); }
 }
 
-// ── POINTS ────────────────────────────────────────────────────────────────
+// ── POINTS (reads from Supabase, award through Worker) ───────────────────
 async function adjustPoints() {
   const memberInput = document.getElementById('pts-member').value.trim();
   const type        = document.getElementById('pts-type').value;
   const amount      = parseInt(document.getElementById('pts-amount').value);
-  const tweetUrl_   = document.getElementById('pts-tweet-url').value.trim();
+  const tweetUrl    = document.getElementById('pts-tweet-url').value.trim();
   const tweetText   = document.getElementById('pts-tweet-text').value.trim();
   const reason      = document.getElementById('pts-reason').value.trim();
 
@@ -604,6 +657,7 @@ async function adjustPoints() {
   if (isNaN(amount) || amount === 0) { toast('Enter a valid point amount', 'e'); return; }
   if (!reason) { toast('Enter a reason', 'e'); return; }
 
+  // Look up member (read via Supabase anon — SELECT is still allowed)
   let query = db.from('members').select('wallet_address, x_handle, points');
   if (memberInput.startsWith('@') || memberInput.length < 44) {
     const handle = memberInput.startsWith('@') ? memberInput : '@' + memberInput;
@@ -614,41 +668,19 @@ async function adjustPoints() {
   const { data, error } = await query.single();
   if (error || !data) { toast('Member not found', 'e'); return; }
 
-  const { error: ue } = await db.from('members').update({ points: (data.points||0) + amount }).eq('wallet_address', data.wallet_address);
-  if (ue) { toast('Failed: ' + ue.message, 'e'); return; }
-
-  const { error: le } = await db.from('points_log').insert({
-    wallet_address: data.wallet_address,
-    x_handle: data.x_handle,
-    type, points: amount, reason,
-    tweet_url:  tweetUrl_  || null,
-    tweet_text: tweetText || null,
-  });
-  if (le) { toast('Log failed: ' + le.message, 'e'); return; }
-
-  toast(`${amount > 0 ? '+' : ''}${amount} pts → ${data.x_handle || memberInput}`);
-  ['pts-member','pts-amount','pts-tweet-url','pts-tweet-text','pts-reason'].forEach(id => document.getElementById(id).value = '');
-  loadPointsLedger();
-  loadMembers();
-}
-
-// ── DELETE POINT ENTRY ────────────────────────────────────────────────────
-async function deletePointEntry(id, wallet, points) {
-  if (!confirm(`Delete this entry and reverse ${points > 0 ? '-' : '+'}${Math.abs(points)} pts from member?`)) return;
-
-  // Delete the log entry
-  const { error: delErr } = await db.from('points_log').delete().eq('id', id);
-  if (delErr) { toast('Delete failed: ' + delErr.message, 'e'); return; }
-
-  // Reverse the points on the member
-  const { data: member } = await db.from('members').select('points').eq('wallet_address', wallet).single();
-  if (member) {
-    await db.from('members').update({ points: (member.points || 0) - points }).eq('wallet_address', wallet);
-  }
-
-  toast(`Entry deleted · ${points > 0 ? '-' : '+'}${Math.abs(points)} pts reversed`);
-  loadPointsLedger();
-  loadMembers();
+  try {
+    await workerPost('/admin/points/award', {
+      wallet_address: data.wallet_address,
+      x_handle: data.x_handle,
+      type, points: amount, reason,
+      tweet_url: tweetUrl || null,
+      tweet_text: tweetText || null,
+    });
+    toast(`${amount > 0 ? '+' : ''}${amount} pts → ${data.x_handle || memberInput}`);
+    ['pts-member','pts-amount','pts-tweet-url','pts-tweet-text','pts-reason'].forEach(id => document.getElementById(id).value = '');
+    loadPointsLedger();
+    loadMembers();
+  } catch (e) { toast('Failed: ' + e.message, 'e'); }
 }
 
 // ── SCAN TWEETS ───────────────────────────────────────────────────────────
@@ -668,7 +700,7 @@ async function triggerScan(btn) {
   }
 }
 
-// ── POINTS LEDGER ─────────────────────────────────────────────────────────
+// ── POINTS LEDGER (read-only from Supabase) ──────────────────────────────
 const TYPE_LABELS = {
   x_post:'Post', x_reply:'Reply', x_quote:'Quote',
   x_engagement:'Engagement', x_raid:'Raid',
@@ -698,71 +730,59 @@ async function loadPointsLedger() {
 
   if (error || !data || data.length === 0) {
     feed.innerHTML  = '<div class="empty">No point activity yet</div>';
-    tbody.innerHTML = '<tr><td colspan="6" class="empty">No activity yet</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="5" class="empty">No activity yet</td></tr>';
     tCount.textContent = '0 entries';
     return;
   }
 
   tCount.textContent = data.length + ' entr' + (data.length !== 1 ? 'ies' : 'y');
 
-  // ── Activity feed cards ────────────────────────────────────────────────
   feed.innerHTML = data.map(p => {
     const handle  = fmtHandle(p);
     const label   = TYPE_LABELS[p.type] || p.type || '—';
     const cls     = typeBadgeCls(p.type);
     const ptsSign = p.points > 0 ? '+' : '';
     const ptsCls  = p.points > 0 ? 'pt-pts-pos' : 'pt-pts-neg';
-    const url     = tweetUrl(p);
-
-    const tweetBlock = p.tweet_text
-      ? (url
-          ? `<a href="${url}" target="_blank" class="pt-tweet" style="display:block;text-decoration:none">${p.tweet_text} <span style="color:var(--purple);font-size:0.6rem">↗</span></a>`
-          : `<div class="pt-tweet">${p.tweet_text}</div>`)
-      : (url
-          ? `<a href="${url}" target="_blank" class="pt-link">View on X →</a>`
-          : (p.reason ? `<div class="pt-reason">${p.reason}</div>` : ''));
 
     return `<div class="pt-card">
       <div class="pt-header">
         <div class="pt-left">
           <span class="badge ${cls}">${label}</span>
-          <span class="pt-handle">${handle}</span>
+          <span class="pt-handle">${esc(handle)}</span>
         </div>
         <div class="pt-right">
           <span class="${ptsCls}">${ptsSign}${p.points} pts</span>
           <span class="pt-date">${fdt(p.created_at)}</span>
-          <button class="pt-del" onclick="deletePointEntry('${p.id}','${p.wallet_address}',${p.points})">DELETE</button>
         </div>
       </div>
-      ${tweetBlock}
+      ${p.tweet_text ? `<div class="pt-tweet">${esc(p.tweet_text)}</div>` : ''}
+      ${p.tweet_url  ? `<a class="pt-link" href="${esc(p.tweet_url)}" target="_blank">View on X →</a>` : ''}
+      ${!p.tweet_text && !p.tweet_url && p.reason ? `<div class="pt-reason">${esc(p.reason)}</div>` : ''}
     </div>`;
   }).join('');
 
-  // ── Full ledger table ──────────────────────────────────────────────────
   tbody.innerHTML = data.map(p => {
     const handle  = fmtHandle(p);
     const label   = TYPE_LABELS[p.type] || p.type || '—';
     const cls     = typeBadgeCls(p.type);
-    const url     = tweetUrl(p);
     const content = p.tweet_text
-      ? (url
-          ? `<a href="${url}" target="_blank" style="font-family:'DM Mono',monospace;font-size:0.68rem;color:var(--w60);word-break:break-word;text-decoration:none">${p.tweet_text} <span style="color:var(--purple)">↗</span></a>`
-          : `<span class="mono" style="font-size:0.68rem;color:var(--w60);word-break:break-word">${p.tweet_text}</span>`)
-      : (url
-          ? `<a href="${url}" target="_blank" style="font-family:'DM Mono',monospace;font-size:0.65rem;color:var(--purple);text-decoration:underline">View on X →</a>`
-          : `<span class="mono" style="font-size:0.65rem;color:var(--w30)">${p.reason||'—'}</span>`);
+      ? (p.tweet_url
+          ? `<a href="${esc(p.tweet_url)}" target="_blank" style="font-family:'DM Mono',monospace;font-size:0.68rem;color:var(--w60);word-break:break-word">${esc(p.tweet_text)}</a>`
+          : `<span class="mono" style="font-size:0.68rem;color:var(--w60);word-break:break-word">${esc(p.tweet_text)}</span>`)
+      : (p.tweet_url
+          ? `<a href="${esc(p.tweet_url)}" target="_blank" style="font-family:'DM Mono',monospace;font-size:0.65rem;color:var(--purple);text-decoration:underline">View on X →</a>`
+          : `<span class="mono" style="font-size:0.65rem;color:var(--w30)">${esc(p.reason||'—')}</span>`);
     return `<tr>
-      <td><span class="mono" style="font-size:0.88rem;font-weight:700;color:var(--purple)">${handle}</span></td>
+      <td><span class="mono" style="font-size:0.88rem;font-weight:700;color:var(--purple)">${esc(handle)}</span></td>
       <td><span class="badge ${cls}">${label}</span></td>
       <td><span class="mono" style="font-size:0.92rem;font-weight:700;color:${p.points>0?'var(--green)':'var(--red)'}">${p.points>0?'+':''}${p.points}</span></td>
       <td style="max-width:320px">${content}</td>
       <td><span class="mono" style="font-size:0.6rem;color:var(--w30);white-space:nowrap">${fd(p.created_at)}</span></td>
-      <td><button class="pt-del" onclick="deletePointEntry('${p.id}','${p.wallet_address}',${p.points})">DEL</button></td>
     </tr>`;
   }).join('');
 }
 
-// ── BURNS ─────────────────────────────────────────────────────────────────
+// ── BURNS (reads from Supabase, write through Worker) ────────────────────
 document.getElementById('burnBtn').addEventListener('click', recordBurn);
 
 async function loadBurns() {
@@ -775,7 +795,7 @@ async function loadBurns() {
         <td><span class="mono" style="font-size:0.7rem">Week ${b.week_number}</span></td>
         <td><span class="mono" style="font-size:0.7rem;color:var(--red)">${Number(b.amount).toLocaleString()}</span></td>
         <td><span class="mono" style="font-size:0.7rem">${Number(b.cumulative).toLocaleString()}</span></td>
-        <td><span class="mono" style="font-size:0.6rem;color:var(--purple)">${(b.tx_signature||'—').slice(0,16)}${b.tx_signature&&b.tx_signature.length>16?'...':''}</span></td>
+        <td><span class="mono" style="font-size:0.6rem;color:var(--purple)">${((b.tx_signature||'—').slice(0,16))}${b.tx_signature&&b.tx_signature.length>16?'...':''}</span></td>
       </tr>`).join('');
 }
 
@@ -784,17 +804,16 @@ async function recordBurn() {
   const amount = parseInt(document.getElementById('b-amount').value);
   const tx     = document.getElementById('b-tx').value.trim();
   if (!week || !amount) { toast('Please enter week and amount', 'e'); return; }
-  const { data: prev } = await db.from('burn_log').select('cumulative').order('week_number', { ascending:false }).limit(1);
-  const cumulative = (prev?.[0]?.cumulative || 0) + amount;
-  const { error } = await db.from('burn_log').insert({ week_number:week, amount, cumulative, tx_signature:tx||null });
-  if (error) { toast('Failed: '+error.message, 'e'); return; }
-  toast('Week '+week+' burn recorded');
-  document.getElementById('b-week').value = '';
-  document.getElementById('b-tx').value = '';
-  loadBurns();
+  try {
+    await workerPost('/admin/burn', { week_number: week, amount, tx_signature: tx || null });
+    toast('Week ' + week + ' burn recorded');
+    document.getElementById('b-week').value = '';
+    document.getElementById('b-tx').value = '';
+    loadBurns();
+  } catch (e) { toast('Failed: ' + e.message, 'e'); }
 }
 
-// ── POOLS ─────────────────────────────────────────────────────────────────
+// ── POOLS (reads from Supabase, write through Worker) ────────────────────
 document.getElementById('poolsBtn').addEventListener('click', updatePools);
 
 const POOL_CONFIG = [
@@ -832,33 +851,35 @@ async function loadPools() {
 
 async function updatePools() {
   const week = parseInt(document.getElementById('p-week').value) || 1;
-  const upserts = POOL_CONFIG.map(p => ({
+  const pools = POOL_CONFIG.map(p => ({
     pool_name: p.key,
     balance: parseInt(document.getElementById('p-'+p.key).value) || 0,
     week_number: week,
-    updated_at: new Date().toISOString()
   }));
-  const { error } = await db.from('pool_balances').upsert(upserts, { onConflict:'pool_name' });
-  if (error) { toast('Failed: '+error.message, 'e'); return; }
-  toast('Pool balances updated');
-  loadPools();
+  try {
+    await workerPost('/admin/pools/update', { pools });
+    toast('Pool balances updated');
+    loadPools();
+  } catch (e) { toast('Failed: ' + e.message, 'e'); }
 }
 
-// ── CLEAR ALL DATA ─────────────────────────────────────────────────────────
+// ── CLEAR ALL DATA (through Worker) ─────────────────────────────────────
 async function clearAllData() {
   if (!confirm('WARNING: Delete ALL members, points, tweets, votes, proposals, claims, staking, burns? Cannot be undone.')) return;
   if (!confirm('Last chance — delete everything?')) return;
-  const tables = ['claim_votes','votes','points_log','tweets_tracked','staking_positions','referrals','claims','proposals','burn_log','pool_balances','members'];
-  const errors = [];
-  for (const table of tables) {
-    const { error } = await db.from(table).delete().neq('id', '00000000-0000-0000-0000-000000000000');
-    if (error) {
-      const { error: e2 } = await db.from(table).delete().gte('created_at', '2000-01-01');
-      if (e2) errors.push(`${table}: ${e2.message}`);
-    }
-  }
-  errors.length ? toast('Partially cleared. Errors: ' + errors.join('; '), 'e') : toast('All data cleared');
-  loadAll();
+  try {
+    await workerPost('/admin/clear-all', {});
+    toast('All data cleared');
+    loadAll();
+  } catch (e) { toast('Failed: ' + e.message, 'e'); }
+}
+
+// ── XSS SANITIZER ─────────────────────────────────────────────────────────
+function esc(str) {
+  if (!str) return '';
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
 }
 </script>
 </body>
