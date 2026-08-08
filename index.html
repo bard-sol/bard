@@ -5,27 +5,27 @@
 <link rel="icon" type="image/png" href="/transparentbardsmile.png">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Bard — Tools for Meme Projects</title>
-<meta name="description" content="Bard is the simple platform for meme projects to run campaigns, leaderboards, airdrops and competitions. One dashboard for projects and holders.">
+<meta name="description" content="Bard is the simple platform for meme projects to run campaigns, leaderboards, airdrops and competitions.">
 <meta property="og:title" content="Bard — Tools for Meme Projects">
 <meta property="og:description" content="Campaigns, leaderboards, airdrops and competitions for every meme project on Solana.">
 <meta property="og:image" content="/transparentbardsmile.png">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=DM+Mono:wght@300;400&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
   *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 
   :root {
-    --bg: #0c0c0f;
-    --surface: #141418;
-    --surface-hover: #1c1c24;
+    --bg: #09090b;
+    --surface: #111113;
+    --border: rgba(255,255,255,0.07);
+    --border-hover: rgba(155,127,232,0.35);
     --purple: #9b7fe8;
-    --purple-soft: rgba(155, 127, 232, 0.12);
-    --purple-border: rgba(155, 127, 232, 0.16);
-    --text: #f2f2f4;
-    --text-muted: #9a9aa3;
-    --text-dim: #6b6b75;
+    --purple-dim: rgba(155,127,232,0.12);
+    --text: #fafafa;
+    --text-secondary: #a1a1aa;
+    --text-tertiary: #71717a;
   }
 
   html { scroll-behavior: smooth; }
@@ -33,9 +33,9 @@
   body {
     background: var(--bg);
     color: var(--text);
-    font-family: 'Outfit', sans-serif;
-    overflow-x: hidden;
-    line-height: 1.55;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
   }
 
   /* NAV */
@@ -44,436 +44,368 @@
     top: 0;
     left: 0;
     right: 0;
-    z-index: 100;
-    padding: 1rem 2.5rem;
+    z-index: 50;
+    height: 64px;
     display: flex;
-    justify-content: space-between;
     align-items: center;
-    background: rgba(12, 12, 15, 0.9);
-    backdrop-filter: blur(18px);
-    border-bottom: 1px solid var(--purple-border);
+    justify-content: space-between;
+    padding: 0 32px;
+    background: rgba(9,9,11,0.8);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
   }
 
-  .nav-logo {
+  .logo {
     display: flex;
     align-items: center;
-    gap: 0.65rem;
+    gap: 10px;
     text-decoration: none;
     color: var(--text);
   }
 
-  .nav-logo img {
-    width: 32px;
-    height: 32px;
+  .logo img {
+    width: 28px;
+    height: 28px;
     object-fit: contain;
   }
 
-  .nav-logo-text {
-    font-size: 1.15rem;
+  .logo span {
+    font-size: 16px;
     font-weight: 600;
-    letter-spacing: 0.03em;
+    letter-spacing: -0.02em;
+  }
+
+  .nav-right {
+    display: flex;
+    align-items: center;
+    gap: 28px;
   }
 
   .nav-links {
     display: flex;
-    gap: 1.8rem;
+    gap: 28px;
     list-style: none;
-    align-items: center;
   }
 
   .nav-links a {
-    font-family: 'DM Mono', monospace;
-    font-size: 0.7rem;
-    color: var(--text-muted);
+    font-size: 14px;
+    color: var(--text-secondary);
     text-decoration: none;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    transition: color 0.2s;
+    font-weight: 500;
+    transition: color 0.15s;
   }
 
-  .nav-links a:hover { color: var(--purple); }
+  .nav-links a:hover { color: var(--text); }
 
-  .nav-cta {
-    background: var(--purple);
-    color: #0c0c0f;
-    font-family: 'Outfit', sans-serif;
-    font-size: 0.72rem;
-    font-weight: 600;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    padding: 0.5rem 1.15rem;
-    text-decoration: none;
-    border-radius: 6px;
-    transition: opacity 0.2s, transform 0.2s;
-  }
-
-  .nav-cta:hover {
-    opacity: 0.9;
-    transform: translateY(-1px);
-  }
-
-  /* HERO */
-  .hero {
-    min-height: 100vh;
-    display: flex;
-    flex-direction: column;
+  .btn {
+    display: inline-flex;
     align-items: center;
     justify-content: center;
-    text-align: center;
-    padding: 7.5rem 1.5rem 4.5rem;
-    position: relative;
-  }
-
-  .hero-bg {
-    position: absolute;
-    inset: 0;
-    background: radial-gradient(ellipse 65% 40% at 50% 30%, rgba(155, 127, 232, 0.08) 0%, transparent 70%);
-    pointer-events: none;
-  }
-
-  .hero-smile {
-    width: 150px;
-    height: 150px;
-    margin-bottom: 2.4rem;
-    object-fit: contain;
-    filter: drop-shadow(0 0 45px rgba(155, 127, 232, 0.35));
-  }
-
-  .hero-eyebrow {
-    font-family: 'DM Mono', monospace;
-    font-size: 0.68rem;
-    letter-spacing: 0.2em;
-    color: var(--purple);
-    text-transform: uppercase;
-    margin-bottom: 1.1rem;
-  }
-
-  .hero-title {
-    font-size: clamp(2.4rem, 5.2vw, 3.6rem);
-    font-weight: 650;
-    letter-spacing: -0.03em;
-    line-height: 1.15;
-    max-width: 700px;
-    margin-bottom: 1.25rem;
-  }
-
-  .hero-title span {
-    color: var(--purple);
-  }
-
-  .hero-sub {
-    font-size: 1.05rem;
-    color: var(--text-muted);
-    max-width: 440px;
-    line-height: 1.7;
-    margin-bottom: 2.6rem;
-    font-weight: 350;
-  }
-
-  .hero-cta {
-    display: flex;
-    gap: 0.9rem;
-    flex-wrap: wrap;
-    justify-content: center;
+    height: 36px;
+    padding: 0 16px;
+    font-size: 13px;
+    font-weight: 550;
+    border-radius: 8px;
+    text-decoration: none;
+    transition: all 0.15s;
+    cursor: pointer;
+    border: none;
   }
 
   .btn-primary {
     background: var(--purple);
-    color: #0c0c0f;
-    border: none;
-    padding: 0.9rem 1.9rem;
-    font-family: 'Outfit', sans-serif;
-    font-size: 0.82rem;
-    font-weight: 600;
-    letter-spacing: 0.07em;
-    text-transform: uppercase;
-    text-decoration: none;
-    border-radius: 6px;
-    transition: all 0.2s;
-    display: inline-block;
+    color: #09090b;
   }
 
   .btn-primary:hover {
-    opacity: 0.92;
-    transform: translateY(-2px);
+    filter: brightness(1.08);
   }
 
-  .btn-ghost {
+  .btn-secondary {
     background: transparent;
-    color: var(--text-muted);
-    border: 1px solid var(--purple-border);
-    padding: 0.9rem 1.9rem;
-    font-family: 'DM Mono', monospace;
-    font-size: 0.75rem;
-    letter-spacing: 0.07em;
-    text-transform: uppercase;
-    text-decoration: none;
-    border-radius: 6px;
-    transition: all 0.2s;
-    display: inline-block;
+    color: var(--text-secondary);
+    border: 1px solid var(--border);
   }
 
-  .btn-ghost:hover {
-    border-color: var(--purple);
-    color: var(--purple);
+  .btn-secondary:hover {
+    border-color: var(--text-tertiary);
+    color: var(--text);
   }
 
-  /* SECTIONS */
-  .section {
-    padding: 6.5rem 2rem;
-    max-width: 1000px;
+  .btn-lg {
+    height: 44px;
+    padding: 0 22px;
+    font-size: 14px;
+    border-radius: 10px;
+  }
+
+  /* HERO */
+  .hero {
+    padding: 140px 24px 100px;
+    max-width: 720px;
     margin: 0 auto;
+    text-align: center;
   }
 
-  .section-header {
-    max-width: 520px;
-    margin-bottom: 3.2rem;
-  }
-
-  .section-label {
-    font-family: 'DM Mono', monospace;
-    font-size: 0.65rem;
-    letter-spacing: 0.2em;
+  .hero-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px 6px 8px;
+    background: var(--purple-dim);
+    border: 1px solid rgba(155,127,232,0.2);
+    border-radius: 100px;
+    font-size: 13px;
+    font-weight: 500;
     color: var(--purple);
-    text-transform: uppercase;
-    margin-bottom: 0.85rem;
+    margin-bottom: 28px;
   }
 
-  .section-title {
-    font-size: clamp(1.65rem, 2.8vw, 2.2rem);
+  .hero-badge img {
+    width: 18px;
+    height: 18px;
+  }
+
+  .hero h1 {
+    font-size: clamp(36px, 6vw, 52px);
     font-weight: 650;
-    line-height: 1.2;
-    margin-bottom: 0.85rem;
+    letter-spacing: -0.04em;
+    line-height: 1.15;
+    margin-bottom: 20px;
   }
 
-  .section-body {
-    font-size: 1rem;
-    color: var(--text-muted);
-    line-height: 1.7;
-    font-weight: 350;
+  .hero h1 span {
+    color: var(--purple);
+  }
+
+  .hero p {
+    font-size: 18px;
+    color: var(--text-secondary);
+    line-height: 1.6;
+    max-width: 480px;
+    margin: 0 auto 36px;
+  }
+
+  .hero-actions {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+    flex-wrap: wrap;
   }
 
   /* FEATURES */
   .features {
+    padding: 0 24px 100px;
+    max-width: 1000px;
+    margin: 0 auto;
+  }
+
+  .features-header {
+    text-align: center;
+    margin-bottom: 48px;
+  }
+
+  .features-header h2 {
+    font-size: 28px;
+    font-weight: 600;
+    letter-spacing: -0.03em;
+    margin-bottom: 12px;
+  }
+
+  .features-header p {
+    font-size: 16px;
+    color: var(--text-secondary);
+    max-width: 420px;
+    margin: 0 auto;
+  }
+
+  .feature-grid {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
-    gap: 1.1rem;
+    gap: 16px;
   }
 
-  .feature {
+  .feature-card {
     background: var(--surface);
-    border: 1px solid var(--purple-border);
-    border-radius: 12px;
-    padding: 2rem 1.9rem;
-    transition: background 0.2s, border-color 0.2s;
-  }
-
-  .feature:hover {
-    background: var(--surface-hover);
-    border-color: rgba(155, 127, 232, 0.28);
-  }
-
-  .feature-num {
-    font-family: 'DM Mono', monospace;
-    font-size: 0.62rem;
-    color: var(--text-dim);
-    letter-spacing: 0.14em;
-    margin-bottom: 0.85rem;
-  }
-
-  .feature-title {
-    font-size: 1.08rem;
-    font-weight: 600;
-    margin-bottom: 0.55rem;
-  }
-
-  .feature-desc {
-    font-size: 0.9rem;
-    color: var(--text-muted);
-    line-height: 1.65;
-    font-weight: 350;
-  }
-
-  /* FOR PROJECTS */
-  .for-projects {
-    background: var(--surface);
-    border: 1px solid var(--purple-border);
+    border: 1px solid var(--border);
     border-radius: 14px;
-    padding: 3rem 3.2rem;
+    padding: 28px;
+    transition: border-color 0.2s;
   }
 
-  .for-projects-inner {
+  .feature-card:hover {
+    border-color: var(--border-hover);
+  }
+
+  .feature-card h3 {
+    font-size: 16px;
+    font-weight: 600;
+    margin-bottom: 8px;
+    letter-spacing: -0.01em;
+  }
+
+  .feature-card p {
+    font-size: 14px;
+    color: var(--text-secondary);
+    line-height: 1.6;
+  }
+
+  /* CTA SECTION */
+  .cta-section {
+    padding: 0 24px 100px;
+    max-width: 1000px;
+    margin: 0 auto;
+  }
+
+  .cta-box {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 48px;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 2.5rem;
+    gap: 32px;
   }
 
-  .for-projects .section-label {
-    margin-bottom: 0.7rem;
+  .cta-box h2 {
+    font-size: 24px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    margin-bottom: 8px;
   }
 
-  .for-projects .section-title {
-    margin-bottom: 0.65rem;
-  }
-
-  .for-projects .section-body {
-    max-width: 420px;
-  }
-
-  /* DIVIDER */
-  .divider {
-    height: 1px;
-    background: var(--purple-border);
-    max-width: 1000px;
-    margin: 0 auto;
+  .cta-box p {
+    font-size: 15px;
+    color: var(--text-secondary);
+    max-width: 400px;
   }
 
   /* FOOTER */
   footer {
-    padding: 2.6rem 2rem;
+    border-top: 1px solid var(--border);
+    padding: 28px 32px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
     max-width: 1000px;
     margin: 0 auto;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 1rem;
   }
 
   .footer-logo {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: 8px;
     text-decoration: none;
     color: var(--text);
+    font-size: 14px;
     font-weight: 600;
-    letter-spacing: 0.03em;
-    font-size: 0.95rem;
   }
 
   .footer-logo img {
-    width: 24px;
-    height: 24px;
-    object-fit: contain;
+    width: 20px;
+    height: 20px;
   }
 
   .footer-copy {
-    font-family: 'DM Mono', monospace;
-    font-size: 0.65rem;
-    color: var(--text-dim);
-    letter-spacing: 0.05em;
+    font-size: 13px;
+    color: var(--text-tertiary);
   }
 
   @media (max-width: 768px) {
-    nav { padding: 0.9rem 1.2rem; }
+    nav { padding: 0 16px; }
     .nav-links { display: none; }
-    .section { padding: 4.5rem 1.25rem; }
-    .features { grid-template-columns: 1fr; gap: 0.9rem; }
-    .for-projects { padding: 2rem; }
-    .for-projects-inner {
+    .hero { padding: 120px 20px 80px; }
+    .feature-grid { grid-template-columns: 1fr; }
+    .cta-box {
       flex-direction: column;
       align-items: flex-start;
-      gap: 1.6rem;
+      padding: 32px 24px;
     }
-    .hero-smile { width: 120px; height: 120px; }
-    footer { padding: 2rem 1.25rem; }
+    footer {
+      flex-direction: column;
+      gap: 12px;
+      text-align: center;
+      padding: 24px 20px;
+    }
   }
 </style>
 </head>
 <body>
 
 <nav>
-  <a href="/" class="nav-logo">
-    <img src="/transparentbardsmile.png" alt="Bard">
-    <span class="nav-logo-text">Bard</span>
+  <a href="/" class="logo">
+    <img src="/transparentbardsmile.png" alt="">
+    <span>Bard</span>
   </a>
-  <ul class="nav-links">
-    <li><a href="#features">Features</a></li>
-    <li><a href="#projects">For Projects</a></li>
-    <li><a href="/dashboard.html">Explore</a></li>
-    <li><a href="/dashboard.html" class="nav-cta">Launch App</a></li>
-  </ul>
+  <div class="nav-right">
+    <ul class="nav-links">
+      <li><a href="#features">Features</a></li>
+      <li><a href="#projects">For Projects</a></li>
+      <li><a href="/dashboard.html">Explore</a></li>
+    </ul>
+    <a href="/dashboard.html" class="btn btn-primary">Launch App</a>
+  </div>
 </nav>
 
 <section class="hero">
-  <div class="hero-bg"></div>
+  <div class="hero-badge">
+    <img src="/transparentbardsmile.png" alt="">
+    Built for Solana meme projects
+  </div>
 
-  <img class="hero-smile" src="/transparentbardsmile.png" alt="Bard Smile">
+  <h1>Campaigns, leaderboards<br>&amp; airdrops. <span>Simple.</span></h1>
 
-  <p class="hero-eyebrow">Built for Solana meme projects</p>
+  <p>One platform for meme teams to run competitions and rewards — and for holders to track everything across multiple projects.</p>
 
-  <h1 class="hero-title">
-    Campaigns, leaderboards<br>
-    &amp; airdrops. <span>Simple.</span>
-  </h1>
-
-  <p class="hero-sub">
-    One platform for meme teams to run competitions and rewards — and for holders to track everything across multiple projects.
-  </p>
-
-  <div class="hero-cta">
-    <a href="/dashboard.html" class="btn-primary">Launch App</a>
-    <a href="#projects" class="btn-ghost">For Projects</a>
+  <div class="hero-actions">
+    <a href="/dashboard.html" class="btn btn-primary btn-lg">Launch App</a>
+    <a href="#projects" class="btn btn-secondary btn-lg">For Projects</a>
   </div>
 </section>
 
-<div class="divider"></div>
-
-<section class="section" id="features">
-  <div class="section-header">
-    <div class="section-label">What Bard does</div>
-    <h2 class="section-title">Everything a meme project needs to run campaigns</h2>
-    <p class="section-body">Create competitions, reward real activity, and let holders manage it all from one place.</p>
+<section class="features" id="features">
+  <div class="features-header">
+    <h2>Everything a meme project needs</h2>
+    <p>Create competitions, reward activity, and let holders manage it all from one place.</p>
   </div>
 
-  <div class="features">
-    <div class="feature">
-      <div class="feature-num">01</div>
-      <div class="feature-title">Campaigns &amp; Competitions</div>
-      <p class="feature-desc">Set clear rules — “achieve X, receive Y”. Leaderboards, raids, custom challenges. Simple to create, easy for the community to join.</p>
+  <div class="feature-grid">
+    <div class="feature-card">
+      <h3>Campaigns &amp; Competitions</h3>
+      <p>Set clear rules — achieve X, receive Y. Leaderboards, raids, custom challenges. Simple to create.</p>
     </div>
-    <div class="feature">
-      <div class="feature-num">02</div>
-      <div class="feature-title">Airdrops &amp; Claims</div>
-      <p class="feature-desc">Distribute rewards cleanly. Holders claim when they qualify. Transparent and on-chain where it matters.</p>
+    <div class="feature-card">
+      <h3>Airdrops &amp; Claims</h3>
+      <p>Distribute rewards cleanly. Holders claim when they qualify. Transparent and on-chain where it matters.</p>
     </div>
-    <div class="feature">
-      <div class="feature-num">03</div>
-      <div class="feature-title">Multi-Project Dashboard</div>
-      <p class="feature-desc">Holders see every project they’re in. Switch between campaigns, check leaderboards, and claim rewards without jumping around.</p>
+    <div class="feature-card">
+      <h3>Multi-Project Dashboard</h3>
+      <p>Holders see every project they’re in. Switch between campaigns and claim rewards without jumping around.</p>
     </div>
-    <div class="feature">
-      <div class="feature-num">04</div>
-      <div class="feature-title">Explore Projects</div>
-      <p class="feature-desc">Discover meme projects already using Bard. Find new campaigns and communities in one feed.</p>
+    <div class="feature-card">
+      <h3>Explore Projects</h3>
+      <p>Discover meme projects already using Bard. Find new campaigns and communities in one feed.</p>
     </div>
   </div>
 </section>
 
-<div class="divider"></div>
-
-<section class="section" id="projects">
-  <div class="for-projects">
-    <div class="for-projects-inner">
-      <div>
-        <div class="section-label">For meme teams</div>
-        <h2 class="section-title">Get set up in minutes</h2>
-        <p class="section-body">Connect your wallet, create your first campaign, and start rewarding your community. No complicated setup.</p>
-      </div>
-      <a href="/admin.html" class="btn-primary">Start as a Project</a>
+<section class="cta-section" id="projects">
+  <div class="cta-box">
+    <div>
+      <h2>Get set up in minutes</h2>
+      <p>Connect your wallet, create your first campaign, and start rewarding your community. No complicated setup.</p>
     </div>
+    <a href="/admin.html" class="btn btn-primary btn-lg">Start as a Project</a>
   </div>
 </section>
-
-<div class="divider"></div>
 
 <footer>
   <a href="/" class="footer-logo">
-    <img src="/transparentbardsmile.png" alt="Bard">
+    <img src="/transparentbardsmile.png" alt="">
     Bard
   </a>
-  <p class="footer-copy">© 2026 Bard · bard.is · Built on Solana</p>
+  <p class="footer-copy">© 2026 Bard · Built on Solana</p>
 </footer>
 
 </body>
