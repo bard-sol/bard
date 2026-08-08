@@ -2,13 +2,13 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<link rel="icon" type="image/png" href="/BardUpdated.png">
+<link rel="icon" type="image/jpeg" href="/BardSmile.jpg">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Bard — Tools for Meme Projects</title>
 <meta name="description" content="Bard is the simple platform for meme projects to run campaigns, leaderboards, airdrops and competitions. One dashboard for projects and holders.">
 <meta property="og:title" content="Bard — Tools for Meme Projects">
 <meta property="og:description" content="Campaigns, leaderboards, airdrops and competitions for every meme project on Solana.">
-<meta property="og:image" content="/BardUpdated.png">
+<meta property="og:image" content="/BardSmile.jpg">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -62,9 +62,11 @@
     color: var(--text);
   }
 
-  .nav-logo svg {
-    width: 28px;
-    height: 28px;
+  .nav-logo img {
+    width: 32px;
+    height: 32px;
+    object-fit: contain;
+    border-radius: 50%;
   }
 
   .nav-logo-text {
@@ -131,9 +133,11 @@
   }
 
   .hero-smile {
-    width: 110px;
-    height: 110px;
-    margin-bottom: 2.2rem;
+    width: 160px;
+    height: 160px;
+    margin-bottom: 2rem;
+    object-fit: contain;
+    filter: drop-shadow(0 0 40px rgba(155, 127, 232, 0.35));
   }
 
   .hero-eyebrow {
@@ -339,9 +343,11 @@
     letter-spacing: 0.04em;
   }
 
-  .footer-logo svg {
-    width: 22px;
-    height: 22px;
+  .footer-logo img {
+    width: 24px;
+    height: 24px;
+    object-fit: contain;
+    border-radius: 50%;
   }
 
   .footer-copy {
@@ -358,7 +364,7 @@
     .features { grid-template-columns: 1fr; }
     .for-projects { padding: 2rem; }
     .for-projects-inner { grid-template-columns: 1fr; gap: 1.5rem; }
-    .hero-smile { width: 90px; height: 90px; }
+    .hero-smile { width: 120px; height: 120px; }
     footer { padding: 2rem 1.25rem; }
   }
 </style>
@@ -367,9 +373,7 @@
 
 <nav>
   <a href="/" class="nav-logo">
-    <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <path d="M5 16 Q16 26 27 16" stroke="#9b7fe8" stroke-width="2.4" fill="none" stroke-linecap="round"/>
-    </svg>
+    <img src="/BardSmile.jpg" alt="Bard">
     <span class="nav-logo-text">Bard</span>
   </a>
   <ul class="nav-links">
@@ -383,10 +387,7 @@
 <section class="hero">
   <div class="hero-bg"></div>
 
-  <svg class="hero-smile" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <circle cx="60" cy="60" r="54" stroke="rgba(155,127,232,0.12)" stroke-width="1.5"/>
-    <path d="M26 56 Q60 88 94 56" stroke="#9b7fe8" stroke-width="3.2" fill="none" stroke-linecap="round"/>
-  </svg>
+  <img class="hero-smile" src="/BardSmile.jpg" alt="Bard Smile">
 
   <p class="hero-eyebrow">Built for Solana meme projects</p>
 
@@ -457,9 +458,7 @@
 
 <footer>
   <a href="/" class="footer-logo">
-    <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <path d="M5 16 Q16 26 27 16" stroke="#9b7fe8" stroke-width="2.4" fill="none" stroke-linecap="round"/>
-    </svg>
+    <img src="/BardSmile.jpg" alt="Bard">
     Bard
   </a>
   <p class="footer-copy">© 2026 Bard · bard.is · Built on Solana</p>
