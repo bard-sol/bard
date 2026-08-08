@@ -4,44 +4,27 @@
 <meta charset="UTF-8">
 <link rel="icon" type="image/png" href="/BardUpdated.png">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>$BARD — The Smile That Spreads</title>
-<meta name="description" content="Bard is not a meme. It's a mechanism. Launching on Pump.fun on Solana. The smile that starts on-chain and ends up everywhere.">
-<meta property="og:title" content="$BARD — The Smile That Spreads">
-<meta property="og:description" content="No presale. No games. Just a grin that doesn't stop growing.">
+<title>Bard — Tools for Meme Projects</title>
+<meta name="description" content="Bard is the simple platform for meme projects to run campaigns, leaderboards, airdrops and competitions. One dashboard for projects and holders.">
+<meta property="og:title" content="Bard — Tools for Meme Projects">
+<meta property="og:description" content="Campaigns, leaderboards, airdrops and competitions for every meme project on Solana.">
 <meta property="og:image" content="/BardUpdated.png">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:site" content="@BardTokenSol">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&family=DM+Mono:wght@300;400&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=DM+Mono:wght@300;400&display=swap" rel="stylesheet">
 <style>
   *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
-
-  html, body {
-    -webkit-user-select: none;
-    -moz-user-select: none;
-    -ms-user-select: none;
-    user-select: none;
-  }
-
-  img {
-    -webkit-user-drag: none;
-    -khtml-user-drag: none;
-    -moz-user-drag: none;
-    -o-user-drag: none;
-    user-drag: none;
-    pointer-events: none;
-  }
 
   :root {
     --black: #000000;
     --purple-glow: #9b7fe8;
     --purple-mid: #6b46c1;
     --purple-deep: #2d1b69;
-    --purple-dim: #1a0f3d;
     --white: #ffffff;
     --white-dim: rgba(255,255,255,0.6);
     --white-faint: rgba(255,255,255,0.08);
+    --border: rgba(155,127,232,0.12);
   }
 
   html { scroll-behavior: smooth; }
@@ -51,20 +34,7 @@
     color: var(--white);
     font-family: 'Outfit', sans-serif;
     overflow-x: hidden;
-    cursor: none;
-  }
-
-  .cursor {
-    position: fixed;
-    width: 8px;
-    height: 8px;
-    background: var(--purple-glow);
-    border-radius: 50%;
-    pointer-events: none;
-    z-index: 9999;
-    transform: translate(-50%, -50%);
-    transition: left 0.05s linear, top 0.05s linear;
-    mix-blend-mode: screen;
+    line-height: 1.5;
   }
 
   /* NAV */
@@ -74,40 +44,71 @@
     left: 0;
     right: 0;
     z-index: 100;
-    padding: 1.5rem 3rem;
+    padding: 1.25rem 2.5rem;
     display: flex;
     justify-content: space-between;
     align-items: center;
-    background: linear-gradient(to bottom, rgba(0,0,0,0.85), transparent);
+    background: rgba(0,0,0,0.85);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
   }
 
   .nav-logo {
-    font-size: 1.2rem;
-    font-weight: 800;
-    letter-spacing: 0.3em;
-    text-transform: uppercase;
-    color: var(--white);
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
     text-decoration: none;
+    color: var(--white);
+  }
+
+  .nav-logo-text {
+    font-size: 1.15rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+  }
+
+  .nav-logo svg {
+    width: 22px;
+    height: 22px;
   }
 
   .nav-links {
     display: flex;
-    gap: 2.5rem;
+    gap: 2rem;
     list-style: none;
+    align-items: center;
   }
 
   .nav-links a {
     font-family: 'DM Mono', monospace;
-    font-size: 0.75rem;
+    font-size: 0.72rem;
     color: var(--white-dim);
     text-decoration: none;
-    letter-spacing: 0.15em;
+    letter-spacing: 0.12em;
     text-transform: uppercase;
-    transition: color 0.3s;
+    transition: color 0.25s;
   }
 
   .nav-links a:hover { color: var(--purple-glow); }
-  .nav-links a.highlight { color: var(--purple-glow); }
+
+  .nav-cta {
+    background: var(--purple-glow);
+    color: var(--black);
+    font-family: 'Outfit', sans-serif;
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 0.55rem 1.2rem;
+    text-decoration: none;
+    border-radius: 4px;
+    transition: background 0.25s, transform 0.2s;
+  }
+
+  .nav-cta:hover {
+    background: var(--white);
+    transform: translateY(-1px);
+  }
 
   /* HERO */
   .hero {
@@ -116,80 +117,54 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
+    text-align: center;
+    padding: 8rem 1.5rem 5rem;
     position: relative;
-    overflow: hidden;
-    padding: 6rem 2rem 5rem;
   }
 
-  .hero-bg-glow {
+  .hero-bg {
     position: absolute;
-    width: 700px;
-    height: 700px;
-    background: radial-gradient(circle, rgba(107,70,193,0.13) 0%, transparent 70%);
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
+    inset: 0;
+    background: radial-gradient(ellipse 80% 50% at 50% 40%, rgba(107,70,193,0.12) 0%, transparent 70%);
     pointer-events: none;
   }
 
-  .mascot-container {
-    position: relative;
-    width: 320px;
-    height: 320px;
-    margin-bottom: 2.5rem;
-    animation: float 6s ease-in-out infinite;
-  }
-
-  @keyframes float {
-    0%, 100% { transform: translateY(0px); }
-    50% { transform: translateY(-20px); }
-  }
-
-  .mascot-container img {
-    width: 100%;
-    height: 100%;
-    object-fit: contain;
-    filter: drop-shadow(0 0 40px rgba(155,127,232,0.85)) drop-shadow(0 0 80px rgba(155,127,232,0.45)) drop-shadow(0 0 120px rgba(155,127,232,0.25));
+  .hero-smile {
+    width: 72px;
+    height: 72px;
+    margin-bottom: 2rem;
+    opacity: 0.9;
   }
 
   .hero-eyebrow {
     font-family: 'DM Mono', monospace;
-    font-size: 0.7rem;
-    letter-spacing: 0.4em;
+    font-size: 0.68rem;
+    letter-spacing: 0.28em;
     color: var(--purple-glow);
     text-transform: uppercase;
-    margin-bottom: 1.2rem;
-    opacity: 0;
-    animation: fadeUp 0.8s ease 0.3s forwards;
+    margin-bottom: 1.4rem;
   }
 
   .hero-title {
-    font-size: clamp(2.2rem, 5vw, 4rem);
+    font-size: clamp(2.4rem, 5.5vw, 3.8rem);
     font-weight: 700;
-    letter-spacing: -0.01em;
-    line-height: 0.9;
-    text-align: center;
-    margin-bottom: 1.5rem;
-    opacity: 0;
-    animation: fadeUp 0.8s ease 0.5s forwards;
+    letter-spacing: -0.02em;
+    line-height: 1.1;
+    max-width: 720px;
+    margin-bottom: 1.4rem;
   }
 
   .hero-title span {
-    display: block;
     color: var(--purple-glow);
   }
 
   .hero-sub {
-    font-family: 'DM Mono', monospace;
-    font-size: 0.85rem;
+    font-size: 1.05rem;
     color: var(--white-dim);
-    text-align: center;
-    max-width: 420px;
-    line-height: 1.9;
-    margin-bottom: 3rem;
-    letter-spacing: 0.05em;
-    opacity: 0;
-    animation: fadeUp 0.8s ease 0.7s forwards;
+    max-width: 480px;
+    line-height: 1.7;
+    margin-bottom: 2.8rem;
+    font-weight: 300;
   }
 
   .hero-cta {
@@ -197,28 +172,21 @@
     gap: 1rem;
     flex-wrap: wrap;
     justify-content: center;
-    opacity: 0;
-    animation: fadeUp 0.8s ease 0.9s forwards;
-  }
-
-  @keyframes fadeUp {
-    from { opacity: 0; transform: translateY(20px); }
-    to { opacity: 1; transform: translateY(0); }
   }
 
   .btn-primary {
     background: var(--purple-glow);
     color: var(--black);
     border: none;
-    padding: 0.95rem 2.4rem;
+    padding: 0.9rem 2rem;
     font-family: 'Outfit', sans-serif;
     font-size: 0.82rem;
-    font-weight: 700;
-    letter-spacing: 0.15em;
+    font-weight: 600;
+    letter-spacing: 0.1em;
     text-transform: uppercase;
-    cursor: pointer;
-    transition: all 0.3s;
     text-decoration: none;
+    border-radius: 4px;
+    transition: all 0.25s;
     display: inline-block;
   }
 
@@ -230,16 +198,15 @@
   .btn-ghost {
     background: transparent;
     color: var(--white-dim);
-    border: 1px solid rgba(155,127,232,0.3);
-    padding: 0.95rem 2.4rem;
+    border: 1px solid var(--border);
+    padding: 0.9rem 2rem;
     font-family: 'DM Mono', monospace;
     font-size: 0.75rem;
-    font-weight: 400;
-    letter-spacing: 0.15em;
+    letter-spacing: 0.1em;
     text-transform: uppercase;
-    cursor: pointer;
-    transition: all 0.3s;
     text-decoration: none;
+    border-radius: 4px;
+    transition: all 0.25s;
     display: inline-block;
   }
 
@@ -248,853 +215,262 @@
     color: var(--purple-glow);
   }
 
-  .scroll-indicator {
-    position: absolute;
-    bottom: 2.5rem;
-    left: 50%;
-    transform: translateX(-50%);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 0.4rem;
-    opacity: 0.4;
-    animation: pulse 2.5s ease-in-out infinite;
-  }
-
-  @keyframes pulse {
-    0%, 100% { opacity: 0.35; }
-    50% { opacity: 0.75; }
-  }
-
-  .scroll-line {
-    width: 1px;
-    height: 40px;
-    background: linear-gradient(to bottom, transparent, var(--purple-glow));
-  }
-
-  .scroll-text {
-    font-family: 'DM Mono', monospace;
-    font-size: 0.6rem;
-    letter-spacing: 0.3em;
-    color: var(--white-dim);
-    text-transform: uppercase;
-  }
-
-  /* MARQUEE */
-  .marquee-wrap {
-    overflow: hidden;
-    border-top: 1px solid rgba(155,127,232,0.12);
-    border-bottom: 1px solid rgba(155,127,232,0.12);
-    padding: 0.9rem 0;
-    background: rgba(107,70,193,0.03);
-  }
-
-  .marquee-track {
-    display: flex;
-    gap: 0;
-    animation: marquee 25s linear infinite;
-    white-space: nowrap;
-    width: max-content;
-  }
-
-  @keyframes marquee {
-    0% { transform: translateX(0); }
-    100% { transform: translateX(-50%); }
-  }
-
-  .marquee-item {
-    font-family: 'DM Mono', monospace;
-    font-size: 0.68rem;
-    letter-spacing: 0.3em;
-    color: rgba(155,127,232,0.45);
-    text-transform: uppercase;
-    padding: 0 2.5rem;
-  }
-
-  .marquee-sep {
-    color: rgba(155,127,232,0.25);
-    font-size: 0.5rem;
-    align-self: center;
-  }
-
-  /* PAGE SECTIONS */
-  .page-section {
-    padding: 8rem 3rem;
-    max-width: 1140px;
+  /* SECTION COMMON */
+  .section {
+    padding: 6rem 2rem;
+    max-width: 1080px;
     margin: 0 auto;
   }
 
   .section-label {
     font-family: 'DM Mono', monospace;
     font-size: 0.65rem;
-    letter-spacing: 0.4em;
+    letter-spacing: 0.3em;
     color: var(--purple-glow);
     text-transform: uppercase;
-    margin-bottom: 1.2rem;
+    margin-bottom: 1rem;
   }
 
   .section-title {
-    font-size: clamp(1.8rem, 3vw, 2.8rem);
-    font-weight: 800;
-    line-height: 1.02;
-    margin-bottom: 1.8rem;
+    font-size: clamp(1.7rem, 3vw, 2.4rem);
+    font-weight: 700;
+    line-height: 1.15;
+    margin-bottom: 1rem;
   }
 
   .section-body {
-    font-family: 'DM Mono', monospace;
-    font-size: 0.85rem;
+    font-size: 1rem;
     color: var(--white-dim);
-    line-height: 2.1;
-    max-width: 580px;
+    max-width: 520px;
+    line-height: 1.7;
+    font-weight: 300;
   }
 
-  /* CONCEPT GRID */
-  .concept-grid {
+  /* FEATURES */
+  .features {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(2, 1fr);
     gap: 1px;
-    background: rgba(155,127,232,0.1);
-    margin-top: 4.5rem;
-    border: 1px solid rgba(155,127,232,0.1);
+    background: var(--border);
+    border: 1px solid var(--border);
+    margin-top: 3.5rem;
   }
 
-  .concept-cell {
+  .feature {
     background: var(--black);
-    padding: 2.8rem;
-    transition: background 0.3s;
-    cursor: default;
+    padding: 2.4rem;
+    transition: background 0.25s;
   }
 
-  .concept-cell:hover { background: rgba(107,70,193,0.07); }
+  .feature:hover {
+    background: rgba(107,70,193,0.06);
+  }
 
-  .concept-num {
+  .feature-num {
     font-family: 'DM Mono', monospace;
     font-size: 0.62rem;
-    color: rgba(155,127,232,0.35);
-    letter-spacing: 0.3em;
-    margin-bottom: 1.3rem;
-  }
-
-  .concept-name {
-    font-size: 1.25rem;
-    font-weight: 700;
-    margin-bottom: 0.9rem;
-    letter-spacing: -0.01em;
-  }
-
-  .concept-desc {
-    font-family: 'DM Mono', monospace;
-    font-size: 0.78rem;
-    color: var(--white-dim);
-    line-height: 1.95;
-  }
-
-  /* TOKENOMICS GRID */
-  .token-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 1px;
-    background: rgba(155,127,232,0.1);
-    margin-top: 4.5rem;
-  }
-
-  .token-card {
-    background: var(--black);
-    padding: 2.5rem;
-    position: relative;
-    overflow: hidden;
-    transition: background 0.3s;
-  }
-
-  .token-card::after {
-    content: '';
-    position: absolute;
-    top: 0; left: 0; right: 0;
-    height: 1px;
-    background: var(--purple-glow);
-    transform: scaleX(0);
-    transform-origin: left;
-    transition: transform 0.5s ease;
-  }
-
-  .token-card:hover::after { transform: scaleX(1); }
-  .token-card:hover { background: rgba(107,70,193,0.06); }
-
-  .token-name {
-    font-family: 'DM Mono', monospace;
-    font-size: 0.7rem;
+    color: rgba(155,127,232,0.4);
     letter-spacing: 0.2em;
-    color: rgba(255,255,255,0.4);
-    text-transform: uppercase;
     margin-bottom: 1rem;
   }
 
-  .token-pct {
-    font-size: 2.2rem;
-    font-weight: 800;
-    color: var(--purple-glow);
-    line-height: 1;
-    margin-bottom: 0.5rem;
-    letter-spacing: -0.03em;
+  .feature-title {
+    font-size: 1.15rem;
+    font-weight: 600;
+    margin-bottom: 0.7rem;
   }
 
-  .token-sub {
-    font-family: 'DM Mono', monospace;
-    font-size: 0.72rem;
-    color: rgba(255,255,255,0.35);
-    line-height: 1.8;
+  .feature-desc {
+    font-size: 0.9rem;
+    color: var(--white-dim);
+    line-height: 1.65;
+    font-weight: 300;
   }
 
-  /* POOLS */
-  .pools-list {
-    display: flex;
-    flex-direction: column;
-    gap: 1px;
-    background: rgba(155,127,232,0.1);
-    margin-top: 4.5rem;
+  /* FOR PROJECTS */
+  .for-projects {
+    margin-top: 2rem;
+    padding: 3.5rem;
+    border: 1px solid var(--border);
+    background: rgba(107,70,193,0.04);
+    border-radius: 6px;
   }
 
-  .pool-row {
-    background: var(--black);
+  .for-projects-inner {
     display: grid;
-    grid-template-columns: 220px 1fr;
+    grid-template-columns: 1fr auto;
     gap: 3rem;
-    padding: 2.8rem;
-    align-items: start;
-    transition: background 0.3s;
-  }
-
-  .pool-row:hover { background: rgba(107,70,193,0.06); }
-
-  .pool-left {}
-
-  .pool-title {
-    font-size: 1.15rem;
-    font-weight: 700;
-    margin-bottom: 0.5rem;
-  }
-
-  .pool-reward {
-    font-size: 2.2rem;
-    font-weight: 800;
-    color: var(--purple-glow);
-    line-height: 1;
-    letter-spacing: -0.03em;
-  }
-
-  .pool-reward-label {
-    font-family: 'DM Mono', monospace;
-    font-size: 0.65rem;
-    color: rgba(155,127,232,0.5);
-    letter-spacing: 0.2em;
-    text-transform: uppercase;
-    margin-top: 0.3rem;
-  }
-
-  .pool-right p {
-    font-family: 'DM Mono', monospace;
-    font-size: 0.8rem;
-    color: var(--white-dim);
-    line-height: 2.1;
-  }
-
-  .pool-tag {
-    display: inline-block;
-    font-family: 'DM Mono', monospace;
-    font-size: 0.6rem;
-    letter-spacing: 0.2em;
-    text-transform: uppercase;
-    color: var(--purple-glow);
-    border: 1px solid rgba(155,127,232,0.3);
-    padding: 0.25rem 0.7rem;
-    margin-top: 1rem;
-  }
-
-  /* LAUNCH */
-  .launch-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 6rem;
     align-items: center;
-    margin-top: 4.5rem;
   }
 
-  .launch-facts {
-    display: flex;
-    flex-direction: column;
-    gap: 0;
+  .for-projects .section-title {
+    margin-bottom: 0.8rem;
   }
 
-  .launch-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: baseline;
-    padding: 1.4rem 0;
-    border-bottom: 1px solid rgba(155,127,232,0.1);
+  .for-projects .section-body {
+    margin-bottom: 0;
   }
 
-  .launch-row:first-child { border-top: 1px solid rgba(155,127,232,0.1); }
-
-  .launch-key {
-    font-family: 'DM Mono', monospace;
-    font-size: 0.68rem;
-    color: rgba(255,255,255,0.35);
-    letter-spacing: 0.2em;
-    text-transform: uppercase;
-  }
-
-  .launch-val {
-    font-size: 0.95rem;
-    font-weight: 700;
-    text-align: right;
-  }
-
-  .launch-cta {
-    margin-top: 2.5rem;
-    display: flex;
-    gap: 1rem;
-    flex-wrap: wrap;
-  }
-
-  .launch-visual {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-
-  .smile-ring {
-    position: relative;
-    width: 280px;
-    height: 280px;
-    animation: float 7s ease-in-out infinite;
-    animation-delay: -3s;
-  }
-
-  /* ROADMAP */
-  .roadmap-list {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 1px;
-    background: rgba(155,127,232,0.1);
-    margin-top: 4.5rem;
-  }
-
-  .roadmap-item {
-    background: var(--black);
-    padding: 2.8rem;
-    transition: background 0.3s;
-  }
-
-  .roadmap-item:hover { background: rgba(107,70,193,0.06); }
-
-  .roadmap-phase {
-    font-family: 'DM Mono', monospace;
-    font-size: 0.62rem;
-    letter-spacing: 0.35em;
-    color: rgba(155,127,232,0.4);
-    text-transform: uppercase;
-    margin-bottom: 1.2rem;
-  }
-
-  .roadmap-name {
-    font-size: 1.15rem;
-    font-weight: 700;
-    margin-bottom: 1rem;
-  }
-
-  .roadmap-items {
-    list-style: none;
-    display: flex;
-    flex-direction: column;
-    gap: 0.6rem;
-  }
-
-  .roadmap-items li {
-    font-family: 'DM Mono', monospace;
-    font-size: 0.75rem;
-    color: var(--white-dim);
-    line-height: 1.6;
-    padding-left: 1rem;
-    position: relative;
-  }
-
-  .roadmap-items li::before {
-    content: '—';
-    position: absolute;
-    left: 0;
-    color: rgba(155,127,232,0.4);
-    font-size: 0.65rem;
-  }
-
-  /* FOOTER */
-  .full-divider {
-    width: 100%;
+  /* DIVIDER */
+  .divider {
     height: 1px;
-    background: rgba(155,127,232,0.08);
-  }
-
-  footer {
-    padding: 3rem;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 1.5rem;
-    max-width: 1140px;
+    background: var(--border);
+    max-width: 1080px;
     margin: 0 auto;
   }
 
-  .footer-logo {
-    font-size: 1.4rem;
-    font-weight: 800;
-    letter-spacing: 0.3em;
-    color: var(--white);
-    text-decoration: none;
-  }
-
-  .footer-links {
+  /* FOOTER */
+  footer {
+    padding: 2.5rem 2rem;
+    max-width: 1080px;
+    margin: 0 auto;
     display: flex;
-    gap: 2rem;
-    list-style: none;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 1.2rem;
   }
 
-  .footer-links a {
-    font-family: 'DM Mono', monospace;
-    font-size: 0.72rem;
-    color: var(--white-dim);
+  .footer-logo {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
     text-decoration: none;
-    letter-spacing: 0.15em;
-    text-transform: uppercase;
-    transition: color 0.3s;
+    color: var(--white);
+    font-weight: 700;
+    letter-spacing: 0.08em;
   }
 
-  .footer-links a:hover { color: var(--purple-glow); }
-  .footer-links a.highlight { color: var(--purple-glow); }
+  .footer-logo svg {
+    width: 18px;
+    height: 18px;
+  }
 
   .footer-copy {
     font-family: 'DM Mono', monospace;
-    font-size: 0.62rem;
-    color: rgba(255,255,255,0.2);
-    letter-spacing: 0.1em;
-    width: 100%;
-  }
-
-  /* FADE IN ON SCROLL */
-  .fade-in {
-    opacity: 0;
-    transform: translateY(28px);
-    transition: opacity 0.9s ease, transform 0.9s ease;
-  }
-
-  .fade-in.visible {
-    opacity: 1;
-    transform: translateY(0);
+    font-size: 0.65rem;
+    color: rgba(255,255,255,0.25);
+    letter-spacing: 0.08em;
   }
 
   /* RESPONSIVE */
   @media (max-width: 768px) {
-    nav { padding: 1.2rem 1.5rem; }
+    nav { padding: 1rem 1.25rem; }
     .nav-links { display: none; }
-    .page-section { padding: 5rem 1.5rem; }
-    .concept-grid { grid-template-columns: 1fr; }
-    .token-grid { grid-template-columns: 1fr 1fr; }
-    .pool-row { grid-template-columns: 1fr; gap: 1.2rem; }
-    .launch-grid { grid-template-columns: 1fr; }
-    .launch-visual { display: none; }
-    .roadmap-list { grid-template-columns: 1fr; }
-    footer { padding: 2rem 1.5rem; }
-    .footer-links { flex-wrap: wrap; gap: 1rem; }
-  }
-
-  @media (max-width: 480px) {
-    .token-grid { grid-template-columns: 1fr; }
-    .hero-title { font-size: 2rem; }
+    .section { padding: 4.5rem 1.25rem; }
+    .features { grid-template-columns: 1fr; }
+    .for-projects { padding: 2rem; }
+    .for-projects-inner { grid-template-columns: 1fr; gap: 1.5rem; }
+    footer { padding: 2rem 1.25rem; }
   }
 </style>
 </head>
 <body>
 
-<div class="cursor" id="cursor"></div>
-
-<!-- NAVIGATION -->
+<!-- NAV -->
 <nav>
-  <a href="#" class="nav-logo">$BARD</a>
+  <a href="/" class="nav-logo">
+    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M4 13 Q12 20 20 13" stroke="#9b7fe8" stroke-width="2" fill="none" stroke-linecap="round"/>
+    </svg>
+    <span class="nav-logo-text">Bard</span>
+  </a>
   <ul class="nav-links">
-    <li><a href="#concept">Concept</a></li>
-    <li><a href="#tokenomics">Tokenomics</a></li>
-    <li><a href="#pools">Pools</a></li>
-    <li><a href="#roadmap">Roadmap</a></li>
-    <li><a href="#launch">Launch</a></li>
-    <li><span class="highlight" style="font-family:'DM Mono',monospace;font-size:0.75rem;letter-spacing:0.15em;text-transform:uppercase;opacity:0.4;cursor:default">Dashboard Coming Soon</span></li>
+    <li><a href="#features">Features</a></li>
+    <li><a href="#projects">For Projects</a></li>
+    <li><a href="/dashboard.html">Explore</a></li>
+    <li><a href="/dashboard.html" class="nav-cta">Launch App</a></li>
   </ul>
 </nav>
 
 <!-- HERO -->
 <section class="hero">
-  <div class="hero-bg-glow"></div>
+  <div class="hero-bg"></div>
 
-  <div class="mascot-container">
-    <img src="BardUpdated.png" alt="Bard — The Smile That Spreads">
-  </div>
+  <svg class="hero-smile" viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="40" cy="40" r="36" stroke="rgba(155,127,232,0.15)" stroke-width="1"/>
+    <path d="M18 38 Q40 58 62 38" stroke="#9b7fe8" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+  </svg>
 
-  <p class="hero-eyebrow">Launching on Pump.fun &nbsp;·&nbsp; Solana</p>
+  <p class="hero-eyebrow">Built for Solana meme projects</p>
 
   <h1 class="hero-title">
-    The Smile
-    <span>Spreads.</span>
+    Campaigns, leaderboards<br>
+    &amp; airdrops. <span>Simple.</span>
   </h1>
 
   <p class="hero-sub">
-    No eyes. No noise. No forced hype.<br>
-    Just a grin that doesn't stop growing.
+    One platform for meme teams to run competitions and rewards — and for holders to track everything across multiple projects.
   </p>
 
   <div class="hero-cta">
-    <a href="https://x.com/BardTokenSol" target="_blank" class="btn-primary">Follow @BardTokenSol</a>
-    <a href="#concept" class="btn-ghost">Read the Vision</a>
-  </div>
-
-  <div class="scroll-indicator">
-    <div class="scroll-line"></div>
-    <span class="scroll-text">Scroll</span>
+    <a href="/dashboard.html" class="btn-primary">Launch App</a>
+    <a href="#projects" class="btn-ghost">For Projects</a>
   </div>
 </section>
 
-<!-- MARQUEE -->
-<div class="marquee-wrap">
-  <div class="marquee-track" id="marquee">
-    <span class="marquee-item">$BARD</span><span class="marquee-sep">·</span>
-    <span class="marquee-item">Pump.fun</span><span class="marquee-sep">·</span>
-    <span class="marquee-item">Solana</span><span class="marquee-sep">·</span>
-    <span class="marquee-item">1B Supply</span><span class="marquee-sep">·</span>
-    <span class="marquee-item">The Elon Pool</span><span class="marquee-sep">·</span>
-    <span class="marquee-item">Viral Pool</span><span class="marquee-sep">·</span>
-    <span class="marquee-item">Community Owned</span><span class="marquee-sep">·</span>
-    <span class="marquee-item">Cultural Arbitrage</span><span class="marquee-sep">·</span>
-    <span class="marquee-item">No Presale</span><span class="marquee-sep">·</span>
-    <span class="marquee-item">On-Chain Rewards</span><span class="marquee-sep">·</span>
-    <span class="marquee-item">Ride the Narrative</span><span class="marquee-sep">·</span>
-    <span class="marquee-item">$BARD</span><span class="marquee-sep">·</span>
-    <span class="marquee-item">Pump.fun</span><span class="marquee-sep">·</span>
-    <span class="marquee-item">Solana</span><span class="marquee-sep">·</span>
-    <span class="marquee-item">1B Supply</span><span class="marquee-sep">·</span>
-    <span class="marquee-item">The Elon Pool</span><span class="marquee-sep">·</span>
-    <span class="marquee-item">Viral Pool</span><span class="marquee-sep">·</span>
-    <span class="marquee-item">Community Owned</span><span class="marquee-sep">·</span>
-    <span class="marquee-item">Cultural Arbitrage</span><span class="marquee-sep">·</span>
-    <span class="marquee-item">No Presale</span><span class="marquee-sep">·</span>
-    <span class="marquee-item">On-Chain Rewards</span><span class="marquee-sep">·</span>
-    <span class="marquee-item">Ride the Narrative</span><span class="marquee-sep">·</span>
-  </div>
-</div>
+<div class="divider"></div>
 
-<!-- CONCEPT -->
-<div class="page-section" id="concept">
-  <div class="fade-in">
-    <div class="section-label">001 — The Concept</div>
-    <h2 class="section-title">Not a meme.<br>A mechanism.</h2>
-    <p class="section-body">Every cycle has a meta. A new animal coin. An AI twist. A viral character. Most projects either copy too late — or pretend they're above it. Bard rides it. The smile subtly adapts, absorbs the trend, and moves on. Cultural arbitrage. Not imitation — absorption.</p>
-  </div>
+<!-- FEATURES -->
+<section class="section" id="features">
+  <div class="section-label">What Bard does</div>
+  <h2 class="section-title">Everything a meme project<br>needs to run campaigns</h2>
+  <p class="section-body">Create competitions, reward real activity, and let holders manage it all from one place.</p>
 
-  <div class="concept-grid fade-in" style="transition-delay:0.15s">
-    <div class="concept-cell">
-      <div class="concept-num">01 —</div>
-      <div class="concept-name">Ride the Narrative™</div>
-      <p class="concept-desc">When a trend peaks, Bard doesn't compete. It absorbs. A faint frog flicker in the curve. A horn silhouette in the grin. A whisker shadow that disappears a week later. Never a clone. Just enough to nod at the moment.</p>
+  <div class="features">
+    <div class="feature">
+      <div class="feature-num">01</div>
+      <div class="feature-title">Campaigns &amp; Competitions</div>
+      <p class="feature-desc">Set clear rules — “achieve X, receive Y”. Leaderboards, raids, custom challenges. Simple to create, easy for the community to join.</p>
     </div>
-    <div class="concept-cell">
-      <div class="concept-num">02 —</div>
-      <div class="concept-name">Escape the Chart</div>
-      <p class="concept-desc">Smile hoodies. Clean mugs. TikTok challenges. Short-form content. The goal isn't numbers on a chart — it's what happens when a meme stops being a meme and becomes a face your aunt reposts without knowing where it started.</p>
+    <div class="feature">
+      <div class="feature-num">02</div>
+      <div class="feature-title">Airdrops &amp; Claims</div>
+      <p class="feature-desc">Distribute rewards cleanly. Holders claim when they qualify. Transparent and on-chain where it matters.</p>
     </div>
-    <div class="concept-cell">
-      <div class="concept-num">03 —</div>
-      <div class="concept-name">Real Incentives Only</div>
-      <p class="concept-desc">No digital trophies. No meaningless community points. If you create impact — a viral post, a real KOL interaction, an Elon engagement — you get paid. On-chain. Transparent. Verifiable.</p>
+    <div class="feature">
+      <div class="feature-num">03</div>
+      <div class="feature-title">Multi-Project Dashboard</div>
+      <p class="feature-desc">Holders see every project they’re in. Switch between campaigns, check leaderboards, and claim rewards without jumping around.</p>
     </div>
-    <div class="concept-cell">
-      <div class="concept-num">04 —</div>
-      <div class="concept-name">Community at the Wheel</div>
-      <p class="concept-desc">Token holders vote on what Bard does next. The more you hold, the more your vote weighs. Decisions are made by the people who have skin in the game — not by a team behind closed doors.</p>
+    <div class="feature">
+      <div class="feature-num">04</div>
+      <div class="feature-title">Explore Projects</div>
+      <p class="feature-desc">Discover meme projects already using Bard. Find new campaigns and communities in one feed.</p>
     </div>
   </div>
-</div>
+</section>
 
-<div class="full-divider"></div>
+<div class="divider"></div>
 
-<!-- TOKENOMICS -->
-<div class="page-section" id="tokenomics">
-  <div class="fade-in">
-    <div class="section-label">002 — Tokenomics</div>
-    <h2 class="section-title">1 Billion tokens.<br>Zero games.</h2>
-    <p class="section-body">No presale. No hidden allocations. No tricks. 46.1% controlled by the project — locked and vested over 9 months. Everything happens on-chain. Public. Trackable. You don't have to trust it. You can watch it.</p>
-  </div>
-
-  <div class="token-grid fade-in" style="transition-delay:0.15s">
-    <div class="token-card">
-      <div class="token-name">Future Staking</div>
-      <div class="token-pct">12.5%</div>
-      <div class="token-sub">125,000,000 tokens<br>Reserved for staking rewards</div>
-    </div>
-    <div class="token-card">
-      <div class="token-name">Weekly Burns</div>
-      <div class="token-pct">10%</div>
-      <div class="token-sub">100,000,000 tokens<br>Burned over 36 weeks</div>
-    </div>
-    <div class="token-card">
-      <div class="token-name">Marketing & Ops</div>
-      <div class="token-pct">10%</div>
-      <div class="token-sub">100,000,000 tokens<br>Vested weekly</div>
-    </div>
-    <div class="token-card">
-      <div class="token-name">Elon Pool</div>
-      <div class="token-pct">5%</div>
-      <div class="token-sub">50,000,000 tokens<br>Accumulates weekly</div>
-    </div>
-    <div class="token-card">
-      <div class="token-name">Viral Pool</div>
-      <div class="token-pct">3.5%</div>
-      <div class="token-sub">35,000,000 tokens<br>Claimed by breaking out</div>
-    </div>
-    <div class="token-card">
-      <div class="token-name">Interaction Pool</div>
-      <div class="token-pct">2.5%</div>
-      <div class="token-sub">25,000,000 tokens<br>Real KOL interactions only</div>
-    </div>
-    <div class="token-card">
-      <div class="token-name">Leaderboard</div>
-      <div class="token-pct">1.575%</div>
-      <div class="token-sub">Monthly shill competition<br>Top 3 promoters rewarded</div>
-    </div>
-    <div class="token-card">
-      <div class="token-name">Buffer</div>
-      <div class="token-pct">1.1%</div>
-      <div class="token-sub">Reserve allocation<br>Operational flexibility</div>
-    </div>
-    <div class="token-card" style="background: rgba(107,70,193,0.05);">
-      <div class="token-name">Public Float</div>
-      <div class="token-pct">53.9%</div>
-      <div class="token-sub">539,000,000 tokens<br>Available at launch</div>
+<!-- FOR PROJECTS -->
+<section class="section" id="projects">
+  <div class="for-projects">
+    <div class="for-projects-inner">
+      <div>
+        <div class="section-label">For meme teams</div>
+        <h2 class="section-title">Get set up in minutes</h2>
+        <p class="section-body">Connect your wallet, create your first campaign, and start rewarding your community. No complicated setup. Built so any team can use it.</p>
+      </div>
+      <div>
+        <a href="/admin.html" class="btn-primary">Start as a Project</a>
+      </div>
     </div>
   </div>
-</div>
+</section>
 
-<div class="full-divider"></div>
-
-<!-- POOLS -->
-<div class="page-section" id="pools">
-  <div class="fade-in">
-    <div class="section-label">003 — Reward Pools</div>
-    <h2 class="section-title">Impact pays.<br>Always.</h2>
-    <p class="section-body">Three accumulating pools. The longer they sit unclaimed, the larger they grow. The more people try, the further Bard spreads. Win conditions are real. Verification is community-driven.</p>
-  </div>
-
-  <div class="pools-list fade-in" style="transition-delay:0.15s">
-
-    <div class="pool-row">
-      <div class="pool-left">
-        <div class="pool-title">Viral Pool</div>
-        <div class="pool-reward">90%</div>
-        <div class="pool-reward-label">to winner</div>
-        <div class="pool-tag">X · TikTok · Any Platform</div>
-      </div>
-      <div class="pool-right">
-        <p>Make a Bard post go genuinely viral on X, TikTok, or a major platform. Break containment. Reach people who've never heard of crypto. Proof of organic virality required — no paid farms, no artificial boosting. Impact only. 10% of the pot is burned permanently when a winner is confirmed. Nobody wins? The pool keeps accumulating.</p>
-      </div>
-    </div>
-
-    <div class="pool-row">
-      <div class="pool-left">
-        <div class="pool-title">Interaction Pool</div>
-        <div class="pool-reward">90%</div>
-        <div class="pool-reward-label">to winner</div>
-        <div class="pool-tag">+ 0.2% airdrop on endorsement</div>
-      </div>
-      <div class="pool-right">
-        <p>Secure a real interaction from a verified, credible KOL or recognized public figure — crypto or mainstream. The community votes on legitimacy. No botted networks. No recycled farm clusters. No fake influence. If the interaction becomes a genuine public endorsement, an additional 200,000 token airdrop is unlocked on top of the pool payout. Real signal. Real reward.</p>
-      </div>
-    </div>
-
-    <div class="pool-row">
-      <div class="pool-left">
-        <div class="pool-title">The Elon Pool</div>
-        <div class="pool-reward">90%</div>
-        <div class="pool-reward-label">to winner</div>
-        <div class="pool-tag">Like · Reply · Retweet</div>
-      </div>
-      <div class="pool-right">
-        <p>Get Elon to like, reply to, or retweet a post that clearly references $BARD. Community confirms the connection. Nobody wins? The pool keeps growing — indefinitely. The longer it sits, the larger the reward. The more people try, the further the smile spreads. The pot only resets when there is a winner. Until then, it keeps building.</p>
-      </div>
-    </div>
-
-    <div class="pool-row">
-      <div class="pool-left">
-        <div class="pool-title">Monthly Leaderboard</div>
-        <div class="pool-reward">3×</div>
-        <div class="pool-reward-label">winners / month</div>
-        <div class="pool-tag">Every 30 days</div>
-      </div>
-      <div class="pool-right">
-        <p>Runs every calendar month. Rewards the top 3 most active public promoters on X. First place: 500,000 tokens. Second: 250,000 tokens. Third: 150,000 tokens. A points system ensures the competition stays fair — no whales, no accounts with pre-existing large followings farming an unfair advantage. Everyone competes on a level playing field. Consistent effort. Consistent reward.</p>
-      </div>
-    </div>
-
-  </div>
-</div>
-
-<div class="full-divider"></div>
-
-<!-- ROADMAP -->
-<div class="page-section" id="roadmap">
-  <div class="fade-in">
-    <div class="section-label">004 — Roadmap</div>
-    <h2 class="section-title">Memes generate attention.<br>Attention builds empires.</h2>
-    <p class="section-body">The blueprint exists. Execution is everything. Each phase funds the next — no external VC, no boardroom politics. Community-backed from the first block to the final credits.</p>
-  </div>
-
-  <div class="roadmap-list fade-in" style="transition-delay:0.15s">
-    <div class="roadmap-item">
-      <div class="roadmap-phase">Phase 01 — Now</div>
-      <div class="roadmap-name">Token Launch</div>
-      <ul class="roadmap-items">
-        <li>Deploy on Pump.fun</li>
-        <li>Activate reward pools</li>
-        <li>Launch dashboard</li>
-        <li>Monthly leaderboard begins</li>
-        <li>Community voting goes live</li>
-      </ul>
-    </div>
-    <div class="roadmap-item">
-      <div class="roadmap-phase">Phase 02 — Months 1–6</div>
-      <div class="roadmap-name">Culture Expansion</div>
-      <ul class="roadmap-items">
-        <li>Merch drop (no crypto branding)</li>
-        <li>Expand to TikTok via normie trends</li>
-        <li>Short-form content series</li>
-        <li>Smile breaks containment</li>
-      </ul>
-    </div>
-    <div class="roadmap-item">
-      <div class="roadmap-phase">Phase 03 — Month 9+</div>
-      <div class="roadmap-name">NFT Launch</div>
-      <ul class="roadmap-items">
-        <li>4,999 NFT collection launch</li>
-        <li>Trait point system activates</li>
-        <li>Rarity upgrade mechanics live</li>
-        <li>NFT holder benefits expand</li>
-      </ul>
-    </div>
-  </div>
-</div>
-
-<div class="full-divider"></div>
-
-<!-- LAUNCH -->
-<div class="page-section" id="launch">
-  <div class="launch-grid">
-    <div class="fade-in">
-      <div class="section-label">005 — Launch</div>
-      <h2 class="section-title">Clean.<br>Transparent.<br>On-chain.</h2>
-      <p class="section-body" style="margin-bottom:0">The contract address drops on X first — @BardTokenSol. Follow to be there from the first block.</p>
-
-      <div class="launch-facts" style="margin-top:2.5rem">
-        <div class="launch-row">
-          <span class="launch-key">Platform</span>
-          <span class="launch-val">Pump.fun · Solana</span>
-        </div>
-        <div class="launch-row">
-          <span class="launch-key">Total Supply</span>
-          <span class="launch-val">1,000,000,000 $BARD</span>
-        </div>
-        <div class="launch-row">
-          <span class="launch-key">Presale</span>
-          <span class="launch-val">None. Zero.</span>
-        </div>
-        <div class="launch-row">
-          <span class="launch-key">Vesting Period</span>
-          <span class="launch-val">9 Months · Weekly</span>
-        </div>
-        <div class="launch-row">
-          <span class="launch-key">NFT Launch</span>
-          <span class="launch-val">Post 9 Months</span>
-        </div>
-        <div class="launch-row">
-          <span class="launch-key">NFT Supply</span>
-          <span class="launch-val">4,999 Tokens</span>
-        </div>
-      </div>
-
-      <div class="launch-cta">
-        <a href="https://x.com/BardTokenSol" target="_blank" class="btn-primary">Follow @BardTokenSol</a>
-        <span class="btn-ghost" style="opacity:0.4;cursor:default;border-color:rgba(155,127,232,0.15)">Dashboard Coming Soon</span>
-      </div>
-    </div>
-
-    <div class="launch-visual fade-in" style="transition-delay:0.3s">
-      <svg class="smile-ring" viewBox="0 0 280 280" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <circle cx="140" cy="140" r="130" stroke="rgba(155,127,232,0.07)" stroke-width="1"/>
-        <circle cx="140" cy="140" r="105" stroke="rgba(155,127,232,0.1)" stroke-width="1"/>
-        <circle cx="140" cy="140" r="80" stroke="rgba(155,127,232,0.08)" stroke-width="1"/>
-        <path d="M 80 135 Q 140 200 200 135" stroke="#9b7fe8" stroke-width="2" fill="none" stroke-linecap="round"/>
-        <circle cx="140" cy="140" r="4" fill="rgba(155,127,232,0.25)"/>
-        <circle cx="80" cy="135" r="2" fill="rgba(155,127,232,0.4)"/>
-        <circle cx="200" cy="135" r="2" fill="rgba(155,127,232,0.4)"/>
-      </svg>
-    </div>
-  </div>
-</div>
+<div class="divider"></div>
 
 <!-- FOOTER -->
-<div class="full-divider"></div>
 <footer>
-  <a href="#" class="footer-logo">$BARD</a>
-  <ul class="footer-links">
-    <li><a href="https://x.com/BardTokenSol" target="_blank">X / Twitter</a></li>
-    <li><a href="#concept">Concept</a></li>
-    <li><a href="#tokenomics">Tokenomics</a></li>
-    <li><a href="#pools">Pools</a></li>
-    <li><span style="font-family:'DM Mono',monospace;font-size:0.72rem;color:rgba(155,127,232,0.4);letter-spacing:0.15em;text-transform:uppercase;cursor:default">Dashboard Coming Soon</span></li>
-  </ul>
-  <p class="footer-copy">© 2025 $BARD · bard.is · Built on Solana · No presale. No games. Just the smile.</p>
+  <a href="/" class="footer-logo">
+    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M4 13 Q12 20 20 13" stroke="#9b7fe8" stroke-width="2" fill="none" stroke-linecap="round"/>
+    </svg>
+    Bard
+  </a>
+  <p class="footer-copy">© 2026 Bard · bard.is · Built on Solana</p>
 </footer>
 
-<script>
-  // Cursor
-  const cursor = document.getElementById('cursor');
-  let mouseX = 0, mouseY = 0;
-  document.addEventListener('mousemove', e => {
-    mouseX = e.clientX;
-    mouseY = e.clientY;
-    cursor.style.left = mouseX + 'px';
-    cursor.style.top = mouseY + 'px';
-  });
-  document.addEventListener('mouseleave', () => cursor.style.opacity = '0');
-  document.addEventListener('mouseenter', () => cursor.style.opacity = '1');
-  document.addEventListener('mousedown', () => cursor.style.transform = 'translate(-50%, -50%) scale(1.8)');
-  document.addEventListener('mouseup', () => cursor.style.transform = 'translate(-50%, -50%) scale(1)');
-
-  // Scroll fade-in
-  const observer = new IntersectionObserver(entries => {
-    entries.forEach(e => {
-      if (e.isIntersecting) {
-        e.target.classList.add('visible');
-        observer.unobserve(e.target);
-      }
-    });
-  }, { threshold: 0.08 });
-
-  document.querySelectorAll('.fade-in').forEach(el => observer.observe(el));
-
-  // Smooth nav links
-  document.querySelectorAll('a[href^="#"]').forEach(a => {
-    a.addEventListener('click', e => {
-      const target = document.querySelector(a.getAttribute('href'));
-      if (target) {
-        e.preventDefault();
-        target.scrollIntoView({ behavior: 'smooth' });
-      }
-    });
-  });
-</script>
 </body>
 </html>
