@@ -17,13 +17,14 @@
   *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 
   :root {
-    --bg: #09090b;
-    --surface: #111113;
-    --border: rgba(255,255,255,0.07);
-    --border-hover: rgba(155,127,232,0.35);
-    --purple: #9b7fe8;
-    --purple-dim: rgba(155,127,232,0.12);
-    --text: #fafafa;
+    --bg: #12141a;
+    --surface: #1a1d26;
+    --surface-hover: #22252f;
+    --border: rgba(255,255,255,0.06);
+    --border-hover: rgba(155,127,232,0.3);
+    --purple: #a78bfa;
+    --purple-soft: rgba(167,139,250,0.12);
+    --text: #f4f4f5;
     --text-secondary: #a1a1aa;
     --text-tertiary: #71717a;
   }
@@ -50,8 +51,8 @@
     align-items: center;
     justify-content: space-between;
     padding: 0 32px;
-    background: rgba(9,9,11,0.8);
-    backdrop-filter: blur(12px);
+    background: rgba(18,20,26,0.85);
+    backdrop-filter: blur(14px);
     border-bottom: 1px solid var(--border);
   }
 
@@ -114,7 +115,7 @@
 
   .btn-primary {
     background: var(--purple);
-    color: #09090b;
+    color: #12141a;
   }
 
   .btn-primary:hover {
@@ -152,8 +153,8 @@
     align-items: center;
     gap: 8px;
     padding: 6px 12px 6px 8px;
-    background: var(--purple-dim);
-    border: 1px solid rgba(155,127,232,0.2);
+    background: var(--purple-soft);
+    border: 1px solid rgba(167,139,250,0.2);
     border-radius: 100px;
     font-size: 13px;
     font-weight: 500;
@@ -230,11 +231,12 @@
     border: 1px solid var(--border);
     border-radius: 14px;
     padding: 28px;
-    transition: border-color 0.2s;
+    transition: border-color 0.2s, background 0.2s;
   }
 
   .feature-card:hover {
     border-color: var(--border-hover);
+    background: var(--surface-hover);
   }
 
   .feature-card h3 {
