@@ -3,24 +3,25 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Bard — campaigns, leaderboards and airdrops for Solana meme projects</title>
-<meta name="description" content="Teams set a rule. Holders do the thing. Bard keeps the record and pays out in SOL — fixed fees, no cut of your token.">
+<title>Bard — the ledger for meme campaigns</title>
+<meta name="description" content="Teams set a rule. Holders do the thing. Bard records it, ranks it and settles the payout — fixed SOL fees, 0% of your token.">
 <meta property="og:title" content="Bard — proof of deeds">
-<meta property="og:description" content="Campaigns, leaderboards and airdrops for Solana meme projects. One dashboard for holders. Fixed SOL fees, no cut of your token.">
+<meta property="og:description" content="Campaigns, leaderboards and airdrops for Solana meme projects. One dashboard for holders. Fixed SOL fees, 0% of your token.">
 <meta property="og:image" content="/transparentbardsmile.png">
 <meta property="og:type" content="website">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="icon" href="/transparentbardsmile.png" type="image/png">
 <link rel="apple-touch-icon" href="/transparentbardsmile.png">
+<link rel="preload" as="image" href="/transparentbardsmile.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&family=Spline+Sans+Mono:wght@400..600&display=swap" rel="stylesheet">
 <style>
 /* ============================================================
-   BARD — THE LEDGER
-   Every meaningful block on this page is a record line.
+   BARD — THE LEDGER · v2
+   Every meaningful block is a record line.
    The smile is not decoration: it is the stamp a row gets
-   when a deed has been verified and paid.
+   when a deed has been verified and a payout has settled.
    ============================================================ */
 :root{
   /* locked palette */
@@ -42,126 +43,100 @@
   --rule:1px solid var(--line);
 }
 *{box-sizing:border-box}
-html{-webkit-text-size-adjust:100%}
+html{-webkit-text-size-adjust:100%;scroll-behavior:smooth}
 body{
-  margin:0;
-  background:var(--bg);
-  color:var(--text);
+  margin:0;background:var(--bg);color:var(--text);
   font-family:var(--display);
   font-variation-settings:"wdth" 100,"wght" 400;
-  font-size:16px;
-  line-height:1.6;
-  -webkit-font-smoothing:antialiased;
-  overflow-x:hidden;
+  font-size:16px;line-height:1.6;
+  -webkit-font-smoothing:antialiased;overflow-x:hidden;
 }
 img{display:block;max-width:100%}
 a{color:inherit;text-decoration:none}
+button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
 :focus-visible{outline:2px solid var(--purple);outline-offset:3px;border-radius:2px}
-/* ---- ledger paper: faint vertical column rules behind everything ---- */
+[id]{scroll-margin-top:88px}
+/* ---- ledger paper: faint column rules behind everything ---- */
 .paper{
   position:fixed;inset:0;z-index:0;pointer-events:none;
-  background-image:repeating-linear-gradient(90deg,
-    rgba(244,244,245,.028) 0 1px, transparent 1px 88px);
+  background-image:repeating-linear-gradient(90deg,rgba(244,244,245,.028) 0 1px,transparent 1px 88px);
   mask-image:linear-gradient(180deg,transparent,#000 12%,#000 78%,transparent);
   -webkit-mask-image:linear-gradient(180deg,transparent,#000 12%,#000 78%,transparent);
 }
 .shell{position:relative;z-index:1}
 .wrap{max-width:var(--max);margin:0 auto;padding-left:var(--gutter);padding-right:var(--gutter)}
-/* ---- shared type utilities ---- */
-.tag{
-  font-family:var(--mono);
-  font-size:.68rem;
-  font-weight:500;
-  letter-spacing:.16em;
-  text-transform:uppercase;
-  color:var(--muted);
-}
+.tag{font-family:var(--mono);font-size:.68rem;font-weight:500;letter-spacing:.16em;text-transform:uppercase;color:var(--muted)}
 .tag--purple{color:var(--purple)}
-.lede{color:var(--muted);font-size:1.02rem;max-width:52ch}
 /* ============ HEADER ============ */
 .head{
   position:sticky;top:0;z-index:50;
-  background:rgba(28,30,38,.82);
+  background:rgba(28,30,38,.85);
   backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
   border-bottom:var(--rule);
 }
 .head__in{display:flex;align-items:center;gap:28px;height:64px;max-width:var(--max);margin:0 auto;padding:0 var(--gutter)}
 .mark{display:flex;align-items:center;gap:10px;margin-right:auto}
 .mark img{width:24px;height:24px;object-fit:contain}
-.mark span{
-  font-size:1.06rem;letter-spacing:-.01em;
-  font-variation-settings:"wdth" 112,"wght" 700;
-}
+.mark span{font-size:1.06rem;letter-spacing:-.01em;font-variation-settings:"wdth" 112,"wght" 700}
 .nav{display:flex;align-items:center;gap:26px}
-.nav a{font-size:.86rem;color:var(--muted);transition:color .18s}
+.nav a{font-size:.86rem;color:var(--muted);transition:color .18s;white-space:nowrap}
 .nav a:hover{color:var(--text)}
 .enter{
   font-family:var(--mono);font-size:.76rem;letter-spacing:.08em;text-transform:uppercase;
   color:var(--text);border:1px solid var(--line-strong);
-  padding:8px 16px;border-radius:2px;transition:border-color .18s,background .18s;
+  padding:8px 16px;border-radius:2px;transition:border-color .18s,background .18s;white-space:nowrap;
 }
 .enter:hover{border-color:var(--purple-line);background:var(--purple-wash)}
-@media(max-width:820px){.nav .hide-s{display:none}}
+@media(max-width:860px){
+  .head__in{height:auto;flex-wrap:wrap;gap:14px;padding-top:12px}
+  .enter{order:2}
+  .nav{order:3;width:100%;gap:22px;overflow-x:auto;padding:11px 0;margin-top:2px;border-top:var(--rule);scrollbar-width:none}
+  .nav::-webkit-scrollbar{display:none}
+}
 /* ============ HERO ============ */
-.hero{padding:clamp(48px,8vw,96px) 0 clamp(56px,7vw,88px)}
-.hero__grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:clamp(32px,5vw,72px);align-items:center}
-@media(max-width:940px){.hero__grid{grid-template-columns:1fr;gap:44px}}
+.hero{padding:clamp(48px,8vw,92px) 0 clamp(56px,7vw,88px)}
+.hero__grid{display:grid;grid-template-columns:minmax(0,.92fr) minmax(0,1.08fr);gap:clamp(32px,5vw,68px);align-items:center}
+@media(max-width:980px){.hero__grid{grid-template-columns:1fr;gap:44px}}
 .hero__eyebrow{display:flex;align-items:center;gap:10px;margin-bottom:26px}
 .dot{width:6px;height:6px;border-radius:50%;background:var(--purple);flex:none;animation:pulse 2.4s ease-in-out infinite}
 @keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.35;transform:scale(.8)}}
-h1{
-  margin:0 0 22px;
-  font-size:clamp(3rem,8.4vw,5.6rem);
-  line-height:.88;
-  letter-spacing:-.035em;
-  font-variation-settings:"wdth" 115,"wght" 700;
-}
+h1{margin:0 0 22px;font-size:clamp(3rem,8.4vw,5.6rem);line-height:.88;letter-spacing:-.035em;font-variation-settings:"wdth" 115,"wght" 700}
 h1 em{font-style:normal;color:var(--purple)}
 .hero__sub{color:var(--muted);font-size:1.06rem;max-width:44ch;margin:0 0 34px}
 .hero__sub b{color:var(--text);font-weight:600}
 .actions{display:flex;flex-wrap:wrap;gap:12px;margin-bottom:26px}
-.btn{
-  display:inline-flex;align-items:center;gap:9px;
-  padding:13px 22px;border-radius:3px;
-  font-size:.92rem;font-variation-settings:"wght" 600;
-  border:1px solid transparent;transition:transform .16s,background .18s,border-color .18s;
-}
+.btn{display:inline-flex;align-items:center;gap:9px;padding:13px 22px;border-radius:3px;font-size:.92rem;font-variation-settings:"wght" 600;border:1px solid transparent;transition:transform .16s,background .18s,border-color .18s}
 .btn:active{transform:translateY(1px)}
 .btn--solid{background:var(--purple);color:#191320}
 .btn--solid:hover{background:#b9a3ff}
 .btn--ghost{border-color:var(--line-strong);color:var(--text)}
 .btn--ghost:hover{border-color:var(--purple-line);background:var(--purple-wash)}
-.hero__foot{font-family:var(--mono);font-size:.74rem;color:var(--muted);letter-spacing:.03em}
+.hero__foot{font-family:var(--mono);font-size:.74rem;color:var(--muted);letter-spacing:.03em;margin:0}
 .hero__foot i{font-style:normal;color:var(--line-strong)}
-/* ============ THE LIVE PANEL (hero thesis) ============ */
-.panel{
-  background:var(--surface);
-  border:1px solid var(--line-strong);
-  border-radius:6px;
-  overflow:hidden;
-  box-shadow:0 24px 60px -30px rgba(0,0,0,.85);
-}
-.panel__top{
-  display:flex;align-items:center;gap:10px;
-  padding:14px 18px;border-bottom:var(--rule);background:var(--well);
-}
+/* ============ LIVE PANEL ============ */
+.panel{background:var(--surface);border:1px solid var(--line-strong);border-radius:6px;overflow:hidden;box-shadow:0 24px 60px -30px rgba(0,0,0,.85)}
+.panel__top{display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:var(--rule);background:var(--well)}
 .live{display:inline-flex;align-items:center;gap:7px;font-family:var(--mono);font-size:.66rem;letter-spacing:.16em;text-transform:uppercase;color:var(--purple)}
 .live i{width:5px;height:5px;border-radius:50%;background:var(--purple);animation:pulse 2.4s ease-in-out infinite}
-.panel__name{font-family:var(--mono);font-size:.78rem;color:var(--text);margin-left:auto}
-.panel__rule{padding:18px;border-bottom:var(--rule)}
-.panel__rule .tag{display:block;margin-bottom:8px}
-.rule-line{font-size:.98rem;line-height:1.5}
+.panel__name{font-family:var(--mono);font-size:.78rem;color:var(--text);margin-left:auto;text-align:right}
+.panel__rule{padding:16px 18px 18px;border-bottom:var(--rule)}
+.rule__head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px;flex-wrap:wrap}
+.switch{display:flex;gap:6px;flex-wrap:wrap}
+.chip{
+  font-family:var(--mono);font-size:.68rem;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--muted);border:1px solid var(--line);border-radius:2px;padding:5px 10px;
+  transition:color .18s,border-color .18s,background .18s;
+}
+.chip:hover{color:var(--text);border-color:var(--line-strong)}
+.chip.is-on{color:var(--purple);border-color:var(--purple-line);background:var(--purple-wash)}
+.rule-line{font-size:.98rem;line-height:1.5;margin:0}
 .rule-line b{font-variation-settings:"wght" 600}
-.rule-line span{color:var(--purple);font-family:var(--mono);font-size:.9rem}
-.rows{padding:6px 0}
+.rule-line span{color:var(--purple);font-family:var(--mono);font-size:.9rem;white-space:nowrap}
+.rows{padding:6px 0;min-height:264px}
 .row{
-  display:grid;
-  grid-template-columns:34px 1fr 76px 74px 26px;
-  align-items:center;gap:10px;
-  padding:9px 18px;
-  font-family:var(--mono);font-size:.8rem;
-  border-left:2px solid transparent;
-  transition:background .2s,border-color .2s;
+  display:grid;grid-template-columns:34px 1fr 84px 74px 26px;align-items:center;gap:10px;
+  padding:9px 18px;font-family:var(--mono);font-size:.8rem;
+  border-left:2px solid transparent;transition:background .2s,border-color .2s;
 }
 .row.is-settled{border-left-color:var(--purple);background:var(--purple-wash)}
 .row__rank{color:var(--muted)}
@@ -169,7 +144,9 @@ h1 em{font-style:normal;color:var(--purple)}
 .row__deed{color:var(--muted);text-align:right;font-size:.74rem}
 .row__pay{text-align:right;color:var(--muted)}
 .row.is-settled .row__pay{color:var(--text);font-variation-settings:"wght" 600}
-.row__seal{width:22px;height:22px;justify-self:end;position:relative}
+.row.is-short{opacity:.5}
+.row.is-short .row__pay{color:var(--line-strong)}
+.row__seal{width:22px;height:22px;justify-self:end}
 .row__seal img{width:22px;height:22px;object-fit:contain;opacity:0}
 .row.is-settled .row__seal img{animation:stamp .5s cubic-bezier(.2,.9,.25,1) forwards}
 @keyframes stamp{
@@ -177,44 +154,38 @@ h1 em{font-style:normal;color:var(--purple)}
   55%{opacity:1;transform:scale(.9) rotate(3deg)}
   100%{opacity:1;transform:scale(1) rotate(0)}
 }
-.panel__foot{
-  display:flex;align-items:center;gap:14px;flex-wrap:wrap;
-  padding:14px 18px;border-top:var(--rule);background:var(--well);
-  font-family:var(--mono);font-size:.72rem;color:var(--muted);
-}
+.panel__foot{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:14px 18px;border-top:var(--rule);background:var(--well);font-family:var(--mono);font-size:.72rem;color:var(--muted)}
 .panel__foot b{color:var(--text);font-variation-settings:"wght" 600}
 .panel__foot .sep{color:var(--line-strong)}
 .bar{flex:1 1 100%;height:3px;background:rgba(244,244,245,.08);border-radius:99px;overflow:hidden;min-width:120px}
 .bar i{display:block;height:100%;width:0;background:var(--purple);border-radius:99px;transition:width .6s cubic-bezier(.3,.8,.3,1)}
-@media(max-width:420px){
-  .row{grid-template-columns:28px 1fr 66px 24px;padding:9px 14px}
+.panel-cap{margin:14px 2px 0;font-family:var(--mono);font-size:.7rem;color:var(--muted);line-height:1.6}
+.panel-cap b{color:var(--text);font-variation-settings:"wght" 500}
+@media(max-width:440px){
+  .row{grid-template-columns:26px 1fr 62px 24px;padding:9px 14px;gap:8px}
   .row__deed{display:none}
+  .rows{min-height:0}
 }
 /* ============ SECTION FRAME ============ */
-.sec{padding:clamp(56px,8vw,104px) 0;border-top:var(--rule)}
+.sec{padding:clamp(56px,8vw,102px) 0;border-top:var(--rule)}
 .sec__head{display:flex;align-items:baseline;justify-content:space-between;gap:20px;flex-wrap:wrap;margin-bottom:38px}
-.sec__head h2{
-  margin:0;font-size:clamp(1.7rem,3.4vw,2.4rem);line-height:1.05;letter-spacing:-.025em;
-  font-variation-settings:"wdth" 108,"wght" 700;
-}
+.sec__head h2{margin:0;font-size:clamp(1.7rem,3.4vw,2.4rem);line-height:1.05;letter-spacing:-.025em;font-variation-settings:"wdth" 108,"wght" 700}
 .sec__head p{margin:0;color:var(--muted);font-size:.94rem;max-width:34ch}
-/* ============ THE RECORD (mechanics as ledger rows) ============ */
+/* ============ THE RECORD ============ */
 .ledger{border-top:var(--rule)}
 .entry{
   display:grid;grid-template-columns:112px minmax(0,220px) minmax(0,1fr) auto;
   gap:clamp(14px,3vw,36px);align-items:baseline;
-  padding:26px 0 26px 14px;
-  border-bottom:var(--rule);
-  border-left:2px solid transparent;
-  margin-left:-14px;
+  padding:26px 0 26px 14px;border-bottom:var(--rule);
+  border-left:2px solid transparent;margin-left:-14px;
   transition:border-color .2s,background .2s;
 }
 .entry:hover{border-left-color:var(--purple);background:rgba(167,139,250,.045)}
 .entry__kind{font-family:var(--mono);font-size:.68rem;letter-spacing:.16em;text-transform:uppercase;color:var(--purple)}
 .entry__name{font-size:1.16rem;letter-spacing:-.015em;font-variation-settings:"wdth" 106,"wght" 600}
-.entry__desc{color:var(--muted);font-size:.95rem;max-width:56ch}
+.entry__desc{color:var(--muted);font-size:.95rem;max-width:56ch;margin:0}
 .entry__val{font-family:var(--mono);font-size:.76rem;color:var(--muted);white-space:nowrap;text-align:right}
-@media(max-width:860px){
+@media(max-width:880px){
   .entry{grid-template-columns:1fr;gap:8px;padding:22px 0 22px 14px}
   .entry__val{text-align:left}
 }
@@ -222,26 +193,16 @@ h1 em{font-style:normal;color:var(--purple)}
 .sides{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line);border:var(--rule);border-radius:6px;overflow:hidden}
 @media(max-width:820px){.sides{grid-template-columns:1fr}}
 .side{background:var(--surface);padding:clamp(26px,3.4vw,40px)}
-.side h3{
-  margin:16px 0 12px;font-size:clamp(1.35rem,2.6vw,1.75rem);line-height:1.1;letter-spacing:-.02em;
-  font-variation-settings:"wdth" 108,"wght" 700;
-}
+.side h3{margin:16px 0 12px;font-size:clamp(1.35rem,2.6vw,1.75rem);line-height:1.1;letter-spacing:-.02em;font-variation-settings:"wdth" 108,"wght" 700}
 .side p{margin:0 0 20px;color:var(--muted);font-size:.96rem}
 .side ul{list-style:none;margin:0 0 26px;padding:0;border-top:var(--rule)}
-.side li{
-  display:flex;gap:12px;align-items:baseline;
-  padding:11px 0;border-bottom:var(--rule);font-size:.93rem;color:var(--text);
-}
+.side li{display:flex;gap:12px;align-items:baseline;padding:11px 0;border-bottom:var(--rule);font-size:.93rem}
 .side li i{font-style:normal;color:var(--purple);font-family:var(--mono);font-size:.7rem;flex:none;letter-spacing:.1em}
-.side a.txt{
-  display:inline-flex;align-items:center;gap:8px;font-size:.92rem;
-  font-variation-settings:"wght" 600;color:var(--purple);
-  border-bottom:1px solid var(--purple-line);padding-bottom:2px;transition:color .18s,border-color .18s;
-}
-.side a.txt:hover{color:var(--text);border-color:var(--text)}
+.txt{display:inline-flex;align-items:center;gap:8px;font-size:.92rem;font-variation-settings:"wght" 600;color:var(--purple);border-bottom:1px solid var(--purple-line);padding-bottom:2px;transition:color .18s,border-color .18s}
+.txt:hover{color:var(--text);border-color:var(--text)}
 /* ============ FEES ============ */
-.fees{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);gap:clamp(30px,5vw,72px);align-items:start}
-@media(max-width:860px){.fees{grid-template-columns:1fr}}
+.fees{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);gap:clamp(30px,5vw,68px);align-items:start}
+@media(max-width:880px){.fees{grid-template-columns:1fr}}
 .fees__say h2{margin:14px 0 16px;font-size:clamp(1.7rem,3.4vw,2.4rem);line-height:1.05;letter-spacing:-.025em;font-variation-settings:"wdth" 108,"wght" 700}
 .fees__say p{color:var(--muted);margin:0 0 14px;font-size:.98rem;max-width:44ch}
 .fees__say strong{color:var(--text);font-variation-settings:"wght" 600}
@@ -255,13 +216,34 @@ h1 em{font-style:normal;color:var(--purple)}
 .fee--zero{border-bottom:none;padding-top:20px}
 .fee--zero .fee__what{font-variation-settings:"wght" 600}
 .fee--zero .fee__amt{color:var(--purple)}
-/* ============ THE SEAL ============ */
-.seal{border-top:var(--rule);padding:clamp(64px,9vw,120px) 0;text-align:center}
+/* ---- worked invoice ---- */
+.invoice{margin-top:28px;background:var(--surface);border:var(--rule);border-radius:5px;padding:20px}
+.invoice .tag{display:block;margin-bottom:14px}
+.inv{display:grid;grid-template-columns:1fr auto;gap:14px;padding:8px 0;font-family:var(--mono);font-size:.82rem;color:var(--muted)}
+.inv b{color:var(--text);font-variation-settings:"wght" 400}
+.inv--total{border-top:1px solid var(--line-strong);margin-top:8px;padding-top:14px;color:var(--text)}
+.inv--total b{font-variation-settings:"wght" 600}
+.inv--zero{color:var(--purple);padding-top:0}
+.inv--zero b{color:var(--purple);font-variation-settings:"wght" 600}
+/* ============ STRAIGHT ANSWERS ============ */
+.qa{border-top:var(--rule)}
+.qa__row{
+  display:grid;grid-template-columns:minmax(0,.85fr) minmax(0,1.15fr);
+  gap:clamp(14px,3vw,40px);align-items:baseline;
+  padding:22px 0 22px 14px;border-bottom:var(--rule);
+  border-left:2px solid transparent;margin-left:-14px;transition:border-color .2s,background .2s;
+}
+.qa__row:hover{border-left-color:var(--purple);background:rgba(167,139,250,.045)}
+.qa__q{font-size:1.02rem;letter-spacing:-.01em;font-variation-settings:"wght" 600;margin:0}
+.qa__a{color:var(--muted);font-size:.95rem;margin:0}
+.qa__a b{color:var(--text);font-variation-settings:"wght" 600}
+@media(max-width:820px){.qa__row{grid-template-columns:1fr;gap:8px}}
+/* ============ SEAL ============ */
+.seal{border-top:var(--rule);padding:clamp(64px,9vw,118px) 0;text-align:center}
 .seal__mark{
-  width:clamp(112px,17vw,160px);height:clamp(112px,17vw,160px);
-  margin:0 auto 30px;display:grid;place-items:center;position:relative;
-  border-radius:50%;background:var(--surface);
-  border:1px solid var(--line-strong);
+  width:clamp(112px,17vw,158px);height:clamp(112px,17vw,158px);margin:0 auto 30px;
+  display:grid;place-items:center;position:relative;border-radius:50%;
+  background:var(--surface);border:1px solid var(--line-strong);
   box-shadow:inset 0 1px 0 rgba(244,244,245,.06),0 20px 50px -28px rgba(0,0,0,.9);
 }
 .seal__mark::after{content:"";position:absolute;inset:9px;border-radius:50%;border:1px dashed rgba(167,139,250,.3)}
@@ -278,17 +260,17 @@ h1 em{font-style:normal;color:var(--purple)}
 .foot__links{display:flex;gap:22px;flex-wrap:wrap}
 .foot__links a{font-size:.86rem;color:var(--muted);transition:color .18s}
 .foot__links a:hover{color:var(--text)}
-.foot__meta{font-family:var(--mono);font-size:.7rem;color:var(--muted);letter-spacing:.04em;width:100%;padding-top:22px;margin-top:22px;border-top:var(--rule)}
-/* ---- reveal ---- */
+.foot__meta{font-family:var(--mono);font-size:.7rem;color:var(--muted);letter-spacing:.04em;width:100%;padding-top:22px;margin:22px 0 0;border-top:var(--rule)}
 .rise{opacity:0;transform:translateY(14px);transition:opacity .6s ease,transform .6s cubic-bezier(.2,.8,.3,1)}
 .rise.in{opacity:1;transform:none}
 @media(prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
   *,*::before,*::after{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important}
   .rise{opacity:1;transform:none}
   .row__seal img{opacity:1}
 }
 </style>
-<noscript><style>.rise{opacity:1!important;transform:none!important}.row__seal img{opacity:1}</style></noscript>
+<noscript><style>.rise{opacity:1!important;transform:none!important}.row__seal img{opacity:1}.switch{display:none}</style></noscript>
 </head>
 <body>
 <div class="paper" aria-hidden="true"></div>
@@ -300,12 +282,13 @@ h1 em{font-style:normal;color:var(--purple)}
         <span>Bard</span>
       </a>
       <nav class="nav" aria-label="Main">
-        <a class="hide-s" href="#record">The record</a>
-        <a class="hide-s" href="#fees">Fees</a>
-        <a class="hide-s" href="/dashboard.html">Explore</a>
-        <a class="hide-s" href="/admin.html">For teams</a>
-        <a class="enter" href="/dashboard.html">Enter</a>
+        <a href="#record">The record</a>
+        <a href="#fees">Fees</a>
+        <a href="#answers">Straight answers</a>
+        <a href="/dashboard.html">Explore</a>
+        <a href="/admin.html">For teams</a>
       </nav>
+      <a class="enter" href="/dashboard.html">Enter</a>
     </div>
   </header>
   <!-- ===================== HERO ===================== -->
@@ -318,35 +301,44 @@ h1 em{font-style:normal;color:var(--purple)}
         </div>
         <h1>Proof of<br><em>deeds.</em></h1>
         <p class="hero__sub">
-          A meme team sets the rule. Holders do the thing. <b>Bard keeps the record and settles the payout</b> — for a fixed fee in SOL, with no cut of your token and no platform coin anyone has to hold.
+          A meme team writes a rule. Holders do the thing. <b>Bard records it, ranks it and settles the payout</b> — for a fixed fee in SOL, with no cut of your token and no platform coin anyone has to hold.
         </p>
         <div class="actions">
           <a class="btn btn--solid" href="/admin.html">Set up a campaign</a>
           <a class="btn btn--ghost" href="/dashboard.html">Open holder dashboard</a>
         </div>
-        <p class="hero__foot">0.25 SOL to onboard <i>/</i> 0.25 per campaign <i>/</i> 0.1 per claim <i>/</i> that's the invoice</p>
+        <p class="hero__foot">0.25 SOL to onboard <i>/</i> 0.25 per campaign <i>/</i> 0.1 per settled claim <i>/</i> 0% of your token</p>
       </div>
-      <!-- the product itself, live -->
-      <div class="panel" role="figure" aria-label="Example of a live Bard campaign and its leaderboard">
-        <div class="panel__top">
-          <span class="live"><i aria-hidden="true"></i> Live</span>
-          <span class="panel__name">$FROGZ · Diamond Week</span>
+      <!-- the product itself, running -->
+      <div>
+        <div class="panel" role="group" aria-label="Live example of a Bard campaign">
+          <div class="panel__top">
+            <span class="live"><i aria-hidden="true"></i> Live</span>
+            <span class="panel__name" id="cname">$FROGZ · Diamond Week</span>
+          </div>
+          <div class="panel__rule">
+            <div class="rule__head">
+              <span class="tag">The rule — the team writes this</span>
+              <div class="switch" role="group" aria-label="Rule type">
+                <button class="chip is-on" data-rule="hold">Hold</button>
+                <button class="chip" data-rule="raid">Raid</button>
+                <button class="chip" data-rule="refer">Refer</button>
+                <button class="chip" data-rule="volume">Volume</button>
+              </div>
+            </div>
+            <p class="rule-line" id="cline"><b>Hold 100,000 $FROGZ for 7 days</b> → <span>0.5 SOL</span></p>
+          </div>
+          <div class="rows" id="rows" aria-live="polite"></div>
+          <div class="panel__foot">
+            <span><b id="paid">0.0</b> SOL paid</span>
+            <span class="sep">·</span>
+            <span><b id="settled">0</b> of <span id="qual">3</span> qualified</span>
+            <span class="sep">·</span>
+            <span>closes in <b id="clock">2d 14:22:08</b></span>
+            <span class="bar" aria-hidden="true"><i id="fill"></i></span>
+          </div>
         </div>
-        <div class="panel__rule">
-          <span class="tag">The rule</span>
-          <p class="rule-line" style="margin:0">
-            <b>Hold 100,000 $FROGZ for 7 days</b> → receive <span>0.5 SOL</span>
-          </p>
-        </div>
-        <div class="rows" id="rows"></div>
-        <div class="panel__foot">
-          <span>Pool <b id="paid">0.0</b> / 12.0 SOL</span>
-          <span class="sep">·</span>
-          <span><b id="settled">0</b> settled</span>
-          <span class="sep">·</span>
-          <span>Closes in <b id="clock">2d 14:22:08</b></span>
-          <span class="bar" aria-hidden="true"><i id="fill"></i></span>
-        </div>
+        <p class="panel-cap">Live example — switch the rule to see how it changes. Wallets that miss it stay unpaid. <b>The smile lands when a payout settles.</b></p>
       </div>
     </div>
   </section>
@@ -361,25 +353,25 @@ h1 em{font-style:normal;color:var(--purple)}
         <div class="entry rise">
           <span class="entry__kind">Rule</span>
           <span class="entry__name">Campaigns</span>
-          <p class="entry__desc" style="margin:0">Write the condition once — hold, trade, raid, refer, or a custom check — and Bard watches for it. Achieve X, receive Y, with no moderator deciding who counts.</p>
+          <p class="entry__desc">Write the condition once — hold, raid, refer, trade, or something custom — and Bard watches for it. Achieve X, receive Y, with no moderator deciding who counts.</p>
           <span class="entry__val">you define it</span>
         </div>
         <div class="entry rise">
           <span class="entry__kind">Rank</span>
           <span class="entry__name">Leaderboards</span>
-          <p class="entry__desc" style="margin:0">Public standing for the work that counts, updating as wallets qualify. The people carrying your community stop being invisible.</p>
+          <p class="entry__desc">Public standing for the work that counts, updating as wallets qualify. The people carrying your community stop being invisible.</p>
           <span class="entry__val">live, public</span>
         </div>
         <div class="entry rise">
           <span class="entry__kind">Payout</span>
           <span class="entry__name">Airdrops &amp; claims</span>
-          <p class="entry__desc" style="margin:0">When a wallet meets the rule, its claim opens. No CSV of addresses, no manual send list, no DMing screenshots to a mod at 3am.</p>
+          <p class="entry__desc">When a wallet meets the rule, its claim opens. No CSV of addresses, no manual send list, no DMing screenshots to a mod at 3am.</p>
           <span class="entry__val">0.1 SOL per claim</span>
         </div>
         <div class="entry rise">
           <span class="entry__kind">Index</span>
           <span class="entry__name">Explore</span>
-          <p class="entry__desc" style="margin:0">Every project running on Bard, in one list. Holders find your campaign without you buying another link drop.</p>
+          <p class="entry__desc">Every project running on Bard, in one list. Holders find your campaign without you buying another link drop.</p>
           <span class="entry__val">open to all</span>
         </div>
       </div>
@@ -399,7 +391,7 @@ h1 em{font-style:normal;color:var(--purple)}
           <p>Set a rule, fund the reward, share one link. Bard handles qualification, ranking and claims while you go back to shipping.</p>
           <ul>
             <li><i>01</i> Onboard your token once — 0.25 SOL</li>
-            <li><i>02</i> Launch competitions, holds, raids or referrals</li>
+            <li><i>02</i> Launch holds, raids, referrals or volume races</li>
             <li><i>03</i> Keep 100% of your supply. Bard never takes tokens</li>
           </ul>
           <a class="txt" href="/admin.html">Set up a campaign →</a>
@@ -426,6 +418,14 @@ h1 em{font-style:normal;color:var(--purple)}
         <h2>Fixed SOL. Nothing off the top.</h2>
         <p>Most tooling in this corner of the market wants a slice of your supply, a seat in your treasury, or a token you're expected to hold forever.</p>
         <p><strong>Bard charges for actions, in SOL, at a published price.</strong> Your token stays yours, your treasury stays yours, and the platform doesn't need your chart to go up to survive.</p>
+        <div class="invoice">
+          <span class="tag">What a real campaign costs</span>
+          <div class="inv"><span>Onboard $FROGZ · once</span><b>0.25</b></div>
+          <div class="inv"><span>Diamond Week campaign</span><b>0.25</b></div>
+          <div class="inv"><span>41 wallets qualified &amp; claimed</span><b>4.10</b></div>
+          <div class="inv inv--total"><span>Total to run it</span><b>4.60 SOL</b></div>
+          <div class="inv inv--zero"><span>Taken from your supply</span><b>0</b></div>
+        </div>
       </div>
       <div class="table rise">
         <div class="fee">
@@ -437,7 +437,7 @@ h1 em{font-style:normal;color:var(--purple)}
           <span class="fee__amt">0.25 SOL</span>
         </div>
         <div class="fee">
-          <span class="fee__what">Settle a claim<span class="fee__note">Charged when a reward is actually paid</span></span>
+          <span class="fee__what">Settle a claim<span class="fee__note">Charged when a reward actually pays out</span></span>
           <span class="fee__amt">0.1 SOL</span>
         </div>
         <div class="fee fee--soon">
@@ -451,7 +451,38 @@ h1 em{font-style:normal;color:var(--purple)}
       </div>
     </div>
   </section>
-  <!-- ===================== THE SEAL ===================== -->
+  <!-- ===================== STRAIGHT ANSWERS ===================== -->
+  <section class="sec" id="answers">
+    <div class="wrap">
+      <div class="sec__head rise">
+        <h2>Straight answers</h2>
+        <p>The questions every team asks in the first five minutes.</p>
+      </div>
+      <div class="qa">
+        <div class="qa__row rise">
+          <p class="qa__q">Do you take a percentage of my token?</p>
+          <p class="qa__a"><b>No.</b> Not at onboarding, not from the reward pool, not later. Bard is paid in SOL at the prices listed above and nowhere else.</p>
+        </div>
+        <div class="qa__row rise">
+          <p class="qa__q">Do I need to hold a $BARD token to use this?</p>
+          <p class="qa__a"><b>No.</b> The platform ships first and stands on its own. Any future $BARD meme is a separate entity — using Bard will never depend on its chart.</p>
+        </div>
+        <div class="qa__row rise">
+          <p class="qa__q">Who decides which wallets qualify?</p>
+          <p class="qa__a"><b>The rule does.</b> You write the condition, Bard checks it, and the leaderboard shows the result. No mod judging who was loyal enough.</p>
+        </div>
+        <div class="qa__row rise">
+          <p class="qa__q">What if the campaign flops?</p>
+          <p class="qa__a"><b>You're out 0.25 SOL.</b> Claim fees only apply to rewards that actually settle, so a campaign nobody finishes costs you almost nothing.</p>
+        </div>
+        <div class="qa__row rise">
+          <p class="qa__q">Is any of it public?</p>
+          <p class="qa__a"><b>Rank and settled payouts are.</b> That's the whole point of a record — your community can verify what was earned without asking you for a screenshot.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+  <!-- ===================== SEAL ===================== -->
   <section class="seal">
     <div class="wrap">
       <div class="seal__mark rise">
@@ -474,6 +505,7 @@ h1 em{font-style:normal;color:var(--purple)}
       <nav class="foot__links" aria-label="Footer">
         <a href="#record">The record</a>
         <a href="#fees">Fees</a>
+        <a href="#answers">Straight answers</a>
         <a href="/dashboard.html">Dashboard</a>
         <a href="/admin.html">For teams</a>
       </nav>
@@ -484,91 +516,143 @@ h1 em{font-style:normal;color:var(--purple)}
 <script>
 (function(){
   var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  /* ---------- the ledger in the hero ---------- */
-  var data = [
-    {w:'7xKq…4mR2', d:'7d held', p:'0.5'},
-    {w:'9mAv…tt61', d:'7d held', p:'0.5'},
-    {w:'Ha3z…8Qw0', d:'7d held', p:'0.5'},
-    {w:'2pLd…v9Kc', d:'6d held', p:'0.5'},
-    {w:'Bn7t…3xEu', d:'6d held', p:'0.5'},
-    {w:'Ktw9…f0Zp', d:'5d held', p:'0.5'}
-  ];
-  var rows = document.getElementById('rows');
-  var frag = document.createDocumentFragment();
-  data.forEach(function(r,i){
-    var el = document.createElement('div');
-    el.className = 'row';
-    el.innerHTML =
-      '<span class="row__rank">'+String(i+1).padStart(2,'0')+'</span>'+
-      '<span class="row__who">'+r.w+'</span>'+
-      '<span class="row__deed">'+r.d+'</span>'+
-      '<span class="row__pay">'+r.p+' SOL</span>'+
-      '<span class="row__seal"><img src="/transparentbardsmile.png" alt=""></span>';
-    frag.appendChild(el);
-  });
-  rows.appendChild(frag);
-  var all = Array.prototype.slice.call(rows.children);
-  var paidEl = document.getElementById('paid');
-  var setEl = document.getElementById('settled');
-  var fill = document.getElementById('fill');
-  var i = 0, timer;
-  function render(n){
-    var paid = (n * 0.5).toFixed(1);
-    paidEl.textContent = paid;
-    setEl.textContent = n;
-    fill.style.width = ((paid/12)*100) + '%';
-  }
-  if(reduce){
-    all.forEach(function(el){ el.classList.add('is-settled'); });
-    render(all.length);
-  } else {
-    function step(){
-      if(i < all.length){
-        all[i].classList.add('is-settled');
-        i++;
-        render(i);
-        timer = setTimeout(step, 1500);
-      } else {
-        timer = setTimeout(function(){
-          all.forEach(function(el){ el.classList.remove('is-settled'); });
-          i = 0; render(0);
-          timer = setTimeout(step, 900);
-        }, 4200);
-      }
+  /* ---------------- rule sets ---------------- */
+  var RULES = {
+    hold:{
+      name:'$FROGZ · Diamond Week',
+      line:'<b>Hold 100,000 $FROGZ for 7 days</b> → <span>0.5 SOL</span>',
+      pay:0.5,
+      rows:[
+        {w:'7xKq…4mR2',d:'7d held',q:1},{w:'9mAv…tt61',d:'7d held',q:1},
+        {w:'Ha3z…8Qw0',d:'7d held',q:1},{w:'2pLd…v9Kc',d:'7d held',q:1},
+        {w:'Bn7t…3xEu',d:'6d held',q:0},{w:'Ktw9…f0Zp',d:'4d held',q:0}
+      ]
+    },
+    raid:{
+      name:'$FROGZ · Raid Night',
+      line:'<b>Reply to 20 posts tagging $FROGZ in 48h</b> → <span>0.25 SOL</span>',
+      pay:0.25,
+      rows:[
+        {w:'Ktw9…f0Zp',d:'31 replies',q:1},{w:'Ha3z…8Qw0',d:'27 replies',q:1},
+        {w:'4vRm…z1Ta',d:'22 replies',q:1},{w:'7xKq…4mR2',d:'20 replies',q:1},
+        {w:'9mAv…tt61',d:'14 replies',q:0},{w:'Bn7t…3xEu',d:'6 replies',q:0}
+      ]
+    },
+    refer:{
+      name:'$FROGZ · Bring a Friend',
+      line:'<b>Refer 5 wallets that hold for 3 days</b> → <span>1 SOL</span>',
+      pay:1,
+      rows:[
+        {w:'2pLd…v9Kc',d:'11 refs',q:1},{w:'Bn7t…3xEu',d:'8 refs',q:1},
+        {w:'7xKq…4mR2',d:'5 refs',q:1},{w:'Ha3z…8Qw0',d:'4 refs',q:0},
+        {w:'4vRm…z1Ta',d:'2 refs',q:0},{w:'Ktw9…f0Zp',d:'1 ref',q:0}
+      ]
+    },
+    volume:{
+      name:'$FROGZ · Volume Sprint',
+      line:'<b>Trade 50 SOL of volume this week</b> → <span>0.4 SOL</span>',
+      pay:0.4,
+      rows:[
+        {w:'9mAv…tt61',d:'212 SOL',q:1},{w:'4vRm…z1Ta',d:'140 SOL',q:1},
+        {w:'Ha3z…8Qw0',d:'96 SOL',q:1},{w:'7xKq…4mR2',d:'61 SOL',q:1},
+        {w:'2pLd…v9Kc',d:'54 SOL',q:1},{w:'Bn7t…3xEu',d:'38 SOL',q:0}
+      ]
     }
-    render(0);
-    timer = setTimeout(step, 700);
-    document.addEventListener('visibilitychange', function(){
-      if(document.hidden){ clearTimeout(timer); }
-      else { clearTimeout(timer); timer = setTimeout(step, 600); }
+  };
+  var rowsEl=document.getElementById('rows'),
+      nameEl=document.getElementById('cname'),
+      lineEl=document.getElementById('cline'),
+      paidEl=document.getElementById('paid'),
+      setEl=document.getElementById('settled'),
+      qualEl=document.getElementById('qual'),
+      fill=document.getElementById('fill'),
+      chips=document.querySelectorAll('.chip');
+  var timer=null, current='hold';
+  function draw(key){
+    clearTimeout(timer);
+    var r=RULES[key];
+    nameEl.textContent=r.name;
+    lineEl.innerHTML=r.line;
+    var html='';
+    r.rows.forEach(function(row,i){
+      html+='<div class="row'+(row.q?'':' is-short')+'">'+ 
+        '<span class="row__rank">'+String(i+1).padStart(2,'0')+'</span>'+
+        '<span class="row__who">'+row.w+'</span>'+
+        '<span class="row__deed">'+row.d+'</span>'+
+        '<span class="row__pay">'+(row.q?r.pay.toFixed(2)+' SOL':'—')+'</span>'+
+        '<span class="row__seal">'+(row.q?'<img src="/transparentbardsmile.png" alt="">':'')+'</span>'+
+      '</div>';
     });
+    rowsEl.innerHTML=html;
+    var all=Array.prototype.slice.call(rowsEl.children).filter(function(el){return !el.classList.contains('is-short')});
+    qualEl.textContent=all.length;
+    function tally(n){
+      paidEl.textContent=(n*r.pay).toFixed(2);
+      setEl.textContent=n;
+      fill.style.width=(all.length?(n/all.length)*100:0)+'%';
+    }
+    if(reduce){
+      all.forEach(function(el){el.classList.add('is-settled')});
+      tally(all.length);
+      return;
+    }
+    var i=0;
+    tally(0);
+    (function step(){
+      if(i<all.length){
+        all[i].classList.add('is-settled');
+        i++; tally(i);
+        timer=setTimeout(step,1400);
+      }else{
+        timer=setTimeout(function(){
+          all.forEach(function(el){el.classList.remove('is-settled')});
+          i=0; tally(0);
+          timer=setTimeout(step,900);
+        },4600);
+      }
+    })();
   }
-  /* ---------- countdown ---------- */
-  var clock = document.getElementById('clock');
-  var end = Date.now() + (2*86400 + 14*3600 + 22*60 + 8) * 1000;
+  chips.forEach(function(c){
+    c.addEventListener('click',function(){
+      var key=c.getAttribute('data-rule');
+      if(key===current) return;
+      current=key;
+      chips.forEach(function(x){x.classList.remove('is-on')});
+      c.classList.add('is-on');
+      draw(key);
+    });
+  });
+  draw('hold');
+  document.addEventListener('visibilitychange',function(){
+    if(document.hidden){clearTimeout(timer);}
+    else if(!reduce){draw(current);}
+  });
+  /* ---------------- countdown ---------------- */
+  var clock=document.getElementById('clock');
+  var end=Date.now()+(2*86400+14*3600+22*60+8)*1000;
   function tick(){
-    var s = Math.max(0, Math.floor((end - Date.now())/1000));
-    var d = Math.floor(s/86400), h = Math.floor(s%86400/3600),
-        m = Math.floor(s%3600/60), sec = s%60;
-    clock.textContent = d+'d '+String(h).padStart(2,'0')+':'+String(m).padStart(2,'0')+':'+String(sec).padStart(2,'0');
+    var s=Math.max(0,Math.floor((end-Date.now())/1000)),
+        d=Math.floor(s/86400),h=Math.floor(s%86400/3600),
+        m=Math.floor(s%3600/60),sec=s%60;
+    clock.textContent=d+'d '+String(h).padStart(2,'0')+':'+String(m).padStart(2,'0')+':'+String(sec).padStart(2,'0');
   }
-  tick();
-  if(!reduce) setInterval(tick, 1000);
-  /* ---------- reveal ---------- */
-  var items = document.querySelectorAll('.rise');
-  if(reduce || !('IntersectionObserver' in window)){
-    items.forEach(function(el){ el.classList.add('in'); });
-  } else {
-    var io = new IntersectionObserver(function(entries){
+  tick(); if(!reduce) setInterval(tick,1000);
+  /* ---------------- reveal ---------------- */
+  var items=document.querySelectorAll('.rise');
+  if(reduce||!('IntersectionObserver' in window)){
+    items.forEach(function(el){el.classList.add('in')});
+  }else{
+    var io=new IntersectionObserver(function(entries){
       entries.forEach(function(e){
         if(e.isIntersecting){
-          e.target.style.transitionDelay = (Math.min(Array.prototype.indexOf.call(e.target.parentNode.children, e.target),5) * 60) + 'ms';
+          var idx=Array.prototype.indexOf.call(e.target.parentNode.children,e.target);
+          e.target.style.transitionDelay=(Math.min(idx,5)*60)+'ms';
           e.target.classList.add('in');
           io.unobserve(e.target);
         }
       });
-    }, {threshold:.12, rootMargin:'0px 0px -8% 0px'});
-    items.forEach(function(el){ io.observe(el); });
+    },{threshold:.12,rootMargin:'0px 0px -8% 0px'});
+    items.forEach(function(el){io.observe(el)});
   }
 })();
 </script>
