@@ -4,318 +4,365 @@
 <meta charset="UTF-8">
 <link rel="icon" type="image/png" href="/transparentbardsmile.png">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Bard — Tools for Meme Projects</title>
-<meta name="description" content="Run campaigns, leaderboards, airdrops and competitions for any meme project on Solana. One simple platform for teams and holders.">
-<meta property="og:title" content="Bard — Tools for Meme Projects">
-<meta property="og:description" content="Campaigns, leaderboards, airdrops and competitions for every meme project on Solana.">
+<title>Bard</title>
+<meta name="description" content="Bard is the platform meme projects use to run campaigns, leaderboards, and airdrops — without the usual chaos.">
+<meta property="og:title" content="Bard">
+<meta property="og:description" content="Campaigns, leaderboards, and airdrops for meme projects. One dashboard for holders.">
 <meta property="og:image" content="/transparentbardsmile.png">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
-  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
   :root {
     --bg: #1c1e26;
-    --surface: #262930;
-    --surface-2: #2c2f38;
-    --border: rgba(255,255,255,0.08);
-    --border-strong: rgba(255,255,255,0.12);
+    --bg-elevated: #23262f;
+    --line: rgba(255,255,255,0.08);
+    --line-strong: rgba(255,255,255,0.14);
     --purple: #a78bfa;
-    --purple-soft: rgba(167,139,250,0.14);
-    --text: #f4f4f5;
-    --muted: #a1a1aa;
-    --dim: #71717a;
+    --purple-glow: rgba(167,139,250,0.16);
+    --text: #f3f3f4;
+    --soft: #b0b0b8;
+    --quiet: #7a7a84;
   }
 
   html { scroll-behavior: smooth; }
   body {
     background: var(--bg);
     color: var(--text);
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    font-family: 'Inter', system-ui, sans-serif;
     line-height: 1.5;
     -webkit-font-smoothing: antialiased;
   }
 
   a { color: inherit; text-decoration: none; }
 
-  /* NAV */
-  nav {
+  /* ─── top bar ─── */
+  .top {
     position: fixed;
-    inset: 0 0 auto 0;
-    z-index: 50;
-    height: 60px;
+    inset: 0 0 auto;
+    z-index: 40;
     display: flex;
     align-items: center;
     justify-content: space-between;
+    height: 58px;
     padding: 0 28px;
-    background: rgba(28,30,38,0.9);
-    backdrop-filter: blur(16px);
-    border-bottom: 1px solid var(--border);
+    background: rgba(28,30,38,0.92);
+    backdrop-filter: blur(18px);
+    border-bottom: 1px solid var(--line);
   }
 
-  .logo {
+  .mark {
     display: flex;
     align-items: center;
-    gap: 9px;
+    gap: 10px;
+  }
+
+  .mark img {
+    width: 22px;
+    height: 22px;
+    object-fit: contain;
+  }
+
+  .mark span {
+    font-size: 14px;
     font-weight: 600;
-    font-size: 15px;
     letter-spacing: -0.02em;
   }
 
-  .logo img { width: 26px; height: 26px; object-fit: contain; }
-
-  .nav-actions {
+  .top-right {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
   }
 
-  .nav-link {
+  .top-link {
     font-size: 13px;
     font-weight: 500;
-    color: var(--muted);
-    padding: 8px 12px;
-    border-radius: 8px;
-    transition: color 0.15s, background 0.15s;
+    color: var(--soft);
+    padding: 7px 11px;
+    border-radius: 7px;
+    transition: color .15s, background .15s;
   }
+  .top-link:hover { color: var(--text); background: rgba(255,255,255,0.04); }
 
-  .nav-link:hover { color: var(--text); background: rgba(255,255,255,0.04); }
-
-  .btn {
+  .pill {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    height: 36px;
-    padding: 0 14px;
+    height: 34px;
+    padding: 0 13px;
+    border-radius: 8px;
     font-size: 13px;
     font-weight: 600;
-    border-radius: 8px;
-    border: none;
-    cursor: pointer;
-    transition: filter 0.15s, background 0.15s, border-color 0.15s;
+    transition: filter .15s, background .15s, border-color .15s;
   }
 
-  .btn-primary {
+  .pill-solid {
     background: var(--purple);
     color: #1c1e26;
   }
-  .btn-primary:hover { filter: brightness(1.07); }
+  .pill-solid:hover { filter: brightness(1.06); }
 
-  .btn-ghost {
+  .pill-line {
+    border: 1px solid var(--line);
+    color: var(--soft);
     background: transparent;
-    color: var(--muted);
-    border: 1px solid var(--border);
   }
-  .btn-ghost:hover {
+  .pill-line:hover {
     color: var(--text);
-    border-color: var(--border-strong);
+    border-color: var(--line-strong);
   }
 
-  .btn-lg {
-    height: 44px;
-    padding: 0 20px;
+  /* ─── stage ─── */
+  .stage {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 132px 24px 64px;
+  }
+
+  .seal {
+    width: 48px;
+    height: 48px;
+    object-fit: contain;
+    margin-bottom: 36px;
+    opacity: 0.9;
+  }
+
+  .stage h1 {
+    font-family: 'Instrument Serif', Georgia, serif;
+    font-size: clamp(42px, 7vw, 64px);
+    font-weight: 400;
+    letter-spacing: -0.03em;
+    line-height: 1.08;
+    margin-bottom: 22px;
+  }
+
+  .stage h1 i {
+    font-style: italic;
+    color: var(--purple);
+  }
+
+  .stage-lead {
+    font-size: 17px;
+    color: var(--soft);
+    max-width: 440px;
+    line-height: 1.65;
+    margin-bottom: 36px;
+  }
+
+  .stage-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 28px;
+  }
+
+  .stage-actions .pill {
+    height: 42px;
+    padding: 0 18px;
     font-size: 14px;
     border-radius: 10px;
   }
 
-  /* HERO */
-  .hero {
-    max-width: 880px;
+  .stage-foot {
+    font-size: 12px;
+    color: var(--quiet);
+    letter-spacing: 0.02em;
+  }
+
+  /* ─── divider with seal ─── */
+  .rule {
+    max-width: 720px;
     margin: 0 auto;
-    padding: 128px 24px 72px;
-    text-align: center;
-  }
-
-  .hero-logo {
-    width: 56px;
-    height: 56px;
-    object-fit: contain;
-    margin-bottom: 28px;
-    opacity: 0.95;
-  }
-
-  .hero h1 {
-    font-size: clamp(34px, 5.5vw, 48px);
-    font-weight: 650;
-    letter-spacing: -0.035em;
-    line-height: 1.15;
-    margin-bottom: 18px;
-  }
-
-  .hero h1 em {
-    font-style: normal;
-    color: var(--purple);
-  }
-
-  .hero-lead {
-    font-size: 17px;
-    color: var(--muted);
-    max-width: 460px;
-    margin: 0 auto 32px;
-    line-height: 1.65;
-  }
-
-  .hero-ctas {
+    padding: 0 24px;
     display: flex;
-    gap: 10px;
-    justify-content: center;
-    flex-wrap: wrap;
-    margin-bottom: 48px;
-  }
-
-  .hero-note {
-    font-size: 13px;
-    color: var(--dim);
-  }
-
-  /* SPLIT */
-  .split {
-    max-width: 960px;
-    margin: 0 auto;
-    padding: 0 24px 80px;
-    display: grid;
-    grid-template-columns: 1fr 1fr;
+    align-items: center;
     gap: 16px;
   }
 
-  .split-card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 16px;
-    padding: 32px 28px;
+  .rule::before,
+  .rule::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--line);
   }
 
-  .split-label {
-    font-size: 12px;
+  .rule img {
+    width: 18px;
+    height: 18px;
+    opacity: 0.55;
+  }
+
+  /* ─── two truths ─── */
+  .truths {
+    max-width: 920px;
+    margin: 0 auto;
+    padding: 56px 24px 72px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+  }
+
+  .truth {
+    position: relative;
+    padding: 36px 32px 32px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    overflow: hidden;
+  }
+
+  .truth::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, var(--purple), transparent 70%);
+    opacity: 0.7;
+  }
+
+  .truth-kicker {
+    font-size: 11px;
     font-weight: 600;
-    letter-spacing: 0.06em;
+    letter-spacing: 0.12em;
     text-transform: uppercase;
+    color: var(--purple);
+    margin-bottom: 14px;
+  }
+
+  .truth h2 {
+    font-family: 'Instrument Serif', Georgia, serif;
+    font-size: 28px;
+    font-weight: 400;
+    letter-spacing: -0.02em;
+    line-height: 1.2;
+    margin-bottom: 14px;
+  }
+
+  .truth p {
+    font-size: 14px;
+    color: var(--soft);
+    line-height: 1.65;
+    margin-bottom: 24px;
+    max-width: 340px;
+  }
+
+  /* ─── mechanics ─── */
+  .mechanics {
+    max-width: 920px;
+    margin: 0 auto;
+    padding: 0 24px 80px;
+  }
+
+  .mechanics-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 28px;
+    flex-wrap: wrap;
+  }
+
+  .mechanics-head h2 {
+    font-family: 'Instrument Serif', Georgia, serif;
+    font-size: 32px;
+    font-weight: 400;
+    letter-spacing: -0.02em;
+  }
+
+  .mechanics-head span {
+    font-size: 13px;
+    color: var(--quiet);
+  }
+
+  .mech-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+  }
+
+  .mech {
+    padding: 22px 18px;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: rgba(255,255,255,0.015);
+    transition: border-color .2s, background .2s;
+  }
+
+  .mech:hover {
+    border-color: rgba(167,139,250,0.28);
+    background: var(--purple-glow);
+  }
+
+  .mech-num {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
     color: var(--purple);
     margin-bottom: 12px;
   }
 
-  .split-card h2 {
-    font-size: 20px;
-    font-weight: 600;
-    letter-spacing: -0.02em;
-    margin-bottom: 10px;
-  }
-
-  .split-card p {
+  .mech h3 {
     font-size: 14px;
-    color: var(--muted);
-    line-height: 1.65;
-    margin-bottom: 22px;
-  }
-
-  /* FEATURES */
-  .features {
-    max-width: 960px;
-    margin: 0 auto;
-    padding: 0 24px 88px;
-  }
-
-  .features-head {
-    margin-bottom: 28px;
-  }
-
-  .features-head h2 {
-    font-size: 24px;
     font-weight: 600;
-    letter-spacing: -0.025em;
     margin-bottom: 8px;
+    letter-spacing: -0.01em;
   }
 
-  .features-head p {
-    font-size: 15px;
-    color: var(--muted);
-  }
-
-  .feature-list {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 12px;
-  }
-
-  .feature {
-    display: flex;
-    gap: 14px;
-    padding: 20px 18px;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-  }
-
-  .feature-icon {
-    flex-shrink: 0;
-    width: 36px;
-    height: 36px;
-    border-radius: 9px;
-    background: var(--purple-soft);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 14px;
-    font-weight: 700;
-    color: var(--purple);
-  }
-
-  .feature h3 {
-    font-size: 14px;
-    font-weight: 600;
-    margin-bottom: 4px;
-  }
-
-  .feature p {
+  .mech p {
     font-size: 13px;
-    color: var(--muted);
+    color: var(--soft);
     line-height: 1.55;
   }
 
-  /* BOTTOM CTA */
-  .bottom-cta {
-    max-width: 960px;
+  /* ─── close ─── */
+  .close {
+    max-width: 720px;
     margin: 0 auto 88px;
     padding: 0 24px;
-  }
-
-  .bottom-cta-inner {
-    background: var(--surface-2);
-    border: 1px solid var(--border);
-    border-radius: 16px;
-    padding: 40px 36px;
     text-align: center;
   }
 
-  .bottom-cta-inner h2 {
-    font-size: 22px;
-    font-weight: 600;
-    letter-spacing: -0.02em;
-    margin-bottom: 10px;
+  .close-seal {
+    width: 36px;
+    height: 36px;
+    object-fit: contain;
+    margin-bottom: 24px;
+    opacity: 0.85;
   }
 
-  .bottom-cta-inner p {
+  .close h2 {
+    font-family: 'Instrument Serif', Georgia, serif;
+    font-size: clamp(28px, 4vw, 36px);
+    font-weight: 400;
+    letter-spacing: -0.02em;
+    margin-bottom: 14px;
+  }
+
+  .close p {
     font-size: 15px;
-    color: var(--muted);
-    max-width: 420px;
-    margin: 0 auto 24px;
+    color: var(--soft);
+    max-width: 400px;
+    margin: 0 auto 28px;
     line-height: 1.6;
   }
 
-  /* FOOTER */
+  /* ─── footer ─── */
   footer {
-    max-width: 960px;
+    max-width: 920px;
     margin: 0 auto;
-    padding: 24px;
-    border-top: 1px solid var(--border);
+    padding: 22px 24px 32px;
+    border-top: 1px solid var(--line);
     display: flex;
     align-items: center;
     justify-content: space-between;
   }
 
-  .footer-logo {
+  .foot-mark {
     display: flex;
     align-items: center;
     gap: 8px;
@@ -323,22 +370,28 @@
     font-weight: 600;
   }
 
-  .footer-logo img { width: 18px; height: 18px; }
+  .foot-mark img { width: 16px; height: 16px; }
 
-  .footer-copy {
+  .foot-copy {
     font-size: 12px;
-    color: var(--dim);
+    color: var(--quiet);
   }
 
-  @media (max-width: 720px) {
-    nav { padding: 0 16px; }
-    .nav-link { display: none; }
-    .hero { padding: 110px 20px 56px; }
-    .split { grid-template-columns: 1fr; padding-bottom: 56px; }
-    .feature-list { grid-template-columns: 1fr; }
-    .features { padding-bottom: 56px; }
-    .bottom-cta { margin-bottom: 56px; }
-    .bottom-cta-inner { padding: 32px 22px; }
+  @media (max-width: 800px) {
+    .mech-grid { grid-template-columns: 1fr 1fr; }
+  }
+
+  @media (max-width: 640px) {
+    .top { padding: 0 16px; }
+    .top-link { display: none; }
+    .stage { padding: 110px 20px 48px; }
+    .truths {
+      grid-template-columns: 1fr;
+      padding: 40px 20px 56px;
+    }
+    .mech-grid { grid-template-columns: 1fr; }
+    .mechanics { padding-bottom: 56px; }
+    .close { margin-bottom: 56px; }
     footer {
       flex-direction: column;
       gap: 10px;
@@ -349,96 +402,91 @@
 </head>
 <body>
 
-<nav>
-  <a href="/" class="logo">
+<header class="top">
+  <a href="/" class="mark">
     <img src="/transparentbardsmile.png" alt="">
-    Bard
+    <span>Bard</span>
   </a>
-  <div class="nav-actions">
-    <a href="#features" class="nav-link">Features</a>
-    <a href="/dashboard.html" class="nav-link">Explore</a>
-    <a href="/admin.html" class="btn btn-ghost">For Projects</a>
-    <a href="/dashboard.html" class="btn btn-primary">Launch App</a>
+  <div class="top-right">
+    <a href="#mechanics" class="top-link">Mechanics</a>
+    <a href="/dashboard.html" class="top-link">Explore</a>
+    <a href="/admin.html" class="pill pill-line">For projects</a>
+    <a href="/dashboard.html" class="pill pill-solid">Enter</a>
   </div>
-</nav>
+</header>
 
-<section class="hero">
-  <img class="hero-logo" src="/transparentbardsmile.png" alt="Bard">
-  <h1>The platform meme projects<br>use to run <em>campaigns</em></h1>
-  <p class="hero-lead">Create competitions, leaderboards, and airdrops in minutes. Holders track every project from one dashboard.</p>
-  <div class="hero-ctas">
-    <a href="/admin.html" class="btn btn-primary btn-lg">Start as a Project</a>
-    <a href="/dashboard.html" class="btn btn-ghost btn-lg">Open Dashboard</a>
+<section class="stage">
+  <img class="seal" src="/transparentbardsmile.png" alt="">
+  <h1>Meme projects need<br>campaigns. <i>Not chaos.</i></h1>
+  <p class="stage-lead">Bard is the place teams run competitions, leaderboards, and airdrops — and holders track every project from one dashboard.</p>
+  <div class="stage-actions">
+    <a href="/admin.html" class="pill pill-solid">Start a project</a>
+    <a href="/dashboard.html" class="pill pill-line">Open dashboard</a>
   </div>
-  <p class="hero-note">Built for Solana · Simple fees · No forced token</p>
+  <p class="stage-foot">Fixed SOL fees · No cut of your token · Built on Solana</p>
 </section>
 
-<section class="split">
-  <div class="split-card">
-    <div class="split-label">For teams</div>
-    <h2>Launch campaigns without the setup headache</h2>
-    <p>Connect your wallet, pay a small fixed SOL fee, and create raids, leaderboards, or custom “achieve X → get Y” competitions. Your community joins in a click.</p>
-    <a href="/admin.html" class="btn btn-primary">Get started</a>
-  </div>
-  <div class="split-card">
-    <div class="split-label">For holders</div>
-    <h2>One dashboard for every project you hold</h2>
-    <p>See active campaigns, climb leaderboards, and claim rewards across multiple meme projects — without jumping between sites.</p>
-    <a href="/dashboard.html" class="btn btn-ghost">Open dashboard</a>
-  </div>
+<div class="rule">
+  <img src="/transparentbardsmile.png" alt="">
+</div>
+
+<section class="truths">
+  <article class="truth">
+    <div class="truth-kicker">Teams</div>
+    <h2>Run the campaign.<br>Skip the duct tape.</h2>
+    <p>Create a competition, set the rule, fund the reward. Your community joins without another broken bot or spreadsheet.</p>
+    <a href="/admin.html" class="pill pill-solid">Start as a project</a>
+  </article>
+  <article class="truth">
+    <div class="truth-kicker">Holders</div>
+    <h2>One home for<br>every project you hold.</h2>
+    <p>Leaderboards, claims, and active campaigns across the memes you’re in — without five tabs and five logins.</p>
+    <a href="/dashboard.html" class="pill pill-line">Open dashboard</a>
+  </article>
 </section>
 
-<section class="features" id="features">
-  <div class="features-head">
-    <h2>What you can run</h2>
-    <p>Everything a meme team needs to reward real activity.</p>
+<section class="mechanics" id="mechanics">
+  <div class="mechanics-head">
+    <h2>The mechanics</h2>
+    <span>What actually runs on Bard</span>
   </div>
-  <div class="feature-list">
-    <div class="feature">
-      <div class="feature-icon">01</div>
-      <div>
-        <h3>Campaigns & competitions</h3>
-        <p>Set clear rules. Leaderboards, raids, and custom challenges that the community can actually join.</p>
-      </div>
+  <div class="mech-grid">
+    <div class="mech">
+      <div class="mech-num">01</div>
+      <h3>Campaigns</h3>
+      <p>Clear rules. Achieve X, receive Y. Raids, competitions, custom challenges.</p>
     </div>
-    <div class="feature">
-      <div class="feature-icon">02</div>
-      <div>
-        <h3>Airdrops & claims</h3>
-        <p>Distribute rewards cleanly. Holders claim when they qualify — transparent and simple.</p>
-      </div>
+    <div class="mech">
+      <div class="mech-num">02</div>
+      <h3>Leaderboards</h3>
+      <p>Public ranking for the activity that matters. Visible effort, visible reward.</p>
     </div>
-    <div class="feature">
-      <div class="feature-icon">03</div>
-      <div>
-        <h3>Multi-project view</h3>
-        <p>Holders manage every Bard-powered project from one place instead of five different sites.</p>
-      </div>
+    <div class="mech">
+      <div class="mech-num">03</div>
+      <h3>Airdrops</h3>
+      <p>Claims when someone qualifies. Simple distribution without the usual mess.</p>
     </div>
-    <div class="feature">
-      <div class="feature-icon">04</div>
-      <div>
-        <h3>Explore</h3>
-        <p>Discover other meme projects already running campaigns on the platform.</p>
-      </div>
+    <div class="mech">
+      <div class="mech-num">04</div>
+      <h3>Explore</h3>
+      <p>See which projects are live on Bard. Join the ones worth your attention.</p>
     </div>
   </div>
 </section>
 
-<section class="bottom-cta">
-  <div class="bottom-cta-inner">
-    <h2>Ready when you are</h2>
-    <p>Onboard a project in minutes. Fixed SOL fees. No percentage of your token. No complicated setup.</p>
-    <a href="/admin.html" class="btn btn-primary btn-lg">Start as a Project</a>
-  </div>
+<section class="close">
+  <img class="close-seal" src="/transparentbardsmile.png" alt="">
+  <h2>The smile is the seal.</h2>
+  <p>Small fixed fees in SOL. No percentage of your bag. The platform stays independent of any single meme — including ours.</p>
+  <a href="/admin.html" class="pill pill-solid" style="height:42px;padding:0 18px;font-size:14px;border-radius:10px;">Start a project</a>
 </section>
 
 <footer>
-  <a href="/" class="footer-logo">
+  <a href="/" class="foot-mark">
     <img src="/transparentbardsmile.png" alt="">
     Bard
   </a>
-  <p class="footer-copy">© 2026 Bard · Built on Solana</p>
+  <p class="foot-copy">© 2026 · Built on Solana</p>
 </footer>
 
 </body>
