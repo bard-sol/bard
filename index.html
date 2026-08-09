@@ -60,19 +60,30 @@ p{margin:0}
   backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
   border-bottom:1px solid var(--line);
 }
-.head__in{display:flex;align-items:center;gap:30px;min-height:72px;max-width:var(--max);margin:0 auto;padding:10px var(--gutter)}
-/* Smile under Bard — holding the name */
+.head__in{display:flex;align-items:center;gap:30px;min-height:78px;max-width:var(--max);margin:0 auto;padding:12px var(--gutter)}
+/* Brand lockup: word on top, smile under it holding the name */
 .mark{
-  display:flex;flex-direction:column;align-items:center;justify-content:center;
-  gap:3px;margin-right:auto;line-height:1;
+  display:inline-flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  gap:2px;
+  margin-right:auto;
+  line-height:1;
+  text-align:center;
 }
-.mark span{
-  font-size:1.12rem;font-variation-settings:"wdth" 110,"wght" 700;letter-spacing:-.01em;
-  order:1;
+.mark__word{
+  display:block;
+  font-size:1.2rem;
+  font-variation-settings:"wdth" 112,"wght" 720;
+  letter-spacing:-.015em;
 }
-.mark img{
-  width:22px;height:22px;object-fit:contain;order:2;
-  opacity:.95;
+.mark__smile{
+  display:block;
+  width:28px;
+  height:18px;
+  object-fit:contain;
+  margin-top:1px;
 }
 .nav{display:flex;align-items:center;gap:26px}
 .nav a{font-size:.92rem;color:var(--muted);transition:color .18s;white-space:nowrap}
@@ -244,16 +255,25 @@ h1 em{font-style:normal;color:var(--purple)}
 .qa__q{font-size:1.06rem;font-variation-settings:"wght" 620;margin-bottom:6px}
 .qa__a{color:var(--body);font-size:.98rem}
 .qa__a b{color:var(--text);font-variation-settings:"wght" 600;font-weight:normal}
-/* SEAL */
+/* SEAL — big lockup */
 .seal{border-top:1px solid var(--line);padding:clamp(68px,9vw,116px) 0;text-align:center}
-.seal__stack{
-  display:inline-flex;flex-direction:column;align-items:center;gap:6px;
+.seal__lockup{
+  display:inline-flex;
+  flex-direction:column;
+  align-items:center;
+  gap:8px;
   margin:0 auto 28px;
 }
-.seal__stack span{
-  font-size:1.35rem;font-variation-settings:"wdth" 110,"wght" 700;letter-spacing:-.01em;
+.seal__lockup .mark__word{
+  font-size:clamp(1.8rem,4vw,2.4rem);
+  font-variation-settings:"wdth" 112,"wght" 720;
+  letter-spacing:-.02em;
 }
-.seal__stack img{width:36px;height:36px;object-fit:contain}
+.seal__lockup .mark__smile{
+  width:56px;
+  height:36px;
+  object-fit:contain;
+}
 .seal h2{margin-bottom:16px}
 .seal p{margin:0 auto 32px;color:var(--body);max-width:50ch;font-size:1.04rem}
 .seal .actions{justify-content:center}
@@ -261,8 +281,8 @@ h1 em{font-style:normal;color:var(--purple)}
 .foot{border-top:1px solid var(--line);padding:32px 0 46px}
 .foot__in{display:flex;align-items:center;gap:22px;flex-wrap:wrap}
 .foot__in .mark{margin-right:auto}
-.foot__in .mark span{font-size:1rem}
-.foot__in .mark img{width:18px;height:18px}
+.foot__in .mark__word{font-size:1.05rem}
+.foot__in .mark__smile{width:24px;height:15px}
 .foot__links{display:flex;gap:24px;flex-wrap:wrap}
 .foot__links a{font-size:.9rem;color:var(--muted);transition:color .18s}
 .foot__links a:hover{color:var(--text)}
@@ -282,8 +302,8 @@ h1 em{font-style:normal;color:var(--purple)}
   <header class="head">
     <div class="head__in">
       <a class="mark" href="/" aria-label="Bard home">
-        <span>Bard</span>
-        <img src="/transparentbardsmile.png" alt="">
+        <span class="mark__word">Bard</span>
+        <img class="mark__smile" src="/transparentbardsmile.png" alt="">
       </a>
       <nav class="nav" aria-label="Main">
         <a href="#how">How it works</a>
@@ -504,9 +524,9 @@ h1 em{font-style:normal;color:var(--purple)}
 
   <section class="seal">
     <div class="wrap">
-      <div class="seal__stack rise">
-        <span>Bard</span>
-        <img src="/transparentbardsmile.png" alt="The Bard smile">
+      <div class="seal__lockup rise">
+        <span class="mark__word">Bard</span>
+        <img class="mark__smile" src="/transparentbardsmile.png" alt="The Bard smile">
       </div>
       <h2 class="rise">The smile sits under the name.</h2>
       <p class="rise">It’s the mark for a settled claim — when the work was recorded and the reward actually moved. Collect enough of them and the record speaks for itself.</p>
@@ -520,8 +540,8 @@ h1 em{font-style:normal;color:var(--purple)}
   <footer class="foot">
     <div class="wrap foot__in">
       <a class="mark" href="/" aria-label="Bard home">
-        <span>Bard</span>
-        <img src="/transparentbardsmile.png" alt="">
+        <span class="mark__word">Bard</span>
+        <img class="mark__smile" src="/transparentbardsmile.png" alt="">
       </a>
       <nav class="foot__links" aria-label="Footer">
         <a href="#how">How it works</a>
