@@ -299,7 +299,7 @@ h1{
       <section class="page" id="page-mine">
         <p class="kicker">My campaigns</p>
         <h1>What you're in</h1>
-        <p class="lead">Every campaign you joined, across every project on Bard in this browser.</p>
+        <p class="lead">Every campaign you joined, across every project on Bard.</p>
         <div id="mine-list"></div>
       </section>
 
@@ -313,7 +313,7 @@ h1{
       <section class="page" id="page-claims">
         <p class="kicker">Claims</p>
         <h1>Rewards</h1>
-        <p class="lead">Qualified entries you can settle. When live, each settled claim is <span class="num">0.1 SOL</span> in platform fees — 0% of any token.</p>
+        <p class="lead">Qualified entries you can settle. Each settled claim is <span class="num">0.1 SOL</span> in platform fees — 0% of any token.</p>
         <div id="claims-list"></div>
       </section>
 
@@ -370,10 +370,9 @@ h1{
 
 <div class="toast" id="toast" role="status"></div>
 
+<script src="/platform.js"></script>
 <script>
 (function(){
-  var TEAM_KEY = 'bard_team_v1';
-  var HOLDER_KEY = 'bard_holder_v1';
   var AUTH_WORKER = 'https://bard-auth.bardsoltoken.workers.dev';
   var X_TYPES = { raid: true, post: true, reply: true, social: true };
 
@@ -382,25 +381,11 @@ h1{
   var browseOnly = false;
   var lastPage = 'overview';
   var detailCtx = null;
-  var pendingJoin = null; // {projectId, campaignId} after X link
+  var pendingJoin = null;
+  var liveCache = [];
+  var joinsCache = [];
+  var claimsCache = [];
 
-  function loadTeam(){
-    try{
-      var raw = localStorage.getItem(TEAM_KEY);
-      if(raw) return JSON.parse(raw);
-    }catch(e){}
-    return { projects: [] };
-  }
-  function loadHolder(){
-    try{
-      var raw = localStorage.getItem(HOLDER_KEY);
-      if(raw) return JSON.parse(raw);
-    }catch(e){}
-    return { joined: {}, claims: {}, xHandle: null };
-  }
-  function saveHolder(h){
-    localStorage.setItem(HOLDER_KEY, JSON.stringify(h));
-  }
   function needsX(type){
     return !!X_TYPES[String(type || '').toLowerCase()];
   }
@@ -413,8 +398,8 @@ h1{
   }
   function escapeHtml(s){
     return String(s == null ? '' : s)
-      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
-      .replace(/"/g,'&quot;');
+      .replace(/&/g,'&').replace(/</g,'<').replace(/>/g,'>')
+      .replace(/"/g,'"');
   }
   function shortAddr(a){
     if(!a) return '—';
@@ -430,26 +415,30 @@ h1{
     if(!h) return null;
     return '@' + h;
   }
-  function allCampaigns(){
-    var team = loadTeam();
-    var out = [];
-    (team.projects || []).forEach(function(p){
-      (p.campaigns || []).forEach(function(c){
-        out.push({
-          projectId: p.id,
-          projectName: p.name,
-          ticker: p.ticker,
-          mint: p.mint,
-          campaign: c
-        });
-      });
-    });
-    return out;
-  }
-  function liveCampaigns(){
-    return allCampaigns().filter(function(x){ return x.campaign.status === 'active'; });
-  }
   function joinKey(pid, cid){ return pid + '::' + cid; }
+
+  async function refreshCampaignCache(){
+    if (!window.BardPlatform) return;
+    liveCache = await BardPlatform.listLiveCampaigns();
+    if (wallet) {
+      joinsCache = await BardPlatform.listJoinsForWallet(wallet);
+      claimsCache = await BardPlatform.listClaimsForWallet(wallet);
+    } else {
+      joinsCache = [];
+      claimsCache = [];
+    }
+  }
+
+  function isJoined(pid, cid){
+    return joinsCache.some(function(j){ return j.project_id === pid && j.campaign_id === cid; });
+  }
+  function isQualified(pid, cid){
+    var j = joinsCache.find(function(x){ return x.project_id === pid && x.campaign_id === cid; });
+    return j && j.qualified;
+  }
+  function isSettled(pid, cid){
+    return claimsCache.some(function(c){ return c.project_id === pid && c.campaign_id === cid && c.settled; });
+  }
 
   function updateXUI(){
     var el = document.getElementById('side-x');
@@ -465,12 +454,9 @@ h1{
 
   function setXHandle(handle, via){
     xHandle = normalizeHandle(handle);
-    var h = loadHolder();
-    h.xHandle = xHandle;
-    h.xLinkedAt = new Date().toISOString();
-    h.xVia = via || 'manual';
-    if(wallet) h.wallet = wallet;
-    saveHolder(h);
+    if (window.BardPlatform && wallet) {
+      BardPlatform.upsertHolder(wallet, xHandle, via || 'manual').catch(function(){});
+    }
     if(xHandle) localStorage.setItem('bard_holder_x', xHandle);
     else localStorage.removeItem('bard_holder_x');
     updateXUI();
@@ -510,7 +496,7 @@ h1{
     document.getElementById('app').style.display = 'flex';
     document.getElementById('side-addr').textContent = wallet ? shortAddr(wallet) : 'Browsing';
     updateXUI();
-    renderAll();
+    refreshCampaignCache().then(renderAll).catch(function(e){ console.error(e); renderAll(); });
     showPage('overview');
   }
 
@@ -531,6 +517,9 @@ h1{
       }
       browseOnly = false;
       localStorage.setItem('bard_holder_wallet', wallet);
+      if (window.BardPlatform) {
+        await BardPlatform.upsertHolder(wallet, xHandle, null);
+      }
       toast('Wallet connected', 'ok');
       enterApp();
     }catch(e){
@@ -597,10 +586,8 @@ h1{
 
   function cardCampaign(x){
     var c = x.campaign;
-    var h = loadHolder();
-    var key = joinKey(x.projectId, c.id);
-    var joined = !!h.joined[key];
-    var claimed = !!(h.claims[key] && h.claims[key].settled);
+    var joined = isJoined(x.projectId, c.id);
+    var claimed = isSettled(x.projectId, c.id);
     var pill = c.status === 'active'
       ? '<span class="pill pill--live">Active</span>'
       : '<span class="pill pill--muted">Ended</span>';
@@ -634,13 +621,12 @@ h1{
   }
 
   function renderOverview(){
-    var live = liveCampaigns();
-    var h = loadHolder();
-    var joinedKeys = Object.keys(h.joined || {});
-    var claimable = joinedKeys.filter(function(k){
-      return h.joined[k] && h.joined[k].qualified && !(h.claims[k] && h.claims[k].settled);
+    var live = liveCache;
+    var joinedCount = joinsCache.length;
+    var claimable = joinsCache.filter(function(j){
+      return j.qualified && !isSettled(j.project_id, j.campaign_id);
     }).length;
-    document.getElementById('ov-joined').textContent = joinedKeys.length;
+    document.getElementById('ov-joined').textContent = joinedCount;
     document.getElementById('ov-claimable').textContent = claimable;
     document.getElementById('ov-live').textContent = live.length;
     var list = document.getElementById('ov-list');
@@ -658,9 +644,8 @@ h1{
   }
 
   function renderMine(){
-    var h = loadHolder();
-    var mine = allCampaigns().filter(function(x){
-      return h.joined[joinKey(x.projectId, x.campaign.id)];
+    var mine = liveCache.filter(function(x){
+      return isJoined(x.projectId, x.campaign.id);
     });
     var list = document.getElementById('mine-list');
     if(!mine.length){
@@ -679,7 +664,7 @@ h1{
   }
 
   function renderExplore(){
-    var live = liveCampaigns();
+    var live = liveCache;
     var list = document.getElementById('explore-list');
     if(!live.length){
       list.innerHTML =
@@ -695,14 +680,10 @@ h1{
   }
 
   function renderClaims(){
-    var h = loadHolder();
     var rows = [];
-    allCampaigns().forEach(function(x){
-      var key = joinKey(x.projectId, x.campaign.id);
-      var j = h.joined[key];
-      if(!j) return;
-      if(j.qualified || (h.claims[key] && h.claims[key].settled)){
-        rows.push({ x: x, key: key, settled: !!(h.claims[key] && h.claims[key].settled) });
+    liveCache.forEach(function(x){
+      if(isQualified(x.projectId, x.campaign.id) || isSettled(x.projectId, x.campaign.id)){
+        rows.push({ x: x, settled: isSettled(x.projectId, x.campaign.id) });
       }
     });
     var list = document.getElementById('claims-list');
@@ -734,29 +715,36 @@ h1{
           '<span class="item__ava">' + initials(r.x.ticker) + '</span>' +
           '<div class="item__body">' +
             '<div class="item__title">' + escapeHtml(c.title) + '</div>' +
-            '<div class="item__sub">$' + escapeHtml(r.x.ticker) + ' · ' + escapeHtml(reward) + ' · fee 0.1 SOL when live</div>' +
+            '<div class="item__sub">$' + escapeHtml(r.x.ticker) + ' · ' + escapeHtml(reward) + ' · fee 0.1 SOL</div>' +
           '</div>' +
           '<div class="item__right">' +
-            '<button class="btn btn--solid btn--sm" data-claim="' + escapeHtml(r.key) + '">Claim</button>' +
+            '<button class="btn btn--solid btn--sm" data-claim="' + escapeHtml(r.x.projectId) + '|' + escapeHtml(c.id) + '">Claim</button>' +
           '</div>' +
         '</div></div>'
       );
     }).join('');
     list.querySelectorAll('[data-claim]').forEach(function(btn){
-      btn.addEventListener('click', function(){
+      btn.addEventListener('click', async function(){
         if(!wallet){ toast('Connect a wallet to claim', 'err'); return; }
-        var key = btn.getAttribute('data-claim');
-        var h2 = loadHolder();
-        h2.claims[key] = { settled: true, at: new Date().toISOString(), wallet: wallet, xHandle: xHandle };
-        saveHolder(h2);
-        toast('Claim settled · smile marked · 0.1 SOL fee when live', 'ok');
-        renderAll();
+        var parts = btn.getAttribute('data-claim').split('|');
+        try {
+          if (window.BardPlatform) {
+            await BardPlatform.settleClaim(parts[0], parts[1], wallet, xHandle, null, 'SOL');
+            try { await BardPlatform.recordFee('claim', wallet, { projectId: parts[0], campaignId: parts[1] }); } catch(fe){}
+          }
+          toast('Claim settled · smile marked', 'ok');
+          await refreshCampaignCache();
+          renderAll();
+        } catch(e) {
+          console.error(e);
+          toast('Claim failed', 'err');
+        }
       });
     });
   }
 
-  function tryJoin(projectId, campaignId){
-    var match = allCampaigns().find(function(x){
+  async function tryJoin(projectId, campaignId){
+    var match = liveCache.find(function(x){
       return x.projectId === projectId && x.campaign.id === campaignId;
     });
     if(!match) return;
@@ -770,32 +758,30 @@ h1{
       return;
     }
 
-    var key = joinKey(projectId, campaignId);
-    var h = loadHolder();
-    h.joined[key] = {
-      at: new Date().toISOString(),
-      qualified: false,
-      wallet: wallet,
-      xHandle: xHandle || null,
-      type: match.campaign.type
-    };
-    saveHolder(h);
-    toast('Joined ' + match.campaign.title, 'ok');
-    openDetail(projectId, campaignId);
-    renderAll();
+    try {
+      if (window.BardPlatform) {
+        await BardPlatform.joinCampaign(projectId, campaignId, wallet, xHandle || null);
+      }
+      toast('Joined ' + match.campaign.title, 'ok');
+      await refreshCampaignCache();
+      openDetail(projectId, campaignId);
+      renderAll();
+    } catch(e) {
+      console.error(e);
+      toast('Join failed', 'err');
+    }
   }
 
   function openDetail(projectId, campaignId){
-    var match = allCampaigns().find(function(x){
+    var match = liveCache.find(function(x){
       return x.projectId === projectId && x.campaign.id === campaignId;
     });
     if(!match){ toast('Campaign not found', 'err'); return; }
     detailCtx = match;
     var c = match.campaign;
-    var h = loadHolder();
-    var key = joinKey(projectId, campaignId);
-    var joined = !!h.joined[key];
-    var settled = !!(h.claims[key] && h.claims[key].settled);
+    var joined = isJoined(projectId, campaignId);
+    var settled = isSettled(projectId, campaignId);
+    var qualified = isQualified(projectId, campaignId);
     var xRequired = needsX(c.type);
 
     document.getElementById('detail-kicker').textContent = match.projectName + ' · $' + match.ticker;
@@ -810,7 +796,7 @@ h1{
 
     var you = 'Not joined';
     if(settled) you = 'Claimed';
-    else if(h.joined[key] && h.joined[key].qualified) you = 'Qualified';
+    else if(qualified) you = 'Qualified';
     else if(joined) you = 'Joined';
     document.getElementById('detail-you').textContent = you;
 
@@ -820,7 +806,7 @@ h1{
     if(settled){
       joinBtn.style.display = 'none';
       hint.textContent = 'This reward was settled. The smile marks a real claim.';
-    } else if(h.joined[key] && h.joined[key].qualified){
+    } else if(qualified){
       joinBtn.style.display = '';
       joinBtn.textContent = 'Go to claims';
       joinBtn.onclick = function(){ showPage('claims'); renderClaims(); };
@@ -828,25 +814,25 @@ h1{
     } else if(joined){
       joinBtn.style.display = '';
       joinBtn.textContent = 'Mark qualified (demo)';
-      joinBtn.onclick = function(){
+      joinBtn.onclick = async function(){
         if(!wallet){ toast('Connect a wallet first', 'err'); return; }
         if(xRequired && !xHandle){
           pendingJoin = { projectId: projectId, campaignId: campaignId };
           openXModal();
           return;
         }
-        var h2 = loadHolder();
-        h2.joined[key] = {
-          at: h2.joined[key].at,
-          qualified: true,
-          wallet: wallet,
-          xHandle: xHandle || null,
-          type: c.type
-        };
-        saveHolder(h2);
-        toast('Marked qualified — claim when ready', 'ok');
-        openDetail(projectId, campaignId);
-        renderAll();
+        try {
+          if (window.BardPlatform) {
+            await BardPlatform.markQualified(projectId, campaignId, wallet);
+          }
+          toast('Marked qualified — claim when ready', 'ok');
+          await refreshCampaignCache();
+          openDetail(projectId, campaignId);
+          renderAll();
+        } catch(e) {
+          console.error(e);
+          toast('Failed', 'err');
+        }
       };
       hint.textContent = xRequired
         ? 'Raid/post campaigns will later score linked X activity automatically. Demo: mark qualified by hand.'
@@ -860,7 +846,7 @@ h1{
         : 'Join to track this campaign under My campaigns. Wallet is enough for hold/refer.';
     }
 
-    var rows = (c.demoRows && c.demoRows.length) ? c.demoRows.slice() : [
+    var rows = [
       {name:'Mona', progress:'On track', done:1},
       {name:'Kaito', progress:'On track', done:1},
       {name:'Serg', progress:'In progress', done:0}
@@ -869,8 +855,8 @@ h1{
       var label = xHandle || shortAddr(wallet);
       rows = [{
         name: label + ' (you)',
-        progress: settled ? 'Claimed' : (h.joined[key].qualified ? 'Qualified' : 'Joined'),
-        done: !!(h.joined[key].qualified || settled)
+        progress: settled ? 'Claimed' : (qualified ? 'Qualified' : 'Joined'),
+        done: !!(qualified || settled)
       }].concat(rows);
     }
     document.getElementById('detail-lb').innerHTML = rows.map(function(r, i){
@@ -902,7 +888,6 @@ h1{
   document.getElementById('btn-disc').onclick = function(){
     wallet = null; browseOnly = false; xHandle = null;
     localStorage.removeItem('bard_holder_wallet');
-    // keep X handle in holder store unless full clear desired
     document.getElementById('app').style.display = 'none';
     document.getElementById('gate').style.display = 'flex';
   };
@@ -964,13 +949,13 @@ h1{
   if(handleAuthCallback()) return;
   var savedW = localStorage.getItem('bard_holder_wallet');
   var savedX = localStorage.getItem('bard_holder_x');
-  var holder = loadHolder();
-  if(holder.xHandle) xHandle = holder.xHandle;
-  else if(savedX) xHandle = normalizeHandle(savedX);
+  if(savedX) xHandle = normalizeHandle(savedX);
   if(savedW){
     wallet = savedW;
     browseOnly = false;
     enterApp();
+  } else if (window.BardPlatform) {
+    BardPlatform.init().then(function(){ return refreshCampaignCache(); }).catch(function(e){ console.error(e); });
   }
 })();
 </script>
