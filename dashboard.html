@@ -42,11 +42,15 @@ img{display:block;max-width:100%}
 a{color:inherit;text-decoration:none}
 button,input,select{font:inherit;color:inherit}
 button{background:none;border:none;cursor:pointer;padding:0}
+input{
+  width:100%;background:var(--surface-2);border:1px solid var(--line-strong);
+  border-radius:9px;padding:11px 14px;color:var(--text);
+}
+input:focus{outline:none;border-color:var(--purple-line)}
 :focus-visible{outline:2px solid var(--purple);outline-offset:3px;border-radius:4px}
 .num{font-variant-numeric:tabular-nums}
 .muted{color:var(--muted)}
 
-/* shell */
 .app{display:flex;min-height:100vh}
 .side{
   width:var(--side);flex:none;background:var(--surface);
@@ -61,10 +65,21 @@ button{background:none;border:none;cursor:pointer;padding:0}
 .side__smile{width:24px;height:15px;object-fit:contain}
 .side__wallet{
   background:var(--surface-2);border:1px solid var(--line);border-radius:10px;
+  padding:12px;margin-bottom:10px;
+}
+.side__x{
+  background:var(--surface-2);border:1px solid var(--line);border-radius:10px;
   padding:12px;margin-bottom:16px;
 }
 .side__lbl{font-size:.72rem;color:var(--muted);margin-bottom:4px}
 .side__addr{font-size:.88rem;font-variation-settings:"wght" 560;word-break:break-all}
+.side__xrow{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.side__handle{font-size:.88rem;font-variation-settings:"wght" 560}
+.dot{
+  width:7px;height:7px;border-radius:50%;background:var(--green);display:inline-block;
+  margin-right:6px;vertical-align:middle;
+}
+.dot.off{background:var(--muted);opacity:.5}
 .nav{display:flex;flex-direction:column;gap:2px;flex:1}
 .nav button{
   text-align:left;padding:10px 12px;border-radius:8px;font-size:.92rem;
@@ -95,12 +110,9 @@ button{background:none;border:none;cursor:pointer;padding:0}
   display:none;align-items:center;justify-content:center;
   width:40px;height:40px;border-radius:8px;border:1px solid var(--line-strong);
 }
-.scrim{
-  display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:25;
-}
+.scrim{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:25}
 .scrim.is-on{display:block}
 
-/* atoms */
 .btn{
   display:inline-flex;align-items:center;justify-content:center;gap:8px;
   padding:11px 18px;border-radius:9px;font-size:.92rem;
@@ -121,12 +133,9 @@ h1{
   font-variation-settings:"wdth" 108,"wght" 700;letter-spacing:-.025em;
 }
 .lead{margin:0 0 22px;color:var(--body);max-width:52ch}
-
 .grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
 .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-@media(max-width:720px){
-  .grid-3,.grid-2{grid-template-columns:1fr}
-}
+@media(max-width:720px){.grid-3,.grid-2{grid-template-columns:1fr}}
 .stat{
   background:var(--surface);border:1px solid var(--line);border-radius:var(--r);
   padding:16px 18px;
@@ -134,7 +143,6 @@ h1{
 .stat__lbl{font-size:.76rem;color:var(--muted);margin-bottom:6px}
 .stat__val{font-size:1.25rem;font-variation-settings:"wght" 660;letter-spacing:-.02em}
 .stat__val.p{color:var(--purple)}
-
 .card{
   background:var(--surface);border:1px solid var(--line);
   border-radius:var(--r);padding:18px 20px;
@@ -142,7 +150,6 @@ h1{
 .card + .card{margin-top:10px}
 .card--hover{cursor:pointer;transition:border-color .15s,background .15s}
 .card--hover:hover{border-color:var(--purple-line);background:var(--surface-2)}
-
 .pill{
   display:inline-flex;align-items:center;font-size:.72rem;padding:3px 9px;
   border-radius:99px;font-variation-settings:"wght" 600;white-space:nowrap;
@@ -150,7 +157,6 @@ h1{
 .pill--live{background:var(--purple-soft);color:var(--purple)}
 .pill--done{background:rgba(74,222,128,.12);color:var(--green)}
 .pill--muted{background:rgba(244,244,245,.06);color:var(--muted)}
-
 .item{display:flex;align-items:center;gap:12px}
 .item__ava{
   width:38px;height:38px;border-radius:10px;background:var(--purple-soft);
@@ -161,17 +167,14 @@ h1{
 .item__title{font-size:.98rem;font-variation-settings:"wght" 600;line-height:1.3}
 .item__sub{font-size:.8rem;color:var(--muted);margin-top:2px}
 .item__right{margin-left:auto;flex:none;text-align:right}
-
 .empty{
   text-align:center;padding:40px 20px;
   background:var(--surface);border:1px dashed var(--line-strong);border-radius:var(--r);
 }
 .empty h3{margin:0 0 8px;font-size:1.1rem;font-variation-settings:"wght" 640}
 .empty p{margin:0 0 16px;color:var(--muted);max-width:40ch;margin-left:auto;margin-right:auto}
-
 .page{display:none}
 .page.is-on{display:block}
-
 .stamp{width:18px;height:18px;object-fit:contain;vertical-align:-3px;margin-left:4px}
 
 .toast{
@@ -199,11 +202,24 @@ h1{
 .connect h1{margin-bottom:10px}
 .connect p{color:var(--body);margin:0 0 24px}
 .connect .actions{display:flex;flex-direction:column;gap:10px}
+
+.modal-ov{
+  position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:80;
+  display:none;align-items:center;justify-content:center;padding:20px;
+}
+.modal-ov.is-on{display:flex}
+.modal{
+  width:100%;max-width:420px;background:var(--surface);
+  border:1px solid var(--line-strong);border-radius:14px;padding:22px;
+}
+.modal h2{margin:0 0 8px;font-size:1.2rem;font-variation-settings:"wght" 680}
+.modal p{margin:0 0 16px;color:var(--body);font-size:.94rem}
+.modal .actions{display:flex;flex-direction:column;gap:10px;margin-top:14px}
+.modal .hint{font-size:.8rem;color:var(--muted);margin-top:10px}
 </style>
 </head>
 <body>
 
-<!-- CONNECT -->
 <div class="connect" id="gate">
   <div class="connect__box">
     <div class="connect__mark">
@@ -211,7 +227,7 @@ h1{
       <img src="/transparentbardsmile.png" alt="">
     </div>
     <h1>Every project you're in, one page</h1>
-    <p>Connect a Solana wallet to track campaigns, ranks, and claims. No Bard token required.</p>
+    <p>Connect a Solana wallet to track campaigns, ranks, and claims. X is only needed for raid or post campaigns.</p>
     <div class="actions">
       <button class="btn btn--solid" id="btn-connect">Connect wallet</button>
       <button class="btn btn--ghost" id="btn-browse">Browse without connecting</button>
@@ -231,6 +247,13 @@ h1{
     <div class="side__wallet">
       <div class="side__lbl">Wallet</div>
       <div class="side__addr" id="side-addr">Not connected</div>
+    </div>
+    <div class="side__x">
+      <div class="side__lbl">X account</div>
+      <div class="side__xrow">
+        <div class="side__handle" id="side-x"><span class="dot off"></span>Not linked</div>
+        <button class="btn btn--ghost btn--sm" id="btn-link-x" type="button">Link</button>
+      </div>
     </div>
     <nav class="nav" aria-label="Dashboard">
       <button type="button" class="is-on" data-page="overview">Overview</button>
@@ -257,11 +280,10 @@ h1{
     </div>
 
     <div class="content">
-      <!-- OVERVIEW -->
       <section class="page is-on" id="page-overview">
         <p class="kicker">Overview</p>
         <h1>Your activity on Bard</h1>
-        <p class="lead">Joined campaigns, open claims, and live projects — without five tabs.</p>
+        <p class="lead">Joined campaigns, open claims, and live projects. Link X only when a campaign scores posts or raids.</p>
         <div class="grid-3" style="margin-bottom:18px">
           <div class="stat"><div class="stat__lbl">Joined</div><div class="stat__val p num" id="ov-joined">0</div></div>
           <div class="stat"><div class="stat__lbl">Claimable</div><div class="stat__val num" id="ov-claimable">0</div></div>
@@ -274,7 +296,6 @@ h1{
         <div id="ov-list"></div>
       </section>
 
-      <!-- MINE -->
       <section class="page" id="page-mine">
         <p class="kicker">My campaigns</p>
         <h1>What you're in</h1>
@@ -282,15 +303,13 @@ h1{
         <div id="mine-list"></div>
       </section>
 
-      <!-- EXPLORE -->
       <section class="page" id="page-explore">
         <p class="kicker">Explore</p>
         <h1>Live campaigns</h1>
-        <p class="lead">Projects teams onboarded on Bard. Join to track rank and claims here.</p>
+        <p class="lead">Projects teams onboarded on Bard. Raid and post campaigns will ask you to link X.</p>
         <div id="explore-list"></div>
       </section>
 
-      <!-- CLAIMS -->
       <section class="page" id="page-claims">
         <p class="kicker">Claims</p>
         <h1>Rewards</h1>
@@ -298,14 +317,14 @@ h1{
         <div id="claims-list"></div>
       </section>
 
-      <!-- DETAIL -->
       <section class="page" id="page-detail">
         <button class="btn btn--ghost btn--sm" id="detail-back" style="margin-bottom:16px">← Back</button>
         <p class="kicker" id="detail-kicker">Campaign</p>
         <h1 id="detail-title">—</h1>
         <p class="lead" id="detail-rule">—</p>
-        <div class="item" style="gap:10px;margin-bottom:18px">
+        <div class="item" style="gap:10px;margin-bottom:18px;flex-wrap:wrap">
           <span class="pill pill--live" id="detail-status">Active</span>
+          <span class="pill pill--muted" id="detail-xneed" style="display:none">Needs X</span>
           <span class="muted" id="detail-meta" style="font-size:.86rem"></span>
         </div>
         <div class="grid-2" style="margin-bottom:16px">
@@ -330,16 +349,40 @@ h1{
   </div>
 </div>
 
+<!-- Link X modal -->
+<div class="modal-ov" id="x-modal" role="dialog" aria-modal="true" aria-labelledby="x-modal-title">
+  <div class="modal">
+    <h2 id="x-modal-title">Link X</h2>
+    <p>Required only for campaigns that score posts, replies, or raids. Hold and refer campaigns work with wallet alone.</p>
+    <button class="btn btn--solid" id="x-oauth" style="width:100%">Continue with X</button>
+    <div class="hint">OAuth via the Bard auth worker when available.</div>
+    <div style="margin:16px 0 8px;border-top:1px solid var(--line);padding-top:14px">
+      <div class="side__lbl" style="margin-bottom:8px">Or save handle for testing</div>
+      <input id="x-handle-input" placeholder="@yourhandle" autocomplete="off" spellcheck="false">
+      <div class="actions">
+        <button class="btn btn--ghost" id="x-save-handle">Save handle</button>
+        <button class="btn btn--ghost" id="x-modal-close">Cancel</button>
+      </div>
+      <div class="hint">Test path stores the handle locally. Production scoring will require real OAuth.</div>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast" role="status"></div>
 
 <script>
 (function(){
   var TEAM_KEY = 'bard_team_v1';
   var HOLDER_KEY = 'bard_holder_v1';
+  var AUTH_WORKER = 'https://bard-auth.bardsoltoken.workers.dev';
+  var X_TYPES = { raid: true, post: true, reply: true, social: true };
+
   var wallet = null;
+  var xHandle = null;
   var browseOnly = false;
   var lastPage = 'overview';
   var detailCtx = null;
+  var pendingJoin = null; // {projectId, campaignId} after X link
 
   function loadTeam(){
     try{
@@ -353,10 +396,13 @@ h1{
       var raw = localStorage.getItem(HOLDER_KEY);
       if(raw) return JSON.parse(raw);
     }catch(e){}
-    return { joined: {}, claims: {} };
+    return { joined: {}, claims: {}, xHandle: null };
   }
   function saveHolder(h){
     localStorage.setItem(HOLDER_KEY, JSON.stringify(h));
+  }
+  function needsX(type){
+    return !!X_TYPES[String(type || '').toLowerCase()];
   }
   function toast(msg, kind){
     var el = document.getElementById('toast');
@@ -378,6 +424,12 @@ h1{
   function initials(s){
     return String(s || '?').trim().slice(0,2).toUpperCase();
   }
+  function normalizeHandle(h){
+    if(!h) return null;
+    h = String(h).trim().replace(/^@/, '');
+    if(!h) return null;
+    return '@' + h;
+  }
   function allCampaigns(){
     var team = loadTeam();
     var out = [];
@@ -398,6 +450,39 @@ h1{
     return allCampaigns().filter(function(x){ return x.campaign.status === 'active'; });
   }
   function joinKey(pid, cid){ return pid + '::' + cid; }
+
+  function updateXUI(){
+    var el = document.getElementById('side-x');
+    var btn = document.getElementById('btn-link-x');
+    if(xHandle){
+      el.innerHTML = '<span class="dot"></span>' + escapeHtml(xHandle);
+      btn.textContent = 'Change';
+    } else {
+      el.innerHTML = '<span class="dot off"></span>Not linked';
+      btn.textContent = 'Link';
+    }
+  }
+
+  function setXHandle(handle, via){
+    xHandle = normalizeHandle(handle);
+    var h = loadHolder();
+    h.xHandle = xHandle;
+    h.xLinkedAt = new Date().toISOString();
+    h.xVia = via || 'manual';
+    if(wallet) h.wallet = wallet;
+    saveHolder(h);
+    if(xHandle) localStorage.setItem('bard_holder_x', xHandle);
+    else localStorage.removeItem('bard_holder_x');
+    updateXUI();
+  }
+
+  function openXModal(){
+    document.getElementById('x-modal').classList.add('is-on');
+    document.getElementById('x-handle-input').value = xHandle ? xHandle.replace(/^@/, '') : '';
+  }
+  function closeXModal(){
+    document.getElementById('x-modal').classList.remove('is-on');
+  }
 
   function showPage(name){
     lastPage = name === 'detail' ? lastPage : name;
@@ -424,6 +509,7 @@ h1{
     document.getElementById('gate').style.display = 'none';
     document.getElementById('app').style.display = 'flex';
     document.getElementById('side-addr').textContent = wallet ? shortAddr(wallet) : 'Browsing';
+    updateXUI();
     renderAll();
     showPage('overview');
   }
@@ -453,6 +539,55 @@ h1{
     }
   }
 
+  async function startXOAuth(){
+    if(!wallet){
+      toast('Connect a wallet before linking X', 'err');
+      return;
+    }
+    try{
+      var res = await fetch(AUTH_WORKER + '/auth/x/start?wallet=' + encodeURIComponent(wallet));
+      if(!res.ok) throw new Error('auth start failed');
+      var data = await res.json();
+      if(data.codeVerifier) localStorage.setItem('bard_cv', data.codeVerifier);
+      if(data.authUrl){
+        window.location.href = data.authUrl;
+        return;
+      }
+      throw new Error('no authUrl');
+    }catch(e){
+      console.error(e);
+      toast('X OAuth unavailable right now — use handle for testing', 'err');
+    }
+  }
+
+  function handleAuthCallback(){
+    var params = new URLSearchParams(window.location.search);
+    var auth = params.get('auth');
+    var handle = params.get('handle');
+    var w = params.get('wallet');
+    if(auth === 'success' && handle){
+      if(w){
+        wallet = w;
+        localStorage.setItem('bard_holder_wallet', wallet);
+        browseOnly = false;
+      }
+      setXHandle(handle, 'oauth');
+      window.history.replaceState({}, '', '/dashboard.html');
+      toast('X linked as ' + normalizeHandle(handle), 'ok');
+      enterApp();
+      if(pendingJoin){
+        var pj = pendingJoin; pendingJoin = null;
+        openDetail(pj.projectId, pj.campaignId);
+      }
+      return true;
+    }
+    if(auth === 'error'){
+      window.history.replaceState({}, '', '/dashboard.html');
+      toast('X login failed', 'err');
+    }
+    return false;
+  }
+
   function renderAll(){
     renderOverview();
     renderMine();
@@ -460,8 +595,7 @@ h1{
     renderClaims();
   }
 
-  function cardCampaign(x, opts){
-    opts = opts || {};
+  function cardCampaign(x){
     var c = x.campaign;
     var h = loadHolder();
     var key = joinKey(x.projectId, c.id);
@@ -472,6 +606,7 @@ h1{
       : '<span class="pill pill--muted">Ended</span>';
     if(claimed) pill = '<span class="pill pill--done">Claimed <img class="stamp" src="/transparentbardsmile.png" alt=""></span>';
     else if(joined) pill = '<span class="pill pill--live">Joined</span>';
+    var xBadge = needsX(c.type) ? ' · needs X' : '';
 
     return (
       '<div class="card card--hover" data-open="' + escapeHtml(x.projectId) + '|' + escapeHtml(c.id) + '">' +
@@ -480,8 +615,8 @@ h1{
           '<div class="item__body">' +
             '<div class="item__title">' + escapeHtml(c.title) +
               ' <span class="muted">· $' + escapeHtml(x.ticker) + '</span></div>' +
-            '<div class="item__sub">' + escapeHtml(c.type) + ' · ' + escapeHtml((c.rule || '').slice(0,64)) +
-              ((c.rule || '').length > 64 ? '…' : '') + '</div>' +
+            '<div class="item__sub">' + escapeHtml(c.type) + xBadge + ' · ' + escapeHtml((c.rule || '').slice(0,56)) +
+              ((c.rule || '').length > 56 ? '…' : '') + '</div>' +
           '</div>' +
           '<div class="item__right">' + pill + '</div>' +
         '</div>' +
@@ -505,11 +640,9 @@ h1{
     var claimable = joinedKeys.filter(function(k){
       return h.joined[k] && h.joined[k].qualified && !(h.claims[k] && h.claims[k].settled);
     }).length;
-
     document.getElementById('ov-joined').textContent = joinedKeys.length;
     document.getElementById('ov-claimable').textContent = claimable;
     document.getElementById('ov-live').textContent = live.length;
-
     var list = document.getElementById('ov-list');
     if(!live.length){
       list.innerHTML =
@@ -520,21 +653,16 @@ h1{
         '</div>';
       return;
     }
-    list.innerHTML = live.slice(0,5).map(function(x){ return cardCampaign(x); }).join('');
+    list.innerHTML = live.slice(0,5).map(cardCampaign).join('');
     bindOpen(list);
   }
 
   function renderMine(){
     var h = loadHolder();
-    var all = allCampaigns();
-    var mine = all.filter(function(x){
+    var mine = allCampaigns().filter(function(x){
       return h.joined[joinKey(x.projectId, x.campaign.id)];
     });
     var list = document.getElementById('mine-list');
-    if(!wallet && !browseOnly){
-      list.innerHTML = '<div class="empty"><h3>Connect a wallet</h3><p>Join campaigns after connecting.</p></div>';
-      return;
-    }
     if(!mine.length){
       list.innerHTML =
         '<div class="empty">' +
@@ -542,12 +670,11 @@ h1{
           '<p>Explore live campaigns and join the ones you want to track.</p>' +
           '<button class="btn btn--solid" data-go="explore">Explore campaigns</button>' +
         '</div>';
-      list.querySelector('[data-go]') && list.querySelector('[data-go]').addEventListener('click', function(){
-        showPage('explore'); renderExplore();
-      });
+      var b = list.querySelector('[data-go]');
+      if(b) b.addEventListener('click', function(){ showPage('explore'); renderExplore(); });
       return;
     }
-    list.innerHTML = mine.map(function(x){ return cardCampaign(x); }).join('');
+    list.innerHTML = mine.map(cardCampaign).join('');
     bindOpen(list);
   }
 
@@ -563,15 +690,14 @@ h1{
         '</div>';
       return;
     }
-    list.innerHTML = live.map(function(x){ return cardCampaign(x); }).join('');
+    list.innerHTML = live.map(cardCampaign).join('');
     bindOpen(list);
   }
 
   function renderClaims(){
     var h = loadHolder();
-    var all = allCampaigns();
     var rows = [];
-    all.forEach(function(x){
+    allCampaigns().forEach(function(x){
       var key = joinKey(x.projectId, x.campaign.id);
       var j = h.joined[key];
       if(!j) return;
@@ -593,43 +719,35 @@ h1{
       var reward = (c.reward || '—') + (c.unit ? ' ' + c.unit : '');
       if(r.settled){
         return (
-          '<div class="card">' +
-            '<div class="item">' +
-              '<span class="item__ava">' + initials(r.x.ticker) + '</span>' +
-              '<div class="item__body">' +
-                '<div class="item__title">' + escapeHtml(c.title) + '</div>' +
-                '<div class="item__sub">$' + escapeHtml(r.x.ticker) + ' · ' + escapeHtml(reward) + '</div>' +
-              '</div>' +
-              '<div class="item__right"><span class="pill pill--done">Settled <img class="stamp" src="/transparentbardsmile.png" alt=""></span></div>' +
-            '</div>' +
-          '</div>'
-        );
-      }
-      return (
-        '<div class="card">' +
-          '<div class="item" style="flex-wrap:wrap">' +
+          '<div class="card"><div class="item">' +
             '<span class="item__ava">' + initials(r.x.ticker) + '</span>' +
             '<div class="item__body">' +
               '<div class="item__title">' + escapeHtml(c.title) + '</div>' +
-              '<div class="item__sub">$' + escapeHtml(r.x.ticker) + ' · ' + escapeHtml(reward) + ' · fee 0.1 SOL when live</div>' +
+              '<div class="item__sub">$' + escapeHtml(r.x.ticker) + ' · ' + escapeHtml(reward) + '</div>' +
             '</div>' +
-            '<div class="item__right">' +
-              '<button class="btn btn--solid btn--sm" data-claim="' + escapeHtml(r.key) + '">Claim</button>' +
-            '</div>' +
+            '<div class="item__right"><span class="pill pill--done">Settled <img class="stamp" src="/transparentbardsmile.png" alt=""></span></div>' +
+          '</div></div>'
+        );
+      }
+      return (
+        '<div class="card"><div class="item" style="flex-wrap:wrap">' +
+          '<span class="item__ava">' + initials(r.x.ticker) + '</span>' +
+          '<div class="item__body">' +
+            '<div class="item__title">' + escapeHtml(c.title) + '</div>' +
+            '<div class="item__sub">$' + escapeHtml(r.x.ticker) + ' · ' + escapeHtml(reward) + ' · fee 0.1 SOL when live</div>' +
           '</div>' +
-        '</div>'
+          '<div class="item__right">' +
+            '<button class="btn btn--solid btn--sm" data-claim="' + escapeHtml(r.key) + '">Claim</button>' +
+          '</div>' +
+        '</div></div>'
       );
     }).join('');
-
     list.querySelectorAll('[data-claim]').forEach(function(btn){
       btn.addEventListener('click', function(){
-        if(!wallet){
-          toast('Connect a wallet to claim', 'err');
-          return;
-        }
+        if(!wallet){ toast('Connect a wallet to claim', 'err'); return; }
         var key = btn.getAttribute('data-claim');
         var h2 = loadHolder();
-        h2.claims[key] = { settled: true, at: new Date().toISOString(), wallet: wallet };
+        h2.claims[key] = { settled: true, at: new Date().toISOString(), wallet: wallet, xHandle: xHandle };
         saveHolder(h2);
         toast('Claim settled · smile marked · 0.1 SOL fee when live', 'ok');
         renderAll();
@@ -637,26 +755,56 @@ h1{
     });
   }
 
+  function tryJoin(projectId, campaignId){
+    var match = allCampaigns().find(function(x){
+      return x.projectId === projectId && x.campaign.id === campaignId;
+    });
+    if(!match) return;
+    if(!wallet){ toast('Connect a wallet to join', 'err'); return; }
+    if(match.campaign.status !== 'active'){ toast('Campaign is not active', 'err'); return; }
+
+    if(needsX(match.campaign.type) && !xHandle){
+      pendingJoin = { projectId: projectId, campaignId: campaignId };
+      toast('This campaign scores X activity — link X to join', 'err');
+      openXModal();
+      return;
+    }
+
+    var key = joinKey(projectId, campaignId);
+    var h = loadHolder();
+    h.joined[key] = {
+      at: new Date().toISOString(),
+      qualified: false,
+      wallet: wallet,
+      xHandle: xHandle || null,
+      type: match.campaign.type
+    };
+    saveHolder(h);
+    toast('Joined ' + match.campaign.title, 'ok');
+    openDetail(projectId, campaignId);
+    renderAll();
+  }
+
   function openDetail(projectId, campaignId){
     var match = allCampaigns().find(function(x){
       return x.projectId === projectId && x.campaign.id === campaignId;
     });
-    if(!match){
-      toast('Campaign not found', 'err');
-      return;
-    }
+    if(!match){ toast('Campaign not found', 'err'); return; }
     detailCtx = match;
     var c = match.campaign;
     var h = loadHolder();
     var key = joinKey(projectId, campaignId);
     var joined = !!h.joined[key];
     var settled = !!(h.claims[key] && h.claims[key].settled);
+    var xRequired = needsX(c.type);
 
     document.getElementById('detail-kicker').textContent = match.projectName + ' · $' + match.ticker;
     document.getElementById('detail-title').textContent = c.title;
     document.getElementById('detail-rule').textContent = c.rule || '—';
     document.getElementById('detail-status').textContent = c.status;
     document.getElementById('detail-status').className = 'pill ' + (c.status === 'active' ? 'pill--live' : 'pill--muted');
+    var xneed = document.getElementById('detail-xneed');
+    xneed.style.display = xRequired ? '' : 'none';
     document.getElementById('detail-meta').textContent = c.type + (c.days ? ' · ' + c.days + ' days' : '');
     document.getElementById('detail-reward').textContent = (c.reward || '—') + (c.unit ? ' ' + c.unit : '');
 
@@ -668,6 +816,7 @@ h1{
 
     var joinBtn = document.getElementById('detail-join');
     var hint = document.getElementById('detail-join-hint');
+
     if(settled){
       joinBtn.style.display = 'none';
       hint.textContent = 'This reward was settled. The smile marks a real claim.';
@@ -681,38 +830,48 @@ h1{
       joinBtn.textContent = 'Mark qualified (demo)';
       joinBtn.onclick = function(){
         if(!wallet){ toast('Connect a wallet first', 'err'); return; }
+        if(xRequired && !xHandle){
+          pendingJoin = { projectId: projectId, campaignId: campaignId };
+          openXModal();
+          return;
+        }
         var h2 = loadHolder();
-        h2.joined[key] = { at: h2.joined[key].at, qualified: true, wallet: wallet };
+        h2.joined[key] = {
+          at: h2.joined[key].at,
+          qualified: true,
+          wallet: wallet,
+          xHandle: xHandle || null,
+          type: c.type
+        };
         saveHolder(h2);
         toast('Marked qualified — claim when ready', 'ok');
         openDetail(projectId, campaignId);
         renderAll();
       };
-      hint.textContent = 'Demo path: mark qualified to unlock the claim flow. Real verification comes with on-chain / checklist checks.';
+      hint.textContent = xRequired
+        ? 'Raid/post campaigns will later score linked X activity automatically. Demo: mark qualified by hand.'
+        : 'Demo path: mark qualified to unlock the claim flow. Hold rules will check the mint on-chain.';
     } else {
       joinBtn.style.display = '';
-      joinBtn.textContent = 'Join campaign';
-      joinBtn.onclick = function(){
-        if(!wallet){ toast('Connect a wallet to join', 'err'); return; }
-        if(c.status !== 'active'){ toast('Campaign is not active', 'err'); return; }
-        var h2 = loadHolder();
-        h2.joined[key] = { at: new Date().toISOString(), qualified: false, wallet: wallet };
-        saveHolder(h2);
-        toast('Joined ' + c.title, 'ok');
-        openDetail(projectId, campaignId);
-        renderAll();
-      };
-      hint.textContent = 'Join to track this campaign under My campaigns.';
+      joinBtn.textContent = xRequired && !xHandle ? 'Link X to join' : 'Join campaign';
+      joinBtn.onclick = function(){ tryJoin(projectId, campaignId); };
+      hint.textContent = xRequired
+        ? 'This campaign scores X activity. Link X once, then join.'
+        : 'Join to track this campaign under My campaigns. Wallet is enough for hold/refer.';
     }
 
-    // Leaderboard from admin demo rows + you
     var rows = (c.demoRows && c.demoRows.length) ? c.demoRows.slice() : [
       {name:'Mona', progress:'On track', done:1},
       {name:'Kaito', progress:'On track', done:1},
       {name:'Serg', progress:'In progress', done:0}
     ];
     if(joined && wallet){
-      rows = [{ name: shortAddr(wallet) + ' (you)', progress: settled ? 'Claimed' : (h.joined[key].qualified ? 'Qualified' : 'Joined'), done: !!(h.joined[key].qualified || settled) }].concat(rows);
+      var label = xHandle || shortAddr(wallet);
+      rows = [{
+        name: label + ' (you)',
+        progress: settled ? 'Claimed' : (h.joined[key].qualified ? 'Qualified' : 'Joined'),
+        done: !!(h.joined[key].qualified || settled)
+      }].concat(rows);
     }
     document.getElementById('detail-lb').innerHTML = rows.map(function(r, i){
       return (
@@ -738,17 +897,43 @@ h1{
   // events
   document.getElementById('btn-connect').onclick = connectWallet;
   document.getElementById('btn-browse').onclick = function(){
-    browseOnly = true;
-    wallet = null;
-    enterApp();
+    browseOnly = true; wallet = null; enterApp();
   };
   document.getElementById('btn-disc').onclick = function(){
-    wallet = null;
-    browseOnly = false;
+    wallet = null; browseOnly = false; xHandle = null;
     localStorage.removeItem('bard_holder_wallet');
+    // keep X handle in holder store unless full clear desired
     document.getElementById('app').style.display = 'none';
     document.getElementById('gate').style.display = 'flex';
   };
+  document.getElementById('btn-link-x').onclick = function(){
+    if(!wallet){
+      toast('Connect a wallet first', 'err');
+      return;
+    }
+    openXModal();
+  };
+  document.getElementById('x-modal-close').onclick = closeXModal;
+  document.getElementById('x-modal').addEventListener('click', function(e){
+    if(e.target === this) closeXModal();
+  });
+  document.getElementById('x-oauth').onclick = startXOAuth;
+  document.getElementById('x-save-handle').onclick = function(){
+    var v = document.getElementById('x-handle-input').value;
+    var n = normalizeHandle(v);
+    if(!n || n.length < 3){
+      toast('Enter a valid handle', 'err');
+      return;
+    }
+    setXHandle(n, 'manual');
+    closeXModal();
+    toast('X saved as ' + n + ' (test link)', 'ok');
+    if(pendingJoin){
+      var pj = pendingJoin; pendingJoin = null;
+      tryJoin(pj.projectId, pj.campaignId);
+    }
+  };
+
   document.querySelectorAll('.nav button').forEach(function(b){
     b.addEventListener('click', function(){
       var name = b.getAttribute('data-page');
@@ -775,10 +960,15 @@ h1{
   };
   document.getElementById('scrim').onclick = closeMenu;
 
-  // restore session
-  var saved = localStorage.getItem('bard_holder_wallet');
-  if(saved){
-    wallet = saved;
+  // boot
+  if(handleAuthCallback()) return;
+  var savedW = localStorage.getItem('bard_holder_wallet');
+  var savedX = localStorage.getItem('bard_holder_x');
+  var holder = loadHolder();
+  if(holder.xHandle) xHandle = holder.xHandle;
+  else if(savedX) xHandle = normalizeHandle(savedX);
+  if(savedW){
+    wallet = savedW;
     browseOnly = false;
     enterApp();
   }
