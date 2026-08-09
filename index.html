@@ -4,9 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Bard — reward the people who show up</title>
-<meta name="description" content="Bard is where Solana projects run challenges, leaderboards and airdrops. Set a challenge, Bard checks who completed it and pays the reward. Flat SOL fees, 0% of your token.">
+<meta name="description" content="Bard is where Solana projects run campaigns, leaderboards and airdrops. Set a rule, track who shows up, and settle rewards — flat SOL fees, 0% of your token.">
 <meta property="og:title" content="Bard — reward the people who show up">
-<meta property="og:description" content="Set a challenge. Your community completes it. Bard verifies and pays the reward. Flat SOL fees, 0% of your token.">
+<meta property="og:description" content="Set a campaign rule. Track who shows up. Settle the reward. Flat SOL fees, 0% of your token.">
 <meta property="og:image" content="/transparentbardsmile.png">
 <meta property="og:type" content="website">
 <meta name="twitter:card" content="summary_large_image">
@@ -17,22 +17,14 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&display=swap" rel="stylesheet">
 <style>
-/* ============================================================
-   BARD · v4 — comprehension-first build
-   One vocabulary: a campaign holds a challenge; completing it
-   gets you paid; every real payout gets the smile.
-   Comfort-based contrast, one typeface, calm depth.
-   ============================================================ */
 :root{
-  /* locked palette */
   --bg:#1c1e26;
   --surface:#262930;
   --purple:#a78bfa;
   --text:#f4f4f5;
   --muted:#a1a1aa;
-  /* derived only */
   --surface-2:#2d3039;
-  --body:#d5d5da; /* comfortable long-read tone */
+  --body:#d5d5da;
   --line:rgba(244,244,245,.08);
   --line-strong:rgba(244,244,245,.16);
   --purple-soft:rgba(167,139,250,.12);
@@ -61,17 +53,27 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer;pad
 h1,h2,h3{margin:0;letter-spacing:-.026em;color:var(--text)}
 h2{font-size:clamp(1.6rem,3.1vw,2.2rem);line-height:1.15;font-variation-settings:"wdth" 106,"wght" 660}
 p{margin:0}
-/* ============ HEADER ============ */
+/* HEADER */
 .head{
   position:sticky;top:0;z-index:50;
   background:rgba(28,30,38,.86);
   backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
   border-bottom:1px solid var(--line);
 }
-.head__in{display:flex;align-items:center;gap:30px;height:68px;max-width:var(--max);margin:0 auto;padding:0 var(--gutter)}
-.mark{display:flex;align-items:center;gap:10px;margin-right:auto}
-.mark img{width:26px;height:26px;object-fit:contain}
-.mark span{font-size:1.12rem;font-variation-settings:"wdth" 110,"wght" 700;letter-spacing:-.01em}
+.head__in{display:flex;align-items:center;gap:30px;min-height:72px;max-width:var(--max);margin:0 auto;padding:10px var(--gutter)}
+/* Smile under Bard — holding the name */
+.mark{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:3px;margin-right:auto;line-height:1;
+}
+.mark span{
+  font-size:1.12rem;font-variation-settings:"wdth" 110,"wght" 700;letter-spacing:-.01em;
+  order:1;
+}
+.mark img{
+  width:22px;height:22px;object-fit:contain;order:2;
+  opacity:.95;
+}
 .nav{display:flex;align-items:center;gap:26px}
 .nav a{font-size:.92rem;color:var(--muted);transition:color .18s;white-space:nowrap}
 .nav a:hover{color:var(--text)}
@@ -82,7 +84,7 @@ p{margin:0}
 }
 .nav__cta:hover{background:#b9a3ff;color:#191320}
 @media(max-width:880px){.nav a:not(.nav__cta){display:none}}
-/* ============ HERO ============ */
+/* HERO */
 .hero{padding:clamp(56px,8vw,100px) 0 clamp(48px,6vw,72px);position:relative}
 .hero__glow{
   position:absolute;top:-10%;right:-6%;width:min(560px,70vw);height:min(560px,70vw);
@@ -112,7 +114,7 @@ h1 em{font-style:normal;color:var(--purple)}
 .btn--ghost:hover{border-color:var(--purple-line);background:var(--purple-soft)}
 .hero__note{margin-top:22px;font-size:.92rem;color:var(--muted)}
 .hero__note b{color:var(--body);font-variation-settings:"wght" 600;font-weight:normal}
-/* ============ CAMPAIGN CARD ============ */
+/* CARD */
 .card{
   background:var(--surface);border:1px solid var(--line-strong);
   border-radius:var(--r);overflow:hidden;
@@ -173,16 +175,13 @@ h1 em{font-style:normal;color:var(--purple)}
   .person__deed{display:none}
   .card__head,.card__rule,.card__foot{padding-left:16px;padding-right:16px}
 }
-/* ============ HOW IT WORKS ============ */
+/* HOW */
 .how{padding:clamp(56px,7vw,92px) 0;border-top:1px solid var(--line)}
 .how__head{text-align:center;max-width:560px;margin:0 auto 48px}
 .how__head p{margin-top:12px;color:var(--muted);font-size:1rem}
-.steps{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;counter-reset:step}
+.steps{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px}
 @media(max-width:820px){.steps{grid-template-columns:1fr;max-width:480px;margin:0 auto}}
-.step{
-  position:relative;background:var(--surface);border:1px solid var(--line);
-  border-radius:var(--r);padding:28px;
-}
+.step{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:28px}
 .step__n{
   width:34px;height:34px;border-radius:50%;
   background:var(--purple-soft);color:var(--purple);
@@ -193,11 +192,10 @@ h1 em{font-style:normal;color:var(--purple)}
 .step p{color:var(--body);font-size:.96rem}
 .step p b{color:var(--text);font-variation-settings:"wght" 600;font-weight:normal}
 .step .mini{width:17px;height:17px;display:inline-block;vertical-align:-3px;margin-left:2px}
-/* ============ SECTIONS ============ */
+/* SECTIONS */
 .sec{padding:clamp(56px,7.5vw,100px) 0;border-top:1px solid var(--line)}
 .sec__head{max-width:620px;margin-bottom:42px}
 .sec__head p{margin-top:14px;color:var(--muted);font-size:1rem}
-/* ---- what you can run ---- */
 .parts{display:grid;grid-template-columns:1fr 1fr;gap:14px}
 @media(max-width:820px){.parts{grid-template-columns:1fr}}
 .part{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:26px 28px;transition:border-color .2s,background .2s}
@@ -205,7 +203,6 @@ h1 em{font-style:normal;color:var(--purple)}
 .part__tag{display:inline-block;font-size:.78rem;color:var(--purple);font-variation-settings:"wght" 620;margin-bottom:10px}
 .part h3{font-size:1.2rem;font-variation-settings:"wdth" 104,"wght" 640;margin-bottom:8px}
 .part p{color:var(--body);font-size:.96rem}
-/* ---- two sides ---- */
 .sides{display:grid;grid-template-columns:1fr 1fr;gap:14px}
 @media(max-width:820px){.sides{grid-template-columns:1fr}}
 .side{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:clamp(26px,3.4vw,38px)}
@@ -217,7 +214,7 @@ h1 em{font-style:normal;color:var(--purple)}
 .side li i{font-style:normal;color:var(--purple);flex:none;font-variation-settings:"wght" 640;font-size:.85rem}
 .txt{display:inline-flex;align-items:center;gap:7px;font-size:.95rem;font-variation-settings:"wght" 620;color:var(--purple);transition:color .18s}
 .txt:hover{color:var(--text)}
-/* ---- pricing ---- */
+/* PRICING */
 .fees{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.1fr);gap:clamp(32px,5vw,72px);align-items:start}
 @media(max-width:880px){.fees{grid-template-columns:1fr}}
 .fees__say p{color:var(--body);margin-top:16px;font-size:1rem;max-width:46ch}
@@ -240,31 +237,32 @@ h1 em{font-style:normal;color:var(--purple)}
 .soon{font-size:.7rem;color:var(--purple);border:1px solid var(--purple-line);border-radius:99px;padding:2px 9px;margin-left:8px;vertical-align:middle;font-variation-settings:"wght" 560}
 .fee--zero{background:var(--purple-soft)}
 .fee--zero .fee__amt{color:var(--purple)}
-/* ---- faq ---- */
+/* FAQ */
 .qa{max-width:780px}
 .qa__row{padding:22px 0;border-top:1px solid var(--line)}
 .qa__row:first-child{border-top:none}
 .qa__q{font-size:1.06rem;font-variation-settings:"wght" 620;margin-bottom:6px}
 .qa__a{color:var(--body);font-size:.98rem}
 .qa__a b{color:var(--text);font-variation-settings:"wght" 600;font-weight:normal}
-/* ---- seal ---- */
+/* SEAL */
 .seal{border-top:1px solid var(--line);padding:clamp(68px,9vw,116px) 0;text-align:center}
-.seal__mark{
-  width:clamp(100px,14vw,132px);height:clamp(100px,14vw,132px);margin:0 auto 28px;
-  display:grid;place-items:center;border-radius:50%;
-  background:var(--surface);border:1px solid var(--line-strong);
-  box-shadow:0 24px 56px -30px rgba(0,0,0,.85);
+.seal__stack{
+  display:inline-flex;flex-direction:column;align-items:center;gap:6px;
+  margin:0 auto 28px;
 }
-.seal__mark img{width:50%;height:50%;object-fit:contain}
+.seal__stack span{
+  font-size:1.35rem;font-variation-settings:"wdth" 110,"wght" 700;letter-spacing:-.01em;
+}
+.seal__stack img{width:36px;height:36px;object-fit:contain}
 .seal h2{margin-bottom:16px}
 .seal p{margin:0 auto 32px;color:var(--body);max-width:50ch;font-size:1.04rem}
 .seal .actions{justify-content:center}
-/* ---- footer ---- */
+/* FOOTER */
 .foot{border-top:1px solid var(--line);padding:32px 0 46px}
 .foot__in{display:flex;align-items:center;gap:22px;flex-wrap:wrap}
 .foot__in .mark{margin-right:auto}
-.foot__in .mark img{width:22px;height:22px}
 .foot__in .mark span{font-size:1rem}
+.foot__in .mark img{width:18px;height:18px}
 .foot__links{display:flex;gap:24px;flex-wrap:wrap}
 .foot__links a{font-size:.9rem;color:var(--muted);transition:color .18s}
 .foot__links a:hover{color:var(--text)}
@@ -284,8 +282,8 @@ h1 em{font-style:normal;color:var(--purple)}
   <header class="head">
     <div class="head__in">
       <a class="mark" href="/" aria-label="Bard home">
-        <img src="/transparentbardsmile.png" alt="">
         <span>Bard</span>
+        <img src="/transparentbardsmile.png" alt="">
       </a>
       <nav class="nav" aria-label="Main">
         <a href="#how">How it works</a>
@@ -296,14 +294,14 @@ h1 em{font-style:normal;color:var(--purple)}
       </nav>
     </div>
   </header>
-  <!-- ===================== HERO ===================== -->
+
   <section class="hero">
     <div class="hero__glow" aria-hidden="true"></div>
     <div class="wrap hero__grid">
       <div>
         <h1>Reward the people who <em>show up.</em></h1>
         <p class="hero__sub">
-          Bard is where Solana projects run challenges, leaderboards and airdrops. The team sets a challenge — do this, earn that. <b>Bard checks who completed it and pays the reward.</b> No spreadsheets, no favorites, no cut of anyone's token.
+          Bard is where Solana projects run campaigns, leaderboards and airdrops. A team sets a clear rule — do this, earn that. <b>Bard keeps the record, shows the ranking, and handles claims</b> so you’re not running it from a spreadsheet.
         </p>
         <div class="actions">
           <a class="btn btn--solid" href="/admin.html">Start a campaign</a>
@@ -311,7 +309,7 @@ h1 em{font-style:normal;color:var(--purple)}
         </div>
         <p class="hero__note">Flat fees in SOL, published upfront. <b>0% of your token, ever.</b></p>
       </div>
-      <!-- the product, running -->
+
       <div>
         <div class="card" role="group" aria-label="Example of a live Bard campaign">
           <div class="card__head">
@@ -320,99 +318,99 @@ h1 em{font-style:normal;color:var(--purple)}
             <span class="pill">Active</span>
           </div>
           <div class="card__rule">
-            <div class="tabs" role="group" aria-label="Try another challenge type">
+            <div class="tabs" role="group" aria-label="Try another campaign type">
               <button class="tab is-on" data-rule="hold">Hold</button>
-              <button class="tab" data-rule="post">Post</button>
-              <button class="tab" data-rule="invite">Invite</button>
+              <button class="tab" data-rule="raid">Raid</button>
+              <button class="tab" data-rule="refer">Refer</button>
             </div>
-            <span class="rule__label">The challenge</span>
+            <span class="rule__label">The rule</span>
             <p class="rule__line" id="cline"><b>Hold 100,000 FROGZ for 7 days</b> → earn <span>0.5 SOL</span></p>
           </div>
           <div class="people" id="people" aria-live="polite"></div>
           <div class="card__foot">
             <div class="card__meta">
               <span><b class="num" id="paid">0.0</b> of <span class="num" id="pool">12</span> SOL paid out</span>
-              <span><b class="num" id="done">0</b> paid</span>
+              <span><b class="num" id="done">0</b> claimed</span>
             </div>
             <div class="bar" aria-hidden="true"><i id="fill"></i></div>
           </div>
         </div>
-        <p class="card-cap">A live example — try the other challenge types above. Members who don't complete the challenge aren't paid. <b>The smile appears on every payout that's real.</b></p>
+        <p class="card-cap">Example only — try the other rule types. Hold checks are on-chain. Raid and refer campaigns use the same leaderboard and claim flow. <b>The smile marks a settled claim.</b></p>
       </div>
     </div>
   </section>
-  <!-- ===================== HOW IT WORKS ===================== -->
+
   <section class="how" id="how">
     <div class="wrap">
       <div class="how__head rise">
         <h2>How it works</h2>
-        <p>Three steps, start to paid.</p>
+        <p>Three steps from rule to claim.</p>
       </div>
       <div class="steps">
         <div class="step rise">
           <span class="step__n" aria-hidden="true">1</span>
-          <h3>A team sets a challenge</h3>
-          <p>Any project can start one in minutes. Hold the token, share posts, invite friends — <b>the team picks the goal and the reward.</b></p>
+          <h3>A team sets a rule</h3>
+          <p>Create a campaign with a clear condition and a reward — hold, raid, refer, or a custom goal. <b>You define what counts.</b></p>
         </div>
         <div class="step rise">
           <span class="step__n" aria-hidden="true">2</span>
-          <h3>The community goes to work</h3>
-          <p>Everyone sees the same challenge and the same leaderboard. <b>Progress is public,</b> so nobody wonders who's really earning.</p>
+          <h3>The community joins</h3>
+          <p>Everyone sees the same rule and the same leaderboard. <b>Progress is public,</b> so nobody is guessing who is earning.</p>
         </div>
         <div class="step rise">
           <span class="step__n" aria-hidden="true">3</span>
-          <h3>Bard checks and pays</h3>
-          <p>When someone completes the challenge, Bard confirms it and pays their reward. <b>Every real payout gets the smile</b><img class="mini" src="/transparentbardsmile.png" alt=""> — that's the proof.</p>
+          <h3>Claims settle on Bard</h3>
+          <p>When someone qualifies, they claim from the dashboard. <b>A settled claim gets the smile</b><img class="mini" src="/transparentbardsmile.png" alt=""> — that’s the mark.</p>
         </div>
       </div>
     </div>
   </section>
-  <!-- ===================== WHAT YOU CAN RUN ===================== -->
+
   <section class="sec">
     <div class="wrap">
       <div class="sec__head rise">
         <h2>What you can run on Bard</h2>
-        <p>Four tools, one record of what your community did and what it earned.</p>
+        <p>Four tools. One place for the campaign and the people in it.</p>
       </div>
       <div class="parts">
         <div class="part rise">
-          <span class="part__tag">Challenges</span>
+          <span class="part__tag">Rules</span>
           <h3>Campaigns</h3>
-          <p>Set the goal once — hold, post, invite, trade, or something custom — and Bard checks it. No moderator deciding who counts.</p>
+          <p>Publish a condition once — hold, raid, refer, volume, or custom. The community works against that rule, not against a private list.</p>
         </div>
         <div class="part rise">
-          <span class="part__tag">Rankings</span>
+          <span class="part__tag">Ranking</span>
           <h3>Leaderboards</h3>
-          <p>A public ranking that updates as members qualify. The people carrying your community stop being invisible.</p>
+          <p>A public standing for the work that counts. The people carrying your community stop being invisible.</p>
         </div>
         <div class="part rise">
           <span class="part__tag">Payouts</span>
           <h3>Airdrops &amp; claims</h3>
-          <p>When someone completes a challenge, their reward opens automatically. No address lists, no manual sends.</p>
+          <p>Qualified wallets claim from one flow. No CSV of addresses and no DMing screenshots to a mod at 3am.</p>
         </div>
         <div class="part rise">
           <span class="part__tag">Discovery</span>
           <h3>Explore</h3>
-          <p>Every project on Bard in one place, so holders find your campaign on their own.</p>
+          <p>Projects using Bard show up in one index, so holders can find live campaigns without another link drop.</p>
         </div>
       </div>
     </div>
   </section>
-  <!-- ===================== TWO SIDES ===================== -->
+
   <section class="sec">
     <div class="wrap">
       <div class="sec__head rise">
         <h2>Built for both sides</h2>
-        <p>Teams set the challenges. Holders complete them. Everyone sees the same record.</p>
+        <p>Teams publish the rule. Holders track and claim. Same record for both.</p>
       </div>
       <div class="sides rise">
         <div class="side">
           <span class="label">For teams</span>
           <h3>Run the campaign,<br>not the spreadsheet.</h3>
-          <p>Set a challenge, fund the reward, share one link. Bard handles checking, ranking and payouts while you get back to building.</p>
+          <p>Set a rule, fund the reward, share one link. Leaderboards and claims live on Bard so you’re not managing it by hand.</p>
           <ul>
             <li><i>1</i> Onboard your token once — 0.25 SOL</li>
-            <li><i>2</i> Run holds, posts, invites or volume races</li>
+            <li><i>2</i> Launch hold, raid, refer, or custom campaigns</li>
             <li><i>3</i> Keep 100% of your supply — Bard never takes tokens</li>
           </ul>
           <a class="txt" href="/admin.html">Start a campaign →</a>
@@ -420,30 +418,30 @@ h1 em{font-style:normal;color:var(--purple)}
         <div class="side">
           <span class="label">For holders</span>
           <h3>Every project you're in,<br>one page.</h3>
-          <p>Active challenges, your rank, and what you can claim — across every project you hold, without five tabs and five logins.</p>
+          <p>Active campaigns, your rank, and open claims — across projects on Bard, without five tabs and five logins.</p>
           <ul>
-            <li><i>1</i> Connect once, see every challenge you qualify for</li>
-            <li><i>2</i> Track your rank while it's still worth climbing</li>
-            <li><i>3</i> Claim what you earned from the same place</li>
+            <li><i>1</i> Connect once and see campaigns you can join</li>
+            <li><i>2</i> Track rank while the campaign is still live</li>
+            <li><i>3</i> Claim rewards from the same dashboard</li>
           </ul>
           <a class="txt" href="/dashboard.html">Open the dashboard →</a>
         </div>
       </div>
     </div>
   </section>
-  <!-- ===================== PRICING ===================== -->
+
   <section class="sec" id="fees">
     <div class="wrap fees">
       <div class="fees__say rise">
         <span class="label">Pricing</span>
         <h2>Flat fees. Nothing off the top.</h2>
-        <p>Most tools in this market want a slice of your supply, a seat in your treasury, or a token you're expected to hold forever.</p>
-        <p><strong>Bard charges per action, in SOL, at a published price.</strong> Your token stays yours, and the platform doesn't need your chart to go up to survive.</p>
+        <p>Most tools in this market want a slice of your supply, a seat in your treasury, or a token you’re expected to hold forever.</p>
+        <p><strong>Bard charges per action, in SOL, at a published price.</strong> Your token stays yours. The platform doesn’t need your chart to go up to survive.</p>
         <div class="example">
           <p class="example__t">What a real campaign costs</p>
           <div class="ex"><span>Onboard your token (once)</span><b class="num">0.25 SOL</b></div>
           <div class="ex"><span>Start the campaign</span><b class="num">0.25 SOL</b></div>
-          <div class="ex"><span>41 members completed it and got paid</span><b class="num">4.10 SOL</b></div>
+          <div class="ex"><span>41 members claimed a reward</span><b class="num">4.10 SOL</b></div>
           <div class="ex ex--total"><span>Total to run it</span><b class="num">4.60 SOL</b></div>
           <div class="ex ex--zero"><span>Taken from your supply</span><b>Nothing</b></div>
         </div>
@@ -458,7 +456,7 @@ h1 em{font-style:normal;color:var(--purple)}
           <span class="fee__amt num">0.25 SOL</span>
         </div>
         <div class="fee">
-          <span class="fee__what">Pay out a reward<span class="fee__note">Charged only when someone actually gets paid</span></span>
+          <span class="fee__what">Settle a claim<span class="fee__note">Charged when a reward is actually claimed</span></span>
           <span class="fee__amt num">0.1 SOL</span>
         </div>
         <div class="fee fee--soon">
@@ -472,12 +470,12 @@ h1 em{font-style:normal;color:var(--purple)}
       </div>
     </div>
   </section>
-  <!-- ===================== FAQ ===================== -->
+
   <section class="sec" id="answers">
     <div class="wrap">
       <div class="sec__head rise">
         <h2>Straight answers</h2>
-        <p>The questions everyone asks in the first five minutes.</p>
+        <p>The questions teams ask in the first five minutes.</p>
       </div>
       <div class="qa">
         <div class="qa__row rise">
@@ -486,42 +484,44 @@ h1 em{font-style:normal;color:var(--purple)}
         </div>
         <div class="qa__row rise">
           <p class="qa__q">Do I need to hold a Bard token to use this?</p>
-          <p class="qa__a"><b>No.</b> The platform stands on its own. If a Bard token ever exists, it will be a separate thing — using the platform will never depend on it.</p>
+          <p class="qa__a"><b>No.</b> The platform stands on its own. If a Bard token ever exists, it will be separate — using the platform will never depend on it.</p>
         </div>
         <div class="qa__row rise">
-          <p class="qa__q">Who decides who gets paid?</p>
-          <p class="qa__a"><b>The challenge does.</b> The team writes the goal, Bard checks it, and the leaderboard shows the result. No moderator judging who was loyal enough.</p>
+          <p class="qa__q">Who decides who qualifies?</p>
+          <p class="qa__a"><b>The rule you publish.</b> Hold-style rules can be checked on-chain. Other campaign types use the same public leaderboard and claim flow so results aren’t hidden in a private chat.</p>
         </div>
         <div class="qa__row rise">
           <p class="qa__q">What if a campaign flops?</p>
-          <p class="qa__a"><b>You're out 0.25 SOL.</b> Payout fees only apply to rewards that are actually paid, so a campaign nobody finishes costs almost nothing.</p>
+          <p class="qa__a"><b>You’re out the campaign fee.</b> Claim fees only apply when rewards are actually claimed, so a campaign nobody finishes costs almost nothing.</p>
         </div>
         <div class="qa__row rise">
           <p class="qa__q">Is any of it public?</p>
-          <p class="qa__a"><b>Rankings and payouts are.</b> That's the point — your community can see what was earned without asking anyone for a screenshot.</p>
+          <p class="qa__a"><b>Rankings and settled claims are meant to be.</b> That’s the point of a shared record — the community can see what was earned without asking for a screenshot.</p>
         </div>
       </div>
     </div>
   </section>
-  <!-- ===================== SEAL ===================== -->
+
   <section class="seal">
     <div class="wrap">
-      <div class="seal__mark rise">
+      <div class="seal__stack rise">
+        <span>Bard</span>
         <img src="/transparentbardsmile.png" alt="The Bard smile">
       </div>
-      <h2 class="rise">The smile means it was paid.</h2>
-      <p class="rise">That's all the mark means, and it's why it's worth something: it appears when work was checked and a reward actually moved. Collect enough of them and the record speaks for itself.</p>
+      <h2 class="rise">The smile sits under the name.</h2>
+      <p class="rise">It’s the mark for a settled claim — when the work was recorded and the reward actually moved. Collect enough of them and the record speaks for itself.</p>
       <div class="actions rise">
         <a class="btn btn--solid" href="/admin.html">Start a campaign</a>
         <a class="btn btn--ghost" href="/dashboard.html">Explore projects</a>
       </div>
     </div>
   </section>
+
   <footer class="foot">
     <div class="wrap foot__in">
       <a class="mark" href="/" aria-label="Bard home">
-        <img src="/transparentbardsmile.png" alt="">
         <span>Bard</span>
+        <img src="/transparentbardsmile.png" alt="">
       </a>
       <nav class="foot__links" aria-label="Footer">
         <a href="#how">How it works</a>
@@ -533,6 +533,7 @@ h1 em{font-style:normal;color:var(--purple)}
       <p class="foot__meta">© 2026 Bard · Built on Solana · The platform and any Bard token are separate entities. Bard takes no share of any project's supply.</p>
     </div>
   </footer>
+
 <script>
 (function(){
   var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -546,22 +547,22 @@ h1 em{font-style:normal;color:var(--purple)}
         {n:'Lex',d:'6 days held',q:0},{n:'Tariq',d:'4 days held',q:0}
       ]
     },
-    post:{
-      line:'<b>Share 20 posts about Frogz in 48 hours</b> → earn <span>0.25 SOL</span>',
+    raid:{
+      line:'<b>Complete the raid checklist for this campaign</b> → earn <span>0.25 SOL</span>',
       pay:0.25, pool:6,
       rows:[
-        {n:'Tariq',d:'31 posts',q:1},{n:'Serg',d:'27 posts',q:1},
-        {n:'Rin',d:'22 posts',q:1},{n:'Mona',d:'20 posts',q:1},
-        {n:'Kaito',d:'14 posts',q:0},{n:'Lex',d:'6 posts',q:0}
+        {n:'Tariq',d:'Checklist done',q:1},{n:'Serg',d:'Checklist done',q:1},
+        {n:'Rin',d:'Checklist done',q:1},{n:'Mona',d:'Checklist done',q:1},
+        {n:'Kaito',d:'In progress',q:0},{n:'Lex',d:'In progress',q:0}
       ]
     },
-    invite:{
-      line:'<b>Invite 5 friends who hold for 3 days</b> → earn <span>1 SOL</span>',
+    refer:{
+      line:'<b>Bring 5 wallets that hold for 3 days</b> → earn <span>1 SOL</span>',
       pay:1, pool:15,
       rows:[
-        {n:'Nadia',d:'11 invites',q:1},{n:'Lex',d:'8 invites',q:1},
-        {n:'Mona',d:'5 invites',q:1},{n:'Serg',d:'4 invites',q:0},
-        {n:'Rin',d:'2 invites',q:0},{n:'Tariq',d:'1 invite',q:0}
+        {n:'Nadia',d:'11 referrals',q:1},{n:'Lex',d:'8 referrals',q:1},
+        {n:'Mona',d:'5 referrals',q:1},{n:'Serg',d:'4 referrals',q:0},
+        {n:'Rin',d:'2 referrals',q:0},{n:'Tariq',d:'1 referral',q:0}
       ]
     }
   };
@@ -587,7 +588,7 @@ h1 em{font-style:normal;color:var(--purple)}
         '<span class="person__deed">'+p.d+'</span></span>'+
         '<span class="person__right">'+ 
           (p.q
-            ? '<span class="person__amt num">'+r.pay.toFixed(2)+' SOL</span><span class="stamp"><img src="/transparentbardsmile.png" alt="Paid"></span>'
+            ? '<span class="person__amt num">'+r.pay.toFixed(2)+' SOL</span><span class="stamp"><img src="/transparentbardsmile.png" alt="Claimed"></span>'
             : '<span class="status">In progress</span>')+
         '</span>'+
       '</div>';
