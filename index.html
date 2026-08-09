@@ -3,10 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Bard — campaigns, leaderboards and airdrops for Solana projects</title>
-<meta name="description" content="Teams set a rule. Holders do the work. Bard records it, ranks it and settles the payout — fixed SOL fees, 0% of your token.">
-<meta property="og:title" content="Bard — proof of deeds">
-<meta property="og:description" content="Campaigns, leaderboards and airdrops for Solana meme projects. One dashboard for holders. Fixed SOL fees, 0% of your token.">
+<title>Bard — reward the people who show up</title>
+<meta name="description" content="Bard is where Solana projects run challenges, leaderboards and airdrops. Set a challenge, Bard checks who completed it and pays the reward. Flat SOL fees, 0% of your token.">
+<meta property="og:title" content="Bard — reward the people who show up">
+<meta property="og:description" content="Set a challenge. Your community completes it. Bard verifies and pays the reward. Flat SOL fees, 0% of your token.">
 <meta property="og:image" content="/transparentbardsmile.png">
 <meta property="og:type" content="website">
 <meta name="twitter:card" content="summary_large_image">
@@ -18,10 +18,10 @@
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&display=swap" rel="stylesheet">
 <style>
 /* ============================================================
-   BARD · v3 — clean build
-   One typeface. Tabular numbers. No terminal styling.
-   The ledger idea stays in the structure and the smile stays
-   the settlement stamp — the vernacular is product, not chain.
+   BARD · v4 — comprehension-first build
+   One vocabulary: a campaign holds a challenge; completing it
+   gets you paid; every real payout gets the smile.
+   Comfort-based contrast, one typeface, calm depth.
    ============================================================ */
 :root{
   /* locked palette */
@@ -31,7 +31,8 @@
   --text:#f4f4f5;
   --muted:#a1a1aa;
   /* derived only */
-  --surface-2:#2c2f38;
+  --surface-2:#2d3039;
+  --body:#d5d5da; /* comfortable long-read tone */
   --line:rgba(244,244,245,.08);
   --line-strong:rgba(244,244,245,.16);
   --purple-soft:rgba(167,139,250,.12);
@@ -45,7 +46,7 @@
 html{-webkit-text-size-adjust:100%;scroll-behavior:smooth}
 body{
   margin:0;background:var(--bg);color:var(--text);
-  font-family:var(--font);font-size:16.5px;line-height:1.65;
+  font-family:var(--font);font-size:17px;line-height:1.7;
   font-variation-settings:"wdth" 100,"wght" 420;
   -webkit-font-smoothing:antialiased;overflow-x:hidden;
 }
@@ -54,14 +55,12 @@ a{color:inherit;text-decoration:none}
 button{font:inherit;color:inherit;background:none;border:none;cursor:pointer;padding:0}
 :focus-visible{outline:2px solid var(--purple);outline-offset:3px;border-radius:4px}
 [id]{scroll-margin-top:92px}
-.num{font-variant-numeric:tabular-nums;letter-spacing:0}
+.num{font-variant-numeric:tabular-nums}
 .wrap{max-width:var(--max);margin:0 auto;padding-left:var(--gutter);padding-right:var(--gutter)}
-.label{
-  display:inline-block;font-size:.8rem;color:var(--purple);
-  font-variation-settings:"wght" 600;letter-spacing:.01em;margin-bottom:14px;
-}
-h1,h2,h3{margin:0;letter-spacing:-.028em}
-h2{font-size:clamp(1.65rem,3.2vw,2.3rem);line-height:1.12;font-variation-settings:"wdth" 106,"wght" 680}
+.label{display:inline-block;font-size:.82rem;color:var(--purple);font-variation-settings:"wght" 600;margin-bottom:14px}
+h1,h2,h3{margin:0;letter-spacing:-.026em;color:var(--text)}
+h2{font-size:clamp(1.6rem,3.1vw,2.2rem);line-height:1.15;font-variation-settings:"wdth" 106,"wght" 660}
+p{margin:0}
 /* ============ HEADER ============ */
 .head{
   position:sticky;top:0;z-index:50;
@@ -84,16 +83,21 @@ h2{font-size:clamp(1.65rem,3.2vw,2.3rem);line-height:1.12;font-variation-setting
 .nav__cta:hover{background:#b9a3ff;color:#191320}
 @media(max-width:880px){.nav a:not(.nav__cta){display:none}}
 /* ============ HERO ============ */
-.hero{padding:clamp(56px,8vw,104px) 0 clamp(60px,7vw,96px)}
-.hero__grid{display:grid;grid-template-columns:minmax(0,.95fr) minmax(0,1.05fr);gap:clamp(36px,5vw,72px);align-items:center}
+.hero{padding:clamp(56px,8vw,100px) 0 clamp(48px,6vw,72px);position:relative}
+.hero__glow{
+  position:absolute;top:-10%;right:-6%;width:min(560px,70vw);height:min(560px,70vw);
+  background:radial-gradient(circle,rgba(167,139,250,.07),transparent 65%);
+  pointer-events:none;
+}
+.hero__grid{display:grid;grid-template-columns:minmax(0,.95fr) minmax(0,1.05fr);gap:clamp(36px,5vw,72px);align-items:center;position:relative}
 @media(max-width:980px){.hero__grid{grid-template-columns:1fr;gap:48px}}
 h1{
-  font-size:clamp(2.7rem,6.6vw,4.4rem);line-height:1.02;
+  font-size:clamp(2.6rem,6.4vw,4.2rem);line-height:1.04;
   font-variation-settings:"wdth" 108,"wght" 700;margin-bottom:22px;
 }
 h1 em{font-style:normal;color:var(--purple)}
-.hero__sub{color:var(--muted);font-size:1.12rem;line-height:1.65;max-width:46ch;margin:0 0 32px}
-.hero__sub b{color:var(--text);font-variation-settings:"wght" 600;font-weight:normal}
+.hero__sub{color:var(--body);font-size:1.14rem;line-height:1.7;max-width:47ch;margin-bottom:32px}
+.hero__sub b{color:var(--text);font-variation-settings:"wght" 620;font-weight:normal}
 .actions{display:flex;flex-wrap:wrap;gap:12px}
 .btn{
   display:inline-flex;align-items:center;justify-content:center;
@@ -106,8 +110,8 @@ h1 em{font-style:normal;color:var(--purple)}
 .btn--solid:hover{background:#b9a3ff}
 .btn--ghost{border-color:var(--line-strong);color:var(--text)}
 .btn--ghost:hover{border-color:var(--purple-line);background:var(--purple-soft)}
-.hero__note{margin:22px 0 0;font-size:.9rem;color:var(--muted)}
-.hero__note b{color:var(--text);font-variation-settings:"wght" 600;font-weight:normal}
+.hero__note{margin-top:22px;font-size:.92rem;color:var(--muted)}
+.hero__note b{color:var(--body);font-variation-settings:"wght" 600;font-weight:normal}
 /* ============ CAMPAIGN CARD ============ */
 .card{
   background:var(--surface);border:1px solid var(--line-strong);
@@ -122,44 +126,35 @@ h1 em{font-style:normal;color:var(--purple)}
 }
 .card__title{font-size:1.02rem;font-variation-settings:"wght" 640;line-height:1.3}
 .card__proj{display:block;font-size:.8rem;color:var(--muted);font-variation-settings:"wght" 420}
-.pill{
-  margin-left:auto;font-size:.76rem;color:var(--purple);
-  background:var(--purple-soft);border-radius:99px;padding:5px 12px;
-  font-variation-settings:"wght" 600;white-space:nowrap;
-}
+.pill{margin-left:auto;font-size:.76rem;color:var(--purple);background:var(--purple-soft);border-radius:99px;padding:5px 12px;font-variation-settings:"wght" 600;white-space:nowrap}
 .card__rule{padding:18px 22px;border-bottom:1px solid var(--line)}
 .tabs{display:flex;gap:4px;background:var(--surface-2);border-radius:9px;padding:4px;margin-bottom:16px;width:max-content;max-width:100%}
-.tab{
-  font-size:.84rem;color:var(--muted);padding:6px 14px;border-radius:6px;
-  font-variation-settings:"wght" 540;transition:color .16s,background .16s;white-space:nowrap;
-}
+.tab{font-size:.85rem;color:var(--muted);padding:6px 15px;border-radius:6px;font-variation-settings:"wght" 540;transition:color .16s,background .16s;white-space:nowrap}
 .tab:hover{color:var(--text)}
 .tab.is-on{background:var(--bg);color:var(--text)}
-.rule__line{margin:0;font-size:1rem;line-height:1.55}
+.rule__label{display:block;font-size:.8rem;color:var(--muted);margin-bottom:5px}
+.rule__line{font-size:1.02rem;line-height:1.55}
 .rule__line b{font-variation-settings:"wght" 620;font-weight:normal}
 .rule__line span{color:var(--purple);font-variation-settings:"wght" 620;white-space:nowrap}
 .people{padding:8px 0}
-.person{
-  display:flex;align-items:center;gap:12px;padding:11px 22px;
-  transition:background .2s;
-}
-.person.is-settled{background:rgba(167,139,250,.06)}
+.person{display:flex;align-items:center;gap:12px;padding:11px 22px;transition:background .2s}
+.person.is-paid{background:rgba(167,139,250,.06)}
 .person__ava{
   width:32px;height:32px;border-radius:50%;background:var(--surface-2);
   display:grid;place-items:center;font-size:.74rem;color:var(--muted);
   font-variation-settings:"wght" 620;flex:none;border:1px solid var(--line);
 }
-.person.is-settled .person__ava{color:var(--purple);border-color:var(--purple-line)}
+.person.is-paid .person__ava{color:var(--purple);border-color:var(--purple-line)}
 .person__who{min-width:0}
 .person__name{font-size:.94rem;font-variation-settings:"wght" 560;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.person__deed{display:block;font-size:.8rem;color:var(--muted);font-variation-settings:"wght" 420}
+.person__deed{display:block;font-size:.8rem;color:var(--muted)}
 .person__right{margin-left:auto;display:flex;align-items:center;gap:9px}
 .person__amt{font-size:.9rem;color:var(--muted)}
-.person.is-settled .person__amt{color:var(--text);font-variation-settings:"wght" 620}
+.person.is-paid .person__amt{color:var(--text);font-variation-settings:"wght" 620}
 .person--short{opacity:.52}
 .stamp{width:20px;height:20px;flex:none}
 .stamp img{width:20px;height:20px;object-fit:contain;opacity:0}
-.person.is-settled .stamp img{animation:stamp .5s cubic-bezier(.2,.9,.25,1) forwards}
+.person.is-paid .stamp img{animation:stamp .5s cubic-bezier(.2,.9,.25,1) forwards}
 @keyframes stamp{
   0%{opacity:0;transform:scale(1.6) rotate(-12deg)}
   55%{opacity:1;transform:scale(.92) rotate(2deg)}
@@ -167,61 +162,72 @@ h1 em{font-style:normal;color:var(--purple)}
 }
 .status{font-size:.8rem;color:var(--muted);white-space:nowrap}
 .card__foot{padding:16px 22px 20px;border-top:1px solid var(--line)}
-.card__meta{display:flex;justify-content:space-between;gap:14px;font-size:.84rem;color:var(--muted);margin-bottom:10px;flex-wrap:wrap}
+.card__meta{display:flex;justify-content:space-between;gap:14px;font-size:.86rem;color:var(--muted);margin-bottom:10px;flex-wrap:wrap}
 .card__meta b{color:var(--text);font-variation-settings:"wght" 620;font-weight:normal}
 .bar{height:5px;background:var(--surface-2);border-radius:99px;overflow:hidden}
 .bar i{display:block;height:100%;width:0;background:var(--purple);border-radius:99px;transition:width .6s cubic-bezier(.3,.8,.3,1)}
-.card-cap{margin:14px 4px 0;font-size:.86rem;color:var(--muted);line-height:1.6}
-.card-cap b{color:var(--text);font-variation-settings:"wght" 580;font-weight:normal}
+.card-cap{margin:14px 4px 0;font-size:.88rem;color:var(--muted);line-height:1.65}
+.card-cap b{color:var(--body);font-variation-settings:"wght" 580;font-weight:normal}
 @media(max-width:440px){
   .person{padding:11px 16px}
   .person__deed{display:none}
   .card__head,.card__rule,.card__foot{padding-left:16px;padding-right:16px}
 }
+/* ============ HOW IT WORKS ============ */
+.how{padding:clamp(56px,7vw,92px) 0;border-top:1px solid var(--line)}
+.how__head{text-align:center;max-width:560px;margin:0 auto 48px}
+.how__head p{margin-top:12px;color:var(--muted);font-size:1rem}
+.steps{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;counter-reset:step}
+@media(max-width:820px){.steps{grid-template-columns:1fr;max-width:480px;margin:0 auto}}
+.step{
+  position:relative;background:var(--surface);border:1px solid var(--line);
+  border-radius:var(--r);padding:28px;
+}
+.step__n{
+  width:34px;height:34px;border-radius:50%;
+  background:var(--purple-soft);color:var(--purple);
+  display:grid;place-items:center;font-size:.9rem;
+  font-variation-settings:"wght" 660;margin-bottom:16px;
+}
+.step h3{font-size:1.16rem;font-variation-settings:"wdth" 104,"wght" 640;margin-bottom:8px}
+.step p{color:var(--body);font-size:.96rem}
+.step p b{color:var(--text);font-variation-settings:"wght" 600;font-weight:normal}
+.step .mini{width:17px;height:17px;display:inline-block;vertical-align:-3px;margin-left:2px}
 /* ============ SECTIONS ============ */
-.sec{padding:clamp(60px,8vw,108px) 0;border-top:1px solid var(--line)}
-.sec__head{max-width:620px;margin-bottom:44px}
-.sec__head p{margin:14px 0 0;color:var(--muted);font-size:1.02rem}
-/* ---- what runs here ---- */
+.sec{padding:clamp(56px,7.5vw,100px) 0;border-top:1px solid var(--line)}
+.sec__head{max-width:620px;margin-bottom:42px}
+.sec__head p{margin-top:14px;color:var(--muted);font-size:1rem}
+/* ---- what you can run ---- */
 .parts{display:grid;grid-template-columns:1fr 1fr;gap:14px}
 @media(max-width:820px){.parts{grid-template-columns:1fr}}
-.part{
-  background:var(--surface);border:1px solid var(--line);border-radius:var(--r);
-  padding:26px 28px;transition:border-color .2s,background .2s;
-}
+.part{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:26px 28px;transition:border-color .2s,background .2s}
 .part:hover{border-color:var(--purple-line);background:var(--surface-2)}
 .part__tag{display:inline-block;font-size:.78rem;color:var(--purple);font-variation-settings:"wght" 620;margin-bottom:10px}
-.part h3{font-size:1.22rem;font-variation-settings:"wdth" 104,"wght" 640;margin-bottom:8px}
-.part p{margin:0;color:var(--muted);font-size:.96rem}
+.part h3{font-size:1.2rem;font-variation-settings:"wdth" 104,"wght" 640;margin-bottom:8px}
+.part p{color:var(--body);font-size:.96rem}
 /* ---- two sides ---- */
 .sides{display:grid;grid-template-columns:1fr 1fr;gap:14px}
 @media(max-width:820px){.sides{grid-template-columns:1fr}}
 .side{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:clamp(26px,3.4vw,38px)}
-.side h3{font-size:clamp(1.3rem,2.4vw,1.6rem);line-height:1.2;font-variation-settings:"wdth" 105,"wght" 660;margin:10px 0 12px}
-.side>p{margin:0 0 22px;color:var(--muted);font-size:.98rem}
+.side h3{font-size:clamp(1.28rem,2.3vw,1.55rem);line-height:1.22;font-variation-settings:"wdth" 105,"wght" 660;margin:10px 0 12px}
+.side>p{margin-bottom:22px;color:var(--body);font-size:.98rem}
 .side ul{list-style:none;margin:0 0 26px;padding:0}
-.side li{display:flex;gap:12px;align-items:baseline;padding:10px 0;border-top:1px solid var(--line);font-size:.95rem}
+.side li{display:flex;gap:12px;align-items:baseline;padding:10px 0;border-top:1px solid var(--line);font-size:.95rem;color:var(--body)}
 .side li:first-child{border-top:none}
 .side li i{font-style:normal;color:var(--purple);flex:none;font-variation-settings:"wght" 640;font-size:.85rem}
-.txt{
-  display:inline-flex;align-items:center;gap:7px;font-size:.95rem;
-  font-variation-settings:"wght" 620;color:var(--purple);transition:color .18s;
-}
+.txt{display:inline-flex;align-items:center;gap:7px;font-size:.95rem;font-variation-settings:"wght" 620;color:var(--purple);transition:color .18s}
 .txt:hover{color:var(--text)}
-/* ---- fees ---- */
+/* ---- pricing ---- */
 .fees{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.1fr);gap:clamp(32px,5vw,72px);align-items:start}
 @media(max-width:880px){.fees{grid-template-columns:1fr}}
-.fees__say p{color:var(--muted);margin:16px 0 0;font-size:1rem;max-width:46ch}
+.fees__say p{color:var(--body);margin-top:16px;font-size:1rem;max-width:46ch}
 .fees__say strong{color:var(--text);font-variation-settings:"wght" 600;font-weight:normal}
-.example{
-  margin-top:30px;background:var(--surface);border:1px solid var(--line);
-  border-radius:var(--r);padding:22px 24px;
-}
-.example__t{font-size:.86rem;color:var(--muted);margin:0 0 14px;font-variation-settings:"wght" 560}
+.example{margin-top:30px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:22px 24px}
+.example__t{font-size:.86rem;color:var(--muted);margin-bottom:14px;font-variation-settings:"wght" 560}
 .ex{display:flex;justify-content:space-between;gap:14px;padding:7px 0;font-size:.94rem;color:var(--muted)}
-.ex b{color:var(--text);font-weight:normal;font-variation-settings:"wght" 480}
+.ex b{color:var(--body);font-weight:normal;font-variation-settings:"wght" 480}
 .ex--total{border-top:1px solid var(--line-strong);margin-top:8px;padding-top:14px;color:var(--text)}
-.ex--total b{font-variation-settings:"wght" 660}
+.ex--total b{color:var(--text);font-variation-settings:"wght" 660}
 .ex--zero{color:var(--purple)}
 .ex--zero b{color:var(--purple);font-variation-settings:"wght" 660}
 .table{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
@@ -234,24 +240,24 @@ h1 em{font-style:normal;color:var(--purple)}
 .soon{font-size:.7rem;color:var(--purple);border:1px solid var(--purple-line);border-radius:99px;padding:2px 9px;margin-left:8px;vertical-align:middle;font-variation-settings:"wght" 560}
 .fee--zero{background:var(--purple-soft)}
 .fee--zero .fee__amt{color:var(--purple)}
-/* ---- answers ---- */
+/* ---- faq ---- */
 .qa{max-width:780px}
 .qa__row{padding:22px 0;border-top:1px solid var(--line)}
 .qa__row:first-child{border-top:none}
-.qa__q{font-size:1.06rem;font-variation-settings:"wght" 620;margin:0 0 6px}
-.qa__a{color:var(--muted);font-size:.98rem;margin:0}
+.qa__q{font-size:1.06rem;font-variation-settings:"wght" 620;margin-bottom:6px}
+.qa__a{color:var(--body);font-size:.98rem}
 .qa__a b{color:var(--text);font-variation-settings:"wght" 600;font-weight:normal}
 /* ---- seal ---- */
-.seal{border-top:1px solid var(--line);padding:clamp(68px,9vw,120px) 0;text-align:center}
+.seal{border-top:1px solid var(--line);padding:clamp(68px,9vw,116px) 0;text-align:center}
 .seal__mark{
-  width:clamp(104px,15vw,140px);height:clamp(104px,15vw,140px);margin:0 auto 30px;
+  width:clamp(100px,14vw,132px);height:clamp(100px,14vw,132px);margin:0 auto 28px;
   display:grid;place-items:center;border-radius:50%;
   background:var(--surface);border:1px solid var(--line-strong);
   box-shadow:0 24px 56px -30px rgba(0,0,0,.85);
 }
 .seal__mark img{width:50%;height:50%;object-fit:contain}
 .seal h2{margin-bottom:16px}
-.seal p{margin:0 auto 32px;color:var(--muted);max-width:52ch;font-size:1.04rem}
+.seal p{margin:0 auto 32px;color:var(--body);max-width:50ch;font-size:1.04rem}
 .seal .actions{justify-content:center}
 /* ---- footer ---- */
 .foot{border-top:1px solid var(--line);padding:32px 0 46px}
@@ -262,7 +268,7 @@ h1 em{font-style:normal;color:var(--purple)}
 .foot__links{display:flex;gap:24px;flex-wrap:wrap}
 .foot__links a{font-size:.9rem;color:var(--muted);transition:color .18s}
 .foot__links a:hover{color:var(--text)}
-.foot__meta{font-size:.82rem;color:var(--muted);width:100%;padding-top:22px;margin:22px 0 0;border-top:1px solid var(--line)}
+.foot__meta{font-size:.82rem;color:var(--muted);width:100%;padding-top:22px;margin-top:22px;border-top:1px solid var(--line)}
 .rise{opacity:0;transform:translateY(12px);transition:opacity .6s ease,transform .6s cubic-bezier(.2,.8,.3,1)}
 .rise.in{opacity:1;transform:none}
 @media(prefers-reduced-motion:reduce){
@@ -292,14 +298,15 @@ h1 em{font-style:normal;color:var(--purple)}
   </header>
   <!-- ===================== HERO ===================== -->
   <section class="hero">
+    <div class="hero__glow" aria-hidden="true"></div>
     <div class="wrap hero__grid">
       <div>
-        <h1>Run campaigns your community can <em>trust.</em></h1>
+        <h1>Reward the people who <em>show up.</em></h1>
         <p class="hero__sub">
-          Bard is where Solana projects run competitions, leaderboards and airdrops. A team writes a rule — do this, receive that — and <b>Bard verifies who did it and settles the reward.</b> No spreadsheets, no favorites, no cut of anyone's token.
+          Bard is where Solana projects run challenges, leaderboards and airdrops. The team sets a challenge — do this, earn that. <b>Bard checks who completed it and pays the reward.</b> No spreadsheets, no favorites, no cut of anyone's token.
         </p>
         <div class="actions">
-          <a class="btn btn--solid" href="/admin.html">Create a campaign</a>
+          <a class="btn btn--solid" href="/admin.html">Start a campaign</a>
           <a class="btn btn--ghost" href="/dashboard.html">Explore projects</a>
         </div>
         <p class="hero__note">Flat fees in SOL, published upfront. <b>0% of your token, ever.</b></p>
@@ -313,53 +320,80 @@ h1 em{font-style:normal;color:var(--purple)}
             <span class="pill">Active</span>
           </div>
           <div class="card__rule">
-            <div class="tabs" role="group" aria-label="Campaign type">
+            <div class="tabs" role="group" aria-label="Try another challenge type">
               <button class="tab is-on" data-rule="hold">Hold</button>
-              <button class="tab" data-rule="raid">Raid</button>
-              <button class="tab" data-rule="refer">Refer</button>
+              <button class="tab" data-rule="post">Post</button>
+              <button class="tab" data-rule="invite">Invite</button>
             </div>
+            <span class="rule__label">The challenge</span>
             <p class="rule__line" id="cline"><b>Hold 100,000 FROGZ for 7 days</b> → earn <span>0.5 SOL</span></p>
           </div>
           <div class="people" id="people" aria-live="polite"></div>
           <div class="card__foot">
             <div class="card__meta">
-              <span><b class="num" id="paid">0.0</b> of <span class="num">12</span> SOL paid out</span>
-              <span><b class="num" id="settled">0</b> settled</span>
+              <span><b class="num" id="paid">0.0</b> of <span class="num" id="pool">12</span> SOL paid out</span>
+              <span><b class="num" id="done">0</b> paid</span>
             </div>
             <div class="bar" aria-hidden="true"><i id="fill"></i></div>
           </div>
         </div>
-        <p class="card-cap">Live example — switch the campaign type above. Members who don't meet the rule aren't paid. <b>The smile appears when a reward settles.</b></p>
+        <p class="card-cap">A live example — try the other challenge types above. Members who don't complete the challenge aren't paid. <b>The smile appears on every payout that's real.</b></p>
       </div>
     </div>
   </section>
   <!-- ===================== HOW IT WORKS ===================== -->
-  <section class="sec" id="how">
+  <section class="how" id="how">
+    <div class="wrap">
+      <div class="how__head rise">
+        <h2>How it works</h2>
+        <p>Three steps, start to paid.</p>
+      </div>
+      <div class="steps">
+        <div class="step rise">
+          <span class="step__n" aria-hidden="true">1</span>
+          <h3>A team sets a challenge</h3>
+          <p>Any project can start one in minutes. Hold the token, share posts, invite friends — <b>the team picks the goal and the reward.</b></p>
+        </div>
+        <div class="step rise">
+          <span class="step__n" aria-hidden="true">2</span>
+          <h3>The community goes to work</h3>
+          <p>Everyone sees the same challenge and the same leaderboard. <b>Progress is public,</b> so nobody wonders who's really earning.</p>
+        </div>
+        <div class="step rise">
+          <span class="step__n" aria-hidden="true">3</span>
+          <h3>Bard checks and pays</h3>
+          <p>When someone completes the challenge, Bard confirms it and pays their reward. <b>Every real payout gets the smile</b><img class="mini" src="/transparentbardsmile.png" alt=""> — that's the proof.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+  <!-- ===================== WHAT YOU CAN RUN ===================== -->
+  <section class="sec">
     <div class="wrap">
       <div class="sec__head rise">
-        <h2>Everything writes to one record</h2>
-        <p>Four parts, one system. What your community does, what it earned, and proof it was paid.</p>
+        <h2>What you can run on Bard</h2>
+        <p>Four tools, one record of what your community did and what it earned.</p>
       </div>
       <div class="parts">
         <div class="part rise">
-          <span class="part__tag">Rules</span>
+          <span class="part__tag">Challenges</span>
           <h3>Campaigns</h3>
-          <p>Write the condition once — hold, raid, refer, trade, or something custom — and Bard checks it. No moderator deciding who counts.</p>
+          <p>Set the goal once — hold, post, invite, trade, or something custom — and Bard checks it. No moderator deciding who counts.</p>
         </div>
         <div class="part rise">
-          <span class="part__tag">Ranking</span>
+          <span class="part__tag">Rankings</span>
           <h3>Leaderboards</h3>
-          <p>A public standing that updates as members qualify. The people carrying your community stop being invisible.</p>
+          <p>A public ranking that updates as members qualify. The people carrying your community stop being invisible.</p>
         </div>
         <div class="part rise">
           <span class="part__tag">Payouts</span>
           <h3>Airdrops &amp; claims</h3>
-          <p>When someone meets the rule, their claim opens automatically. No address lists, no manual sends, no screenshots to a moderator.</p>
+          <p>When someone completes a challenge, their reward opens automatically. No address lists, no manual sends.</p>
         </div>
         <div class="part rise">
           <span class="part__tag">Discovery</span>
           <h3>Explore</h3>
-          <p>Every project running on Bard in one place, so holders find your campaign without you paying for another link drop.</p>
+          <p>Every project on Bard in one place, so holders find your campaign on their own.</p>
         </div>
       </div>
     </div>
@@ -369,26 +403,26 @@ h1 em{font-style:normal;color:var(--purple)}
     <div class="wrap">
       <div class="sec__head rise">
         <h2>Built for both sides</h2>
-        <p>Teams write the record. Holders read it. Nobody has to trust a screenshot.</p>
+        <p>Teams set the challenges. Holders complete them. Everyone sees the same record.</p>
       </div>
       <div class="sides rise">
         <div class="side">
           <span class="label">For teams</span>
           <h3>Run the campaign,<br>not the spreadsheet.</h3>
-          <p>Set a rule, fund the reward, share one link. Bard handles qualification, ranking and claims while you get back to building.</p>
+          <p>Set a challenge, fund the reward, share one link. Bard handles checking, ranking and payouts while you get back to building.</p>
           <ul>
             <li><i>1</i> Onboard your token once — 0.25 SOL</li>
-            <li><i>2</i> Launch holds, raids, referrals or volume races</li>
+            <li><i>2</i> Run holds, posts, invites or volume races</li>
             <li><i>3</i> Keep 100% of your supply — Bard never takes tokens</li>
           </ul>
-          <a class="txt" href="/admin.html">Create a campaign →</a>
+          <a class="txt" href="/admin.html">Start a campaign →</a>
         </div>
         <div class="side">
           <span class="label">For holders</span>
           <h3>Every project you're in,<br>one page.</h3>
-          <p>Active campaigns, your rank, and what's claimable — across every project you hold, without five tabs and five logins.</p>
+          <p>Active challenges, your rank, and what you can claim — across every project you hold, without five tabs and five logins.</p>
           <ul>
-            <li><i>1</i> Connect once, see every campaign you qualify for</li>
+            <li><i>1</i> Connect once, see every challenge you qualify for</li>
             <li><i>2</i> Track your rank while it's still worth climbing</li>
             <li><i>3</i> Claim what you earned from the same place</li>
           </ul>
@@ -408,8 +442,8 @@ h1 em{font-style:normal;color:var(--purple)}
         <div class="example">
           <p class="example__t">What a real campaign costs</p>
           <div class="ex"><span>Onboard your token (once)</span><b class="num">0.25 SOL</b></div>
-          <div class="ex"><span>Create the campaign</span><b class="num">0.25 SOL</b></div>
-          <div class="ex"><span>41 members qualified and claimed</span><b class="num">4.10 SOL</b></div>
+          <div class="ex"><span>Start the campaign</span><b class="num">0.25 SOL</b></div>
+          <div class="ex"><span>41 members completed it and got paid</span><b class="num">4.10 SOL</b></div>
           <div class="ex ex--total"><span>Total to run it</span><b class="num">4.60 SOL</b></div>
           <div class="ex ex--zero"><span>Taken from your supply</span><b>Nothing</b></div>
         </div>
@@ -420,11 +454,11 @@ h1 em{font-style:normal;color:var(--purple)}
           <span class="fee__amt num">0.25 SOL</span>
         </div>
         <div class="fee">
-          <span class="fee__what">Create a campaign<span class="fee__note">Per campaign, unlimited participants</span></span>
+          <span class="fee__what">Start a campaign<span class="fee__note">Per campaign, unlimited participants</span></span>
           <span class="fee__amt num">0.25 SOL</span>
         </div>
         <div class="fee">
-          <span class="fee__what">Settle a claim<span class="fee__note">Charged only when a reward actually pays out</span></span>
+          <span class="fee__what">Pay out a reward<span class="fee__note">Charged only when someone actually gets paid</span></span>
           <span class="fee__amt num">0.1 SOL</span>
         </div>
         <div class="fee fee--soon">
@@ -443,7 +477,7 @@ h1 em{font-style:normal;color:var(--purple)}
     <div class="wrap">
       <div class="sec__head rise">
         <h2>Straight answers</h2>
-        <p>The questions every team asks in the first five minutes.</p>
+        <p>The questions everyone asks in the first five minutes.</p>
       </div>
       <div class="qa">
         <div class="qa__row rise">
@@ -455,16 +489,16 @@ h1 em{font-style:normal;color:var(--purple)}
           <p class="qa__a"><b>No.</b> The platform stands on its own. If a Bard token ever exists, it will be a separate thing — using the platform will never depend on it.</p>
         </div>
         <div class="qa__row rise">
-          <p class="qa__q">Who decides which members qualify?</p>
-          <p class="qa__a"><b>The rule does.</b> You write the condition, Bard checks it, and the leaderboard shows the result. No moderator judging who was loyal enough.</p>
+          <p class="qa__q">Who decides who gets paid?</p>
+          <p class="qa__a"><b>The challenge does.</b> The team writes the goal, Bard checks it, and the leaderboard shows the result. No moderator judging who was loyal enough.</p>
         </div>
         <div class="qa__row rise">
           <p class="qa__q">What if a campaign flops?</p>
-          <p class="qa__a"><b>You're out 0.25 SOL.</b> Claim fees only apply to rewards that actually settle, so a campaign nobody finishes costs almost nothing.</p>
+          <p class="qa__a"><b>You're out 0.25 SOL.</b> Payout fees only apply to rewards that are actually paid, so a campaign nobody finishes costs almost nothing.</p>
         </div>
         <div class="qa__row rise">
           <p class="qa__q">Is any of it public?</p>
-          <p class="qa__a"><b>Rankings and settled payouts are.</b> That's the point of a record — your community can verify what was earned without asking you for a screenshot.</p>
+          <p class="qa__a"><b>Rankings and payouts are.</b> That's the point — your community can see what was earned without asking anyone for a screenshot.</p>
         </div>
       </div>
     </div>
@@ -475,10 +509,10 @@ h1 em{font-style:normal;color:var(--purple)}
       <div class="seal__mark rise">
         <img src="/transparentbardsmile.png" alt="The Bard smile">
       </div>
-      <h2 class="rise">A settled reward gets the smile.</h2>
-      <p class="rise">That's all the mark means, and it's why it's worth something: it appears when work was verified and a reward was actually paid. Collect enough of them and the record speaks for itself.</p>
+      <h2 class="rise">The smile means it was paid.</h2>
+      <p class="rise">That's all the mark means, and it's why it's worth something: it appears when work was checked and a reward actually moved. Collect enough of them and the record speaks for itself.</p>
       <div class="actions rise">
-        <a class="btn btn--solid" href="/admin.html">Create a campaign</a>
+        <a class="btn btn--solid" href="/admin.html">Start a campaign</a>
         <a class="btn btn--ghost" href="/dashboard.html">Explore projects</a>
       </div>
     </div>
@@ -512,29 +546,30 @@ h1 em{font-style:normal;color:var(--purple)}
         {n:'Lex',d:'6 days held',q:0},{n:'Tariq',d:'4 days held',q:0}
       ]
     },
-    raid:{
-      line:'<b>Reply to 20 posts about Frogz in 48 hours</b> → earn <span>0.25 SOL</span>',
+    post:{
+      line:'<b>Share 20 posts about Frogz in 48 hours</b> → earn <span>0.25 SOL</span>',
       pay:0.25, pool:6,
       rows:[
-        {n:'Tariq',d:'31 replies',q:1},{n:'Serg',d:'27 replies',q:1},
-        {n:'Rin',d:'22 replies',q:1},{n:'Mona',d:'20 replies',q:1},
-        {n:'Kaito',d:'14 replies',q:0},{n:'Lex',d:'6 replies',q:0}
+        {n:'Tariq',d:'31 posts',q:1},{n:'Serg',d:'27 posts',q:1},
+        {n:'Rin',d:'22 posts',q:1},{n:'Mona',d:'20 posts',q:1},
+        {n:'Kaito',d:'14 posts',q:0},{n:'Lex',d:'6 posts',q:0}
       ]
     },
-    refer:{
-      line:'<b>Refer 5 members who hold for 3 days</b> → earn <span>1 SOL</span>',
+    invite:{
+      line:'<b>Invite 5 friends who hold for 3 days</b> → earn <span>1 SOL</span>',
       pay:1, pool:15,
       rows:[
-        {n:'Nadia',d:'11 referrals',q:1},{n:'Lex',d:'8 referrals',q:1},
-        {n:'Mona',d:'5 referrals',q:1},{n:'Serg',d:'4 referrals',q:0},
-        {n:'Rin',d:'2 referrals',q:0},{n:'Tariq',d:'1 referral',q:0}
+        {n:'Nadia',d:'11 invites',q:1},{n:'Lex',d:'8 invites',q:1},
+        {n:'Mona',d:'5 invites',q:1},{n:'Serg',d:'4 invites',q:0},
+        {n:'Rin',d:'2 invites',q:0},{n:'Tariq',d:'1 invite',q:0}
       ]
     }
   };
   var peopleEl=document.getElementById('people'),
       lineEl=document.getElementById('cline'),
       paidEl=document.getElementById('paid'),
-      setEl=document.getElementById('settled'),
+      poolEl=document.getElementById('pool'),
+      doneEl=document.getElementById('done'),
       fill=document.getElementById('fill'),
       tabs=document.querySelectorAll('.tab');
   var timer=null, current='hold';
@@ -543,6 +578,7 @@ h1 em{font-style:normal;color:var(--purple)}
     clearTimeout(timer);
     var r=RULES[key];
     lineEl.innerHTML=r.line;
+    poolEl.textContent=r.pool;
     var html='';
     r.rows.forEach(function(p){
       html+='<div class="person'+(p.q?'':' person--short')+'">'+ 
@@ -551,7 +587,7 @@ h1 em{font-style:normal;color:var(--purple)}
         '<span class="person__deed">'+p.d+'</span></span>'+
         '<span class="person__right">'+ 
           (p.q
-            ? '<span class="person__amt num">'+r.pay.toFixed(2)+' SOL</span><span class="stamp"><img src="/transparentbardsmile.png" alt="Settled"></span>'
+            ? '<span class="person__amt num">'+r.pay.toFixed(2)+' SOL</span><span class="stamp"><img src="/transparentbardsmile.png" alt="Paid"></span>'
             : '<span class="status">In progress</span>')+
         '</span>'+
       '</div>';
@@ -560,23 +596,23 @@ h1 em{font-style:normal;color:var(--purple)}
     var all=Array.prototype.slice.call(peopleEl.children).filter(function(el){return !el.classList.contains('person--short')});
     function tally(n){
       paidEl.textContent=(n*r.pay).toFixed(1);
-      setEl.textContent=n;
+      doneEl.textContent=n;
       fill.style.width=((n*r.pay)/r.pool*100)+'%';
     }
     if(reduce){
-      all.forEach(function(el){el.classList.add('is-settled')});
+      all.forEach(function(el){el.classList.add('is-paid')});
       tally(all.length);
       return;
     }
     var i=0; tally(0);
     (function step(){
       if(i<all.length){
-        all[i].classList.add('is-settled');
+        all[i].classList.add('is-paid');
         i++; tally(i);
         timer=setTimeout(step,1500);
       }else{
         timer=setTimeout(function(){
-          all.forEach(function(el){el.classList.remove('is-settled')});
+          all.forEach(function(el){el.classList.remove('is-paid')});
           i=0; tally(0);
           timer=setTimeout(step,900);
         },4800);
