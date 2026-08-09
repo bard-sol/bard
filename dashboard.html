@@ -2,1228 +2,787 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<link rel="icon" type="image/png" href="/BardUpdated.png">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>$BARD — Dashboard</title>
+<title>Bard — dashboard</title>
+<meta name="description" content="Track campaigns, ranks, and claims across every Solana project on Bard.">
+<link rel="icon" href="/transparentbardsmile.png" type="image/png">
+<link rel="apple-touch-icon" href="/transparentbardsmile.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=DM+Mono:wght@300;400&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="https://unpkg.com/@solana/web3.js@1.87.6/lib/index.iife.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&display=swap" rel="stylesheet">
 <style>
-*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
-html, body { -webkit-user-select: none; user-select: none; height: 100%; }
-:root {
-  --bg: #080808; --surface: #0e0e0e; --surface2: #141414; --surface3: #1a1a1a;
-  --border: rgba(155,127,232,0.12); --border2: rgba(155,127,232,0.22);
-  --purple: #9b7fe8; --purple-dim: rgba(155,127,232,0.12);
-  --white: #fff; --w60: rgba(255,255,255,0.6); --w30: rgba(255,255,255,0.3); --w08: rgba(255,255,255,0.07);
-  --green: #4ade80; --red: #f87171; --sidebar: 220px;
+:root{
+  --bg:#1c1e26;
+  --surface:#262930;
+  --surface-2:#2d3039;
+  --purple:#a78bfa;
+  --text:#f4f4f5;
+  --muted:#a1a1aa;
+  --body:#d5d5da;
+  --line:rgba(244,244,245,.08);
+  --line-strong:rgba(244,244,245,.16);
+  --purple-soft:rgba(167,139,250,.12);
+  --purple-line:rgba(167,139,250,.35);
+  --green:#4ade80;
+  --font:"Archivo","Helvetica Neue",Helvetica,Arial,sans-serif;
+  --r:12px;
+  --gutter:clamp(18px,4vw,40px);
+  --max:1080px;
+  --side:220px;
 }
-body { background: var(--bg); color: var(--white); font-family: 'Outfit', sans-serif; display: flex; min-height: 100vh; cursor: none; }
-.cursor { position: fixed; width: 7px; height: 7px; background: var(--purple); border-radius: 50%; pointer-events: none; z-index: 9999; transform: translate(-50%,-50%); mix-blend-mode: screen; transition: transform 0.15s; }
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0;background:var(--bg);color:var(--text);
+  font-family:var(--font);font-size:16px;line-height:1.6;
+  font-variation-settings:"wdth" 100,"wght" 420;
+  -webkit-font-smoothing:antialiased;min-height:100vh;
+}
+img{display:block;max-width:100%}
+a{color:inherit;text-decoration:none}
+button,input,select{font:inherit;color:inherit}
+button{background:none;border:none;cursor:pointer;padding:0}
+:focus-visible{outline:2px solid var(--purple);outline-offset:3px;border-radius:4px}
+.num{font-variant-numeric:tabular-nums}
+.muted{color:var(--muted)}
 
-/* CONNECT SCREEN */
-.connect-screen { position: fixed; inset: 0; background: var(--bg); z-index: 200; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 2rem; }
-.connect-glow { position: absolute; width: 500px; height: 500px; background: radial-gradient(circle, rgba(107,70,193,0.1) 0%, transparent 70%); pointer-events: none; }
-.c-logo { display: flex; align-items: center; gap: 0.8rem; margin-bottom: 2.5rem; }
-.c-logo-text { font-size: 1.4rem; font-weight: 700; letter-spacing: 0.2em; }
-.c-title { font-size: 1.5rem; font-weight: 600; margin-bottom: 0.5rem; }
-.c-sub { font-family: 'DM Mono', monospace; font-size: 0.72rem; color: var(--w30); text-align: center; margin-bottom: 2rem; line-height: 1.8; letter-spacing: 0.05em; }
-.c-steps { display: flex; flex-direction: column; gap: 0.7rem; width: 100%; max-width: 340px; margin-bottom: 1.5rem; }
-.c-step { display: flex; align-items: center; gap: 0.9rem; padding: 0.9rem 1.1rem; background: var(--surface); border: 1px solid var(--border); cursor: pointer; transition: all 0.2s; }
-.c-step:hover { border-color: var(--purple); background: var(--purple-dim); }
-.c-step.done { border-color: rgba(74,222,128,0.3); }
-.c-step-num { width: 22px; height: 22px; border-radius: 50%; background: var(--purple-dim); border: 1px solid var(--border2); display: flex; align-items: center; justify-content: center; font-family: 'DM Mono', monospace; font-size: 0.62rem; color: var(--purple); flex-shrink: 0; }
-.c-step.done .c-step-num { background: rgba(74,222,128,0.1); border-color: rgba(74,222,128,0.3); color: var(--green); }
-.c-step-label { font-size: 0.83rem; font-weight: 500; }
-.c-step-sub { font-family: 'DM Mono', monospace; font-size: 0.6rem; color: var(--w30); margin-top: 0.1rem; }
-.c-btn { width: 100%; max-width: 340px; padding: 0.9rem; background: var(--purple); color: #000; border: none; font-family: 'Outfit', sans-serif; font-size: 0.82rem; font-weight: 600; letter-spacing: 0.08em; cursor: pointer; transition: all 0.2s; text-transform: uppercase; margin-bottom: 2rem; }
-.c-btn:hover { background: var(--white); }
-.tier-table { width: 100%; max-width: 340px; }
-.tier-row { display: flex; justify-content: space-between; padding: 0.55rem 0; border-bottom: 1px solid rgba(155,127,232,0.06); font-family: 'DM Mono', monospace; font-size: 0.62rem; }
-.tier-row:last-child { border-bottom: none; }
+/* shell */
+.app{display:flex;min-height:100vh}
+.side{
+  width:var(--side);flex:none;background:var(--surface);
+  border-right:1px solid var(--line);padding:18px 14px;
+  display:flex;flex-direction:column;position:fixed;inset:0 auto 0 0;z-index:30;
+}
+.side__brand{
+  display:flex;flex-direction:column;align-items:center;gap:2px;
+  padding:8px 0 18px;border-bottom:1px solid var(--line);margin-bottom:14px;
+}
+.side__word{font-size:1.1rem;font-variation-settings:"wdth" 112,"wght" 720;letter-spacing:-.015em}
+.side__smile{width:24px;height:15px;object-fit:contain}
+.side__wallet{
+  background:var(--surface-2);border:1px solid var(--line);border-radius:10px;
+  padding:12px;margin-bottom:16px;
+}
+.side__lbl{font-size:.72rem;color:var(--muted);margin-bottom:4px}
+.side__addr{font-size:.88rem;font-variation-settings:"wght" 560;word-break:break-all}
+.nav{display:flex;flex-direction:column;gap:2px;flex:1}
+.nav button{
+  text-align:left;padding:10px 12px;border-radius:8px;font-size:.92rem;
+  color:var(--muted);transition:background .15s,color .15s;
+}
+.nav button:hover{color:var(--text);background:rgba(244,244,245,.04)}
+.nav button.is-on{color:var(--text);background:var(--purple-soft);font-variation-settings:"wght" 600}
+.side__foot{padding-top:12px;border-top:1px solid var(--line)}
+.main{margin-left:var(--side);flex:1;min-width:0}
+.top{
+  position:sticky;top:0;z-index:20;
+  background:rgba(28,30,38,.9);backdrop-filter:blur(14px);
+  border-bottom:1px solid var(--line);
+  display:flex;align-items:center;justify-content:space-between;gap:16px;
+  padding:16px var(--gutter);min-height:64px;
+}
+.top__title{font-size:1rem;font-variation-settings:"wght" 640}
+.top__sub{font-size:.8rem;color:var(--muted);margin-top:2px}
+.content{padding:clamp(24px,4vw,40px) var(--gutter) 72px;max-width:var(--max)}
 
-/* SIDEBAR */
-.sidebar { width: var(--sidebar); min-height: 100vh; background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; position: fixed; top: 0; left: 0; bottom: 0; z-index: 50; }
-.sb-logo { padding: 1.5rem 1.3rem 1.1rem; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 0.65rem; }
-.sb-logo-text { font-size: 1.05rem; font-weight: 700; letter-spacing: 0.15em; }
-.sb-wallet { padding: 0.9rem 1.3rem; border-bottom: 1px solid var(--border); }
-.sb-tier { display: inline-flex; align-items: center; gap: 0.35rem; font-family: 'DM Mono', monospace; font-size: 0.58rem; letter-spacing: 0.18em; text-transform: uppercase; color: var(--purple); background: var(--purple-dim); padding: 0.2rem 0.55rem; margin-bottom: 0.55rem; }
-.sb-addr { font-family: 'DM Mono', monospace; font-size: 0.65rem; color: var(--w30); margin-bottom: 0.25rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.sb-bal { font-size: 0.95rem; font-weight: 600; }
-.sb-bal span { font-family: 'DM Mono', monospace; font-size: 0.62rem; color: var(--w30); margin-left: 0.25rem; font-weight: 400; }
-.sb-x { display: flex; align-items: center; gap: 0.35rem; margin-top: 0.45rem; font-family: 'DM Mono', monospace; font-size: 0.62rem; color: var(--w30); }
-.x-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--green); flex-shrink: 0; animation: blink 2s ease-in-out infinite; }
-@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
-.sb-nav { flex: 1; padding: 0.8rem 0; overflow-y: auto; }
-.nav-lbl { font-family: 'DM Mono', monospace; font-size: 0.52rem; letter-spacing: 0.3em; color: rgba(255,255,255,0.18); text-transform: uppercase; padding: 0.7rem 1.3rem 0.35rem; }
-.nav-item { display: flex; align-items: center; gap: 0.65rem; padding: 0.6rem 1.3rem; cursor: pointer; transition: all 0.18s; border-left: 2px solid transparent; font-size: 0.82rem; font-weight: 400; color: var(--w60); }
-.nav-item:hover { color: var(--white); background: var(--w08); }
-.nav-item.active { color: var(--purple); border-left-color: var(--purple); background: var(--purple-dim); font-weight: 500; }
-.nav-icon { width: 15px; height: 15px; opacity: 0.65; flex-shrink: 0; }
-.nav-item.active .nav-icon { opacity: 1; }
-.nav-badge { margin-left: auto; background: var(--purple); color: #000; font-family: 'DM Mono', monospace; font-size: 0.52rem; font-weight: 700; padding: 0.12rem 0.38rem; border-radius: 20px; }
-.sb-bottom { padding: 0.9rem 1.3rem; border-top: 1px solid var(--border); }
-.disc-btn { width: 100%; background: var(--purple); border: 1px solid var(--purple); color: #000; font-family: 'DM Mono', monospace; font-size: 0.62rem; letter-spacing: 0.15em; text-transform: uppercase; padding: 0.55rem; cursor: pointer; transition: all 0.2s; font-weight: 600; }
-.disc-btn:hover { background: var(--red); border-color: var(--red); color: #000; }
+@media(max-width:820px){
+  .side{position:fixed;transform:translateX(-105%);transition:transform .2s}
+  .side.is-open{transform:none}
+  .main{margin-left:0}
+  .menu-btn{display:inline-flex !important}
+}
+.menu-btn{
+  display:none;align-items:center;justify-content:center;
+  width:40px;height:40px;border-radius:8px;border:1px solid var(--line-strong);
+}
+.scrim{
+  display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:25;
+}
+.scrim.is-on{display:block}
 
-/* MAIN */
-.main { margin-left: var(--sidebar); flex: 1; min-height: 100vh; display: flex; flex-direction: column; }
-.topbar { padding: 1.1rem 1.8rem; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; background: var(--surface); position: sticky; top: 0; z-index: 40; }
-.topbar-title { font-size: 0.9rem; font-weight: 600; }
-.topbar-meta { font-family: 'DM Mono', monospace; font-size: 0.62rem; color: var(--w30); margin-top: 0.1rem; }
-.live-pill { display: flex; align-items: center; gap: 0.35rem; font-family: 'DM Mono', monospace; font-size: 0.6rem; color: var(--green); }
-.live-pill::before { content:''; width:5px; height:5px; border-radius:50%; background:var(--green); animation: blink 2s ease-in-out infinite; }
+/* atoms */
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:8px;
+  padding:11px 18px;border-radius:9px;font-size:.92rem;
+  font-variation-settings:"wght" 620;border:1px solid transparent;
+  transition:background .15s,border-color .15s,transform .12s;
+}
+.btn:active{transform:translateY(1px)}
+.btn--solid{background:var(--purple);color:#191320}
+.btn--solid:hover{background:#b9a3ff}
+.btn--ghost{border-color:var(--line-strong);color:var(--text)}
+.btn--ghost:hover{border-color:var(--purple-line);background:var(--purple-soft)}
+.btn--sm{padding:8px 12px;font-size:.84rem;border-radius:8px}
+.btn:disabled{opacity:.45;cursor:not-allowed;transform:none}
 
-/* PAGES */
-.page { display: none; padding: 1.8rem; animation: fadeIn 0.25s ease; }
-.page.active { display: block; }
-@keyframes fadeIn { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
+.kicker{font-size:.8rem;color:var(--purple);font-variation-settings:"wght" 600;margin:0 0 8px}
+h1{
+  margin:0 0 8px;font-size:clamp(1.55rem,3vw,2.05rem);line-height:1.15;
+  font-variation-settings:"wdth" 108,"wght" 700;letter-spacing:-.025em;
+}
+.lead{margin:0 0 22px;color:var(--body);max-width:52ch}
 
-/* STATS GRID */
-.stats-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 1px; background: var(--border); border: 1px solid var(--border); margin-bottom: 1.8rem; }
-.stat-card { background: var(--surface); padding: 1.3rem 1.5rem; transition: background 0.18s; }
-.stat-card:hover { background: var(--surface2); }
-.stat-lbl { font-family: 'DM Mono', monospace; font-size: 0.58rem; letter-spacing: 0.22em; color: var(--w30); text-transform: uppercase; margin-bottom: 0.55rem; }
-.stat-val { font-size: 1.4rem; font-weight: 600; line-height: 1; margin-bottom: 0.28rem; }
-.stat-sub { font-family: 'DM Mono', monospace; font-size: 0.6rem; color: var(--w30); }
-.stat-val.p { color: var(--purple); } .stat-val.g { color: var(--green); } .stat-val.r { color: var(--red); }
+.grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media(max-width:720px){
+  .grid-3,.grid-2{grid-template-columns:1fr}
+}
+.stat{
+  background:var(--surface);border:1px solid var(--line);border-radius:var(--r);
+  padding:16px 18px;
+}
+.stat__lbl{font-size:.76rem;color:var(--muted);margin-bottom:6px}
+.stat__val{font-size:1.25rem;font-variation-settings:"wght" 660;letter-spacing:-.02em}
+.stat__val.p{color:var(--purple)}
 
-/* CARDS */
-.card { background: var(--surface); border: 1px solid var(--border); padding: 1.4rem; margin-bottom: 0.9rem; }
-.card-sm { background: var(--surface); border: 1px solid var(--border); padding: 1.1rem 1.3rem; }
-.sec-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.1rem; }
-.sec-title { font-size: 0.75rem; font-weight: 600; letter-spacing: 0.06em; color: var(--w60); text-transform: uppercase; }
-.sec-action { font-family: 'DM Mono', monospace; font-size: 0.6rem; color: var(--purple); letter-spacing: 0.1em; cursor: pointer; background: none; border: none; text-transform: uppercase; }
+.card{
+  background:var(--surface);border:1px solid var(--line);
+  border-radius:var(--r);padding:18px 20px;
+}
+.card + .card{margin-top:10px}
+.card--hover{cursor:pointer;transition:border-color .15s,background .15s}
+.card--hover:hover{border-color:var(--purple-line);background:var(--surface-2)}
 
-/* TABLE */
-.dt { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
-.dt th { font-family: 'DM Mono', monospace; font-size: 0.56rem; letter-spacing: 0.2em; color: var(--w30); text-transform: uppercase; padding: 0.65rem 0.9rem; text-align: left; border-bottom: 1px solid var(--border); font-weight: 400; }
-.dt td { padding: 0.8rem 0.9rem; border-bottom: 1px solid rgba(155,127,232,0.05); vertical-align: middle; }
-.dt tr:last-child td { border-bottom: none; }
-.dt tr:hover td { background: var(--w08); }
+.pill{
+  display:inline-flex;align-items:center;font-size:.72rem;padding:3px 9px;
+  border-radius:99px;font-variation-settings:"wght" 600;white-space:nowrap;
+}
+.pill--live{background:var(--purple-soft);color:var(--purple)}
+.pill--done{background:rgba(74,222,128,.12);color:var(--green)}
+.pill--muted{background:rgba(244,244,245,.06);color:var(--muted)}
 
-/* BADGES */
-.badge { display: inline-block; font-family: 'DM Mono', monospace; font-size: 0.56rem; letter-spacing: 0.15em; text-transform: uppercase; padding: 0.18rem 0.5rem; border-radius: 2px; }
-.bp { background: var(--purple-dim); color: var(--purple); }
-.bg { background: rgba(74,222,128,0.1); color: var(--green); }
-.br { background: rgba(248,113,113,0.1); color: var(--red); }
-.bw { background: var(--w08); color: var(--w30); }
+.item{display:flex;align-items:center;gap:12px}
+.item__ava{
+  width:38px;height:38px;border-radius:10px;background:var(--purple-soft);
+  display:grid;place-items:center;color:var(--purple);
+  font-size:.8rem;font-variation-settings:"wght" 680;flex:none;
+}
+.item__body{min-width:0;flex:1}
+.item__title{font-size:.98rem;font-variation-settings:"wght" 600;line-height:1.3}
+.item__sub{font-size:.8rem;color:var(--muted);margin-top:2px}
+.item__right{margin-left:auto;flex:none;text-align:right}
 
-/* MISC */
-.rank { font-family: 'DM Mono', monospace; font-size: 0.72rem; color: var(--w30); min-width: 22px; }
-.rank.gold { color: #f59e0b; } .rank.silver { color: #94a3b8; } .rank.bronze { color: #b45309; }
-.avatar { width: 28px; height: 28px; border-radius: 50%; background: var(--purple-dim); border: 1px solid var(--border2); display: flex; align-items: center; justify-content: center; font-size: 0.6rem; font-weight: 600; color: var(--purple); flex-shrink: 0; }
-.bar-wrap { height: 3px; background: rgba(255,255,255,0.05); border-radius: 2px; overflow: hidden; }
-.bar { height: 100%; background: var(--purple); border-radius: 2px; }
-.mono { font-family: 'DM Mono', monospace; }
+.empty{
+  text-align:center;padding:40px 20px;
+  background:var(--surface);border:1px dashed var(--line-strong);border-radius:var(--r);
+}
+.empty h3{margin:0 0 8px;font-size:1.1rem;font-variation-settings:"wght" 640}
+.empty p{margin:0 0 16px;color:var(--muted);max-width:40ch;margin-left:auto;margin-right:auto}
 
-/* OVERVIEW 2-col */
-.ov-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem; }
-.mini-lb { display: flex; align-items: center; gap: 0.7rem; padding: 0.65rem 0; border-bottom: 1px solid rgba(155,127,232,0.05); }
-.mini-lb:last-child { border-bottom: none; }
-.mini-pts { margin-left: auto; font-family: 'DM Mono', monospace; font-size: 0.7rem; color: var(--purple); }
-.vp-bar { background: var(--surface); border: 1px solid var(--border); padding: 1rem 1.3rem; display: flex; align-items: center; gap: 1.2rem; }
-.vp-lbl { font-family: 'DM Mono', monospace; font-size: 0.58rem; letter-spacing: 0.18em; color: var(--w30); text-transform: uppercase; flex-shrink: 0; }
-.vp-track { flex: 1; height: 3px; background: rgba(255,255,255,0.05); border-radius: 2px; overflow: hidden; }
-.vp-fill { height: 100%; background: var(--purple); }
-.vp-val { font-family: 'DM Mono', monospace; font-size: 0.72rem; color: var(--purple); flex-shrink: 0; }
+.page{display:none}
+.page.is-on{display:block}
 
-/* STAKING */
-.stake-panel { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--border); border: 1px solid var(--border); margin-bottom: 1.8rem; }
-.stake-side { background: var(--surface); padding: 1.6rem; }
-.stake-lbl { font-family: 'DM Mono', monospace; font-size: 0.58rem; letter-spacing: 0.22em; color: var(--w30); text-transform: uppercase; margin-bottom: 1rem; }
-.apy-wrap { display: flex; align-items: baseline; gap: 0.4rem; margin-bottom: 1.3rem; }
-.apy-val { font-size: 2.3rem; font-weight: 700; color: var(--green); line-height: 1; }
-.apy-lbl { font-family: 'DM Mono', monospace; font-size: 0.62rem; color: var(--w30); }
-.inp-wrap { display: flex; align-items: center; border: 1px solid var(--border2); margin-bottom: 0.6rem; transition: border-color 0.2s; }
-.inp-wrap:focus-within { border-color: var(--purple); }
-.inp { flex: 1; background: transparent; border: none; outline: none; padding: 0.7rem 0.9rem; color: var(--white); font-family: 'DM Mono', monospace; font-size: 0.88rem; cursor: text; }
-.inp::placeholder { color: var(--w30); }
-.inp-max { font-family: 'DM Mono', monospace; font-size: 0.58rem; color: var(--purple); padding: 0 0.9rem; cursor: pointer; background: none; border: none; text-transform: uppercase; }
-.stake-btn { width: 100%; padding: 0.75rem; background: var(--purple); color: #000; border: none; font-family: 'Outfit', sans-serif; font-size: 0.8rem; font-weight: 600; letter-spacing: 0.08em; cursor: pointer; transition: all 0.2s; text-transform: uppercase; }
-.stake-btn:hover { background: var(--white); }
-.stake-btn.out { background: transparent; color: var(--w60); border: 1px solid var(--border2); }
-.stake-btn.out:hover { border-color: var(--red); color: var(--red); background: transparent; }
+.stamp{width:18px;height:18px;object-fit:contain;vertical-align:-3px;margin-left:4px}
 
-/* VOTING */
-.vote-card { background: var(--surface); border: 1px solid var(--border); padding: 1.3rem 1.5rem; margin-bottom: 1px; transition: background 0.18s; }
-.vote-card:hover { background: var(--surface2); }
-.vote-title { font-size: 0.88rem; font-weight: 500; margin-bottom: 0.35rem; }
-.vote-meta { font-family: 'DM Mono', monospace; font-size: 0.6rem; color: var(--w30); margin-bottom: 0.9rem; }
-.vote-bar-wrap { height: 3px; background: rgba(255,255,255,0.05); border-radius: 2px; overflow: hidden; margin-bottom: 0.4rem; }
-.vote-bar-yes { height: 100%; background: var(--green); }
-.vote-stats { display: flex; justify-content: space-between; font-family: 'DM Mono', monospace; font-size: 0.6rem; color: var(--w30); margin-bottom: 0.9rem; }
-.vote-acts { display: flex; gap: 0.5rem; }
-.vbtn { flex: 1; padding: 0.5rem; border: 1px solid var(--border2); background: transparent; color: var(--w60); font-family: 'Outfit', sans-serif; font-size: 0.76rem; font-weight: 500; cursor: pointer; transition: all 0.18s; }
-.vbtn.yes:hover { border-color: var(--green); color: var(--green); background: rgba(74,222,128,0.05); }
-.vbtn.no:hover { border-color: var(--red); color: var(--red); background: rgba(248,113,113,0.05); }
+.toast{
+  position:fixed;bottom:22px;right:22px;z-index:100;
+  background:var(--surface);border:1px solid var(--line-strong);
+  border-radius:10px;padding:12px 16px;font-size:.9rem;
+  box-shadow:0 16px 40px -20px rgba(0,0,0,.7);
+  opacity:0;transform:translateY(8px);pointer-events:none;
+  transition:opacity .25s,transform .25s;max-width:320px;
+}
+.toast.is-on{opacity:1;transform:none}
+.toast.ok{border-color:rgba(74,222,128,.35);color:var(--green)}
+.toast.err{border-color:rgba(248,113,113,.35);color:#f87171}
 
-/* TREASURY */
-.trow { display: grid; grid-template-columns: 1.6fr 1fr 1fr 1fr 130px; align-items: center; padding: 0.9rem 1.1rem; border-bottom: 1px solid rgba(155,127,232,0.05); transition: background 0.15s; }
-.trow:hover { background: var(--w08); }
-.trow.hdr { font-family: 'DM Mono', monospace; font-size: 0.55rem; letter-spacing: 0.2em; color: var(--w30); text-transform: uppercase; padding: 0.55rem 1.1rem; border-bottom: 1px solid var(--border); }
-.trow.hdr:hover { background: transparent; }
-.tname { font-size: 0.82rem; font-weight: 500; }
-.tmono { font-family: 'DM Mono', monospace; font-size: 0.72rem; }
-
-/* BURN */
-.burn-box { text-align: center; padding: 1.8rem; border: 1px solid var(--border); background: var(--surface); margin-bottom: 1.2rem; }
-.burn-num { font-size: 2.8rem; font-weight: 700; color: var(--red); line-height: 1; margin-bottom: 0.35rem; letter-spacing: -0.02em; }
-.burn-lbl { font-family: 'DM Mono', monospace; font-size: 0.62rem; color: var(--w30); letter-spacing: 0.2em; text-transform: uppercase; }
-
-/* CLAIMS */
-.claim-card { background: var(--surface); border: 1px solid var(--border); padding: 1.4rem; margin-bottom: 1px; transition: background 0.18s; }
-.claim-card:hover { background: var(--surface2); }
-
-/* MODAL */
-.modal-ov { position: fixed; inset: 0; background: rgba(0,0,0,0.88); z-index: 300; display: none; align-items: center; justify-content: center; padding: 2rem; }
-.modal-ov.open { display: flex; }
-.modal { background: var(--surface); border: 1px solid var(--border2); width: 100%; max-width: 540px; max-height: 80vh; overflow-y: auto; animation: fadeIn 0.2s ease; }
-.modal-hdr { display: flex; align-items: center; justify-content: space-between; padding: 1.1rem 1.4rem; border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--surface); }
-.modal-title { font-size: 0.88rem; font-weight: 600; }
-.modal-close { background: none; border: none; color: var(--w30); cursor: pointer; font-size: 1.1rem; line-height: 1; }
-.modal-close:hover { color: var(--white); }
-.modal-body { padding: 1.2rem 1.4rem; }
-.pts-bk { background: var(--surface2); border: 1px solid var(--border); padding: 0.9rem 1.1rem; margin-bottom: 1rem; }
-.pts-row { display: flex; justify-content: space-between; align-items: center; padding: 0.45rem 0; border-bottom: 1px solid rgba(155,127,232,0.05); font-family: 'DM Mono', monospace; font-size: 0.68rem; }
-.pts-row:last-child { border-bottom: none; }
-.shill-item { padding: 0.85rem 0; border-bottom: 1px solid rgba(155,127,232,0.05); }
-.shill-item:last-child { border-bottom: none; }
-.shill-txt { font-size: 0.8rem; color: var(--w60); line-height: 1.5; margin-bottom: 0.45rem; }
-.shill-stats { display: flex; gap: 0.9rem; font-family: 'DM Mono', monospace; font-size: 0.58rem; color: var(--w30); }
-.shill-pts { color: var(--purple); margin-left: auto; }
-
-select { background: var(--surface2); border: 1px solid var(--border2); color: var(--white); padding: 0.7rem 0.8rem; font-family: 'Outfit', sans-serif; font-size: 0.8rem; outline: none; cursor: pointer; width: 100%; }
-textarea { width: 100%; background: var(--surface2); border: 1px solid var(--border2); color: var(--white); padding: 0.75rem 0.9rem; font-family: 'DM Mono', monospace; font-size: 0.72rem; resize: vertical; min-height: 75px; outline: none; line-height: 1.6; }
+.connect{
+  min-height:100vh;display:flex;align-items:center;justify-content:center;
+  padding:32px var(--gutter);text-align:center;
+}
+.connect__box{max-width:420px;width:100%}
+.connect__mark{
+  display:inline-flex;flex-direction:column;align-items:center;gap:4px;margin-bottom:22px;
+}
+.connect__mark span{font-size:1.4rem;font-variation-settings:"wdth" 112,"wght" 720}
+.connect__mark img{width:36px;height:22px;object-fit:contain}
+.connect h1{margin-bottom:10px}
+.connect p{color:var(--body);margin:0 0 24px}
+.connect .actions{display:flex;flex-direction:column;gap:10px}
 </style>
 </head>
 <body>
-<div class="cursor" id="cursor"></div>
 
 <!-- CONNECT -->
-<div class="connect-screen" id="cs">
-  <div class="connect-glow"></div>
-  <div class="c-logo">
-    <svg width="30" height="18" viewBox="0 0 30 18" fill="none"><path d="M2 2 Q15 16 28 2" stroke="#9b7fe8" stroke-width="2.5" fill="none" stroke-linecap="round"/></svg>
-    <span class="c-logo-text">$BARD</span>
-  </div>
-  <h1 class="c-title">Enter the Dashboard</h1>
-  <p class="c-sub">Connect your wallet and link your X account<br>to access the Bard member area.</p>
-  <div class="c-steps">
-    <div class="c-step" id="s1" onclick="doStep(1)">
-      <div class="c-step-num" id="s1n">1</div>
-      <div><div class="c-step-label">Connect Wallet</div><div class="c-step-sub">Phantom · Trust · Solflare</div></div>
+<div class="connect" id="gate">
+  <div class="connect__box">
+    <div class="connect__mark">
+      <span>Bard</span>
+      <img src="/transparentbardsmile.png" alt="">
     </div>
-    <div class="c-step" id="s2" onclick="doStep(2)">
-      <div class="c-step-num" id="s2n">2</div>
-      <div><div class="c-step-label">Link X Account</div><div class="c-step-sub">Authorize via OAuth</div></div>
+    <h1>Every project you're in, one page</h1>
+    <p>Connect a Solana wallet to track campaigns, ranks, and claims. No Bard token required.</p>
+    <div class="actions">
+      <button class="btn btn--solid" id="btn-connect">Connect wallet</button>
+      <button class="btn btn--ghost" id="btn-browse">Browse without connecting</button>
     </div>
-  </div>
-  <button class="c-btn" onclick="enter()">Enter Dashboard</button>
-  <div class="mono" style="font-size:0.65rem;color:var(--w30);text-align:center;line-height:1.8;letter-spacing:0.05em">Hold at least 1 $BARD for full access.<br>All features available to every holder.</div>
-</div>
-
-<!-- MODAL -->
-<div class="modal-ov" id="mo">
-  <div class="modal">
-    <div class="modal-hdr">
-      <div><div class="modal-title" id="mu">—</div><div class="mono" style="font-size:0.6rem;color:var(--w30);margin-top:0.15rem;" id="modal-sub">—</div></div>
-      <button class="modal-close" onclick="closeModal()">✕</button>
-    </div>
-    <div class="modal-body">
-      <div class="pts-bk" id="modal-pts-breakdown">
-        <div class="pts-row"><span style="color:var(--w30)">Loading...</span></div>
-      </div>
-      <div class="mono" style="font-size:0.58rem;letter-spacing:0.2em;color:var(--w30);text-transform:uppercase;margin-bottom:0.7rem;">This Month's Shills</div>
-      <div id="modal-shills" style="font-family:'DM Mono',monospace;font-size:0.7rem;color:var(--w30);padding:1rem 0;text-align:center">No shills tracked yet</div>
-      <div style="text-align:center;padding-top:1rem;"><button class="sec-action" style="font-size:0.65rem;">Challenge a Point Allocation ↗</button></div>
-    </div>
+    <p class="muted" style="margin-top:18px;font-size:.82rem">Phantom, Solflare, or any injected Solana wallet.</p>
   </div>
 </div>
 
-<!-- DASHBOARD -->
-<div id="app" style="display:none;width:100%;">
+<div class="scrim" id="scrim"></div>
 
-<aside class="sidebar">
-  <div class="sb-logo">
-    <svg width="26" height="16" viewBox="0 0 26 16" fill="none"><path d="M1 1 Q13 15 25 1" stroke="#9b7fe8" stroke-width="2" fill="none" stroke-linecap="round"/></svg>
-    <span class="sb-logo-text">$BARD</span>
-  </div>
-  <div class="sb-wallet">
-    <div class="sb-tier">● Holder</div>
-    <div class="sb-addr" id="sb-addr">Not connected</div>
-    <div class="sb-bal" id="sb-bal">— <span>$BARD</span></div>
-    <div class="sb-x" id="sb-x"><div class="x-dot"></div>Not linked</div>
-  </div>
-  <nav class="sb-nav">
-    <div class="nav-lbl">Main</div>
-    <div class="nav-item active" onclick="go('overview',this)">
-      <svg class="nav-icon" viewBox="0 0 16 16" fill="none"><rect x="1" y="1" width="6" height="6" rx="1" stroke="currentColor" stroke-width="1.2"/><rect x="9" y="1" width="6" height="6" rx="1" stroke="currentColor" stroke-width="1.2"/><rect x="1" y="9" width="6" height="6" rx="1" stroke="currentColor" stroke-width="1.2"/><rect x="9" y="9" width="6" height="6" rx="1" stroke="currentColor" stroke-width="1.2"/></svg>
-      Overview
+<div class="app" id="app" style="display:none">
+  <aside class="side" id="side">
+    <a class="side__brand" href="/">
+      <span class="side__word">Bard</span>
+      <img class="side__smile" src="/transparentbardsmile.png" alt="">
+    </a>
+    <div class="side__wallet">
+      <div class="side__lbl">Wallet</div>
+      <div class="side__addr" id="side-addr">Not connected</div>
     </div>
-    <div class="nav-item" onclick="go('leaderboard',this)">
-      <svg class="nav-icon" viewBox="0 0 16 16" fill="none"><path d="M8 1l1.5 4.5H14l-3.5 2.5 1.5 4.5L8 10l-4 2.5 1.5-4.5L2 5.5h4.5z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg>
-      Leaderboard <span class="nav-badge">LIVE</span>
+    <nav class="nav" aria-label="Dashboard">
+      <button type="button" class="is-on" data-page="overview">Overview</button>
+      <button type="button" data-page="mine">My campaigns</button>
+      <button type="button" data-page="explore">Explore</button>
+      <button type="button" data-page="claims">Claims</button>
+    </nav>
+    <div class="side__foot">
+      <button class="btn btn--ghost btn--sm" style="width:100%" id="btn-disc">Disconnect</button>
+      <a class="btn btn--ghost btn--sm" style="width:100%;margin-top:8px" href="/admin.html">For teams</a>
     </div>
-    <div class="nav-item" onclick="go('pools',this)">
-      <svg class="nav-icon" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.2"/><path d="M8 4v4l3 2" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
-      Pools
-    </div>
-    <div class="nav-lbl">Member</div>
-    <div class="nav-item" onclick="go('staking',this)">
-      <svg class="nav-icon" viewBox="0 0 16 16" fill="none"><path d="M2 12l4-8 3 5 2-3 3 6" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      Staking
-    </div>
-    <div class="nav-item" onclick="go('voting',this)">
-      <svg class="nav-icon" viewBox="0 0 16 16" fill="none"><rect x="1" y="3" width="14" height="10" rx="1" stroke="currentColor" stroke-width="1.2"/><path d="M5 8l2 2 4-4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      Voting <span class="nav-badge">3</span>
-    </div>
-    <div class="nav-item" onclick="go('claims',this)">
-      <svg class="nav-icon" viewBox="0 0 16 16" fill="none"><path d="M8 1v9M4 6l4 4 4-4M2 12h12" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      Claims <span class="nav-badge">1</span>
-    </div>
-    <div class="nav-item" onclick="go('treasury',this)">
-      <svg class="nav-icon" viewBox="0 0 16 16" fill="none"><rect x="1" y="4" width="14" height="10" rx="1" stroke="currentColor" stroke-width="1.2"/><path d="M1 7h14M5 10h2M9 10h2" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
-      Treasury
-    </div>
-  </nav>
-  <div class="sb-bottom">
-    <button class="disc-btn" onclick="disconnect()">Disconnect</button>
-  </div>
-</aside>
+  </aside>
 
-<div class="main">
-  <div class="topbar">
-    <div><div class="topbar-title" id="tt">Overview</div><div class="topbar-meta" id="tm">Loading...</div></div>
-    <div class="live-pill">Live</div>
-  </div>
-
-  <!-- OVERVIEW -->
-  <div class="page active" id="pg-overview">
-    <div class="stats-grid">
-      <div class="stat-card"><div class="stat-lbl">My Holdings</div><div class="stat-val p" id="ov-holdings">—</div><div class="stat-sub" id="ov-holdings-sub">Connect wallet to view</div></div>
-      <div class="stat-card"><div class="stat-lbl">Voting Power</div><div class="stat-val" id="ov-vp">—</div><div class="stat-sub">Wallet + staked ×1.25</div></div>
-      <div class="stat-card"><div class="stat-lbl">My Points</div><div class="stat-val p" id="ov-points">—</div><div class="stat-sub" id="ov-rank">This month</div></div>
-      <div class="stat-card"><div class="stat-lbl">Total Burned</div><div class="stat-val g" id="ov-burned">—</div><div class="stat-sub">Weekly burns</div></div>
-    </div>
-    <div class="ov-grid">
-      <div>
-        <div class="sec-head"><div class="sec-title">Top Leaderboard</div><button class="sec-action" onclick="go('leaderboard',document.querySelectorAll('.nav-item')[1])">View All</button></div>
-        <div class="card-sm">
-          <div id="ov-lb-list" style="font-family:'DM Mono',monospace;font-size:0.7rem;color:var(--w30);padding:1rem 0;text-align:center">No activity yet</div>
+  <div class="main">
+    <div class="top">
+      <div class="item" style="gap:10px">
+        <button class="menu-btn" id="menu-btn" aria-label="Open menu">☰</button>
+        <div>
+          <div class="top__title" id="top-title">Overview</div>
+          <div class="top__sub" id="top-sub">Campaigns across Bard</div>
         </div>
       </div>
-      <div>
-        <div class="sec-head"><div class="sec-title">Pool Snapshot</div><button class="sec-action" onclick="go('pools',document.querySelectorAll('.nav-item')[2])">View All</button></div>
-        <div class="card-sm">
-          <div style="display:flex;flex-direction:column;gap:0.9rem">
-            <div><div style="display:flex;justify-content:space-between;margin-bottom:0.18rem"><span style="font-size:0.8rem;font-weight:500">Elon Pool</span><span class="mono" style="font-size:0.68rem;color:var(--purple)" id="ov-elon-pool">—</span></div><div class="bar-wrap"><div class="bar" style="width:30%"></div></div></div>
-            <div><div style="display:flex;justify-content:space-between;margin-bottom:0.18rem"><span style="font-size:0.8rem;font-weight:500">Viral Pool</span><span class="mono" style="font-size:0.68rem;color:var(--purple)" id="ov-viral-pool">—</span></div><div class="bar-wrap"><div class="bar" style="width:30%"></div></div></div>
-            <div><div style="display:flex;justify-content:space-between;margin-bottom:0.18rem"><span style="font-size:0.8rem;font-weight:500">Interaction Pool</span><span class="mono" style="font-size:0.68rem;color:var(--purple)" id="ov-interaction-pool">—</span></div><div class="bar-wrap"><div class="bar" style="width:30%"></div></div></div>
+      <a class="btn btn--ghost btn--sm" href="/">Landing</a>
+    </div>
+
+    <div class="content">
+      <!-- OVERVIEW -->
+      <section class="page is-on" id="page-overview">
+        <p class="kicker">Overview</p>
+        <h1>Your activity on Bard</h1>
+        <p class="lead">Joined campaigns, open claims, and live projects — without five tabs.</p>
+        <div class="grid-3" style="margin-bottom:18px">
+          <div class="stat"><div class="stat__lbl">Joined</div><div class="stat__val p num" id="ov-joined">0</div></div>
+          <div class="stat"><div class="stat__lbl">Claimable</div><div class="stat__val num" id="ov-claimable">0</div></div>
+          <div class="stat"><div class="stat__lbl">Live on Bard</div><div class="stat__val num" id="ov-live">0</div></div>
+        </div>
+        <div class="item" style="justify-content:space-between;margin-bottom:10px">
+          <strong style="font-variation-settings:'wght' 620">Recent campaigns</strong>
+          <button class="btn btn--ghost btn--sm" data-go="explore">Explore all</button>
+        </div>
+        <div id="ov-list"></div>
+      </section>
+
+      <!-- MINE -->
+      <section class="page" id="page-mine">
+        <p class="kicker">My campaigns</p>
+        <h1>What you're in</h1>
+        <p class="lead">Every campaign you joined, across every project on Bard in this browser.</p>
+        <div id="mine-list"></div>
+      </section>
+
+      <!-- EXPLORE -->
+      <section class="page" id="page-explore">
+        <p class="kicker">Explore</p>
+        <h1>Live campaigns</h1>
+        <p class="lead">Projects teams onboarded on Bard. Join to track rank and claims here.</p>
+        <div id="explore-list"></div>
+      </section>
+
+      <!-- CLAIMS -->
+      <section class="page" id="page-claims">
+        <p class="kicker">Claims</p>
+        <h1>Rewards</h1>
+        <p class="lead">Qualified entries you can settle. When live, each settled claim is <span class="num">0.1 SOL</span> in platform fees — 0% of any token.</p>
+        <div id="claims-list"></div>
+      </section>
+
+      <!-- DETAIL -->
+      <section class="page" id="page-detail">
+        <button class="btn btn--ghost btn--sm" id="detail-back" style="margin-bottom:16px">← Back</button>
+        <p class="kicker" id="detail-kicker">Campaign</p>
+        <h1 id="detail-title">—</h1>
+        <p class="lead" id="detail-rule">—</p>
+        <div class="item" style="gap:10px;margin-bottom:18px">
+          <span class="pill pill--live" id="detail-status">Active</span>
+          <span class="muted" id="detail-meta" style="font-size:.86rem"></span>
+        </div>
+        <div class="grid-2" style="margin-bottom:16px">
+          <div class="stat"><div class="stat__lbl">Reward</div><div class="stat__val num" id="detail-reward">—</div></div>
+          <div class="stat"><div class="stat__lbl">Your status</div><div class="stat__val" id="detail-you">—</div></div>
+        </div>
+        <div class="card" style="margin-bottom:12px">
+          <div class="item" style="justify-content:space-between;gap:12px;flex-wrap:wrap">
+            <div>
+              <div style="font-variation-settings:'wght' 600;margin-bottom:4px">Participation</div>
+              <div class="muted" style="font-size:.86rem" id="detail-join-hint">Join to track this campaign on your dashboard.</div>
+            </div>
+            <button class="btn btn--solid btn--sm" id="detail-join">Join campaign</button>
           </div>
         </div>
-      </div>
-    </div>
-    <div class="vp-bar"><span class="vp-lbl">Your Voting Power</span><div class="vp-track"><div class="vp-fill" id="vp-fill-bar" style="width:0%"></div></div><span class="vp-val" id="vp-val-display">0 VP</span></div>
-  </div>
-
-  <!-- LEADERBOARD -->
-  <div class="page" id="pg-leaderboard">
-    <div class="stats-grid">
-      <div class="stat-card"><div class="stat-lbl">Your Rank</div><div class="stat-val p" id="lb-rank">—</div><div class="stat-sub">This month</div></div>
-      <div class="stat-card"><div class="stat-lbl">Your Points</div><div class="stat-val" id="lb-points">—</div><div class="stat-sub">X posts + buys combined</div></div>
-      <div class="stat-card"><div class="stat-lbl">From X Activity</div><div class="stat-val p" id="lb-x-pts">—</div><div class="stat-sub">Eligible posts tracked</div></div>
-      <div class="stat-card"><div class="stat-lbl">From Buys</div><div class="stat-val g" id="lb-buy-pts">—</div><div class="stat-sub">SOL spent on $BARD</div></div>
-    </div>
-    <div class="sec-head"><div class="sec-title" id="lb-month-title">This Month</div><span class="badge bp">Live Rankings</span></div>
-    <div class="card" style="padding:0">
-      <table class="dt">
-        <thead><tr><th style="width:44px">#</th><th>Member</th><th>X Points</th><th>Buy Points</th><th>Total</th><th>Prize</th></tr></thead>
-        <tbody>
-          <tr id="lb-empty-row"><td colspan="6" style="text-align:center;font-family:'DM Mono',monospace;font-size:0.7rem;color:var(--w30);padding:2rem">No members yet — be the first to join</td></tr>
-        </tbody>
-      </table>
-    </div>
-    <div class="mono" style="font-size:0.6rem;color:var(--w30);text-align:center;padding:0.8rem">Click any member to see their full activity · Challenges close 24hrs before month end</div>
-  </div>
-
-  <!-- POOLS -->
-  <div class="page" id="pg-pools">
-    <div class="burn-box"><div class="burn-num" id="burn-counter">—</div><div class="burn-lbl">$BARD Burned To Date</div></div>
-    <div class="sec-head" style="margin-bottom:1rem"><div class="sec-title">Active Reward Pools</div><span class="badge bp" id="pools-week-badge">Week — · Accumulating</span></div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--border);border:1px solid var(--border);margin-bottom:1.8rem">
-      <div class="stat-card" style="position:relative;overflow:hidden"><div style="position:absolute;top:0;left:0;right:0;height:2px;background:var(--purple)"></div><div class="stat-lbl">Elon Pool</div><div class="stat-val p" id="pool-elon">—</div><div class="stat-sub">$BARD accumulated · Unclaimed</div><div class="bar-wrap" style="margin-top:0.9rem"><div class="bar" id="pool-elon-bar" style="width:0%"></div></div><div class="mono" style="display:flex;justify-content:space-between;font-size:0.58rem;color:var(--w30);margin-top:0.3rem"><span>of 50M total allocation</span><span>Resets on winner only</span></div></div>
-      <div class="stat-card" style="position:relative;overflow:hidden"><div style="position:absolute;top:0;left:0;right:0;height:2px;background:var(--purple)"></div><div class="stat-lbl">Viral Pool</div><div class="stat-val p" id="pool-viral">—</div><div class="stat-sub">$BARD accumulated · Unclaimed</div><div class="bar-wrap" style="margin-top:0.9rem"><div class="bar" id="pool-viral-bar" style="width:0%"></div></div><div class="mono" style="display:flex;justify-content:space-between;font-size:0.58rem;color:var(--w30);margin-top:0.3rem"><span>of 35M total allocation</span><span>Resets on winner only</span></div></div>
-      <div class="stat-card" style="position:relative;overflow:hidden"><div style="position:absolute;top:0;left:0;right:0;height:2px;background:var(--purple)"></div><div class="stat-lbl">Interaction Pool</div><div class="stat-val p" id="pool-interaction">—</div><div class="stat-sub">$BARD accumulated · Unclaimed</div><div class="bar-wrap" style="margin-top:0.9rem"><div class="bar" id="pool-interaction-bar" style="width:0%"></div></div><div class="mono" style="display:flex;justify-content:space-between;font-size:0.58rem;color:var(--w30);margin-top:0.3rem"><span>of 25M total allocation</span><span>Resets on winner only</span></div></div>
-      <div class="stat-card" style="position:relative;overflow:hidden"><div style="position:absolute;top:0;left:0;right:0;height:2px;background:var(--green)"></div><div class="stat-lbl">Leaderboard Pool</div><div class="stat-val g" id="pool-leaderboard">—</div><div class="stat-sub">$BARD · Pays out end of month</div><div class="bar-wrap" style="margin-top:0.9rem"><div class="bar" id="pool-leaderboard-bar" style="width:0%;background:var(--green)"></div></div><div class="mono" style="display:flex;justify-content:space-between;font-size:0.58rem;color:var(--w30);margin-top:0.3rem"><span>of 15.75M total allocation</span><span>Auto-airdrop monthly</span></div></div>
-    </div>
-    <div class="sec-head"><div class="sec-title">Next Unlock</div></div>
-    <div class="card" style="display:flex;align-items:center;justify-content:space-between">
-      <div><div style="font-size:0.83rem;font-weight:500;margin-bottom:0.2rem">Week 4 vest unlocks in</div><div class="mono" style="font-size:0.6rem;color:var(--w30)">All pools receive their weekly allocation simultaneously</div></div>
-      <div style="text-align:right"><div class="mono" style="font-size:1.7rem;font-weight:700;color:var(--purple)" id="cd">04 : 22 : 17</div><div class="mono" style="font-size:0.58rem;color:var(--w30);margin-top:0.15rem">DAYS · HRS · MINS</div></div>
-    </div>
-  </div>
-
-  <!-- STAKING -->
-  <div class="page" id="pg-staking">
-    <div style="padding:0.9rem 1.2rem;background:rgba(251,191,36,0.05);border:1px solid rgba(251,191,36,0.2);margin-bottom:1.8rem;font-family:'DM Mono',monospace;font-size:0.7rem;color:rgba(251,191,36,0.8);letter-spacing:0.05em;line-height:1.75">
-      Staking activates after the token launches on-chain. All controls below are disabled until then.
-    </div>
-    <div class="stats-grid">
-      <div class="stat-card"><div class="stat-lbl">My Staked</div><div class="stat-val p">—</div><div class="stat-sub">Coming after token launch</div></div>
-      <div class="stat-card"><div class="stat-lbl">Current APY</div><div class="stat-val g">—</div><div class="stat-sub">Dynamic · updates weekly</div></div>
-      <div class="stat-card"><div class="stat-lbl">Rewards Earned</div><div class="stat-val">—</div><div class="stat-sub">$BARD claimable</div></div>
-      <div class="stat-card"><div class="stat-lbl">Total Staked (All)</div><div class="stat-val">—</div><div class="stat-sub">% of supply</div></div>
-    </div>
-    <div class="stake-panel" style="opacity:0.45;pointer-events:none">
-      <div class="stake-side">
-        <div class="stake-lbl">Stake $BARD</div>
-        <div class="apy-wrap"><div class="apy-val">—</div><div class="apy-lbl">Current APY</div></div>
-        <div class="inp-wrap"><input class="inp" type="number" placeholder="0" disabled><button class="inp-max" disabled>Max</button></div>
-        <div class="mono" style="font-size:0.6rem;color:var(--w30);margin-bottom:0.9rem">Available: — $BARD</div>
-        <button class="stake-btn" disabled>Stake Tokens</button>
-      </div>
-      <div class="stake-side">
-        <div class="stake-lbl">Unstake $BARD</div>
-        <div style="margin-bottom:1.2rem"><div class="mono" style="font-size:0.6rem;color:var(--w30);margin-bottom:0.35rem">Currently staked</div><div style="font-size:1.3rem;font-weight:600;color:var(--purple)">— <span style="font-size:0.72rem;color:var(--w30);font-weight:400">$BARD</span></div></div>
-        <div class="inp-wrap"><input class="inp" type="number" placeholder="0" disabled><button class="inp-max" disabled>Max</button></div>
-        <div class="mono" style="font-size:0.6rem;color:var(--w30);margin-bottom:0.9rem">Note: unstaking reduces your voting weight</div>
-        <button class="stake-btn out" disabled>Unstake Tokens</button>
-      </div>
-    </div>
-    <div class="sec-head"><div class="sec-title">Claimable Rewards</div></div>
-    <div class="card" style="display:flex;align-items:center;justify-content:space-between;opacity:0.45;pointer-events:none">
-      <div><div style="font-size:1.1rem;font-weight:600;margin-bottom:0.25rem">— <span style="font-size:0.78rem;color:var(--w30);font-weight:400">$BARD</span></div><div class="mono" style="font-size:0.6rem;color:var(--w30)">From staking rewards · Accruing continuously</div></div>
-      <button class="stake-btn" style="width:auto;padding:0.65rem 1.6rem" disabled>Claim Rewards</button>
-    </div>
-  </div>
-
-  <!-- VOTING -->
-  <div class="page" id="pg-voting">
-    <div style="margin-bottom:1.5rem;padding:1rem 1.2rem;background:var(--surface);border:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
-      <div><div style="font-size:0.83rem;font-weight:500;margin-bottom:0.18rem">Your Voting Power</div><div class="mono" style="font-size:0.6rem;color:var(--w30)">Every holder votes. Power = wallet tokens + (staked tokens × 1.25)</div></div>
-      <div class="mono" style="font-size:1.1rem;font-weight:600;color:var(--purple)" id="voting-vp">— VP</div>
-    </div>
-    <div class="sec-head"><div class="sec-title">Active Proposals · 3 open</div></div>
-    <div id="proposals-container" style="background:var(--border);display:flex;flex-direction:column;gap:1px"><div style="text-align:center;font-family:'DM Mono',monospace;font-size:0.7rem;color:var(--w30);padding:2.5rem">No active proposals yet</div></div>
-    <div style="margin-top:1.2rem">
-      <button id="submitProposalBtn" style="background:var(--purple);color:#000;border:none;padding:0.75rem 1.8rem;font-family:'Outfit',sans-serif;font-size:0.82rem;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;cursor:pointer !important;width:100%;pointer-events:all">+ Submit a Proposal</button>
-    </div>
-  </div>
-
-  <!-- CLAIMS -->
-  <div class="page" id="pg-claims">
-    <div style="padding:0.9rem 1.1rem;background:rgba(155,127,232,0.05);border:1px solid var(--border2);margin-bottom:1.4rem;font-family:'DM Mono',monospace;font-size:0.7rem;color:var(--w60);line-height:1.75">
-      Pool claims go to community vote. If approved, payout fires automatically — 90% to winner, 10% burned. Claims that fail keep the pool accumulating. Every token holder can vote.
-    </div>
-    <div class="sec-head"><div class="sec-title" id="claims-open-title">Open Claims</div></div>
-    <div id="open-claims-container" style="margin-bottom:1.4rem">
-      <div style="text-align:center;font-family:'DM Mono',monospace;font-size:0.7rem;color:var(--w30);padding:2rem;background:var(--surface);border:1px solid var(--border)">No open claims</div>
-    </div>
-    <div class="sec-head" style="margin-top:1.4rem"><div class="sec-title">Past Claims</div></div>
-    <div class="card" style="padding:0;margin-bottom:1.4rem">
-      <table class="dt"><thead><tr><th>Pool</th><th>Submitted by</th><th>Result</th><th>Date</th></tr></thead>
-      <tbody id="past-claims-tbody"><tr><td colspan="4" style="text-align:center;font-family:'DM Mono',monospace;font-size:0.7rem;color:var(--w30);padding:1.5rem">No past claims</td></tr></tbody></table>
-    </div>
-    <div class="sec-head"><div class="sec-title">Submit a Claim</div></div>
-    <div class="card">
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:0.9rem">
-        <div><div class="mono" style="font-size:0.58rem;color:var(--w30);letter-spacing:0.2em;text-transform:uppercase;margin-bottom:0.45rem">Pool</div><select><option>Elon Pool</option><option>Viral Pool</option><option>Interaction Pool</option></select></div>
-        <div><div class="mono" style="font-size:0.58rem;color:var(--w30);letter-spacing:0.2em;text-transform:uppercase;margin-bottom:0.45rem">Proof Link</div><div class="inp-wrap" style="margin:0"><input class="inp" type="text" placeholder="https://" style="font-size:0.8rem"></div></div>
-      </div>
-      <div class="mono" style="font-size:0.58rem;color:var(--w30);letter-spacing:0.2em;text-transform:uppercase;margin-bottom:0.45rem">Description</div>
-      <textarea style="margin-bottom:0.9rem" placeholder="Describe why this qualifies..."></textarea>
-      <button class="stake-btn" style="width:auto;padding:0.65rem 1.8rem" onclick="submitClaim()">Submit Claim for Vote</button>
-    </div>
-  </div>
-
-  <!-- TREASURY -->
-  <div class="page" id="pg-treasury">
-    <div class="stats-grid">
-      <div class="stat-card"><div class="stat-lbl">Total Vested So Far</div><div class="stat-val p" id="tr-vested">—</div><div class="stat-sub">of 461M total</div></div>
-      <div class="stat-card"><div class="stat-lbl">Total Remaining</div><div class="stat-val" id="tr-remaining">—</div><div class="stat-sub">Still vesting</div></div>
-      <div class="stat-card"><div class="stat-lbl">Total Burned</div><div class="stat-val g" id="tr-burned">—</div><div class="stat-sub">of 100M burn allocation</div></div>
-      <div class="stat-card"><div class="stat-lbl">Next Weekly Vest</div><div class="stat-val">12.75M</div><div class="stat-sub">Weekly allocation</div></div>
-    </div>
-    <div class="sec-head"><div class="sec-title">Allocation Breakdown</div><span class="badge bw" id="tr-week-badge">Vesting active</span></div>
-    <div class="card" style="padding:0;margin-bottom:1.5rem">
-      <div class="trow hdr"><div>Allocation</div><div>Total</div><div>Vested</div><div>Remaining</div><div>Progress</div></div>
-      <div class="trow"><div class="tname">🔥 Weekly Burns</div><div class="tmono" style="color:var(--w60)">100,000,000</div><div class="tmono" style="color:var(--purple)">8,333,333</div><div class="tmono" style="color:var(--w30)">91,666,667</div><div><div class="bar-wrap" style="margin:0"><div class="bar" style="width:8.33%;background:var(--red)"></div></div></div></div>
-      <div class="trow"><div class="tname">📈 Staking Reserve</div><div class="tmono" style="color:var(--w60)">125,000,000</div><div class="tmono" style="color:var(--purple)">10,416,667</div><div class="tmono" style="color:var(--w30)">114,583,333</div><div><div class="bar-wrap" style="margin:0"><div class="bar" style="width:8.33%"></div></div></div></div>
-      <div class="trow"><div class="tname">📢 Marketing & Ops</div><div class="tmono" style="color:var(--w60)">100,000,000</div><div class="tmono" style="color:var(--purple)">8,333,333</div><div class="tmono" style="color:var(--w30)">91,666,667</div><div><div class="bar-wrap" style="margin:0"><div class="bar" style="width:8.33%"></div></div></div></div>
-      <div class="trow"><div class="tname">⚡ Elon Pool</div><div class="tmono" style="color:var(--w60)">50,000,000</div><div class="tmono" style="color:var(--purple)">4,166,667</div><div class="tmono" style="color:var(--w30)">45,833,333</div><div><div class="bar-wrap" style="margin:0"><div class="bar" style="width:8.33%"></div></div></div></div>
-      <div class="trow"><div class="tname">🌊 Viral Pool</div><div class="tmono" style="color:var(--w60)">35,000,000</div><div class="tmono" style="color:var(--purple)">2,916,667</div><div class="tmono" style="color:var(--w30)">32,083,333</div><div><div class="bar-wrap" style="margin:0"><div class="bar" style="width:8.33%"></div></div></div></div>
-      <div class="trow"><div class="tname">🤝 Interaction Pool</div><div class="tmono" style="color:var(--w60)">25,000,000</div><div class="tmono" style="color:var(--purple)">2,083,333</div><div class="tmono" style="color:var(--w30)">22,916,667</div><div><div class="bar-wrap" style="margin:0"><div class="bar" style="width:8.33%"></div></div></div></div>
-      <div class="trow"><div class="tname">🏆 Leaderboard</div><div class="tmono" style="color:var(--w60)">15,750,000</div><div class="tmono" style="color:var(--purple)">1,312,500</div><div class="tmono" style="color:var(--w30)">14,437,500</div><div><div class="bar-wrap" style="margin:0"><div class="bar" style="width:8.33%;background:var(--green)"></div></div></div></div>
-      <div class="trow" style="border:none"><div class="tname">🛡 Buffer</div><div class="tmono" style="color:var(--w60)">11,000,000</div><div class="tmono" style="color:var(--purple)">916,667</div><div class="tmono" style="color:var(--w30)">10,083,333</div><div><div class="bar-wrap" style="margin:0"><div class="bar" style="width:8.33%"></div></div></div></div>
-    </div>
-    <div class="sec-head"><div class="sec-title">Burn History</div></div>
-    <div class="card" style="padding:0">
-      <table class="dt"><thead><tr><th>Week</th><th>Burned</th><th>Cumulative</th><th>Tx Hash</th></tr></thead>
-      <tbody id="treasury-burn-tbody">
-        <tr><td colspan="4" style="text-align:center;font-family:'DM Mono',monospace;font-size:0.7rem;color:var(--w30);padding:1.5rem">No burns recorded yet</td></tr>
-      </tbody></table>
-    </div>
-  </div>
-
-</div><!-- /main -->
-</div><!-- /app -->
-<!-- PROPOSAL MODAL -->
-<div class="modal-ov" id="proposalModal">
-  <div class="modal">
-    <div class="modal-hdr">
-      <div class="modal-title">Submit a Proposal</div>
-      <button class="modal-close" id="closeProposalBtn">✕</button>
-    </div>
-    <div class="modal-body">
-      <div class="mono" style="font-size:0.62rem;color:var(--w30);margin-bottom:1rem;line-height:1.7">Proposals go to admin review before going live for community voting.</div>
-      <div class="mono" style="font-size:0.58rem;color:var(--w30);letter-spacing:0.2em;text-transform:uppercase;margin-bottom:0.45rem">Title</div>
-      <div class="inp-wrap" style="margin-bottom:0.9rem"><input class="inp" type="text" id="proposalTitle" placeholder="Proposal title..." style="font-size:0.82rem"></div>
-      <div class="mono" style="font-size:0.58rem;color:var(--w30);letter-spacing:0.2em;text-transform:uppercase;margin-bottom:0.45rem">Description</div>
-      <textarea id="proposalDesc" style="margin-bottom:1rem" placeholder="Describe your proposal in detail..."></textarea>
-      <button class="stake-btn" id="submitProposalFormBtn">Submit for Review</button>
+        <div class="card">
+          <div style="font-variation-settings:'wght' 600;margin-bottom:12px">Leaderboard</div>
+          <div id="detail-lb"></div>
+        </div>
+      </section>
     </div>
   </div>
 </div>
 
+<div class="toast" id="toast" role="status"></div>
 
 <script>
-// ─── CONFIG ───────────────────────────────────────────────────────────────
-const SUPABASE_URL = 'https://pxdiyukxgnphxlknhmke.supabase.co';
-const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB4ZGl5dWt4Z25waHhsa25obWtlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM4NTg2NDAsImV4cCI6MjA4OTQzNDY0MH0.eOJ8I7UBCywHDMWdPbcWFURbfoDgMUHFD_cSAZA8Hk4';
-const BARD_MINT = 'REPLACE_WITH_TOKEN_MINT_ADDRESS'; // ← TODO: paste contract address after launch
-const RPC = 'https://api.mainnet-beta.solana.com';
-const LAUNCH_DATE = null; // ← TODO: set to e.g. new Date('2025-03-01') after launch
-const TOTAL_VEST_WEEKS = 36;
+(function(){
+  var TEAM_KEY = 'bard_team_v1';
+  var HOLDER_KEY = 'bard_holder_v1';
+  var wallet = null;
+  var browseOnly = false;
+  var lastPage = 'overview';
+  var detailCtx = null;
 
-const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
-
-// ─── TYPE LABELS ────────────────────────────────────────────────────────────
-const TYPE_LABEL_MAP = {
-  x_post: 'Post', x_reply: 'Reply', x_quote: 'Quote',
-  x_engagement: 'Engagement', x_raid: 'Raid',
-  stake: 'Stake', buy: 'Buy', sell: 'Sell', challenge: 'Manual'
-};
-
-// ─── STATE ─────────────────────────────────────────────────────────────────
-let walletAddress = null;
-let xHandle = null;
-let tokenBalance = 0;
-let stakedBalance = 0;
-let stepsDone = { 1: false, 2: false };
-
-// ─── CURSOR ────────────────────────────────────────────────────────────────
-const cursor = document.getElementById('cursor');
-document.addEventListener('mousemove', e => { cursor.style.left = e.clientX+'px'; cursor.style.top = e.clientY+'px'; });
-document.addEventListener('mousedown', () => cursor.style.transform = 'translate(-50%,-50%) scale(1.8)');
-document.addEventListener('mouseup', () => cursor.style.transform = 'translate(-50%,-50%) scale(1)');
-document.addEventListener('mouseleave', () => cursor.style.opacity='0');
-document.addEventListener('mouseenter', () => cursor.style.opacity='1');
-
-// ─── STEP 1: WALLET CONNECT ────────────────────────────────────────────────
-async function doStep(n) {
-  if (n === 1) await connectWallet();
-  if (n === 2) await connectX();
-}
-
-async function connectWallet() {
-  try {
-    // Detect wallet — Phantom first, then Solflare
-    const provider = window.phantom?.solana || window.solflare || window.solana;
-    if (!provider) {
-      alert('No Solana wallet detected. Please install Phantom or Solflare.');
-      return;
-    }
-
-    const resp = await provider.connect();
-    walletAddress = resp.publicKey.toString();
-
-    // Read token balance
-    await refreshBalance(walletAddress);
-
-    // Check they hold at least 1 BARD
-    if (tokenBalance < 1 && BARD_MINT !== 'REPLACE_WITH_TOKEN_MINT_ADDRESS') {
-      alert('You need to hold at least 1 $BARD to access the dashboard.');
-      walletAddress = null;
-      return;
-    }
-
-    // Mark step done
-    stepsDone[1] = true;
-    document.getElementById('s1').classList.add('done');
-    document.getElementById('s1n').textContent = '✓';
-
-    // Upsert member into Supabase
-    await db.from('members').upsert({
-      wallet_address: walletAddress,
-      token_balance: tokenBalance,
-      last_seen: new Date().toISOString()
-    }, { onConflict: 'wallet_address' });
-
-  } catch (err) {
-    console.error('Wallet connect error:', err);
-    alert('Wallet connection failed. Please try again.');
+  function loadTeam(){
+    try{
+      var raw = localStorage.getItem(TEAM_KEY);
+      if(raw) return JSON.parse(raw);
+    }catch(e){}
+    return { projects: [] };
   }
-}
-
-// ─── READ TOKEN BALANCE FROM SOLANA ───────────────────────────────────────
-async function refreshBalance(address) {
-  try {
-    if (BARD_MINT === 'REPLACE_WITH_TOKEN_MINT_ADDRESS') {
-      // Token not deployed yet — show zero
-      tokenBalance = 0;
-      stakedBalance = 0;
-      return;
-    }
-
-    const connection = new solanaWeb3.Connection(RPC, 'confirmed');
-    const owner = new solanaWeb3.PublicKey(address);
-    const mint = new solanaWeb3.PublicKey(BARD_MINT);
-
-    const accounts = await connection.getParsedTokenAccountsByOwner(owner, { mint });
-    if (accounts.value.length > 0) {
-      tokenBalance = accounts.value[0].account.data.parsed.info.tokenAmount.uiAmount || 0;
-    } else {
-      tokenBalance = 0;
-    }
-  } catch (err) {
-    console.error('Balance fetch error:', err);
-    tokenBalance = 0;
+  function loadHolder(){
+    try{
+      var raw = localStorage.getItem(HOLDER_KEY);
+      if(raw) return JSON.parse(raw);
+    }catch(e){}
+    return { joined: {}, claims: {} };
   }
-}
+  function saveHolder(h){
+    localStorage.setItem(HOLDER_KEY, JSON.stringify(h));
+  }
+  function toast(msg, kind){
+    var el = document.getElementById('toast');
+    el.textContent = msg;
+    el.className = 'toast is-on' + (kind ? ' ' + kind : '');
+    clearTimeout(toast._t);
+    toast._t = setTimeout(function(){ el.className = 'toast'; }, 2800);
+  }
+  function escapeHtml(s){
+    return String(s == null ? '' : s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+      .replace(/"/g,'&quot;');
+  }
+  function shortAddr(a){
+    if(!a) return '—';
+    if(a.length < 10) return a;
+    return a.slice(0,4) + '…' + a.slice(-4);
+  }
+  function initials(s){
+    return String(s || '?').trim().slice(0,2).toUpperCase();
+  }
+  function allCampaigns(){
+    var team = loadTeam();
+    var out = [];
+    (team.projects || []).forEach(function(p){
+      (p.campaigns || []).forEach(function(c){
+        out.push({
+          projectId: p.id,
+          projectName: p.name,
+          ticker: p.ticker,
+          mint: p.mint,
+          campaign: c
+        });
+      });
+    });
+    return out;
+  }
+  function liveCampaigns(){
+    return allCampaigns().filter(function(x){ return x.campaign.status === 'active'; });
+  }
+  function joinKey(pid, cid){ return pid + '::' + cid; }
 
-// ─── STEP 2: X OAUTH ──────────────────────────────────────────────────────
-async function connectX() {
-  if (!walletAddress) {
-    alert('Please connect your wallet first.');
-    return;
+  function showPage(name){
+    lastPage = name === 'detail' ? lastPage : name;
+    document.querySelectorAll('.page').forEach(function(p){ p.classList.remove('is-on'); });
+    var page = document.getElementById('page-' + name);
+    if(page) page.classList.add('is-on');
+    document.querySelectorAll('.nav button').forEach(function(b){
+      b.classList.toggle('is-on', b.getAttribute('data-page') === name);
+    });
+    var titles = {
+      overview: ['Overview', 'Campaigns across Bard'],
+      mine: ['My campaigns', 'Joined across projects'],
+      explore: ['Explore', 'Live campaigns on Bard'],
+      claims: ['Claims', 'Settle what you earned'],
+      detail: ['Campaign', 'Rule, rank, and claims']
+    };
+    var t = titles[name] || titles.overview;
+    document.getElementById('top-title').textContent = t[0];
+    document.getElementById('top-sub').textContent = t[1];
+    closeMenu();
   }
 
-  localStorage.setItem('bard_wallet', walletAddress);
-
-  try {
-    // Ask worker to generate the OAuth URL and PKCE verifier
-    const res = await fetch(`https://bard-auth.bardsoltoken.workers.dev/auth/x/start?wallet=${encodeURIComponent(walletAddress)}`);
-    const { authUrl, codeVerifier } = await res.json();
-
-    // Store code verifier in localStorage for the callback
-    localStorage.setItem('bard_cv', codeVerifier);
-
-    // Browser does the redirect — X sees existing session, no re-login needed
-    window.location.href = authUrl;
-
-  } catch (err) {
-    console.error('X auth error:', err);
-    alert('X login failed. Please try again.');
-  }
-}
-
-// ─── HANDLE OAUTH CALLBACK ─────────────────────────────────────────────────
-async function handleAuthCallback() {
-  const params = new URLSearchParams(window.location.search);
-  const authStatus = params.get('auth');
-  const handle = params.get('handle');
-  const wallet = params.get('wallet');
-
-  if (authStatus === 'success' && handle && wallet) {
-    walletAddress = wallet;
-    xHandle = handle;
-    localStorage.setItem('bard_xhandle', handle);
-
-    await refreshBalance(walletAddress);
-
-    stepsDone[1] = true;
-    stepsDone[2] = true;
-    document.getElementById('s1').classList.add('done');
-    document.getElementById('s1n').textContent = '✓';
-    document.getElementById('s2').classList.add('done');
-    document.getElementById('s2n').textContent = '✓';
-
-    // Clean URL and enter dashboard
-    window.history.replaceState({}, '', '/dashboard.html');
-    setTimeout(() => enterDashboard(), 600);
-
-  } else if (authStatus === 'error') {
-    alert('X login failed. Please try again.');
-    window.history.replaceState({}, '', '/dashboard.html');
-  }
-}
-
-// ─── ENTER DASHBOARD ───────────────────────────────────────────────────────
-async function enter() {
-  if (!walletAddress) { alert('Please connect your wallet first.'); return; }
-  if (!stepsDone[2]) { alert('Please link your X account first.'); return; }
-  enterDashboard();
-}
-
-function enterDashboard() {
-  // Update sidebar with real data
-  document.querySelector('.sb-addr').textContent = walletAddress.slice(0,4) + '...' + walletAddress.slice(-4);
-  document.querySelector('.sb-bal').innerHTML = Number(tokenBalance).toLocaleString() + ' <span>$BARD</span>';
-  document.querySelector('.sb-x').innerHTML = '<div class="x-dot"></div>' + (xHandle ? '@'+xHandle : 'linked');
-
-  // Update stats with real data
-  const vp = tokenBalance + (stakedBalance * 1.25);
-  const vpFmt = vp >= 1000000 ? (vp/1000000).toFixed(2)+'M' : vp >= 1000 ? (vp/1000).toFixed(1)+'K' : vp.toString();
-  const holdFmt = tokenBalance >= 1000000 ? (tokenBalance/1000000).toFixed(2)+'M' : tokenBalance >= 1000 ? (tokenBalance/1000).toFixed(1)+'K' : tokenBalance.toString();
-
-  document.getElementById('ov-holdings')?.setAttribute('textContent', holdFmt);
-  document.getElementById('ov-holdings') && (document.getElementById('ov-holdings').textContent = holdFmt);
-  document.getElementById('ov-vp') && (document.getElementById('ov-vp').textContent = vpFmt);
-  document.getElementById('ov-vp-fill') && (document.getElementById('ov-vp-fill').style.width = Math.min((vp / 10000000) * 100, 100) + '%');
-  document.getElementById('ov-vp-val') && (document.getElementById('ov-vp-val').textContent = Number(vp).toLocaleString() + ' VP');
-  document.getElementById('voting-vp') && (document.getElementById('voting-vp').textContent = Number(vp).toLocaleString() + ' VP');
-  // Save session to localStorage
-  if (walletAddress) localStorage.setItem('bard_wallet', walletAddress);
-  if (xHandle) localStorage.setItem('bard_xhandle', xHandle);
-  localStorage.setItem('bard_session_at', Date.now().toString());
-
-  const week = currentWeek();
-  const tm = document.getElementById('tm');
-  if (tm) tm.textContent = buildMetas().overview;
-  const pwb = document.getElementById('pools-week-badge');
-  if (pwb) pwb.textContent = `Week ${week} · Accumulating`;
-
-  document.getElementById('cs').style.display = 'none';
-  document.getElementById('app').style.display = 'flex';
-  initDashboardData();
-  resetInactivityTimer();
-}
-
-// ─── DISCONNECT ────────────────────────────────────────────────────────────
-async function disconnect() {
-  await db.auth.signOut();
-  localStorage.removeItem('bard_wallet');
-  localStorage.removeItem('bard_xhandle');
-  localStorage.removeItem('bard_session_at');
-  clearTimeout(inactivityTimer);
-  walletAddress = null;
-  xHandle = null;
-  tokenBalance = 0;
-  stakedBalance = 0;
-  stepsDone = { 1: false, 2: false };
-  document.getElementById('s1').classList.remove('done');
-  document.getElementById('s2').classList.remove('done');
-  document.getElementById('s1n').textContent = '1';
-  document.getElementById('s2n').textContent = '2';
-  document.getElementById('cs').style.display = 'flex';
-  document.getElementById('app').style.display = 'none';
-}
-
-// ─── PAGE NAV ──────────────────────────────────────────────────────────────
-const titles = { overview:'Overview', leaderboard:'Leaderboard', pools:'Pools', staking:'Staking', voting:'Voting', claims:'Claims', treasury:'Treasury' };
-function currentWeek() {
-  if (!LAUNCH_DATE) return '—';
-  return Math.min(Math.max(Math.floor((Date.now() - LAUNCH_DATE) / (7*24*60*60*1000)) + 1, 1), TOTAL_VEST_WEEKS);
-}
-
-function buildMetas() {
-  const week = currentWeek();
-  const month = new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-  return {
-    overview: `Week ${week} of ${TOTAL_VEST_WEEKS} · Vesting active`,
-    leaderboard: `${month} · Automated point tracking`,
-    pools: `All pools accumulating · Week ${week}`,
-    staking: 'Dynamic APY · Coming after token launch',
-    voting: 'All holders can vote',
-    claims: 'Community-verified payouts',
-    treasury: 'Full on-chain transparency'
-  };
-}
-
-function go(name, el) {
-  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-  document.getElementById('pg-'+name).classList.add('active');
-  if (el) el.classList.add('active');
-  document.getElementById('tt').textContent = titles[name] || name;
-  document.getElementById('tm').textContent = buildMetas()[name] || '';
-}
-
-// ─── MODAL ─────────────────────────────────────────────────────────────────
-async function openModal(handle) {
-  const mo = document.getElementById('mo');
-  document.getElementById('mu').textContent = handle;
-  document.getElementById('modal-sub').textContent = 'Loading...';
-  document.getElementById('modal-pts-breakdown').innerHTML = '<div class="pts-row"><span style="color:var(--w30)">Loading...</span></div>';
-  document.getElementById('modal-shills').innerHTML = '<div style="text-align:center;padding:1rem 0;font-family:\'DM Mono\',monospace;font-size:0.7rem;color:var(--w30)">Loading...</div>';
-  mo.classList.add('open');
-
-  const normHandle = handle.startsWith('@') ? handle : '@' + handle;
-
-  const [{ data: member }, { data: logs }] = await Promise.all([
-    db.from('members').select('points, token_balance').eq('x_handle', normHandle).single(),
-    db.from('points_log').select('*').eq('x_handle', normHandle).order('created_at', { ascending: false })
-  ]);
-
-  const month = new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-  const total = member?.points || 0;
-  document.getElementById('modal-sub').textContent = `${month} · ${total.toLocaleString()} pts total`;
-
-  // Tally by category
-  const cats = { post: 0, reply: 0, quote: 0, engagement: 0, staking: 0, buy: 0, sell: 0 };
-  (logs || []).forEach(l => {
-    if      (l.type === 'x_post')                               cats.post       += l.points;
-    else if (l.type === 'x_reply')                              cats.reply      += l.points;
-    else if (l.type === 'x_quote')                              cats.quote      += l.points;
-    else if (l.type === 'x_engagement' || l.type === 'x_raid') cats.engagement += l.points;
-    else if (l.type === 'stake')                                cats.staking    += l.points;
-    else if (l.type === 'buy')                                  cats.buy        += l.points;
-    else if (l.type === 'sell')                                 cats.sell       += l.points;
-  });
-
-  const fmtPts = (n) => `<span style="color:${n >= 0 ? 'var(--green)' : 'var(--red)'}">${n > 0 ? '+' : ''}${n.toLocaleString()} pts</span>`;
-
-  document.getElementById('modal-pts-breakdown').innerHTML = `
-    <div class="pts-row"><span style="color:var(--w30)">Posts</span>${fmtPts(cats.post)}</div>
-    <div class="pts-row"><span style="color:var(--w30)">Replies</span>${fmtPts(cats.reply)}</div>
-    <div class="pts-row"><span style="color:var(--w30)">Quotes</span>${fmtPts(cats.quote)}</div>
-    <div class="pts-row"><span style="color:var(--w30)">Engagement & Raids</span>${fmtPts(cats.engagement)}</div>
-    <div class="pts-row"><span style="color:var(--w30)">Staking</span>${fmtPts(cats.staking)}</div>
-    <div class="pts-row"><span style="color:var(--w30)">Buys</span>${fmtPts(cats.buy)}</div>
-    <div class="pts-row"><span style="color:var(--w30)">Sells</span>${fmtPts(cats.sell)}</div>
-    <div class="pts-row" style="font-weight:600"><span style="color:var(--w60)">Total</span><span style="color:var(--purple)">${total.toLocaleString()} pts</span></div>`;
-
-  // Tweet / shill items
-  const tweetLogs = (logs || []).filter(l => l.type && l.type.startsWith('x_') && (l.tweet_text || l.tweet_url));
-  if (tweetLogs.length === 0) {
-    document.getElementById('modal-shills').innerHTML = '<div style="text-align:center;padding:1rem 0;font-family:\'DM Mono\',monospace;font-size:0.7rem;color:var(--w30)">No tweet activity logged yet</div>';
-  } else {
-    document.getElementById('modal-shills').innerHTML = tweetLogs.map(l => {
-      const label   = TYPE_LABEL_MAP[l.type] || l.type;
-      const pts     = (l.points > 0 ? '+' : '') + l.points;
-      const ptsClr  = l.points >= 0 ? 'var(--green)' : 'var(--red)';
-      const dateStr = new Date(l.created_at).toLocaleDateString('en-GB', { day:'2-digit', month:'short' });
-      const link    = l.tweet_url ? `<a href="${l.tweet_url}" target="_blank" style="font-family:'DM Mono',monospace;font-size:0.58rem;color:var(--purple);text-decoration:underline;text-underline-offset:3px">View →</a>` : '';
-      return `<div class="shill-item">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.35rem">
-          <div style="display:flex;align-items:center;gap:0.5rem">
-            <span class="badge bp" style="font-size:0.48rem">${label}</span>
-            <span class="mono" style="font-size:0.58rem;color:var(--w30)">${dateStr}</span>
-            ${link}
-          </div>
-          <span class="mono" style="font-size:0.72rem;font-weight:600;color:${ptsClr}">${pts} pts</span>
-        </div>
-        ${l.tweet_text ? `<div class="shill-txt">"${l.tweet_text}"</div>` : ''}
-        ${l.reason    ? `<div class="mono" style="font-size:0.6rem;color:var(--w30);margin-top:0.3rem">${l.reason}</div>` : ''}
-      </div>`;
-    }).join('');
-  }
-}
-
-function closeModal() { document.getElementById('mo').classList.remove('open'); }
-document.getElementById('mo').addEventListener('click', function(e) { if(e.target===this) closeModal(); });
-
-// ─── COUNTDOWN ─────────────────────────────────────────────────────────────
-let secs = 4*86400 + 22*3600 + 17*60;
-setInterval(() => {
-  if (secs <= 0) return; secs--;
-  const d = Math.floor(secs/86400), h = Math.floor((secs%86400)/3600), m = Math.floor((secs%3600)/60);
-  const el = document.getElementById('cd');
-  if (el) el.textContent = String(d).padStart(2,'0')+' : '+String(h).padStart(2,'0')+' : '+String(m).padStart(2,'0');
-}, 1000);
-
-
-// ─── LOAD PROPOSALS FROM SUPABASE ──────────────────────────────────────────
-async function loadProposals() {
-  const { data, error } = await db.from('proposals')
-    .select('*, members(x_handle)')
-    .eq('status', 'active')
-    .order('created_at', { ascending: false });
-
-  // Update voting nav badge regardless
-  const voteBadge = document.querySelector('#pg-voting')?.closest('.main')?.querySelector
-    ? document.querySelectorAll('.nav-badge')[0]
-    : null;
-  if (voteBadge) voteBadge.textContent = (data || []).length;
-
-  if (error || !data || data.length === 0) return;
-
-  const container = document.getElementById('proposals-container');
-  if (!container) return;
-
-  // Clear existing cards
-  container.innerHTML = '';
-
-  data.forEach(p => {
-    const total = (p.yes_power || 0) + (p.no_power || 0);
-    const yesPct = total > 0 ? Math.round((p.yes_power / total) * 100) : 0;
-    const card = document.createElement('div');
-    card.className = 'vote-card';
-    card.id = `proposal-${p.id}`;
-    card.innerHTML = `
-      <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:0.35rem">
-        <div>
-          <div class="vote-title">${p.title}</div>
-          <div class="vote-meta">Submitted by ${p.members?.x_handle || p.submitted_by?.slice(0,6)+'...'+p.submitted_by?.slice(-4) || 'community'} · ${formatDate(p.ends_at)} · ${Math.round(total / 1000000)}M VP cast</div>
-        </div>
-        <span class="badge bp">Active</span>
-      </div>
-      <div class="vote-bar-wrap"><div class="vote-bar-yes" style="width:${yesPct}%"></div></div>
-      <div class="vote-stats"><span style="color:var(--green)">${yesPct}% Yes</span><span>${100 - yesPct}% No</span></div>
-      <div class="vote-acts">
-        <button class="vbtn yes" onclick="castVote('${p.id}','yes')">Vote Yes</button>
-        <button class="vbtn no" onclick="castVote('${p.id}','no')">Vote No</button>
-      </div>`;
-    container.appendChild(card);
-  });
-}
-
-// ─── CAST VOTE ──────────────────────────────────────────────────────────────
-async function castVote(proposalId, vote) {
-  if (!walletAddress) { alert('Connect your wallet first.'); return; }
-
-  const vp = tokenBalance + (stakedBalance * 1.25);
-
-  // Check not already voted
-  const { data: existing } = await db.from('votes')
-    .select('id')
-    .eq('proposal_id', proposalId)
-    .eq('wallet_address', walletAddress)
-    .single();
-
-  if (existing) { alert('You have already voted on this proposal.'); return; }
-
-  // Insert vote
-  const { error } = await db.from('votes').insert({
-    proposal_id: proposalId,
-    wallet_address: walletAddress,
-    vote: vote,
-    voting_power: vp
-  });
-
-  if (error) { alert('Vote failed. Please try again.'); return; }
-
-  // Update proposal yes/no power
-  const field = vote === 'yes' ? 'yes_power' : 'no_power';
-  const { data: proposal } = await db.from('proposals').select(field).eq('id', proposalId).single();
-  const newPower = (proposal?.[field] || 0) + vp;
-  await db.from('proposals').update({ [field]: newPower }).eq('id', proposalId);
-
-  // Visual feedback
-  const card = document.getElementById(`proposal-${proposalId}`);
-  if (card) {
-    const btns = card.querySelectorAll('.vbtn');
-    btns.forEach(b => { b.disabled = true; b.style.opacity = '0.4'; });
-    const label = vote === 'yes' ? '✓ Voted Yes' : '✓ Voted No';
-    btns[vote === 'yes' ? 0 : 1].textContent = label;
-    btns[vote === 'yes' ? 0 : 1].style.opacity = '1';
-    btns[vote === 'yes' ? 0 : 1].style.color = vote === 'yes' ? 'var(--green)' : 'var(--red)';
-  }
-}
-
-// ─── SUBMIT PROPOSAL ───────────────────────────────────────────────────────
-async function openProposalModal() {
-  if (!walletAddress) { alert('Connect your wallet first.'); return; }
-  document.getElementById('proposalModal').classList.add('open');
-}
-
-async function submitProposal() {
-  const title = document.getElementById('proposalTitle').value.trim();
-  const desc = document.getElementById('proposalDesc').value.trim();
-
-  if (!title) { alert('Please enter a title.'); return; }
-
-  // Fallback to localStorage if walletAddress not in memory
-  const activeWallet = walletAddress || localStorage.getItem('bard_wallet');
-  const activeHandle = xHandle || localStorage.getItem('bard_xhandle');
-  if (!activeWallet) { alert('Connect your wallet first.'); return; }
-
-  console.log('Submitting with wallet:', activeWallet, 'handle:', activeHandle);
-
-  // Ensure member exists in Supabase before inserting proposal
-  const memberRes = await db.from('members').upsert({
-    wallet_address: activeWallet,
-    x_handle: activeHandle ? '@' + activeHandle.replace('@','') : null,
-    token_balance: tokenBalance || 0,
-    last_seen: new Date().toISOString()
-  }, { onConflict: 'wallet_address', ignoreDuplicates: false });
-  console.log('Member upsert result:', JSON.stringify(memberRes));
-  
-  const { data, error } = await db.from('proposals').insert({
-    title: title,
-    description: desc,
-    submitted_by: activeWallet,
-    approved_by_admin: false,
-    status: 'pending',
-    ends_at: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString()
-  }).select();
-
-  if (error) { 
-    console.error('Proposal error:', JSON.stringify(error));
-    alert('Submission failed: ' + error.message); 
-    return; 
-  }
-  
-  console.log('Proposal submitted:', data);
-
-  document.getElementById('proposalModal').classList.remove('open');
-  document.getElementById('proposalTitle').value = '';
-  document.getElementById('proposalDesc').value = '';
-  alert('Proposal submitted for review. It will appear once approved.');
-}
-
-// ─── LOAD CLAIMS FROM SUPABASE ──────────────────────────────────────────────
-async function loadClaims() {
-  const { data, error } = await db.from('claims')
-    .select('*, members(x_handle)')
-    .eq('status', 'open')
-    .order('created_at', { ascending: false });
-
-  if (error || !data) return;
-
-  // Update nav badge
-  const badge = document.querySelectorAll('.nav-badge')[1];
-  if (badge) badge.textContent = data.length;
-
-  // Update title
-  const titleEl = document.getElementById('claims-open-title');
-  if (titleEl) titleEl.textContent = `Open Claims${data.length ? ' · ' + data.length + ' active' : ''}`;
-
-  // Render cards
-  const container = document.getElementById('open-claims-container');
-  if (!container) return;
-
-  if (data.length === 0) {
-    container.innerHTML = '<div style="text-align:center;font-family:\'DM Mono\',monospace;font-size:0.7rem;color:var(--w30);padding:2rem;background:var(--surface);border:1px solid var(--border)">No open claims</div>';
-    return;
+  function enterApp(){
+    document.getElementById('gate').style.display = 'none';
+    document.getElementById('app').style.display = 'flex';
+    document.getElementById('side-addr').textContent = wallet ? shortAddr(wallet) : 'Browsing';
+    renderAll();
+    showPage('overview');
   }
 
-  const POOL_LABELS = { elon: 'Elon Pool', viral: 'Viral Pool', interaction: 'Interaction Pool' };
-
-  container.innerHTML = data.map(c => {
-    const total   = (c.yes_power || 0) + (c.no_power || 0);
-    const pct     = total > 0 ? Math.round((c.yes_power / total) * 100) : 0;
-    const handle  = c.members?.x_handle || (c.submitted_by || '').slice(0,6) + '...' + (c.submitted_by || '').slice(-4);
-    const poolLbl = POOL_LABELS[c.pool_name] || c.pool_name;
-    const daysLeft= c.ends_at ? Math.max(0, Math.ceil((new Date(c.ends_at) - Date.now()) / 86400000)) : '—';
-    const proof   = c.proof_url ? `<a href="${c.proof_url}" target="_blank" style="font-family:'DM Mono',monospace;font-size:0.63rem;color:var(--purple);background:none;border:none;cursor:pointer;text-decoration:underline;text-underline-offset:3px;display:inline-block;margin-bottom:0.9rem">View Proof →</a>` : '';
-    return `<div class="claim-card">
-      <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:0.7rem">
-        <div><div style="font-size:0.88rem;font-weight:600;margin-bottom:0.2rem">${poolLbl} Claim</div><div class="mono" style="font-size:0.6rem;color:var(--w30)">Submitted by ${handle}</div></div>
-        <span class="badge bp">Voting Open · ${daysLeft} days left</span>
-      </div>
-      ${c.description ? `<div class="mono" style="font-size:0.7rem;color:var(--w60);line-height:1.8;margin-bottom:0.9rem">${c.description}</div>` : ''}
-      ${proof}
-      <div style="display:flex;align-items:center;gap:0.9rem;margin-bottom:0.8rem">
-        <div class="bar-wrap" style="flex:1;margin:0"><div class="bar" style="width:${pct}%;background:var(--green)"></div></div>
-        <span class="mono" style="font-size:0.62rem;color:var(--green);white-space:nowrap">${pct}% Approve</span>
-      </div>
-      <div class="vote-acts">
-        <button class="vbtn yes" onclick="castClaimVote('${c.id}','yes')">Approve Claim</button>
-        <button class="vbtn no"  onclick="castClaimVote('${c.id}','no')">Reject Claim</button>
-      </div>
-    </div>`;
-  }).join('');
-}
-
-// ─── CAST CLAIM VOTE ────────────────────────────────────────────────────────
-async function castClaimVote(claimId, vote) {
-  if (!walletAddress) { alert('Connect your wallet first.'); return; }
-
-  const vp = tokenBalance + (stakedBalance * 1.25);
-
-  const { data: existing } = await db.from('claim_votes')
-    .select('id')
-    .eq('claim_id', claimId)
-    .eq('wallet_address', walletAddress)
-    .single();
-
-  if (existing) { alert('You have already voted on this claim.'); return; }
-
-  const { error } = await db.from('claim_votes').insert({
-    claim_id: claimId,
-    wallet_address: walletAddress,
-    vote: vote,
-    voting_power: vp
-  });
-
-  if (error) { alert('Vote failed. Please try again.'); return; }
-
-  alert(vote === 'yes' ? '✓ Claim approved — vote recorded.' : '✓ Rejection recorded.');
-}
-
-// ─── SUBMIT CLAIM ───────────────────────────────────────────────────────────
-async function submitClaim() {
-  if (!walletAddress) { alert('Connect your wallet first.'); return; }
-
-  const pool = document.querySelector('#pg-claims select')?.value;
-  const proofUrl = document.querySelector('#pg-claims .inp[type="text"]')?.value?.trim();
-  const desc = document.querySelector('#pg-claims textarea')?.value?.trim();
-
-  if (!proofUrl) { alert('Please provide a proof link.'); return; }
-  if (!desc) { alert('Please describe your claim.'); return; }
-
-  const poolMap = { 'Elon Pool': 'elon', 'Viral Pool': 'viral', 'Interaction Pool': 'interaction' };
-
-  const { error } = await db.from('claims').insert({
-    pool_name: poolMap[pool] || pool.toLowerCase(),
-    submitted_by: walletAddress,
-    proof_url: proofUrl,
-    description: desc,
-    status: 'open'
-  });
-
-  if (error) { alert('Submission failed. Please try again.'); return; }
-
-  alert('Claim submitted! The community will now vote on it.');
-  document.querySelector('#pg-claims .inp[type="text"]').value = '';
-  document.querySelector('#pg-claims textarea').value = '';
-}
-
-// ─── LOAD TREASURY FROM SUPABASE ────────────────────────────────────────────
-async function loadTreasury() {
-  const { data: burns, error } = await db.from('burn_log')
-    .select('*')
-    .order('week_number', { ascending: false });
-
-  if (error || !burns || burns.length === 0) return;
-
-  // Update burn counter
-  const latest = burns[0];
-  ['burn-counter', 'tr-burned', 'ov-burned'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.textContent = Number(latest.cumulative).toLocaleString();
-  });
-
-  // Update burn history table
-  const tbody = document.getElementById('treasury-burn-tbody');
-  if (tbody) {
-    tbody.innerHTML = burns.map(b => `
-      <tr>
-        <td><span class="mono" style="font-size:0.72rem">Week ${b.week_number}</span></td>
-        <td><span class="mono" style="font-size:0.72rem;color:var(--red)">${Number(b.amount).toLocaleString()}</span></td>
-        <td><span class="mono" style="font-size:0.72rem">${Number(b.cumulative).toLocaleString()}</span></td>
-        <td><span class="mono" style="font-size:0.62rem;color:var(--purple)">${b.tx_signature || '—'}</span></td>
-      </tr>`).join('');
-  }
-}
-
-// ─── LOAD LEADERBOARD FROM SUPABASE ────────────────────────────────────────
-async function loadLeaderboard() {
-  const { data, error } = await db.from('members')
-    .select('wallet_address, x_handle, points, token_balance, staked_balance')
-    .order('points', { ascending: false })
-    .limit(20);
-
-  if (error || !data || data.length === 0) return;
-
-  const tbody = document.querySelector('#pg-leaderboard .dt tbody');
-  if (!tbody) return;
-
-  const medals = ['gold', 'silver', 'bronze'];
-  const prizes = ['500K tokens', '250K tokens', '150K tokens'];
-
-  tbody.innerHTML = data.map((m, i) => {
-    const isYou = m.wallet_address === walletAddress;
-    const rankClass = medals[i] || '';
-    const handle = m.x_handle || m.wallet_address.slice(0,6) + '...' + m.wallet_address.slice(-4);
-    const initials = handle.replace('@','').slice(0,2).toUpperCase();
-    return `<tr style="cursor:pointer${isYou ? ';background:rgba(155,127,232,0.04)' : ''}" onclick="openModal('${handle}')">
-      <td><span class="rank ${rankClass}">${String(i+1).padStart(2,'0')}</span></td>
-      <td><div style="display:flex;align-items:center;gap:0.6rem">
-        <div class="avatar" ${isYou ? 'style="border-color:var(--purple)"' : ''}>${initials}</div>
-        <div><div style="font-weight:500;font-size:0.82rem">${handle}${isYou ? ' <span style="font-size:0.6rem;color:var(--purple)">· you</span>' : ''}</div>
-        <div class="mono" style="font-size:0.58rem;color:var(--w30)">${Number(m.token_balance).toLocaleString()} $BARD</div></div>
-      </div></td>
-      <td><span class="mono" style="font-size:0.72rem">${m.points || 0}</span></td>
-      <td><span class="mono" style="font-size:0.72rem;color:var(--green)">0</span></td>
-      <td><span class="mono" style="font-size:0.82rem;font-weight:600;color:var(--purple)">${m.points || 0}</span></td>
-      <td>${prizes[i] ? `<span class="badge ${i === 0 ? 'bp' : 'bw'}">${prizes[i]}</span>` : '<span class="badge bw">—</span>'}</td>
-    </tr>`;
-  }).join('');
-}
-
-// ─── HELPER ─────────────────────────────────────────────────────────────────
-function formatDate(dateStr) {
-  if (!dateStr) return '';
-  const d = new Date(dateStr);
-  const diff = Math.ceil((d - Date.now()) / (1000 * 60 * 60 * 24));
-  return diff > 0 ? `${diff} days remaining` : 'Ended';
-}
-
-// ─── INIT ALL DATA ──────────────────────────────────────────────────────────
-async function initDashboardData() {
-  await Promise.all([
-    loadProposals(),
-    loadClaims(),
-    loadTreasury(),
-    loadLeaderboard()
-  ]);
-}
-
-// ─── INIT ──────────────────────────────────────────────────────────────────
-// ─── INACTIVITY TIMER ──────────────────────────────────────────────────────
-const INACTIVE_LIMIT = 30 * 60 * 1000; // 30 minutes
-let inactivityTimer = null;
-
-function resetInactivityTimer() {
-  clearTimeout(inactivityTimer);
-  inactivityTimer = setTimeout(() => {
-    if (walletAddress) {
-      disconnect();
-      alert('You have been signed out due to 30 minutes of inactivity.');
-    }
-  }, INACTIVE_LIMIT);
-}
-
-// Track user activity
-['mousemove', 'keydown', 'click', 'scroll', 'touchstart'].forEach(evt => {
-  document.addEventListener(evt, resetInactivityTimer, { passive: true });
-});
-
-window.addEventListener('load', async () => {
-  try {
-    handleAuthCallback();
-  } catch(e) {
-    console.error('Init error:', e);
-  }
-
-  // Restore session from localStorage on page load
-  const savedWallet = localStorage.getItem('bard_wallet');
-  const savedHandle = localStorage.getItem('bard_xhandle');
-  const savedAt = localStorage.getItem('bard_session_at');
-
-  // Check session isn't older than 30 minutes
-  const sessionAge = savedAt ? Date.now() - parseInt(savedAt) : Infinity;
-
-  if (savedWallet && savedHandle && sessionAge < INACTIVE_LIMIT) {
-    try {
-      const provider = window.phantom?.solana || window.solflare || window.solana;
-      if (provider) {
-        const resp = await provider.connect({ onlyIfTrusted: true });
-        walletAddress = resp.publicKey.toString();
-        xHandle = savedHandle;
-        await refreshBalance(walletAddress);
-        enterDashboard();
-        resetInactivityTimer();
+  async function connectWallet(){
+    try{
+      var provider = window.phantom && window.phantom.solana
+        || window.solflare
+        || window.solana;
+      if(!provider){
+        toast('No Solana wallet found. Install Phantom or Solflare, or browse without connecting.', 'err');
+        return;
       }
-    } catch(e) {
-      // Phantom not connected silently, stay on connect screen
-      localStorage.removeItem('bard_wallet');
-      localStorage.removeItem('bard_xhandle');
-      localStorage.removeItem('bard_session_at');
+      var resp = await provider.connect();
+      wallet = (resp.publicKey && resp.publicKey.toString()) || (provider.publicKey && provider.publicKey.toString());
+      if(!wallet){
+        toast('Could not read wallet address', 'err');
+        return;
+      }
+      browseOnly = false;
+      localStorage.setItem('bard_holder_wallet', wallet);
+      toast('Wallet connected', 'ok');
+      enterApp();
+    }catch(e){
+      console.error(e);
+      toast('Connection cancelled or failed', 'err');
     }
   }
 
-  // Wire up proposal buttons via addEventListener
-  document.getElementById('submitProposalBtn')?.addEventListener('click', () => {
-    document.getElementById('proposalModal').classList.add('open');
-  });
+  function renderAll(){
+    renderOverview();
+    renderMine();
+    renderExplore();
+    renderClaims();
+  }
 
-  document.getElementById('closeProposalBtn')?.addEventListener('click', () => {
-    document.getElementById('proposalModal').classList.remove('open');
-  });
+  function cardCampaign(x, opts){
+    opts = opts || {};
+    var c = x.campaign;
+    var h = loadHolder();
+    var key = joinKey(x.projectId, c.id);
+    var joined = !!h.joined[key];
+    var claimed = !!(h.claims[key] && h.claims[key].settled);
+    var pill = c.status === 'active'
+      ? '<span class="pill pill--live">Active</span>'
+      : '<span class="pill pill--muted">Ended</span>';
+    if(claimed) pill = '<span class="pill pill--done">Claimed <img class="stamp" src="/transparentbardsmile.png" alt=""></span>';
+    else if(joined) pill = '<span class="pill pill--live">Joined</span>';
 
-  document.getElementById('submitProposalFormBtn')?.addEventListener('click', submitProposal);
+    return (
+      '<div class="card card--hover" data-open="' + escapeHtml(x.projectId) + '|' + escapeHtml(c.id) + '">' +
+        '<div class="item">' +
+          '<span class="item__ava">' + initials(x.ticker || x.projectName) + '</span>' +
+          '<div class="item__body">' +
+            '<div class="item__title">' + escapeHtml(c.title) +
+              ' <span class="muted">· $' + escapeHtml(x.ticker) + '</span></div>' +
+            '<div class="item__sub">' + escapeHtml(c.type) + ' · ' + escapeHtml((c.rule || '').slice(0,64)) +
+              ((c.rule || '').length > 64 ? '…' : '') + '</div>' +
+          '</div>' +
+          '<div class="item__right">' + pill + '</div>' +
+        '</div>' +
+      '</div>'
+    );
+  }
 
-  // Close modal on overlay click
-  document.getElementById('proposalModal')?.addEventListener('click', function(e) {
-    if (e.target === this) this.classList.remove('open');
+  function bindOpen(root){
+    root.querySelectorAll('[data-open]').forEach(function(el){
+      el.addEventListener('click', function(){
+        var parts = el.getAttribute('data-open').split('|');
+        openDetail(parts[0], parts[1]);
+      });
+    });
+  }
+
+  function renderOverview(){
+    var live = liveCampaigns();
+    var h = loadHolder();
+    var joinedKeys = Object.keys(h.joined || {});
+    var claimable = joinedKeys.filter(function(k){
+      return h.joined[k] && h.joined[k].qualified && !(h.claims[k] && h.claims[k].settled);
+    }).length;
+
+    document.getElementById('ov-joined').textContent = joinedKeys.length;
+    document.getElementById('ov-claimable').textContent = claimable;
+    document.getElementById('ov-live').textContent = live.length;
+
+    var list = document.getElementById('ov-list');
+    if(!live.length){
+      list.innerHTML =
+        '<div class="empty">' +
+          '<h3>No live campaigns yet</h3>' +
+          '<p>When a team onboards a project and starts a campaign in the admin, it shows up here.</p>' +
+          '<a class="btn btn--solid" href="/admin.html">Open team admin</a>' +
+        '</div>';
+      return;
+    }
+    list.innerHTML = live.slice(0,5).map(function(x){ return cardCampaign(x); }).join('');
+    bindOpen(list);
+  }
+
+  function renderMine(){
+    var h = loadHolder();
+    var all = allCampaigns();
+    var mine = all.filter(function(x){
+      return h.joined[joinKey(x.projectId, x.campaign.id)];
+    });
+    var list = document.getElementById('mine-list');
+    if(!wallet && !browseOnly){
+      list.innerHTML = '<div class="empty"><h3>Connect a wallet</h3><p>Join campaigns after connecting.</p></div>';
+      return;
+    }
+    if(!mine.length){
+      list.innerHTML =
+        '<div class="empty">' +
+          '<h3>Nothing joined yet</h3>' +
+          '<p>Explore live campaigns and join the ones you want to track.</p>' +
+          '<button class="btn btn--solid" data-go="explore">Explore campaigns</button>' +
+        '</div>';
+      list.querySelector('[data-go]') && list.querySelector('[data-go]').addEventListener('click', function(){
+        showPage('explore'); renderExplore();
+      });
+      return;
+    }
+    list.innerHTML = mine.map(function(x){ return cardCampaign(x); }).join('');
+    bindOpen(list);
+  }
+
+  function renderExplore(){
+    var live = liveCampaigns();
+    var list = document.getElementById('explore-list');
+    if(!live.length){
+      list.innerHTML =
+        '<div class="empty">' +
+          '<h3>Nothing to explore yet</h3>' +
+          '<p>Create a project and campaign in the team admin, then refresh this page.</p>' +
+          '<a class="btn btn--solid" href="/admin.html">Team admin</a>' +
+        '</div>';
+      return;
+    }
+    list.innerHTML = live.map(function(x){ return cardCampaign(x); }).join('');
+    bindOpen(list);
+  }
+
+  function renderClaims(){
+    var h = loadHolder();
+    var all = allCampaigns();
+    var rows = [];
+    all.forEach(function(x){
+      var key = joinKey(x.projectId, x.campaign.id);
+      var j = h.joined[key];
+      if(!j) return;
+      if(j.qualified || (h.claims[key] && h.claims[key].settled)){
+        rows.push({ x: x, key: key, settled: !!(h.claims[key] && h.claims[key].settled) });
+      }
+    });
+    var list = document.getElementById('claims-list');
+    if(!rows.length){
+      list.innerHTML =
+        '<div class="empty">' +
+          '<h3>No claims yet</h3>' +
+          '<p>Join a campaign and mark yourself qualified from the campaign page to test the claim flow.</p>' +
+        '</div>';
+      return;
+    }
+    list.innerHTML = rows.map(function(r){
+      var c = r.x.campaign;
+      var reward = (c.reward || '—') + (c.unit ? ' ' + c.unit : '');
+      if(r.settled){
+        return (
+          '<div class="card">' +
+            '<div class="item">' +
+              '<span class="item__ava">' + initials(r.x.ticker) + '</span>' +
+              '<div class="item__body">' +
+                '<div class="item__title">' + escapeHtml(c.title) + '</div>' +
+                '<div class="item__sub">$' + escapeHtml(r.x.ticker) + ' · ' + escapeHtml(reward) + '</div>' +
+              '</div>' +
+              '<div class="item__right"><span class="pill pill--done">Settled <img class="stamp" src="/transparentbardsmile.png" alt=""></span></div>' +
+            '</div>' +
+          '</div>'
+        );
+      }
+      return (
+        '<div class="card">' +
+          '<div class="item" style="flex-wrap:wrap">' +
+            '<span class="item__ava">' + initials(r.x.ticker) + '</span>' +
+            '<div class="item__body">' +
+              '<div class="item__title">' + escapeHtml(c.title) + '</div>' +
+              '<div class="item__sub">$' + escapeHtml(r.x.ticker) + ' · ' + escapeHtml(reward) + ' · fee 0.1 SOL when live</div>' +
+            '</div>' +
+            '<div class="item__right">' +
+              '<button class="btn btn--solid btn--sm" data-claim="' + escapeHtml(r.key) + '">Claim</button>' +
+            '</div>' +
+          '</div>' +
+        '</div>'
+      );
+    }).join('');
+
+    list.querySelectorAll('[data-claim]').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        if(!wallet){
+          toast('Connect a wallet to claim', 'err');
+          return;
+        }
+        var key = btn.getAttribute('data-claim');
+        var h2 = loadHolder();
+        h2.claims[key] = { settled: true, at: new Date().toISOString(), wallet: wallet };
+        saveHolder(h2);
+        toast('Claim settled · smile marked · 0.1 SOL fee when live', 'ok');
+        renderAll();
+      });
+    });
+  }
+
+  function openDetail(projectId, campaignId){
+    var match = allCampaigns().find(function(x){
+      return x.projectId === projectId && x.campaign.id === campaignId;
+    });
+    if(!match){
+      toast('Campaign not found', 'err');
+      return;
+    }
+    detailCtx = match;
+    var c = match.campaign;
+    var h = loadHolder();
+    var key = joinKey(projectId, campaignId);
+    var joined = !!h.joined[key];
+    var settled = !!(h.claims[key] && h.claims[key].settled);
+
+    document.getElementById('detail-kicker').textContent = match.projectName + ' · $' + match.ticker;
+    document.getElementById('detail-title').textContent = c.title;
+    document.getElementById('detail-rule').textContent = c.rule || '—';
+    document.getElementById('detail-status').textContent = c.status;
+    document.getElementById('detail-status').className = 'pill ' + (c.status === 'active' ? 'pill--live' : 'pill--muted');
+    document.getElementById('detail-meta').textContent = c.type + (c.days ? ' · ' + c.days + ' days' : '');
+    document.getElementById('detail-reward').textContent = (c.reward || '—') + (c.unit ? ' ' + c.unit : '');
+
+    var you = 'Not joined';
+    if(settled) you = 'Claimed';
+    else if(h.joined[key] && h.joined[key].qualified) you = 'Qualified';
+    else if(joined) you = 'Joined';
+    document.getElementById('detail-you').textContent = you;
+
+    var joinBtn = document.getElementById('detail-join');
+    var hint = document.getElementById('detail-join-hint');
+    if(settled){
+      joinBtn.style.display = 'none';
+      hint.textContent = 'This reward was settled. The smile marks a real claim.';
+    } else if(h.joined[key] && h.joined[key].qualified){
+      joinBtn.style.display = '';
+      joinBtn.textContent = 'Go to claims';
+      joinBtn.onclick = function(){ showPage('claims'); renderClaims(); };
+      hint.textContent = 'You’re marked qualified. Claim from the Claims tab.';
+    } else if(joined){
+      joinBtn.style.display = '';
+      joinBtn.textContent = 'Mark qualified (demo)';
+      joinBtn.onclick = function(){
+        if(!wallet){ toast('Connect a wallet first', 'err'); return; }
+        var h2 = loadHolder();
+        h2.joined[key] = { at: h2.joined[key].at, qualified: true, wallet: wallet };
+        saveHolder(h2);
+        toast('Marked qualified — claim when ready', 'ok');
+        openDetail(projectId, campaignId);
+        renderAll();
+      };
+      hint.textContent = 'Demo path: mark qualified to unlock the claim flow. Real verification comes with on-chain / checklist checks.';
+    } else {
+      joinBtn.style.display = '';
+      joinBtn.textContent = 'Join campaign';
+      joinBtn.onclick = function(){
+        if(!wallet){ toast('Connect a wallet to join', 'err'); return; }
+        if(c.status !== 'active'){ toast('Campaign is not active', 'err'); return; }
+        var h2 = loadHolder();
+        h2.joined[key] = { at: new Date().toISOString(), qualified: false, wallet: wallet };
+        saveHolder(h2);
+        toast('Joined ' + c.title, 'ok');
+        openDetail(projectId, campaignId);
+        renderAll();
+      };
+      hint.textContent = 'Join to track this campaign under My campaigns.';
+    }
+
+    // Leaderboard from admin demo rows + you
+    var rows = (c.demoRows && c.demoRows.length) ? c.demoRows.slice() : [
+      {name:'Mona', progress:'On track', done:1},
+      {name:'Kaito', progress:'On track', done:1},
+      {name:'Serg', progress:'In progress', done:0}
+    ];
+    if(joined && wallet){
+      rows = [{ name: shortAddr(wallet) + ' (you)', progress: settled ? 'Claimed' : (h.joined[key].qualified ? 'Qualified' : 'Joined'), done: !!(h.joined[key].qualified || settled) }].concat(rows);
+    }
+    document.getElementById('detail-lb').innerHTML = rows.map(function(r, i){
+      return (
+        '<div class="item" style="padding:10px 0;border-bottom:1px solid var(--line)">' +
+          '<span class="muted num" style="width:24px">' + (i+1) + '</span>' +
+          '<div class="item__body">' +
+            '<div class="item__title" style="font-size:.94rem">' + escapeHtml(r.name) + '</div>' +
+            '<div class="item__sub">' + escapeHtml(r.progress || '') + '</div>' +
+          '</div>' +
+          (r.done ? '<span class="pill pill--live">In</span>' : '<span class="pill pill--muted">…</span>') +
+        '</div>'
+      );
+    }).join('') || '<div class="muted">No entries yet</div>';
+
+    showPage('detail');
+  }
+
+  function closeMenu(){
+    document.getElementById('side').classList.remove('is-open');
+    document.getElementById('scrim').classList.remove('is-on');
+  }
+
+  // events
+  document.getElementById('btn-connect').onclick = connectWallet;
+  document.getElementById('btn-browse').onclick = function(){
+    browseOnly = true;
+    wallet = null;
+    enterApp();
+  };
+  document.getElementById('btn-disc').onclick = function(){
+    wallet = null;
+    browseOnly = false;
+    localStorage.removeItem('bard_holder_wallet');
+    document.getElementById('app').style.display = 'none';
+    document.getElementById('gate').style.display = 'flex';
+  };
+  document.querySelectorAll('.nav button').forEach(function(b){
+    b.addEventListener('click', function(){
+      var name = b.getAttribute('data-page');
+      showPage(name);
+      if(name === 'overview') renderOverview();
+      if(name === 'mine') renderMine();
+      if(name === 'explore') renderExplore();
+      if(name === 'claims') renderClaims();
+    });
   });
-});
+  document.querySelectorAll('[data-go]').forEach(function(b){
+    b.addEventListener('click', function(){
+      var name = b.getAttribute('data-go');
+      showPage(name);
+      if(name === 'explore') renderExplore();
+    });
+  });
+  document.getElementById('detail-back').onclick = function(){
+    showPage(lastPage || 'explore');
+  };
+  document.getElementById('menu-btn').onclick = function(){
+    document.getElementById('side').classList.add('is-open');
+    document.getElementById('scrim').classList.add('is-on');
+  };
+  document.getElementById('scrim').onclick = closeMenu;
+
+  // restore session
+  var saved = localStorage.getItem('bard_holder_wallet');
+  if(saved){
+    wallet = saved;
+    browseOnly = false;
+    enterApp();
+  }
+})();
 </script>
 </body>
 </html>
