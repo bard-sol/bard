@@ -2,770 +2,782 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<link rel="icon" type="image/png" href="/BardUpdated.png">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>$BARD — Admin</title>
+<title>Bard — for teams</title>
+<meta name="description" content="Onboard your Solana project, run campaigns, and settle claims on Bard.">
+<link rel="icon" href="/transparentbardsmile.png" type="image/png">
+<link rel="apple-touch-icon" href="/transparentbardsmile.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=DM+Mono:wght@300;400&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&display=swap" rel="stylesheet">
 <style>
-*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
-html, body { height: 100%; -webkit-user-select: none; user-select: none; }
-:root {
-  --bg: #080808; --surface: #0e0e0e; --surface2: #141414;
-  --border: rgba(155,127,232,0.12); --border2: rgba(155,127,232,0.22);
-  --purple: #9b7fe8; --purple-dim: rgba(155,127,232,0.12);
-  --white: #fff; --w60: rgba(255,255,255,0.6); --w30: rgba(255,255,255,0.3); --w08: rgba(255,255,255,0.07);
-  --green: #4ade80; --red: #f87171; --amber: #fbbf24; --sidebar: 200px;
+:root{
+  --bg:#1c1e26;
+  --surface:#262930;
+  --surface-2:#2d3039;
+  --purple:#a78bfa;
+  --text:#f4f4f5;
+  --muted:#a1a1aa;
+  --body:#d5d5da;
+  --line:rgba(244,244,245,.08);
+  --line-strong:rgba(244,244,245,.16);
+  --purple-soft:rgba(167,139,250,.12);
+  --purple-line:rgba(167,139,250,.35);
+  --green:#4ade80;
+  --amber:#fbbf24;
+  --font:"Archivo","Helvetica Neue",Helvetica,Arial,sans-serif;
+  --r:12px;
+  --gutter:clamp(18px,4vw,40px);
+  --max:1080px;
 }
-body { background: var(--bg); color: var(--white); font-family: 'Outfit', sans-serif; display: flex; min-height: 100vh; }
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0;background:var(--bg);color:var(--text);
+  font-family:var(--font);font-size:16px;line-height:1.6;
+  font-variation-settings:"wdth" 100,"wght" 420;
+  -webkit-font-smoothing:antialiased;min-height:100vh;
+}
+img{display:block;max-width:100%}
+a{color:inherit;text-decoration:none}
+button,input,select,textarea{font:inherit;color:inherit}
+button{background:none;border:none;cursor:pointer;padding:0}
+:focus-visible{outline:2px solid var(--purple);outline-offset:3px;border-radius:4px}
+.num{font-variant-numeric:tabular-nums}
+.wrap{max-width:var(--max);margin:0 auto;padding:0 var(--gutter)}
 
-.login-screen { position: fixed; inset: 0; background: var(--bg); z-index: 200; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.8rem; }
-.login-tag { font-family: 'DM Mono', monospace; font-size: 0.65rem; color: var(--purple); letter-spacing: 0.3em; margin-bottom: 0.5rem; }
-.login-title { font-size: 1rem; font-weight: 600; margin-bottom: 0.3rem; }
-.login-sub { font-family: 'DM Mono', monospace; font-size: 0.62rem; color: var(--w30); margin-bottom: 0.8rem; }
-.login-inp { width: 280px; background: var(--surface); border: 1px solid var(--border2); color: var(--white); padding: 0.75rem 1rem; font-family: 'DM Mono', monospace; font-size: 0.85rem; outline: none; }
-.login-inp:focus { border-color: var(--purple); }
-.login-btn { width: 280px; background: var(--purple); color: #000; border: none; padding: 0.75rem; font-family: 'Outfit', sans-serif; font-size: 0.82rem; font-weight: 600; cursor: pointer; letter-spacing: 0.08em; text-transform: uppercase; transition: background 0.2s; }
-.login-btn:hover { background: var(--white); }
-.login-err { font-family: 'DM Mono', monospace; font-size: 0.62rem; color: var(--red); display: none; }
+/* header */
+.head{
+  position:sticky;top:0;z-index:40;
+  background:rgba(28,30,38,.9);
+  backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+  border-bottom:1px solid var(--line);
+}
+.head__in{
+  display:flex;align-items:center;gap:20px;
+  min-height:72px;max-width:var(--max);margin:0 auto;padding:10px var(--gutter);
+}
+.mark{
+  display:inline-flex;flex-direction:column;align-items:center;
+  gap:2px;margin-right:auto;line-height:1;text-align:center;
+}
+.mark__word{
+  font-size:1.15rem;font-variation-settings:"wdth" 112,"wght" 720;letter-spacing:-.015em;
+}
+.mark__smile{width:26px;height:16px;object-fit:contain}
+.head__meta{font-size:.82rem;color:var(--muted);margin-right:8px}
+.head__link{
+  font-size:.9rem;color:var(--muted);padding:8px 12px;border-radius:8px;
+  transition:color .15s,background .15s;
+}
+.head__link:hover{color:var(--text);background:var(--purple-soft)}
 
-.sidebar { width: var(--sidebar); min-height: 100vh; background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; position: fixed; top: 0; left: 0; bottom: 0; z-index: 50; }
-.sb-head { padding: 1.3rem 1.2rem 1rem; border-bottom: 1px solid var(--border); }
-.sb-title { font-size: 0.9rem; font-weight: 700; letter-spacing: 0.12em; }
-.sb-badge { display: inline-block; font-family: 'DM Mono', monospace; font-size: 0.48rem; letter-spacing: 0.2em; color: var(--amber); background: rgba(251,191,36,0.1); padding: 0.15rem 0.45rem; margin-top: 0.3rem; text-transform: uppercase; border: 1px solid rgba(251,191,36,0.2); }
-.sb-nav { flex: 1; padding: 0.7rem 0; overflow-y: auto; }
-.nav-lbl { font-family: 'DM Mono', monospace; font-size: 0.48rem; letter-spacing: 0.3em; color: rgba(255,255,255,0.18); text-transform: uppercase; padding: 0.65rem 1.2rem 0.3rem; }
-.nav-item { display: flex; align-items: center; gap: 0.55rem; padding: 0.52rem 1.2rem; cursor: pointer; transition: all 0.18s; border-left: 2px solid transparent; font-size: 0.78rem; color: var(--w60); }
-.nav-item:hover { color: var(--white); background: var(--w08); }
-.nav-item.active { color: var(--purple); border-left-color: var(--purple); background: var(--purple-dim); font-weight: 500; }
-.nav-count { margin-left: auto; font-family: 'DM Mono', monospace; font-size: 0.52rem; background: var(--amber); color: #000; padding: 0.1rem 0.35rem; border-radius: 10px; font-weight: 700; }
-.nav-count.red { background: var(--red); }
-.sb-bottom { padding: 0.9rem 1.2rem; border-top: 1px solid var(--border); }
-.logout-btn { width: 100%; background: transparent; border: 1px solid var(--border2); color: var(--w30); font-family: 'DM Mono', monospace; font-size: 0.58rem; letter-spacing: 0.15em; text-transform: uppercase; padding: 0.5rem; cursor: pointer; transition: all 0.2s; }
-.logout-btn:hover { border-color: var(--red); color: var(--red); }
+/* layout */
+.main{padding:clamp(28px,5vw,48px) 0 80px}
+.page{display:none}
+.page.is-on{display:block}
 
-.main { margin-left: var(--sidebar); flex: 1; min-height: 100vh; display: flex; flex-direction: column; }
-.topbar { padding: 1rem 1.8rem; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; background: var(--surface); position: sticky; top: 0; z-index: 40; }
-.topbar-title { font-size: 0.88rem; font-weight: 600; }
-.topbar-meta { font-family: 'DM Mono', monospace; font-size: 0.58rem; color: var(--w30); margin-top: 0.1rem; }
-.live { display: flex; align-items: center; gap: 0.35rem; font-family: 'DM Mono', monospace; font-size: 0.58rem; color: var(--green); }
-.live::before { content:''; width:5px; height:5px; border-radius:50%; background:var(--green); }
+.kicker{font-size:.8rem;color:var(--purple);font-variation-settings:"wght" 600;margin:0 0 10px}
+h1{
+  margin:0 0 10px;font-size:clamp(1.7rem,3.5vw,2.3rem);line-height:1.15;
+  font-variation-settings:"wdth" 108,"wght" 700;letter-spacing:-.025em;
+}
+.lead{margin:0 0 28px;color:var(--body);max-width:52ch;font-size:1.02rem}
 
-.page { display: none; padding: 1.8rem; animation: fi 0.2s ease; }
-.page.active { display: block; }
-@keyframes fi { from{opacity:0;transform:translateY(5px)} to{opacity:1;transform:translateY(0)} }
+.row{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.row--between{justify-content:space-between}
+.gap{height:22px}
 
-.stats-row { display: grid; grid-template-columns: repeat(4,1fr); gap: 1px; background: var(--border); border: 1px solid var(--border); margin-bottom: 1.8rem; }
-.stat { background: var(--surface); padding: 1.2rem 1.4rem; }
-.stat-lbl { font-family: 'DM Mono', monospace; font-size: 0.52rem; letter-spacing: 0.2em; color: var(--w30); text-transform: uppercase; margin-bottom: 0.5rem; }
-.stat-val { font-size: 1.3rem; font-weight: 600; }
-.stat-val.p { color: var(--purple); } .stat-val.g { color: var(--green); } .stat-val.a { color: var(--amber); } .stat-val.r { color: var(--red); }
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:8px;
+  padding:12px 20px;border-radius:9px;font-size:.95rem;
+  font-variation-settings:"wght" 620;border:1px solid transparent;
+  transition:background .15s,border-color .15s,transform .12s;
+}
+.btn:active{transform:translateY(1px)}
+.btn--solid{background:var(--purple);color:#191320}
+.btn--solid:hover{background:#b9a3ff}
+.btn--ghost{border-color:var(--line-strong);color:var(--text)}
+.btn--ghost:hover{border-color:var(--purple-line);background:var(--purple-soft)}
+.btn--sm{padding:8px 14px;font-size:.86rem;border-radius:8px}
+.btn:disabled{opacity:.45;cursor:not-allowed;transform:none}
 
-.card { background: var(--surface); border: 1px solid var(--border); margin-bottom: 1rem; }
-.card-head { padding: 1.1rem 1.4rem; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
-.card-body { padding: 1.4rem; }
-.sec-title { font-size: 0.7rem; font-weight: 600; letter-spacing: 0.06em; color: var(--w60); text-transform: uppercase; }
-.sec-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.8rem; }
+.card{
+  background:var(--surface);border:1px solid var(--line);
+  border-radius:var(--r);padding:22px 24px;
+}
+.card + .card{margin-top:12px}
+.card--hover{transition:border-color .15s,background .15s;cursor:pointer}
+.card--hover:hover{border-color:var(--purple-line);background:var(--surface-2)}
 
-.dt { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
-.dt th { font-family: 'DM Mono', monospace; font-size: 0.52rem; letter-spacing: 0.18em; color: var(--w30); text-transform: uppercase; padding: 0.6rem 1rem; text-align: left; border-bottom: 1px solid var(--border); font-weight: 400; }
-.dt td { padding: 0.8rem 1rem; border-bottom: 1px solid rgba(155,127,232,0.05); vertical-align: middle; }
-.dt tr:last-child td { border-bottom: none; }
-.dt tr:hover td { background: var(--w08); }
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media(max-width:720px){.grid-2{grid-template-columns:1fr}}
 
-.badge { display: inline-block; font-family: 'DM Mono', monospace; font-size: 0.52rem; letter-spacing: 0.12em; text-transform: uppercase; padding: 0.18rem 0.5rem; border-radius: 2px; }
-.bp { background: var(--purple-dim); color: var(--purple); }
-.bg { background: rgba(74,222,128,0.1); color: var(--green); }
-.br { background: rgba(248,113,113,0.1); color: var(--red); }
-.ba { background: rgba(251,191,36,0.1); color: var(--amber); }
-.bw { background: var(--w08); color: var(--w30); }
+.stat{
+  background:var(--surface);border:1px solid var(--line);border-radius:var(--r);
+  padding:18px 20px;
+}
+.stat__lbl{font-size:.78rem;color:var(--muted);margin-bottom:6px}
+.stat__val{font-size:1.35rem;font-variation-settings:"wght" 660;letter-spacing:-.02em}
+.stat__val.p{color:var(--purple)}
 
-.btn { padding: 0.42rem 0.9rem; border: none; font-family: 'Outfit', sans-serif; font-size: 0.72rem; font-weight: 500; cursor: pointer; transition: all 0.18s; }
-.btn-p { background: var(--purple); color: #000; }
-.btn-p:hover { background: var(--white); }
-.btn-g { background: rgba(74,222,128,0.12); color: var(--green); border: 1px solid rgba(74,222,128,0.25); }
-.btn-g:hover { background: rgba(74,222,128,0.22); }
-.btn-r { background: rgba(248,113,113,0.12); color: var(--red); border: 1px solid rgba(248,113,113,0.25); }
-.btn-r:hover { background: rgba(248,113,113,0.22); }
-.btn-ghost { background: transparent; color: var(--w60); border: 1px solid var(--border2); }
-.btn-ghost:hover { border-color: var(--purple); color: var(--purple); }
+.empty{
+  text-align:center;padding:48px 24px;
+  background:var(--surface);border:1px dashed var(--line-strong);border-radius:var(--r);
+}
+.empty h3{margin:0 0 8px;font-size:1.15rem;font-variation-settings:"wght" 640}
+.empty p{margin:0 0 20px;color:var(--muted);max-width:40ch;margin-left:auto;margin-right:auto}
 
-.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem; }
-.form-group { display: flex; flex-direction: column; gap: 0.4rem; }
-.form-label { font-family: 'DM Mono', monospace; font-size: 0.54rem; letter-spacing: 0.18em; color: var(--w30); text-transform: uppercase; }
-.form-inp { background: var(--surface2); border: 1px solid var(--border2); color: var(--white); padding: 0.62rem 0.85rem; font-family: 'DM Mono', monospace; font-size: 0.8rem; outline: none; transition: border-color 0.2s; width: 100%; }
-.form-inp:focus { border-color: var(--purple); }
-.form-btn { background: var(--purple); color: #000; border: none; padding: 0.65rem 1.4rem; font-family: 'Outfit', sans-serif; font-size: 0.8rem; font-weight: 600; cursor: pointer; transition: background 0.2s; }
-.form-btn:hover { background: var(--white); }
+.pill{
+  display:inline-flex;align-items:center;font-size:.74rem;padding:4px 10px;
+  border-radius:99px;font-variation-settings:"wght" 600;white-space:nowrap;
+}
+.pill--live{background:var(--purple-soft);color:var(--purple)}
+.pill--draft{background:rgba(244,244,245,.06);color:var(--muted)}
+.pill--ended{background:rgba(161,161,170,.12);color:var(--muted)}
 
-.fg { display: flex; flex-direction: column; gap: 0.4rem; }
-.fg.full { grid-column: 1 / -1; }
-.fl { font-family: 'DM Mono', monospace; font-size: 0.54rem; letter-spacing: 0.18em; color: var(--w30); text-transform: uppercase; }
-.fi { background: var(--surface2); border: 1px solid var(--border2); color: var(--white); padding: 0.62rem 0.85rem; font-family: 'DM Mono', monospace; font-size: 0.8rem; outline: none; transition: border-color 0.2s; width: 100%; }
-.fi:focus { border-color: var(--purple); }
+/* forms */
+.form{display:flex;flex-direction:column;gap:16px}
+.field{display:flex;flex-direction:column;gap:6px}
+.field label{font-size:.8rem;color:var(--muted);font-variation-settings:"wght" 540}
+.field .hint{font-size:.78rem;color:var(--muted);margin-top:2px}
+.inp, .sel, .area{
+  width:100%;background:var(--surface-2);border:1px solid var(--line-strong);
+  border-radius:9px;padding:11px 14px;color:var(--text);
+  transition:border-color .15s;
+}
+.inp:focus, .sel:focus, .area:focus{outline:none;border-color:var(--purple-line)}
+.area{min-height:96px;resize:vertical;line-height:1.55}
+.fee-note{
+  display:flex;justify-content:space-between;align-items:center;gap:12px;
+  padding:12px 14px;background:var(--purple-soft);border-radius:9px;
+  font-size:.9rem;
+}
+.fee-note b{font-variation-settings:"wght" 640;font-weight:normal}
 
-.toast { position: fixed; bottom: 1.5rem; right: 1.5rem; background: var(--surface); border: 1px solid var(--border2); padding: 0.75rem 1.1rem; font-family: 'DM Mono', monospace; font-size: 0.68rem; z-index: 1000; opacity: 0; transform: translateY(8px); transition: all 0.3s; pointer-events: none; max-width: 320px; }
-.toast.show { opacity: 1; transform: translateY(0); }
-.toast.s { border-color: rgba(74,222,128,0.4); color: var(--green); }
-.toast.e { border-color: rgba(248,113,113,0.4); color: var(--red); }
+/* lists */
+.item{
+  display:flex;align-items:center;gap:14px;padding:16px 0;
+  border-bottom:1px solid var(--line);
+}
+.item:last-child{border-bottom:none}
+.item__ava{
+  width:40px;height:40px;border-radius:10px;background:var(--purple-soft);
+  display:grid;place-items:center;color:var(--purple);
+  font-size:.85rem;font-variation-settings:"wght" 680;flex:none;
+}
+.item__body{min-width:0;flex:1}
+.item__title{font-size:1rem;font-variation-settings:"wght" 600;line-height:1.3}
+.item__sub{font-size:.82rem;color:var(--muted);margin-top:2px}
+.item__right{margin-left:auto;text-align:right;flex:none}
 
-.empty { text-align:center; padding:2rem; font-family:'DM Mono',monospace; font-size:0.68rem; color:var(--w30); }
-.mono { font-family: 'DM Mono', monospace; }
+.back{
+  display:inline-flex;align-items:center;gap:6px;font-size:.9rem;
+  color:var(--muted);margin-bottom:18px;transition:color .15s;
+}
+.back:hover{color:var(--text)}
 
-.pt-card { padding: 1.1rem 1.4rem; border-bottom: 1px solid rgba(155,127,232,0.08); }
-.pt-card:last-child { border-bottom: none; }
-.pt-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem; }
-.pt-left { display: flex; align-items: center; gap: 0.7rem; }
-.pt-right { display: flex; align-items: center; gap: 0.8rem; }
-.pt-handle { font-family: 'DM Mono', monospace; font-size: 0.95rem; font-weight: 700; color: var(--purple); }
-.pt-pts-pos { font-family: 'DM Mono', monospace; font-size: 1rem; font-weight: 700; color: var(--green); }
-.pt-pts-neg { font-family: 'DM Mono', monospace; font-size: 1rem; font-weight: 700; color: var(--red); }
-.pt-date { font-family: 'DM Mono', monospace; font-size: 0.6rem; color: var(--w30); }
-.pt-tweet { background: rgba(155,127,232,0.06); border-left: 2px solid var(--purple); padding: 0.6rem 0.8rem; margin-top: 0.5rem; border-radius: 0 4px 4px 0; font-family: 'DM Mono', monospace; font-size: 0.75rem; color: var(--w60); line-height: 1.75; white-space: pre-wrap; word-break: break-word; }
-.pt-reason { font-family: 'DM Mono', monospace; font-size: 0.65rem; color: var(--w30); margin-top: 0.35rem; }
-.pt-link { font-family: 'DM Mono', monospace; font-size: 0.65rem; color: var(--purple); text-decoration: underline; text-underline-offset: 3px; margin-top: 0.35rem; display: inline-block; }
+.table{width:100%;border-collapse:collapse}
+.table th{
+  text-align:left;font-size:.74rem;color:var(--muted);font-variation-settings:"wght" 520;
+  padding:10px 12px;border-bottom:1px solid var(--line);font-weight:normal;
+}
+.table td{
+  padding:12px;border-bottom:1px solid var(--line);font-size:.92rem;vertical-align:middle;
+}
+.table tr:last-child td{border-bottom:none}
+
+.toast{
+  position:fixed;bottom:24px;right:24px;z-index:100;
+  background:var(--surface);border:1px solid var(--line-strong);
+  border-radius:10px;padding:12px 16px;font-size:.9rem;
+  box-shadow:0 16px 40px -20px rgba(0,0,0,.7);
+  opacity:0;transform:translateY(8px);pointer-events:none;
+  transition:opacity .25s,transform .25s;max-width:320px;
+}
+.toast.is-on{opacity:1;transform:none}
+.toast.ok{border-color:rgba(74,222,128,.35);color:var(--green)}
+.toast.err{border-color:rgba(248,113,113,.35);color:#f87171}
+
+.tabs{display:flex;gap:4px;background:var(--surface-2);border-radius:9px;padding:4px;width:max-content;max-width:100%;margin-bottom:18px}
+.tab{
+  font-size:.86rem;color:var(--muted);padding:7px 14px;border-radius:6px;
+  font-variation-settings:"wght" 540;transition:color .15s,background .15s;
+}
+.tab.is-on{background:var(--bg);color:var(--text)}
+
+.muted{color:var(--muted)}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);border:0}
 </style>
 </head>
 <body>
+  <header class="head">
+    <div class="head__in">
+      <a class="mark" href="/" aria-label="Bard home">
+        <span class="mark__word">Bard</span>
+        <img class="mark__smile" src="/transparentbardsmile.png" alt="">
+      </a>
+      <span class="head__meta">For teams</span>
+      <a class="head__link" href="/dashboard.html">Holder dashboard</a>
+      <a class="head__link" href="/">Landing</a>
+    </div>
+  </header>
 
-<div id="ls" class="login-screen">
-  <div class="login-tag">$BARD · ADMIN</div>
-  <div class="login-title">Admin Access</div>
-  <div class="login-sub">Enter your admin password to continue</div>
-  <input class="login-inp" type="password" id="pwd" placeholder="Password">
-  <button class="login-btn" id="loginBtn">Enter</button>
-  <div class="login-err" id="lerr">Incorrect password</div>
-</div>
+  <main class="main">
+    <div class="wrap">
 
-<div class="toast" id="toast"></div>
-
-<div id="app" style="display:none;width:100%">
-<aside class="sidebar">
-  <div class="sb-head">
-    <div class="sb-title">$BARD</div>
-    <div class="sb-badge">Admin Panel</div>
-  </div>
-  <nav class="sb-nav">
-    <div class="nav-lbl">Overview</div>
-    <div class="nav-item active" id="nav-overview" onclick="go('overview',this)">
-      <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><rect x="1" y="1" width="6" height="6" rx="1" stroke="currentColor" stroke-width="1.3"/><rect x="9" y="1" width="6" height="6" rx="1" stroke="currentColor" stroke-width="1.3"/><rect x="1" y="9" width="6" height="6" rx="1" stroke="currentColor" stroke-width="1.3"/><rect x="9" y="9" width="6" height="6" rx="1" stroke="currentColor" stroke-width="1.3"/></svg>
-      Dashboard
-    </div>
-    <div class="nav-lbl">Manage</div>
-    <div class="nav-item" onclick="go('proposals',this)">
-      <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><rect x="1" y="3" width="14" height="10" rx="1" stroke="currentColor" stroke-width="1.3"/><path d="M5 8l2 2 4-4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      Proposals <span class="nav-count" id="n-p">0</span>
-    </div>
-    <div class="nav-item" onclick="go('claims',this)">
-      <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M8 1v9M4 6l4 4 4-4M2 12h12" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      Claims <span class="nav-count red" id="n-c">0</span>
-    </div>
-    <div class="nav-item" onclick="go('members',this)">
-      <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="5" r="3" stroke="currentColor" stroke-width="1.3"/><path d="M2 14c0-3 2.7-5 6-5s6 2 6 5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
-      Members
-    </div>
-    <div class="nav-item" onclick="go('points',this);loadPointsLedger()">
-      <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.3"/><path d="M8 5v3l2 2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
-      Points
-    </div>
-    <div class="nav-lbl">Treasury</div>
-    <div class="nav-item" onclick="go('burns',this)">
-      <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M8 2c0 3-4 4-4 7a4 4 0 008 0c0-3-4-4-4-7z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>
-      Record Burn
-    </div>
-    <div class="nav-item" onclick="go('pools',this)">
-      <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.3"/><path d="M8 4v4l3 2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
-      Update Pools
-    </div>
-  </nav>
-  <div class="sb-bottom">
-    <div class="nav-lbl" style="padding-bottom:0.5rem">Danger</div>
-    <button class="logout-btn" style="border-color:rgba(248,113,113,0.3);color:var(--red);margin-bottom:0.5rem" onclick="clearAllData()">Clear All Data</button>
-    <button class="logout-btn" id="logoutBtn">Log Out</button>
-  </div>
-</aside>
-
-<div class="main">
-  <div class="topbar">
-    <div><div class="topbar-title" id="tt">Dashboard</div><div class="topbar-meta">$BARD Admin Panel</div></div>
-    <div class="live">Supabase Connected</div>
-  </div>
-
-  <!-- OVERVIEW -->
-  <div class="page active" id="pg-overview">
-    <div class="stats-row">
-      <div class="stat"><div class="stat-lbl">Pending Proposals</div><div class="stat-val a" id="ov-p">—</div></div>
-      <div class="stat"><div class="stat-lbl">Open Claims</div><div class="stat-val r" id="ov-c">—</div></div>
-      <div class="stat"><div class="stat-lbl">Total Members</div><div class="stat-val p" id="ov-m">—</div></div>
-      <div class="stat"><div class="stat-lbl">Total Burned</div><div class="stat-val g" id="ov-b">—</div></div>
-    </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
-      <div class="card">
-        <div class="card-head"><div class="sec-title">Pending Proposals</div></div>
-        <div class="card-body" id="ov-pl"><div class="mono" style="font-size:0.65rem;color:var(--w30)">None pending</div></div>
-      </div>
-      <div class="card">
-        <div class="card-head"><div class="sec-title">Open Claims</div></div>
-        <div class="card-body" id="ov-cl"><div class="mono" style="font-size:0.65rem;color:var(--w30)">None open</div></div>
-      </div>
-    </div>
-  </div>
-
-  <!-- PROPOSALS -->
-  <div class="page" id="pg-proposals">
-    <div class="card" style="margin-bottom:1.2rem">
-      <div class="card-head"><div class="sec-title">Pending Approval</div><span class="badge ba">Needs review</span></div>
-      <table class="dt"><thead><tr><th>Title</th><th>Submitted by</th><th>Date</th><th>Actions</th></tr></thead>
-      <tbody id="tb-pending"><tr><td colspan="4" class="empty">Loading...</td></tr></tbody></table>
-    </div>
-    <div class="card">
-      <div class="card-head"><div class="sec-title">Active Proposals</div></div>
-      <table class="dt"><thead><tr><th>Title</th><th>Yes VP</th><th>No VP</th><th>Ends</th><th>Actions</th></tr></thead>
-      <tbody id="tb-active"><tr><td colspan="5" class="empty">Loading...</td></tr></tbody></table>
-    </div>
-  </div>
-
-  <!-- CLAIMS -->
-  <div class="page" id="pg-claims">
-    <div class="card" style="margin-bottom:1.2rem">
-      <div class="card-head"><div class="sec-title">Open Claims</div><span class="badge br">Awaiting vote</span></div>
-      <table class="dt"><thead><tr><th>Pool</th><th>By</th><th>Proof</th><th>Approve %</th><th>Actions</th></tr></thead>
-      <tbody id="tb-claims"><tr><td colspan="5" class="empty">Loading...</td></tr></tbody></table>
-    </div>
-    <div class="card">
-      <div class="card-head"><div class="sec-title">Past Claims</div></div>
-      <table class="dt"><thead><tr><th>Pool</th><th>By</th><th>Result</th><th>Date</th></tr></thead>
-      <tbody id="tb-past-claims"><tr><td colspan="4" class="empty">Loading...</td></tr></tbody></table>
-    </div>
-  </div>
-
-  <!-- MEMBERS -->
-  <div class="page" id="pg-members">
-    <div class="card">
-      <div class="card-head"><div class="sec-title">All Members</div><span class="badge bp" id="mb-count">0 members</span></div>
-      <table class="dt"><thead><tr><th>X Handle</th><th>Wallet</th><th>Balance</th><th>Points</th><th>Last Seen</th><th></th></tr></thead>
-      <tbody id="tb-members"><tr><td colspan="6" class="empty">Loading...</td></tr></tbody></table>
-    </div>
-  </div>
-
-  <!-- POINTS -->
-  <div class="page" id="pg-points">
-    <div class="sec-head"><div class="sec-title">Award Points</div></div>
-    <div class="card" style="margin-bottom:1.5rem">
-      <div class="card-body">
-        <div class="form-grid">
-          <div class="form-group">
-            <label class="form-label">X Handle or Wallet</label>
-            <input type="text" class="form-inp" id="pts-member" placeholder="@handle or wallet address">
+      <!-- HOME -->
+      <section class="page is-on" id="page-home">
+        <p class="kicker">Team workspace</p>
+        <div class="row row--between" style="align-items:flex-start;gap:20px;margin-bottom:8px">
+          <div>
+            <h1>Your projects</h1>
+            <p class="lead" style="margin-bottom:0">Onboard a token, run campaigns, and settle claims. Flat SOL fees — 0% of your supply.</p>
           </div>
-          <div class="form-group">
-            <label class="form-label">Type</label>
-            <select class="form-inp" id="pts-type">
-              <option value="x_post">Post</option>
-              <option value="x_reply">Reply</option>
-              <option value="x_quote">Quote</option>
-              <option value="x_engagement">Engagement</option>
-              <option value="x_raid">Raid</option>
-              <option value="buy">Buy</option>
-              <option value="stake">Stake</option>
-              <option value="sell">Sell</option>
-              <option value="challenge">Manual</option>
-            </select>
+          <button class="btn btn--solid" id="btn-new-project">Onboard a project</button>
+        </div>
+        <div class="gap"></div>
+        <div class="grid-2" id="home-stats">
+          <div class="stat"><div class="stat__lbl">Projects</div><div class="stat__val p num" id="stat-projects">0</div></div>
+          <div class="stat"><div class="stat__lbl">Active campaigns</div><div class="stat__val num" id="stat-campaigns">0</div></div>
+        </div>
+        <div class="gap"></div>
+        <div id="project-list"></div>
+      </section>
+
+      <!-- ONBOARD -->
+      <section class="page" id="page-onboard">
+        <button class="back" data-go="home">← Back to projects</button>
+        <p class="kicker">Onboarding</p>
+        <h1>Add a project</h1>
+        <p class="lead">One-time setup per token. After this you can launch campaigns without re-onboarding.</p>
+        <div class="card" style="max-width:560px">
+          <form class="form" id="form-onboard">
+            <div class="field">
+              <label for="p-name">Project name</label>
+              <input class="inp" id="p-name" name="name" placeholder="e.g. Frogz" required maxlength="48">
+            </div>
+            <div class="grid-2">
+              <div class="field">
+                <label for="p-ticker">Ticker</label>
+                <input class="inp" id="p-ticker" name="ticker" placeholder="FROGZ" required maxlength="12">
+              </div>
+              <div class="field">
+                <label for="p-chain">Chain</label>
+                <select class="sel" id="p-chain" name="chain">
+                  <option value="solana">Solana</option>
+                </select>
+              </div>
+            </div>
+            <div class="field">
+              <label for="p-mint">Token mint address</label>
+              <input class="inp" id="p-mint" name="mint" placeholder="Solana mint address" required minlength="32" maxlength="64">
+              <span class="hint">Used to identify holders and run hold-style rules.</span>
+            </div>
+            <div class="field">
+              <label for="p-admin">Admin wallet (optional)</label>
+              <input class="inp" id="p-admin" name="admin" placeholder="Wallet that controls this project">
+              <span class="hint">Stored locally for now. Fee wallet wiring comes next.</span>
+            </div>
+            <div class="fee-note">
+              <span>Onboard fee</span>
+              <b class="num">0.25 SOL</b>
+            </div>
+            <p class="hint" style="margin:0">Fee payment is recorded as pending until on-chain collection is wired. You can still set up the project and create campaigns for testing.</p>
+            <button class="btn btn--solid" type="submit">Create project</button>
+          </form>
+        </div>
+      </section>
+
+      <!-- PROJECT -->
+      <section class="page" id="page-project">
+        <button class="back" data-go="home">← All projects</button>
+        <div class="row row--between" style="align-items:flex-start;gap:16px;margin-bottom:6px">
+          <div>
+            <p class="kicker" id="proj-kicker">Project</p>
+            <h1 id="proj-title">—</h1>
+            <p class="lead" id="proj-meta" style="margin-bottom:0">—</p>
           </div>
-          <div class="form-group">
-            <label class="form-label">Points (negative to deduct)</label>
-            <input type="number" class="form-inp" id="pts-amount" placeholder="e.g. 250 or -100">
+          <button class="btn btn--solid" id="btn-new-campaign">New campaign</button>
+        </div>
+        <div class="gap"></div>
+        <div class="tabs" role="tablist">
+          <button class="tab is-on" data-tab="campaigns">Campaigns</button>
+          <button class="tab" data-tab="settings">Settings</button>
+        </div>
+        <div id="proj-campaigns"></div>
+        <div id="proj-settings" style="display:none"></div>
+      </section>
+
+      <!-- NEW CAMPAIGN -->
+      <section class="page" id="page-new-campaign">
+        <button class="back" id="back-from-campaign">← Back to project</button>
+        <p class="kicker">Campaign</p>
+        <h1>Create a campaign</h1>
+        <p class="lead">Publish a rule, fund a reward pool later, and let holders climb the leaderboard.</p>
+        <div class="card" style="max-width:600px">
+          <form class="form" id="form-campaign">
+            <div class="field">
+              <label for="c-title">Campaign name</label>
+              <input class="inp" id="c-title" name="title" placeholder="e.g. Diamond Week" required maxlength="64">
+            </div>
+            <div class="field">
+              <label for="c-type">Rule type</label>
+              <select class="sel" id="c-type" name="type">
+                <option value="hold">Hold — on-chain balance / duration</option>
+                <option value="raid">Raid — checklist / social actions</option>
+                <option value="refer">Refer — invite wallets that hold</option>
+                <option value="custom">Custom — you define the condition</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="c-rule">Rule (shown to holders)</label>
+              <textarea class="area" id="c-rule" name="rule" placeholder="Hold 100,000 TOKEN for 7 days → earn 0.5 SOL" required></textarea>
+            </div>
+            <div class="grid-2">
+              <div class="field">
+                <label for="c-reward">Reward per claim</label>
+                <input class="inp" id="c-reward" name="reward" placeholder="0.5" inputmode="decimal">
+                <span class="hint">In SOL or your token — label only for now.</span>
+              </div>
+              <div class="field">
+                <label for="c-unit">Reward unit</label>
+                <select class="sel" id="c-unit" name="unit">
+                  <option value="SOL">SOL</option>
+                  <option value="TOKEN">Project token</option>
+                </select>
+              </div>
+            </div>
+            <div class="grid-2">
+              <div class="field">
+                <label for="c-pool">Reward pool size</label>
+                <input class="inp" id="c-pool" name="pool" placeholder="12" inputmode="decimal">
+              </div>
+              <div class="field">
+                <label for="c-days">Duration (days)</label>
+                <input class="inp" id="c-days" name="days" type="number" min="1" max="90" value="7">
+              </div>
+            </div>
+            <div class="fee-note">
+              <span>Campaign fee</span>
+              <b class="num">0.25 SOL</b>
+            </div>
+            <button class="btn btn--solid" type="submit">Create campaign</button>
+          </form>
+        </div>
+      </section>
+
+      <!-- CAMPAIGN DETAIL -->
+      <section class="page" id="page-campaign">
+        <button class="back" id="back-from-detail">← Back to project</button>
+        <div class="row row--between" style="align-items:flex-start;gap:16px">
+          <div>
+            <p class="kicker" id="camp-kicker">Campaign</p>
+            <h1 id="camp-title">—</h1>
+            <p class="lead" id="camp-rule" style="margin-bottom:12px">—</p>
+            <span class="pill pill--live" id="camp-status">Active</span>
           </div>
-          <div class="form-group">
-            <label class="form-label">Tweet URL (optional)</label>
-            <input type="text" class="form-inp" id="pts-tweet-url" placeholder="https://x.com/...">
-          </div>
-          <div class="form-group" style="grid-column:1/-1">
-            <label class="form-label">Tweet Text (optional)</label>
-            <input type="text" class="form-inp" id="pts-tweet-text" placeholder="Paste the tweet content...">
-          </div>
-          <div class="form-group" style="grid-column:1/-1">
-            <label class="form-label">Reason / Notes</label>
-            <input type="text" class="form-inp" id="pts-reason" placeholder="e.g. Viral post on TikTok, 2.4M views">
+          <div class="row">
+            <button class="btn btn--ghost btn--sm" id="btn-end-campaign">End campaign</button>
           </div>
         </div>
-        <button class="form-btn" onclick="adjustPoints()">Apply Points</button>
-      </div>
-    </div>
-
-    <div class="sec-head" style="margin-bottom:0.8rem">
-      <div class="sec-title">Recent Point Activity</div>
-      <div style="display:flex;align-items:center;gap:0.6rem">
-        <span class="badge bw" id="tweet-count">—</span>
-        <button class="btn btn-p" style="padding:0.3rem 0.8rem;font-size:0.68rem" onclick="triggerScan(this)">Scan Tweets</button>
-      </div>
-    </div>
-    <div class="card" id="points-feed" style="padding:0;margin-bottom:1.5rem">
-      <div class="empty">Loading...</div>
-    </div>
-
-    <div class="sec-head"><div class="sec-title">Full Ledger</div></div>
-    <div class="card" style="padding:0">
-      <table class="dt">
-        <thead><tr><th>Member</th><th>Type</th><th>Points</th><th>Content / Reason</th><th>When</th></tr></thead>
-        <tbody id="points-tbody"><tr><td colspan="5" class="empty">Loading...</td></tr></tbody>
-      </table>
-    </div>
-  </div>
-
-  <!-- BURNS -->
-  <div class="page" id="pg-burns">
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
-      <div class="card">
-        <div class="card-head"><div class="sec-title">Record Weekly Burn</div></div>
-        <div class="card-body">
-          <div class="form-grid">
-            <div class="fg"><label class="fl">Week Number</label><input class="fi" type="number" id="b-week" placeholder="e.g. 4" min="1" max="36"></div>
-            <div class="fg"><label class="fl">Amount Burned</label><input class="fi" type="number" id="b-amount" value="2777778"></div>
-            <div class="fg full"><label class="fl">Transaction Hash</label><input class="fi" type="text" id="b-tx" placeholder="Solana tx signature..."></div>
+        <div class="gap"></div>
+        <div class="grid-2" style="margin-bottom:18px">
+          <div class="stat"><div class="stat__lbl">Pool</div><div class="stat__val num" id="camp-pool">—</div></div>
+          <div class="stat"><div class="stat__lbl">Claims settled</div><div class="stat__val p num" id="camp-claims">0</div></div>
+        </div>
+        <div class="card">
+          <div class="row row--between" style="margin-bottom:12px">
+            <strong style="font-variation-settings:'wght' 620">Leaderboard</strong>
+            <span class="muted" style="font-size:.82rem">Demo entries until holder dashboard is live</span>
           </div>
-          <button class="btn btn-p" style="width:100%" id="burnBtn">Record Burn</button>
+          <div style="overflow-x:auto">
+            <table class="table">
+              <thead>
+                <tr><th>#</th><th>Wallet / name</th><th>Progress</th><th>Status</th><th></th></tr>
+              </thead>
+              <tbody id="camp-lb"></tbody>
+            </table>
+          </div>
         </div>
-      </div>
-      <div class="card">
-        <div class="card-head"><div class="sec-title">Burn History</div></div>
-        <table class="dt"><thead><tr><th>Week</th><th>Amount</th><th>Cumulative</th><th>Tx</th></tr></thead>
-        <tbody id="tb-burns"><tr><td colspan="4" class="empty">No burns yet</td></tr></tbody></table>
-      </div>
-    </div>
-  </div>
+        <div class="gap"></div>
+        <p class="muted" style="font-size:.86rem;max-width:56ch">
+          Claim fee is <b class="num" style="color:var(--text);font-weight:normal">0.1 SOL</b> when a reward actually settles.
+          Hold rules will check mint balances on-chain; raid / refer use the same claim flow once verification is connected.
+        </p>
+      </section>
 
-  <!-- POOLS -->
-  <div class="page" id="pg-pools">
-    <div class="card" style="margin-bottom:1rem">
-      <div class="card-head"><div class="sec-title">Update Pool Balances</div></div>
-      <div class="card-body">
-        <p class="mono" style="font-size:0.63rem;color:var(--w30);margin-bottom:1.3rem;line-height:1.8">Set the current accumulated balance for each pool. Update weekly after each vest unlock fires. Members see these numbers on their dashboard.</p>
-        <div class="form-grid">
-          <div class="fg"><label class="fl">Elon Pool</label><input class="fi" type="number" id="p-elon" placeholder="0"></div>
-          <div class="fg"><label class="fl">Viral Pool</label><input class="fi" type="number" id="p-viral" placeholder="0"></div>
-          <div class="fg"><label class="fl">Interaction Pool</label><input class="fi" type="number" id="p-interaction" placeholder="0"></div>
-          <div class="fg"><label class="fl">Current Week</label><input class="fi" type="number" id="p-week" placeholder="e.g. 4" min="1" max="36"></div>
-        </div>
-        <button class="btn btn-p" style="width:100%;margin-top:0.3rem" id="poolsBtn">Update Pool Balances</button>
-      </div>
     </div>
-    <div class="card">
-      <div class="card-head"><div class="sec-title">Current Pool State</div></div>
-      <table class="dt"><thead><tr><th>Pool</th><th>Current Balance</th><th>Total Allocation</th><th>Status</th></tr></thead>
-      <tbody id="tb-pools"><tr><td colspan="4" class="empty">Loading...</td></tr></tbody></table>
-    </div>
-  </div>
+  </main>
 
-</div>
-</div>
+  <div class="toast" id="toast" role="status"></div>
 
 <script>
-// ═══════════════════════════════════════════════════════════════════════════
-// $BARD ADMIN PANEL — SECURED
-// Password checked server-side via Worker JWT
-// All writes route through Worker (uses Supabase service key)
-// Reads still use anon key (RLS allows SELECT only)
-// ═══════════════════════════════════════════════════════════════════════════
+(function(){
+  var KEY = 'bard_team_v1';
+  var state = load();
+  var currentProjectId = null;
+  var currentCampaignId = null;
 
-const SUPABASE_URL = 'https://pxdiyukxgnphxlknhmke.supabase.co';
-const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB4ZGl5dWt4Z25waHhsa25obWtlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM4NTg2NDAsImV4cCI6MjA4OTQzNDY0MH0.eOJ8I7UBCywHDMWdPbcWFURbfoDgMUHFD_cSAZA8Hk4';
-const WORKER_URL = 'https://bard-auth.bardsoltoken.workers.dev';
-const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+  function load(){
+    try{
+      var raw = localStorage.getItem(KEY);
+      if(raw) return JSON.parse(raw);
+    }catch(e){}
+    return { projects: [] };
+  }
+  function save(){
+    localStorage.setItem(KEY, JSON.stringify(state));
+  }
+  function uid(){
+    return 'id_' + Math.random().toString(36).slice(2,10) + Date.now().toString(36).slice(-4);
+  }
+  function toast(msg, kind){
+    var el = document.getElementById('toast');
+    el.textContent = msg;
+    el.className = 'toast is-on' + (kind ? ' ' + kind : '');
+    clearTimeout(toast._t);
+    toast._t = setTimeout(function(){ el.className = 'toast'; }, 2800);
+  }
+  function show(name){
+    document.querySelectorAll('.page').forEach(function(p){ p.classList.remove('is-on'); });
+    var page = document.getElementById('page-' + name);
+    if(page) page.classList.add('is-on');
+    window.scrollTo(0,0);
+  }
+  function initials(s){
+    s = (s || '?').trim();
+    return s.slice(0,2).toUpperCase();
+  }
+  function findProject(id){
+    return state.projects.find(function(p){ return p.id === id; });
+  }
+  function findCampaign(pid, cid){
+    var p = findProject(pid);
+    if(!p) return null;
+    return (p.campaigns || []).find(function(c){ return c.id === cid; });
+  }
+  function activeCount(p){
+    return (p.campaigns || []).filter(function(c){ return c.status === 'active'; }).length;
+  }
 
-let adminToken = sessionStorage.getItem('admin_token') || null;
+  function renderHome(){
+    var list = document.getElementById('project-list');
+    var totalCamps = 0;
+    state.projects.forEach(function(p){ totalCamps += activeCount(p); });
+    document.getElementById('stat-projects').textContent = state.projects.length;
+    document.getElementById('stat-campaigns').textContent = totalCamps;
 
-function authHeaders() {
-  return { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + adminToken };
-}
-
-async function workerPost(path, body) {
-  const res = await fetch(WORKER_URL + path, {
-    method: 'POST', headers: authHeaders(), body: JSON.stringify(body),
-  });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error || 'Request failed');
-  return data;
-}
-
-document.getElementById('loginBtn').addEventListener('click', login);
-document.getElementById('pwd').addEventListener('keydown', e => { if(e.key==='Enter') login(); });
-document.getElementById('logoutBtn').addEventListener('click', () => {
-  sessionStorage.removeItem('admin_token');
-  adminToken = null;
-  location.reload();
-});
-
-async function login() {
-  const pwd = document.getElementById('pwd').value;
-  const errEl = document.getElementById('lerr');
-  errEl.style.display = 'none';
-  try {
-    const res = await fetch(WORKER_URL + '/admin/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ password: pwd }),
-    });
-    const data = await res.json();
-    if (!res.ok || !data.token) {
-      errEl.textContent = data.error || 'Incorrect password';
-      errEl.style.display = 'block';
+    if(!state.projects.length){
+      list.innerHTML =
+        '<div class="empty">' +
+          '<h3>No projects yet</h3>' +
+          '<p>Onboard your first token to start running campaigns, leaderboards, and claims.</p>' +
+          '<button class="btn btn--solid" id="empty-onboard">Onboard a project</button>' +
+        '</div>';
+      document.getElementById('empty-onboard').onclick = function(){ show('onboard'); };
       return;
     }
-    adminToken = data.token;
-    sessionStorage.setItem('admin_token', adminToken);
-    showApp();
-  } catch (e) {
-    errEl.textContent = 'Connection failed — check Worker is deployed';
-    errEl.style.display = 'block';
-  }
-}
 
-async function verifySession() {
-  if (!adminToken) return false;
-  try {
-    const res = await fetch(WORKER_URL + '/admin/verify', {
-      headers: { 'Authorization': 'Bearer ' + adminToken },
+    list.innerHTML = state.projects.map(function(p){
+      var n = (p.campaigns || []).length;
+      var a = activeCount(p);
+      return (
+        '<div class="card card--hover" data-open-project="' + p.id + '">' +
+          '<div class="item" style="padding:0;border:none">' +
+            '<span class="item__ava">' + initials(p.ticker || p.name) + '</span>' +
+            '<div class="item__body">' +
+              '<div class="item__title">' + escapeHtml(p.name) + ' <span class="muted">· $' + escapeHtml(p.ticker) + '</span></div>' +
+              '<div class="item__sub">' + escapeHtml(shortMint(p.mint)) + ' · ' + n + ' campaign' + (n===1?'':'s') + '</div>' +
+            '</div>' +
+            '<div class="item__right">' +
+              (a ? '<span class="pill pill--live">' + a + ' active</span>' : '<span class="pill pill--draft">No live campaigns</span>') +
+            '</div>' +
+          '</div>' +
+        '</div>'
+      );
+    }).join('');
+
+    list.querySelectorAll('[data-open-project]').forEach(function(el){
+      el.addEventListener('click', function(){
+        openProject(el.getAttribute('data-open-project'));
+      });
     });
-    return res.ok;
-  } catch (e) { return false; }
-}
+  }
 
-function showApp() {
-  document.getElementById('ls').style.display = 'none';
-  document.getElementById('app').style.display = 'flex';
-  loadAll();
-}
+  function openProject(id){
+    var p = findProject(id);
+    if(!p) return;
+    currentProjectId = id;
+    document.getElementById('proj-kicker').textContent = '$' + p.ticker;
+    document.getElementById('proj-title').textContent = p.name;
+    document.getElementById('proj-meta').textContent = shortMint(p.mint) + ' · onboarded ' + formatDate(p.createdAt);
+    renderProjectTabs('campaigns');
+    show('project');
+  }
 
-window.addEventListener('load', async () => {
-  if (adminToken && await verifySession()) showApp();
-  else { sessionStorage.removeItem('admin_token'); adminToken = null; }
-});
-
-const titles = { overview:'Dashboard', proposals:'Proposals', claims:'Claims', members:'Members', points:'Points Management', burns:'Record Burn', pools:'Update Pools' };
-function go(name, el) {
-  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-  document.getElementById('pg-'+name).classList.add('active');
-  if (el) el.classList.add('active');
-  document.getElementById('tt').textContent = titles[name] || name;
-}
-
-function toast(msg, type='s') {
-  const t = document.getElementById('toast');
-  t.textContent = msg;
-  t.className = `toast show ${type}`;
-  setTimeout(() => t.className = 'toast', 3000);
-}
-
-async function loadAll() {
-  await Promise.all([loadProposals(), loadClaims(), loadMembers(), loadBurns(), loadPools(), loadPointsLedger()]);
-}
-
-function fd(str) {
-  if (!str) return '—';
-  return new Date(str).toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' });
-}
-
-function fdt(str) {
-  if (!str) return '—';
-  const d = new Date(str);
-  return d.toLocaleDateString('en-GB', { day:'2-digit', month:'short' }) + ' · ' + d.toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
-}
-
-function esc(str) {
-  if (!str) return '';
-  const div = document.createElement('div');
-  div.textContent = str;
-  return div.innerHTML;
-}
-
-// ── PROPOSALS ─────────────────────────────────────────────────────────────
-async function loadProposals() {
-  const { data } = await db.from('proposals').select('*, members(x_handle)').order('created_at', { ascending: false });
-  if (!data) return;
-  const pending = data.filter(p => p.status === 'pending');
-  const active = data.filter(p => p.status === 'active');
-  document.getElementById('n-p').textContent = pending.length;
-  document.getElementById('ov-p').textContent = pending.length;
-  const pb = document.getElementById('tb-pending');
-  pb.innerHTML = pending.length === 0 ? '<tr><td colspan="4" class="empty">No pending proposals</td></tr>'
-    : pending.map(p => `<tr>
-        <td><div style="font-weight:500;font-size:0.82rem">${esc(p.title)}</div><div class="mono" style="font-size:0.58rem;color:var(--w30);margin-top:0.2rem">${esc((p.description||'').slice(0,70))}${(p.description||'').length>70?'...':''}</div></td>
-        <td><span class="mono" style="font-size:0.7rem">${esc(p.members?.x_handle || (p.submitted_by||'').slice(0,8)+'...')}</span></td>
-        <td><span class="mono" style="font-size:0.62rem;color:var(--w30)">${fd(p.created_at)}</span></td>
-        <td><div style="display:flex;gap:0.4rem"><button class="btn btn-g" onclick="approveP('${p.id}')">Approve</button><button class="btn btn-r" onclick="rejectP('${p.id}')">Reject</button></div></td>
-      </tr>`).join('');
-  const ab = document.getElementById('tb-active');
-  ab.innerHTML = active.length === 0 ? '<tr><td colspan="5" class="empty">No active proposals</td></tr>'
-    : active.map(p => `<tr>
-        <td style="font-weight:500;font-size:0.82rem">${esc(p.title)}</td>
-        <td><span class="mono" style="font-size:0.7rem;color:var(--green)">${Number(p.yes_power||0).toLocaleString()}</span></td>
-        <td><span class="mono" style="font-size:0.7rem;color:var(--red)">${Number(p.no_power||0).toLocaleString()}</span></td>
-        <td><span class="mono" style="font-size:0.62rem;color:var(--w30)">${fd(p.ends_at)}</span></td>
-        <td><button class="btn btn-ghost" onclick="closeP('${p.id}')">Close</button></td>
-      </tr>`).join('');
-  const ol = document.getElementById('ov-pl');
-  ol.innerHTML = pending.length === 0 ? '<div class="mono" style="font-size:0.65rem;color:var(--w30)">None pending</div>'
-    : pending.slice(0,3).map(p => `<div style="padding:0.6rem 0;border-bottom:1px solid rgba(155,127,232,0.06)">
-        <div style="font-size:0.8rem;font-weight:500;margin-bottom:0.5rem">${esc(p.title)}</div>
-        <div style="display:flex;gap:0.4rem">
-          <button class="btn btn-g" style="font-size:0.65rem;padding:0.3rem 0.6rem" onclick="approveP('${p.id}')">Approve</button>
-          <button class="btn btn-r" style="font-size:0.65rem;padding:0.3rem 0.6rem" onclick="rejectP('${p.id}')">Reject</button>
-        </div></div>`).join('');
-}
-
-async function approveP(id) {
-  try { await workerPost('/admin/proposal/approve', { id }); toast('Proposal approved'); loadProposals(); }
-  catch (e) { toast('Failed: ' + e.message, 'e'); }
-}
-async function rejectP(id) {
-  if (!confirm('Reject and remove this proposal?')) return;
-  try { await workerPost('/admin/proposal/reject', { id }); toast('Proposal rejected'); loadProposals(); }
-  catch (e) { toast('Failed: ' + e.message, 'e'); }
-}
-async function closeP(id) {
-  if (!confirm('Close voting on this proposal?')) return;
-  try { await workerPost('/admin/proposal/close', { id }); toast('Proposal closed'); loadProposals(); }
-  catch (e) { toast('Failed: ' + e.message, 'e'); }
-}
-
-// ── CLAIMS ────────────────────────────────────────────────────────────────
-async function loadClaims() {
-  const { data } = await db.from('claims').select('*, members(x_handle)').order('created_at', { ascending: false });
-  if (!data) return;
-  const open = data.filter(c => c.status === 'open');
-  const past = data.filter(c => c.status !== 'open');
-  document.getElementById('n-c').textContent = open.length;
-  document.getElementById('ov-c').textContent = open.length;
-  const cb = document.getElementById('tb-claims');
-  cb.innerHTML = open.length === 0 ? '<tr><td colspan="5" class="empty">No open claims</td></tr>'
-    : open.map(c => {
-        const total = (c.yes_power||0)+(c.no_power||0);
-        const pct = total > 0 ? Math.round((c.yes_power/total)*100) : 0;
-        return `<tr>
-          <td><span class="badge bp">${esc(c.pool_name)}</span></td>
-          <td><span class="mono" style="font-size:0.7rem">${esc(c.members?.x_handle||(c.submitted_by||'').slice(0,8)+'...')}</span></td>
-          <td><a href="${esc(c.proof_url)}" target="_blank" style="font-family:'DM Mono',monospace;font-size:0.62rem;color:var(--purple);text-decoration:underline">View →</a></td>
-          <td><span class="mono" style="font-size:0.7rem;color:${pct>=50?'var(--green)':'var(--red)'}">${pct}%</span></td>
-          <td><div style="display:flex;gap:0.4rem"><button class="btn btn-g" onclick="approveC('${c.id}')">Pay Out</button><button class="btn btn-r" onclick="rejectC('${c.id}')">Reject</button></div></td>
-        </tr>`;}).join('');
-  const pcb = document.getElementById('tb-past-claims');
-  pcb.innerHTML = past.length === 0 ? '<tr><td colspan="4" class="empty">No past claims</td></tr>'
-    : past.map(c => `<tr>
-        <td><span class="badge bw">${esc(c.pool_name)}</span></td>
-        <td><span class="mono" style="font-size:0.7rem">${esc(c.members?.x_handle||'—')}</span></td>
-        <td><span class="badge ${c.status==='approved'?'bg':'br'}">${c.status}</span></td>
-        <td><span class="mono" style="font-size:0.62rem;color:var(--w30)">${fd(c.created_at)}</span></td>
-      </tr>`).join('');
-  const ocl = document.getElementById('ov-cl');
-  ocl.innerHTML = open.length === 0 ? '<div class="mono" style="font-size:0.65rem;color:var(--w30)">None open</div>'
-    : open.slice(0,3).map(c => {
-        const total=(c.yes_power||0)+(c.no_power||0);
-        const pct=total>0?Math.round((c.yes_power/total)*100):0;
-        return `<div style="padding:0.6rem 0;border-bottom:1px solid rgba(155,127,232,0.06)">
-          <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.4rem">
-            <span class="badge bp">${esc(c.pool_name)}</span>
-            <span class="mono" style="font-size:0.62rem;color:var(--w30)">${esc(c.members?.x_handle||'—')} · ${pct}% approve</span>
-          </div>
-          <div style="display:flex;gap:0.4rem">
-            <button class="btn btn-g" style="font-size:0.65rem;padding:0.3rem 0.6rem" onclick="approveC('${c.id}')">Pay Out</button>
-            <button class="btn btn-r" style="font-size:0.65rem;padding:0.3rem 0.6rem" onclick="rejectC('${c.id}')">Reject</button>
-          </div></div>`;}).join('');
-}
-
-async function approveC(id) {
-  if (!confirm('Mark as paid out? Remember to execute the on-chain payout manually.')) return;
-  try { await workerPost('/admin/claim/approve', { id }); toast('Claim approved'); loadClaims(); }
-  catch (e) { toast('Failed: ' + e.message, 'e'); }
-}
-async function rejectC(id) {
-  if (!confirm('Reject this claim?')) return;
-  try { await workerPost('/admin/claim/reject', { id }); toast('Claim rejected'); loadClaims(); }
-  catch (e) { toast('Failed: ' + e.message, 'e'); }
-}
-
-// ── MEMBERS ───────────────────────────────────────────────────────────────
-async function loadMembers() {
-  const { data, count } = await db.from('members').select('wallet_address, x_handle, token_balance, points, last_seen', { count:'exact' }).order('points', { ascending:false });
-  if (!data) return;
-  const total = count || data.length;
-  document.getElementById('ov-m').textContent = total;
-  document.getElementById('mb-count').textContent = total + ' members';
-  const mb = document.getElementById('tb-members');
-  mb.innerHTML = data.length === 0 ? '<tr><td colspan="6" class="empty">No members yet</td></tr>'
-    : data.map(m => `<tr>
-        <td><span class="mono" style="font-size:0.78rem">${esc(m.x_handle||'—')}</span></td>
-        <td><span class="mono" style="font-size:0.62rem;color:var(--w30)">${(m.wallet_address||'').slice(0,6)}...${(m.wallet_address||'').slice(-4)}</span></td>
-        <td><span class="mono" style="font-size:0.7rem">${Number(m.token_balance||0).toLocaleString()}</span></td>
-        <td><span class="mono" style="font-size:0.7rem;color:var(--purple)">${m.points||0}</span></td>
-        <td><span class="mono" style="font-size:0.62rem;color:var(--w30)">${fd(m.last_seen)}</span></td>
-        <td><button class="btn btn-ghost" style="font-size:0.65rem;padding:0.3rem 0.6rem" onclick="removeM('${m.wallet_address}')">Remove</button></td>
-      </tr>`).join('');
-}
-
-async function removeM(wallet) {
-  if (!confirm('Remove this member and all their data?')) return;
-  try { await workerPost('/admin/member/delete', { wallet_address: wallet }); toast('Member removed'); loadMembers(); }
-  catch (e) { toast('Failed: ' + e.message, 'e'); }
-}
-
-// ── POINTS ────────────────────────────────────────────────────────────────
-async function adjustPoints() {
-  const memberInput = document.getElementById('pts-member').value.trim();
-  const type = document.getElementById('pts-type').value;
-  const amount = parseInt(document.getElementById('pts-amount').value);
-  const tweetUrl = document.getElementById('pts-tweet-url').value.trim();
-  const tweetText = document.getElementById('pts-tweet-text').value.trim();
-  const reason = document.getElementById('pts-reason').value.trim();
-  if (!memberInput) { toast('Enter an X handle or wallet address', 'e'); return; }
-  if (isNaN(amount) || amount === 0) { toast('Enter a valid point amount', 'e'); return; }
-  if (!reason) { toast('Enter a reason', 'e'); return; }
-
-  let query = db.from('members').select('wallet_address, x_handle, points');
-  if (memberInput.startsWith('@') || memberInput.length < 44) {
-    const handle = memberInput.startsWith('@') ? memberInput : '@' + memberInput;
-    query = query.eq('x_handle', handle);
-  } else { query = query.eq('wallet_address', memberInput); }
-  const { data, error } = await query.single();
-  if (error || !data) { toast('Member not found', 'e'); return; }
-
-  try {
-    await workerPost('/admin/points/award', {
-      wallet_address: data.wallet_address, x_handle: data.x_handle,
-      type, points: amount, reason,
-      tweet_url: tweetUrl || null, tweet_text: tweetText || null,
+  function renderProjectTabs(tab){
+    var p = findProject(currentProjectId);
+    if(!p) return;
+    document.querySelectorAll('#page-project .tab').forEach(function(t){
+      t.classList.toggle('is-on', t.getAttribute('data-tab') === tab);
     });
-    toast(`${amount > 0 ? '+' : ''}${amount} pts → ${data.x_handle || memberInput}`);
-    ['pts-member','pts-amount','pts-tweet-url','pts-tweet-text','pts-reason'].forEach(id => document.getElementById(id).value = '');
-    loadPointsLedger(); loadMembers();
-  } catch (e) { toast('Failed: ' + e.message, 'e'); }
-}
-
-async function triggerScan(btn) {
-  btn.disabled = true; btn.textContent = 'Scanning...';
-  try {
-    const res = await fetch('https://bard-points.bardsoltoken.workers.dev/run/tweets');
-    if (!res.ok) throw new Error('Worker returned ' + res.status);
-    toast('Scan triggered'); setTimeout(() => loadPointsLedger(), 6000);
-  } catch (e) { toast('Scan failed: ' + e.message, 'e'); }
-  finally { btn.disabled = false; btn.textContent = 'Scan Tweets'; }
-}
-
-const TYPE_LABELS = { x_post:'Post', x_reply:'Reply', x_quote:'Quote', x_engagement:'Engagement', x_raid:'Raid', stake:'Stake', sell:'Sell', buy:'Buy', challenge:'Manual' };
-function typeBadgeCls(t) {
-  if (['x_post','x_reply','x_quote'].includes(t)) return 'bp';
-  if (['x_engagement','x_raid'].includes(t)) return 'ba';
-  if (['stake','buy'].includes(t)) return 'bg';
-  if (t === 'sell') return 'br';
-  return 'bw';
-}
-function fmtHandle(p) {
-  const raw = p.x_handle || ((p.wallet_address||'').slice(0,6)+'...'+(p.wallet_address||'').slice(-4));
-  return '@' + (raw.startsWith('@') ? raw.slice(1) : raw);
-}
-
-async function loadPointsLedger() {
-  const { data, error } = await db.from('points_log').select('*').order('created_at', { ascending: false }).limit(100);
-  const feed = document.getElementById('points-feed');
-  const tbody = document.getElementById('points-tbody');
-  const tCount = document.getElementById('tweet-count');
-  if (error || !data || data.length === 0) {
-    feed.innerHTML = '<div class="empty">No point activity yet</div>';
-    tbody.innerHTML = '<tr><td colspan="5" class="empty">No activity yet</td></tr>';
-    tCount.textContent = '0 entries'; return;
+    var campsEl = document.getElementById('proj-campaigns');
+    var setEl = document.getElementById('proj-settings');
+    if(tab === 'settings'){
+      campsEl.style.display = 'none';
+      setEl.style.display = 'block';
+      setEl.innerHTML =
+        '<div class="card">' +
+          '<div class="form">' +
+            '<div class="field"><label>Name</label><div>' + escapeHtml(p.name) + '</div></div>' +
+            '<div class="field"><label>Ticker</label><div>$' + escapeHtml(p.ticker) + '</div></div>' +
+            '<div class="field"><label>Mint</label><div class="num" style="word-break:break-all">' + escapeHtml(p.mint) + '</div></div>' +
+            '<div class="field"><label>Admin wallet</label><div>' + escapeHtml(p.admin || '—') + '</div></div>' +
+            '<div class="field"><label>Onboard fee</label><div>0.25 SOL · <span class="muted">' + (p.feePaid ? 'paid' : 'pending') + '</span></div></div>' +
+            '<button class="btn btn--ghost btn--sm" type="button" id="btn-delete-project">Remove project from this browser</button>' +
+          '</div>' +
+        '</div>';
+      document.getElementById('btn-delete-project').onclick = function(){
+        if(!confirm('Remove this project and its campaigns from local storage?')) return;
+        state.projects = state.projects.filter(function(x){ return x.id !== p.id; });
+        save();
+        toast('Project removed', 'ok');
+        show('home');
+        renderHome();
+      };
+      return;
+    }
+    setEl.style.display = 'none';
+    campsEl.style.display = 'block';
+    var camps = p.campaigns || [];
+    if(!camps.length){
+      campsEl.innerHTML =
+        '<div class="empty">' +
+          '<h3>No campaigns yet</h3>' +
+          '<p>Create a hold, raid, refer, or custom campaign for $' + escapeHtml(p.ticker) + '.</p>' +
+          '<button class="btn btn--solid" id="empty-camp">New campaign</button>' +
+        '</div>';
+      document.getElementById('empty-camp').onclick = function(){ show('new-campaign'); };
+      return;
+    }
+    campsEl.innerHTML = camps.slice().reverse().map(function(c){
+      var pill = c.status === 'active' ? 'pill--live' : (c.status === 'ended' ? 'pill--ended' : 'pill--draft');
+      return (
+        '<div class="card card--hover" data-open-camp="' + c.id + '">' +
+          '<div class="item" style="padding:0;border:none">' +
+            '<div class="item__body">' +
+              '<div class="item__title">' + escapeHtml(c.title) + '</div>' +
+              '<div class="item__sub">' + escapeHtml(c.type) + ' · ' + escapeHtml(c.rule).slice(0,72) + (c.rule.length>72?'…':'') + '</div>' +
+            '</div>' +
+            '<div class="item__right">' +
+              '<span class="pill ' + pill + '">' + escapeHtml(c.status) + '</span>' +
+            '</div>' +
+          '</div>' +
+        '</div>'
+      );
+    }).join('');
+    campsEl.querySelectorAll('[data-open-camp]').forEach(function(el){
+      el.addEventListener('click', function(){
+        openCampaign(el.getAttribute('data-open-camp'));
+      });
+    });
   }
-  tCount.textContent = data.length + ' entr' + (data.length !== 1 ? 'ies' : 'y');
 
-  feed.innerHTML = data.map(p => {
-    const handle = fmtHandle(p); const label = TYPE_LABELS[p.type] || p.type || '—';
-    const cls = typeBadgeCls(p.type); const ptsSign = p.points > 0 ? '+' : '';
-    const ptsCls = p.points > 0 ? 'pt-pts-pos' : 'pt-pts-neg';
-    return `<div class="pt-card"><div class="pt-header"><div class="pt-left"><span class="badge ${cls}">${label}</span><span class="pt-handle">${esc(handle)}</span></div><div class="pt-right"><span class="${ptsCls}">${ptsSign}${p.points} pts</span><span class="pt-date">${fdt(p.created_at)}</span></div></div>${p.tweet_text ? `<div class="pt-tweet">${esc(p.tweet_text)}</div>` : ''}${p.tweet_url ? `<a class="pt-link" href="${esc(p.tweet_url)}" target="_blank">View on X →</a>` : ''}${!p.tweet_text && !p.tweet_url && p.reason ? `<div class="pt-reason">${esc(p.reason)}</div>` : ''}</div>`;
-  }).join('');
+  function openCampaign(cid){
+    var c = findCampaign(currentProjectId, cid);
+    var p = findProject(currentProjectId);
+    if(!c || !p) return;
+    currentCampaignId = cid;
+    document.getElementById('camp-kicker').textContent = p.name + ' · $' + p.ticker;
+    document.getElementById('camp-title').textContent = c.title;
+    document.getElementById('camp-rule').textContent = c.rule;
+    var st = document.getElementById('camp-status');
+    st.textContent = c.status;
+    st.className = 'pill ' + (c.status === 'active' ? 'pill--live' : 'pill--ended');
+    var poolLabel = (c.pool || '—') + (c.unit ? ' ' + c.unit : '');
+    document.getElementById('camp-pool').textContent = poolLabel;
+    document.getElementById('camp-claims').textContent = (c.settled || 0);
 
-  tbody.innerHTML = data.map(p => {
-    const handle = fmtHandle(p); const label = TYPE_LABELS[p.type] || p.type || '—';
-    const cls = typeBadgeCls(p.type);
-    const content = p.tweet_text
-      ? (p.tweet_url ? `<a href="${esc(p.tweet_url)}" target="_blank" style="font-family:'DM Mono',monospace;font-size:0.68rem;color:var(--w60);word-break:break-word">${esc(p.tweet_text)}</a>`
-        : `<span class="mono" style="font-size:0.68rem;color:var(--w60);word-break:break-word">${esc(p.tweet_text)}</span>`)
-      : (p.tweet_url ? `<a href="${esc(p.tweet_url)}" target="_blank" style="font-family:'DM Mono',monospace;font-size:0.65rem;color:var(--purple);text-decoration:underline">View on X →</a>`
-        : `<span class="mono" style="font-size:0.65rem;color:var(--w30)">${esc(p.reason||'—')}</span>`);
-    return `<tr><td><span class="mono" style="font-size:0.88rem;font-weight:700;color:var(--purple)">${esc(handle)}</span></td><td><span class="badge ${cls}">${label}</span></td><td><span class="mono" style="font-size:0.92rem;font-weight:700;color:${p.points>0?'var(--green)':'var(--red)'}">${p.points>0?'+':''}${p.points}</span></td><td style="max-width:320px">${content}</td><td><span class="mono" style="font-size:0.6rem;color:var(--w30);white-space:nowrap">${fd(p.created_at)}</span></td></tr>`;
-  }).join('');
-}
+    // Demo leaderboard rows so the UI isn't empty
+    var rows = c.demoRows || defaultDemoRows(c);
+    var tbody = document.getElementById('camp-lb');
+    tbody.innerHTML = rows.map(function(r, i){
+      var status = r.done
+        ? '<span class="pill pill--live">Qualified</span>'
+        : '<span class="pill pill--draft">In progress</span>';
+      var action = r.done && c.status === 'active'
+        ? '<button class="btn btn--ghost btn--sm" data-settle="' + i + '">Mark claimed</button>'
+        : (r.claimed ? '<span class="muted">Claimed</span>' : '');
+      return '<tr>' +
+        '<td class="num muted">' + (i+1) + '</td>' +
+        '<td>' + escapeHtml(r.name) + '</td>' +
+        '<td class="muted">' + escapeHtml(r.progress) + '</td>' +
+        '<td>' + status + '</td>' +
+        '<td style="text-align:right">' + action + '</td>' +
+      '</tr>';
+    }).join('');
 
-// ── BURNS ─────────────────────────────────────────────────────────────────
-document.getElementById('burnBtn').addEventListener('click', recordBurn);
+    tbody.querySelectorAll('[data-settle]').forEach(function(btn){
+      btn.addEventListener('click', function(e){
+        e.stopPropagation();
+        var idx = parseInt(btn.getAttribute('data-settle'), 10);
+        if(!c.demoRows) c.demoRows = rows;
+        if(c.demoRows[idx]){
+          c.demoRows[idx].claimed = true;
+          c.demoRows[idx].done = true;
+          c.settled = (c.settled || 0) + 1;
+          save();
+          toast('Claim marked settled · 0.1 SOL fee applies when live', 'ok');
+          openCampaign(cid);
+        }
+      });
+    });
 
-async function loadBurns() {
-  const { data } = await db.from('burn_log').select('*').order('week_number', { ascending:false });
-  if (!data) return;
-  if (data.length > 0) document.getElementById('ov-b').textContent = Number(data[0].cumulative).toLocaleString();
-  const bb = document.getElementById('tb-burns');
-  bb.innerHTML = data.length === 0 ? '<tr><td colspan="4" class="empty">No burns recorded</td></tr>'
-    : data.map(b => `<tr>
-        <td><span class="mono" style="font-size:0.7rem">Week ${b.week_number}</span></td>
-        <td><span class="mono" style="font-size:0.7rem;color:var(--red)">${Number(b.amount).toLocaleString()}</span></td>
-        <td><span class="mono" style="font-size:0.7rem">${Number(b.cumulative).toLocaleString()}</span></td>
-        <td><span class="mono" style="font-size:0.6rem;color:var(--purple)">${((b.tx_signature||'—').slice(0,16))}${b.tx_signature&&b.tx_signature.length>16?'...':''}</span></td>
-      </tr>`).join('');
-}
-
-async function recordBurn() {
-  const week = parseInt(document.getElementById('b-week').value);
-  const amount = parseInt(document.getElementById('b-amount').value);
-  const tx = document.getElementById('b-tx').value.trim();
-  if (!week || !amount) { toast('Please enter week and amount', 'e'); return; }
-  try {
-    await workerPost('/admin/burn', { week_number: week, amount, tx_signature: tx || null });
-    toast('Week ' + week + ' burn recorded');
-    document.getElementById('b-week').value = ''; document.getElementById('b-tx').value = '';
-    loadBurns();
-  } catch (e) { toast('Failed: ' + e.message, 'e'); }
-}
-
-// ── POOLS ─────────────────────────────────────────────────────────────────
-document.getElementById('poolsBtn').addEventListener('click', updatePools);
-const POOL_CONFIG = [
-  { key:'elon', name:'Elon Pool', total:50000000 },
-  { key:'viral', name:'Viral Pool', total:35000000 },
-  { key:'interaction', name:'Interaction Pool', total:25000000 },
-];
-
-async function loadPools() {
-  const { data } = await db.from('pool_balances').select('*');
-  const tb = document.getElementById('tb-pools');
-  if (!data || data.length === 0) {
-    tb.innerHTML = POOL_CONFIG.map(p => `<tr><td style="font-weight:500">${p.name}</td><td><span class="mono" style="color:var(--w30)">—</span></td><td><span class="mono" style="color:var(--w30)">${Number(p.total).toLocaleString()}</span></td><td><span class="badge bw">Not set</span></td></tr>`).join('');
-    return;
+    document.getElementById('btn-end-campaign').style.display = c.status === 'active' ? '' : 'none';
+    show('campaign');
   }
-  const map = {}; data.forEach(d => { map[d.pool_name] = d; });
-  tb.innerHTML = POOL_CONFIG.map(p => {
-    const bal = map[p.key]?.balance || 0; const pct = Math.round((bal/p.total)*100);
-    return `<tr><td style="font-weight:500">${p.name}</td><td><span class="mono" style="color:var(--purple)">${Number(bal).toLocaleString()}</span></td><td><span class="mono" style="color:var(--w30)">${Number(p.total).toLocaleString()}</span></td><td><span class="badge ${pct>0?'bg':'bw'}">${pct}% vested</span></td></tr>`;
-  }).join('');
-  data.forEach(d => { const el = document.getElementById('p-'+d.pool_name); if (el) el.value = d.balance; });
-  if (data[0]?.week_number) document.getElementById('p-week').value = data[0].week_number;
-}
 
-async function updatePools() {
-  const week = parseInt(document.getElementById('p-week').value) || 1;
-  const pools = POOL_CONFIG.map(p => ({ pool_name: p.key, balance: parseInt(document.getElementById('p-'+p.key).value) || 0, week_number: week }));
-  try { await workerPost('/admin/pools/update', { pools }); toast('Pool balances updated'); loadPools(); }
-  catch (e) { toast('Failed: ' + e.message, 'e'); }
-}
+  function defaultDemoRows(c){
+    if(c.type === 'raid'){
+      return [
+        {name:'Tariq', progress:'Checklist done', done:1},
+        {name:'Serg', progress:'Checklist done', done:1},
+        {name:'Rin', progress:'2 of 3 steps', done:0},
+        {name:'Lex', progress:'Started', done:0}
+      ];
+    }
+    if(c.type === 'refer'){
+      return [
+        {name:'Nadia', progress:'8 referrals', done:1},
+        {name:'Mona', progress:'5 referrals', done:1},
+        {name:'Serg', progress:'3 referrals', done:0},
+        {name:'Lex', progress:'1 referral', done:0}
+      ];
+    }
+    return [
+      {name:'Mona', progress:'7 / 7 days', done:1},
+      {name:'Kaito', progress:'7 / 7 days', done:1},
+      {name:'Serg', progress:'6 / 7 days', done:0},
+      {name:'Lex', progress:'3 / 7 days', done:0}
+    ];
+  }
 
-// ── CLEAR ALL DATA ────────────────────────────────────────────────────────
-async function clearAllData() {
-  if (!confirm('WARNING: Delete ALL members, points, tweets, votes, proposals, claims, staking, burns? Cannot be undone.')) return;
-  if (!confirm('Last chance — delete everything?')) return;
-  try { await workerPost('/admin/clear-all', {}); toast('All data cleared'); loadAll(); }
-  catch (e) { toast('Failed: ' + e.message, 'e'); }
-}
+  function escapeHtml(s){
+    return String(s == null ? '' : s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+      .replace(/"/g,'&quot;');
+  }
+  function shortMint(m){
+    if(!m || m.length < 10) return m || '—';
+    return m.slice(0,4) + '…' + m.slice(-4);
+  }
+  function formatDate(iso){
+    try{
+      return new Date(iso).toLocaleDateString(undefined,{year:'numeric',month:'short',day:'numeric'});
+    }catch(e){ return '—'; }
+  }
+
+  // Events
+  document.getElementById('btn-new-project').onclick = function(){ show('onboard'); };
+  document.getElementById('btn-new-campaign').onclick = function(){ show('new-campaign'); };
+  document.querySelectorAll('[data-go]').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      var go = btn.getAttribute('data-go');
+      if(go === 'home'){ renderHome(); show('home'); }
+      else show(go);
+    });
+  });
+  document.getElementById('back-from-campaign').onclick = function(){
+    openProject(currentProjectId);
+  };
+  document.getElementById('back-from-detail').onclick = function(){
+    openProject(currentProjectId);
+  };
+  document.querySelectorAll('#page-project .tab').forEach(function(t){
+    t.addEventListener('click', function(){
+      renderProjectTabs(t.getAttribute('data-tab'));
+    });
+  });
+
+  document.getElementById('form-onboard').addEventListener('submit', function(e){
+    e.preventDefault();
+    var name = document.getElementById('p-name').value.trim();
+    var ticker = document.getElementById('p-ticker').value.trim().replace(/^\$/,'').toUpperCase();
+    var mint = document.getElementById('p-mint').value.trim();
+    var admin = document.getElementById('p-admin').value.trim();
+    if(!name || !ticker || !mint){
+      toast('Fill in name, ticker, and mint', 'err');
+      return;
+    }
+    var project = {
+      id: uid(),
+      name: name,
+      ticker: ticker,
+      mint: mint,
+      admin: admin || '',
+      chain: 'solana',
+      feePaid: false,
+      createdAt: new Date().toISOString(),
+      campaigns: []
+    };
+    state.projects.push(project);
+    save();
+    toast('Project created · onboard fee pending (0.25 SOL)', 'ok');
+    document.getElementById('form-onboard').reset();
+    openProject(project.id);
+  });
+
+  document.getElementById('form-campaign').addEventListener('submit', function(e){
+    e.preventDefault();
+    var p = findProject(currentProjectId);
+    if(!p) return;
+    var title = document.getElementById('c-title').value.trim();
+    var type = document.getElementById('c-type').value;
+    var rule = document.getElementById('c-rule').value.trim();
+    var reward = document.getElementById('c-reward').value.trim();
+    var unit = document.getElementById('c-unit').value;
+    var pool = document.getElementById('c-pool').value.trim();
+    var days = parseInt(document.getElementById('c-days').value, 10) || 7;
+    if(!title || !rule){
+      toast('Add a name and rule', 'err');
+      return;
+    }
+    var camp = {
+      id: uid(),
+      title: title,
+      type: type,
+      rule: rule,
+      reward: reward,
+      unit: unit,
+      pool: pool,
+      days: days,
+      status: 'active',
+      settled: 0,
+      feePaid: false,
+      createdAt: new Date().toISOString()
+    };
+    p.campaigns = p.campaigns || [];
+    p.campaigns.push(camp);
+    save();
+    toast('Campaign live · 0.25 SOL fee pending', 'ok');
+    document.getElementById('form-campaign').reset();
+    openCampaign(camp.id);
+  });
+
+  document.getElementById('btn-end-campaign').onclick = function(){
+    var c = findCampaign(currentProjectId, currentCampaignId);
+    if(!c) return;
+    if(!confirm('End this campaign? New claims will stop.')) return;
+    c.status = 'ended';
+    save();
+    toast('Campaign ended', 'ok');
+    openCampaign(c.id);
+  };
+
+  // boot
+  renderHome();
+})();
 </script>
 </body>
 </html>
