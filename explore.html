@@ -1,1 +1,312 @@
-PLACEHOLDER_EXPLORE
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bard — explore campaigns</title>
+<meta name="description" content="Browse live campaigns on Bard. Hold, raid, refer, and custom challenges across Solana meme projects.">
+<link rel="icon" href="/transparentbardsmile.png" type="image/png">
+<link rel="apple-touch-icon" href="/transparentbardsmile.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#1c1e26;
+  --surface:#262930;
+  --surface-2:#2d3039;
+  --purple:#a78bfa;
+  --text:#f4f4f5;
+  --muted:#a1a1aa;
+  --body:#d5d5da;
+  --line:rgba(244,244,245,.08);
+  --line-strong:rgba(244,244,245,.16);
+  --purple-soft:rgba(167,139,250,.12);
+  --purple-line:rgba(167,139,250,.35);
+  --font:"Archivo","Helvetica Neue",Helvetica,Arial,sans-serif;
+  --r:12px;
+  --gutter:clamp(18px,4vw,40px);
+  --max:1080px;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0;background:var(--bg);color:var(--text);
+  font-family:var(--font);font-size:16px;line-height:1.6;
+  font-variation-settings:"wdth" 100,"wght" 420;
+  -webkit-font-smoothing:antialiased;min-height:100vh;
+}
+img{display:block;max-width:100%}
+a{color:inherit;text-decoration:none}
+button,input{font:inherit;color:inherit}
+button{background:none;border:none;cursor:pointer;padding:0}
+:focus-visible{outline:2px solid var(--purple);outline-offset:3px;border-radius:4px}
+.num{font-variant-numeric:tabular-nums}
+.muted{color:var(--muted)}
+.wrap{max-width:var(--max);margin:0 auto;padding:0 var(--gutter)}
+.head{
+  position:sticky;top:0;z-index:40;
+  background:rgba(28,30,38,.9);
+  backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+  border-bottom:1px solid var(--line);
+}
+.head__in{
+  display:flex;align-items:center;gap:16px;flex-wrap:wrap;
+  min-height:72px;max-width:var(--max);margin:0 auto;padding:10px var(--gutter);
+}
+.mark{
+  display:inline-flex;flex-direction:column;align-items:center;
+  gap:2px;margin-right:auto;line-height:1;text-align:center;
+}
+.mark__word{font-size:1.15rem;font-variation-settings:"wdth" 112,"wght" 720;letter-spacing:-.015em}
+.mark__smile{width:26px;height:16px;object-fit:contain}
+.nav{display:flex;align-items:center;gap:4px;flex-wrap:wrap}
+.nav a{
+  font-size:.9rem;color:var(--muted);padding:8px 12px;border-radius:8px;
+  transition:color .15s,background .15s;
+}
+.nav a:hover,.nav a.is-on{color:var(--text);background:var(--purple-soft)}
+.nav__cta{
+  background:var(--purple)!important;color:#191320!important;
+  font-variation-settings:"wght" 620;margin-left:4px;
+}
+.nav__cta:hover{background:#b9a3ff!important}
+.main{padding:clamp(28px,5vw,52px) 0 80px}
+.kicker{font-size:.8rem;color:var(--purple);font-variation-settings:"wght" 600;margin:0 0 10px}
+h1{
+  margin:0 0 10px;font-size:clamp(1.7rem,3.5vw,2.35rem);line-height:1.15;
+  font-variation-settings:"wdth" 108,"wght" 700;letter-spacing:-.025em;
+}
+.lead{margin:0 0 24px;color:var(--body);max-width:54ch;font-size:1.02rem}
+.toolbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:20px}
+.filters{display:flex;flex-wrap:wrap;gap:6px}
+.chip{
+  padding:7px 12px;border-radius:99px;font-size:.84rem;
+  border:1px solid var(--line-strong);color:var(--muted);
+  transition:color .15s,background .15s,border-color .15s;
+}
+.chip.is-on,.chip:hover{color:var(--text);border-color:var(--purple-line);background:var(--purple-soft)}
+.search{
+  flex:1;min-width:180px;max-width:280px;
+  background:var(--surface);border:1px solid var(--line-strong);
+  border-radius:9px;padding:10px 14px;color:var(--text);
+}
+.search:focus{outline:none;border-color:var(--purple-line)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px}
+.card{
+  background:var(--surface);border:1px solid var(--line);
+  border-radius:var(--r);padding:18px 20px;
+  display:flex;flex-direction:column;gap:12px;
+  transition:border-color .15s,background .15s;
+}
+.card:hover{border-color:var(--purple-line);background:var(--surface-2)}
+.card__top{display:flex;align-items:flex-start;gap:12px}
+.ava{
+  width:42px;height:42px;border-radius:11px;background:var(--purple-soft);
+  display:grid;place-items:center;color:var(--purple);
+  font-size:.85rem;font-variation-settings:"wght" 680;flex:none;
+}
+.card__title{font-size:1.05rem;font-variation-settings:"wght" 640;line-height:1.3;margin:0}
+.card__sub{font-size:.82rem;color:var(--muted);margin-top:3px}
+.card__rule{
+  font-size:.92rem;color:var(--body);line-height:1.5;
+  display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;flex:1;
+}
+.card__meta{
+  display:flex;flex-wrap:wrap;gap:8px;align-items:center;
+  font-size:.8rem;color:var(--muted);border-top:1px solid var(--line);padding-top:12px;
+}
+.pill{
+  display:inline-flex;align-items:center;font-size:.72rem;padding:3px 9px;
+  border-radius:99px;font-variation-settings:"wght" 600;white-space:nowrap;
+}
+.pill--live{background:var(--purple-soft);color:var(--purple)}
+.pill--muted{background:rgba(244,244,245,.06);color:var(--muted)}
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:8px;
+  padding:11px 18px;border-radius:9px;font-size:.92rem;
+  font-variation-settings:"wght" 620;border:1px solid transparent;
+  transition:background .15s,border-color .15s,transform .12s;
+}
+.btn:active{transform:translateY(1px)}
+.btn--solid{background:var(--purple);color:#191320}
+.btn--solid:hover{background:#b9a3ff}
+.btn--ghost{border-color:var(--line-strong);color:var(--text)}
+.btn--ghost:hover{border-color:var(--purple-line);background:var(--purple-soft)}
+.btn--sm{padding:8px 12px;font-size:.84rem;border-radius:8px}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:22px}
+@media(max-width:640px){.stats{grid-template-columns:1fr}}
+.stat{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px 18px}
+.stat__lbl{font-size:.76rem;color:var(--muted);margin-bottom:6px}
+.stat__val{font-size:1.3rem;font-variation-settings:"wght" 660;letter-spacing:-.02em}
+.stat__val.p{color:var(--purple)}
+.empty{
+  text-align:center;padding:48px 24px;grid-column:1/-1;
+  background:var(--surface);border:1px dashed var(--line-strong);border-radius:var(--r);
+}
+.empty h3{margin:0 0 8px;font-size:1.15rem;font-variation-settings:"wght" 640}
+.empty p{margin:0 0 18px;color:var(--muted);max-width:42ch;margin-left:auto;margin-right:auto}
+.foot{border-top:1px solid var(--line);padding:28px 0 40px;color:var(--muted);font-size:.88rem}
+.foot__in{display:flex;flex-wrap:wrap;gap:12px 20px;align-items:center}
+.foot .mark{margin-right:8px}
+.foot a:hover{color:var(--text)}
+</style>
+</head>
+<body>
+  <header class="head">
+    <div class="head__in">
+      <a class="mark" href="/" aria-label="Bard home">
+        <span class="mark__word">Bard</span>
+        <img class="mark__smile" src="/transparentbardsmile.png" alt="">
+      </a>
+      <nav class="nav" aria-label="Primary">
+        <a href="/">Home</a>
+        <a class="is-on" href="/explore.html">Explore</a>
+        <a href="/admin.html">For teams</a>
+        <a class="nav__cta" href="/dashboard.html">Open Bard</a>
+      </nav>
+    </div>
+  </header>
+  <main class="main">
+    <div class="wrap">
+      <p class="kicker">Public explore</p>
+      <h1>Live campaigns on Bard</h1>
+      <p class="lead">Browse challenges across projects. Open any campaign in the dashboard to join, climb the board, and claim — wallet for hold/refer, X only when the campaign scores posts or raids.</p>
+      <div class="stats">
+        <div class="stat"><div class="stat__lbl">Live campaigns</div><div class="stat__val p num" id="stat-live">0</div></div>
+        <div class="stat"><div class="stat__lbl">Projects</div><div class="stat__val num" id="stat-projects">0</div></div>
+        <div class="stat"><div class="stat__lbl">Showing</div><div class="stat__val num" id="stat-showing">0</div></div>
+      </div>
+      <div class="toolbar">
+        <div class="filters" role="tablist" aria-label="Filter by type">
+          <button type="button" class="chip is-on" data-filter="all">All</button>
+          <button type="button" class="chip" data-filter="hold">Hold</button>
+          <button type="button" class="chip" data-filter="raid">Raid</button>
+          <button type="button" class="chip" data-filter="refer">Refer</button>
+          <button type="button" class="chip" data-filter="custom">Custom</button>
+        </div>
+        <input class="search" id="q" type="search" placeholder="Search name or ticker" autocomplete="off">
+      </div>
+      <div class="grid" id="grid"></div>
+    </div>
+  </main>
+  <footer class="foot">
+    <div class="wrap foot__in">
+      <a class="mark" href="/">
+        <span class="mark__word">Bard</span>
+        <img class="mark__smile" src="/transparentbardsmile.png" alt="">
+      </a>
+      <span>© 2026 Bard</span>
+      <a href="/dashboard.html">Dashboard</a>
+      <a href="/admin.html">For teams</a>
+      <a href="/">Home</a>
+    </div>
+  </footer>
+<script src="/platform.js"></script>
+<script>
+(function(){
+  var TEAM_KEY = 'bard_team_v1';
+  var X_TYPES = { raid:1, post:1, reply:1, social:1 };
+  var filter = 'all';
+  var query = '';
+  function loadTeam(){
+    try{
+      var raw = localStorage.getItem(TEAM_KEY);
+      if(raw) return JSON.parse(raw);
+    }catch(e){}
+    return { projects: [] };
+  }
+  function escapeHtml(s){
+    return String(s == null ? '' : s)
+      .replace(/&/g,'&').replace(/</g,'<').replace(/>/g,'>')
+      .replace(/\"/g,'"');
+  }
+  function initials(s){ return String(s || '?').trim().slice(0,2).toUpperCase(); }
+  function needsX(type){ return !!X_TYPES[String(type || '').toLowerCase()]; }
+  var cachedLive = [];
+  var cachedProjectCount = 0;
+
+  async function refreshLive(){
+    if (window.BardPlatform) {
+      await BardPlatform.init();
+      cachedLive = await BardPlatform.listLiveCampaigns();
+      var projects = await BardPlatform.listProjects();
+      cachedProjectCount = projects.length;
+    } else {
+      var team = loadTeam();
+      cachedProjectCount = (team.projects || []).length;
+      cachedLive = [];
+      (team.projects || []).forEach(function(p){
+        (p.campaigns || []).forEach(function(c){
+          if(c.status !== 'active') return;
+          cachedLive.push({ projectId: p.id, projectName: p.name, ticker: p.ticker, campaign: c });
+        });
+      });
+    }
+  }
+
+  function render(){
+    var all = cachedLive;
+    document.getElementById('stat-live').textContent = all.length;
+    document.getElementById('stat-projects').textContent = cachedProjectCount;
+    var list = all.filter(function(x){
+      if(filter !== 'all' && String(x.campaign.type).toLowerCase() !== filter) return false;
+      if(!query) return true;
+      var hay = (x.projectName + ' ' + x.ticker + ' ' + x.campaign.title + ' ' + (x.campaign.rule||'')).toLowerCase();
+      return hay.indexOf(query) !== -1;
+    });
+    document.getElementById('stat-showing').textContent = list.length;
+    var grid = document.getElementById('grid');
+    if(!all.length){
+      grid.innerHTML = '<div class="empty"><h3>No live campaigns yet</h3><p>When teams onboard a project and start a campaign, they appear here for anyone to browse.</p><a class="btn btn--solid" href="/admin.html">Start a campaign</a></div>';
+      return;
+    }
+    if(!list.length){
+      grid.innerHTML = '<div class="empty"><h3>No matches</h3><p>Try another filter or clear the search.</p></div>';
+      return;
+    }
+    grid.innerHTML = list.map(function(x){
+      var c = x.campaign;
+      var reward = (c.reward || '—') + (c.unit ? ' ' + c.unit : '');
+      var xPill = needsX(c.type) ? '<span class="pill pill--muted">Needs X</span>' : '';
+      return (
+        '<article class="card">' +
+          '<div class="card__top">' +
+            '<span class="ava">' + initials(x.ticker || x.projectName) + '</span>' +
+            '<div>' +
+              '<h2 class="card__title">' + escapeHtml(c.title) + '</h2>' +
+              '<div class="card__sub">' + escapeHtml(x.projectName) + ' · $' + escapeHtml(x.ticker) + '</div>' +
+            '</div>' +
+          '</div>' +
+          '<p class="card__rule">' + escapeHtml(c.rule || 'No rule text') + '</p>' +
+          '<div class="card__meta">' +
+            '<span class="pill pill--live">Live</span>' +
+            '<span class="pill pill--muted">' + escapeHtml(c.type) + '</span>' +
+            xPill +
+            '<span class="num">' + escapeHtml(reward) + '</span>' +
+            (c.days ? '<span>' + c.days + 'd</span>' : '') +
+            '<a class="btn btn--ghost btn--sm" style="margin-left:auto" href="/dashboard.html">Open in Bard</a>' +
+          '</div>' +
+        '</article>'
+      );
+    }).join('');
+  }
+  document.querySelectorAll('[data-filter]').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      filter = btn.getAttribute('data-filter');
+      document.querySelectorAll('[data-filter]').forEach(function(b){ b.classList.toggle('is-on', b === btn); });
+      render();
+    });
+  });
+  document.getElementById('q').addEventListener('input', function(){
+    query = this.value.trim().toLowerCase();
+    render();
+  });
+  (async function(){
+    try { await refreshLive(); } catch(e){ console.error(e); }
+    render();
+  })();
+})();
+</script>
+</body>
+</html>
