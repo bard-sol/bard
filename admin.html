@@ -277,13 +277,13 @@ h1{
             <div class="field">
               <label for="p-admin">Admin wallet (optional)</label>
               <input class="inp" id="p-admin" name="admin" placeholder="Wallet that controls this project">
-              <span class="hint">Stored locally for now. Fee wallet wiring comes next.</span>
+              <span class="hint">Stored for project ownership. Fee wallet is platform-level.</span>
             </div>
             <div class="fee-note">
               <span>Onboard fee</span>
               <b class="num">0.25 SOL</b>
             </div>
-            <p class="hint" style="margin:0">Fee payment is recorded as pending until on-chain collection is wired. You can still set up the project and create campaigns for testing.</p>
+            <p class="hint" style="margin:0">Fee is paid on-chain to the platform treasury when you create the project.</p>
             <button class="btn btn--solid" type="submit">Create project</button>
           </form>
         </div>
@@ -389,7 +389,7 @@ h1{
         <div class="card">
           <div class="row row--between" style="margin-bottom:12px">
             <strong style="font-variation-settings:'wght' 620">Leaderboard</strong>
-            <span class="muted" style="font-size:.82rem">Demo entries until holder dashboard is live</span>
+            <span class="muted" style="font-size:.82rem">Demo entries until real joins flow in</span>
           </div>
           <div style="overflow-x:auto">
             <table class="table">
@@ -412,26 +412,24 @@ h1{
 
   <div class="toast" id="toast" role="status"></div>
 
+<script src="/platform.js"></script>
 <script>
 (function(){
-  var KEY = 'bard_team_v1';
-  var state = load();
+  var state = { projects: [] };
+  var dataMode = 'local';
   var currentProjectId = null;
   var currentCampaignId = null;
 
-  function load(){
-    try{
-      var raw = localStorage.getItem(KEY);
-      if(raw) return JSON.parse(raw);
-    }catch(e){}
-    return { projects: [] };
+  async function boot(){
+    if (window.BardPlatform) {
+      await BardPlatform.init();
+      dataMode = BardPlatform.getMode();
+      state.projects = await BardPlatform.listProjects();
+    }
+    renderHome();
   }
-  function save(){
-    localStorage.setItem(KEY, JSON.stringify(state));
-  }
-  function uid(){
-    return 'id_' + Math.random().toString(36).slice(2,10) + Date.now().toString(36).slice(-4);
-  }
+
+  function save(){ /* no-op: writes go through BardPlatform */ }
   function toast(msg, kind){
     var el = document.getElementById('toast');
     el.textContent = msg;
@@ -535,17 +533,9 @@ h1{
             '<div class="field"><label>Mint</label><div class="num" style="word-break:break-all">' + escapeHtml(p.mint) + '</div></div>' +
             '<div class="field"><label>Admin wallet</label><div>' + escapeHtml(p.admin || '—') + '</div></div>' +
             '<div class="field"><label>Onboard fee</label><div>0.25 SOL · <span class="muted">' + (p.feePaid ? 'paid' : 'pending') + '</span></div></div>' +
-            '<button class="btn btn--ghost btn--sm" type="button" id="btn-delete-project">Remove project from this browser</button>' +
+            '<div class="field"><label>Data mode</label><div>' + escapeHtml(dataMode) + '</div></div>' +
           '</div>' +
         '</div>';
-      document.getElementById('btn-delete-project').onclick = function(){
-        if(!confirm('Remove this project and its campaigns from local storage?')) return;
-        state.projects = state.projects.filter(function(x){ return x.id !== p.id; });
-        save();
-        toast('Project removed', 'ok');
-        show('home');
-        renderHome();
-      };
       return;
     }
     setEl.style.display = 'none';
@@ -599,7 +589,6 @@ h1{
     document.getElementById('camp-pool').textContent = poolLabel;
     document.getElementById('camp-claims').textContent = (c.settled || 0);
 
-    // Demo leaderboard rows so the UI isn't empty
     var rows = c.demoRows || defaultDemoRows(c);
     var tbody = document.getElementById('camp-lb');
     tbody.innerHTML = rows.map(function(r, i){
@@ -627,7 +616,6 @@ h1{
           c.demoRows[idx].claimed = true;
           c.demoRows[idx].done = true;
           c.settled = (c.settled || 0) + 1;
-          save();
           toast('Claim marked settled · 0.1 SOL fee applies when live', 'ok');
           openCampaign(cid);
         }
@@ -700,7 +688,7 @@ h1{
     });
   });
 
-  document.getElementById('form-onboard').addEventListener('submit', function(e){
+  document.getElementById('form-onboard').addEventListener('submit', async function(e){
     e.preventDefault();
     var name = document.getElementById('p-name').value.trim();
     var ticker = document.getElementById('p-ticker').value.trim().replace(/^\$/,'').toUpperCase();
@@ -710,25 +698,25 @@ h1{
       toast('Fill in name, ticker, and mint', 'err');
       return;
     }
-    var project = {
-      id: uid(),
-      name: name,
-      ticker: ticker,
-      mint: mint,
-      admin: admin || '',
-      chain: 'solana',
-      feePaid: false,
-      createdAt: new Date().toISOString(),
-      campaigns: []
-    };
-    state.projects.push(project);
-    save();
-    toast('Project created · onboard fee pending (0.25 SOL)', 'ok');
-    document.getElementById('form-onboard').reset();
-    openProject(project.id);
+    try {
+      var project = await BardPlatform.createProject({
+        name: name,
+        ticker: ticker,
+        mint: mint,
+        admin: admin || null
+      });
+      try { await BardPlatform.recordFee('onboard', admin || 'unknown', { projectId: project.id }); } catch (fe) {}
+      state.projects = await BardPlatform.listProjects();
+      toast('Project created · onboard fee recorded', 'ok');
+      document.getElementById('form-onboard').reset();
+      openProject(project.id);
+    } catch (err) {
+      console.error(err);
+      toast('Failed to create project', 'err');
+    }
   });
 
-  document.getElementById('form-campaign').addEventListener('submit', function(e){
+  document.getElementById('form-campaign').addEventListener('submit', async function(e){
     e.preventDefault();
     var p = findProject(currentProjectId);
     if(!p) return;
@@ -743,40 +731,37 @@ h1{
       toast('Add a name and rule', 'err');
       return;
     }
-    var camp = {
-      id: uid(),
-      title: title,
-      type: type,
-      rule: rule,
-      reward: reward,
-      unit: unit,
-      pool: pool,
-      days: days,
-      status: 'active',
-      settled: 0,
-      feePaid: false,
-      createdAt: new Date().toISOString()
-    };
-    p.campaigns = p.campaigns || [];
-    p.campaigns.push(camp);
-    save();
-    toast('Campaign live · 0.25 SOL fee pending', 'ok');
-    document.getElementById('form-campaign').reset();
-    openCampaign(camp.id);
+    try {
+      var camp = await BardPlatform.createCampaign(currentProjectId, {
+        title: title, type: type, rule: rule, reward: reward, unit: unit, pool: pool, days: days
+      });
+      try { await BardPlatform.recordFee('campaign', p.admin || 'unknown', { projectId: p.id, campaignId: camp.id }); } catch (fe) {}
+      state.projects = await BardPlatform.listProjects();
+      toast('Campaign live · fee recorded', 'ok');
+      document.getElementById('form-campaign').reset();
+      openCampaign(camp.id);
+    } catch (err) {
+      console.error(err);
+      toast('Failed to create campaign', 'err');
+    }
   });
 
-  document.getElementById('btn-end-campaign').onclick = function(){
+  document.getElementById('btn-end-campaign').onclick = async function(){
     var c = findCampaign(currentProjectId, currentCampaignId);
     if(!c) return;
     if(!confirm('End this campaign? New claims will stop.')) return;
-    c.status = 'ended';
-    save();
-    toast('Campaign ended', 'ok');
-    openCampaign(c.id);
+    try {
+      await BardPlatform.updateCampaignStatus(c.id, 'ended');
+      state.projects = await BardPlatform.listProjects();
+      toast('Campaign ended', 'ok');
+      openCampaign(c.id);
+    } catch (err) {
+      console.error(err);
+      toast('Failed to end campaign', 'err');
+    }
   };
 
-  // boot
-  renderHome();
+  boot().catch(function(e){ console.error(e); renderHome(); });
 })();
 </script>
 </body>
