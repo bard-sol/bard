@@ -379,16 +379,24 @@ h1{
   </main>
   <div class="toast" id="toast" role="status"></div>
 
-<script src="https://cdn.jsdelivr.net/npm/buffer@6.0.3/index.js"></script>
+<script src="https://bundle.run/buffer@6.0.3"></script>
 <script>
   (function () {
-    var B = (typeof buffer !== 'undefined' && buffer.Buffer)
-      || (typeof globalThis !== 'undefined' && globalThis.buffer && globalThis.buffer.Buffer);
-    if (B) {
+    // bundle.run UMD: window.buffer = { Buffer, SlowBuffer, ... }
+    var mod = (typeof buffer !== 'undefined') ? buffer : null;
+    var B = mod && (mod.Buffer || (typeof mod.from === 'function' ? mod : null));
+    if (!B || typeof B.from !== 'function') {
+      console.error('[Bard] Buffer polyfill failed', { mod: typeof mod, from: B && typeof B.from });
+    } else {
       window.Buffer = B;
       if (typeof globalThis !== 'undefined') globalThis.Buffer = B;
+      if (!window.buffer || !window.buffer.Buffer) window.buffer = { Buffer: B };
+      console.info('[Bard] Buffer.from ready');
     }
     if (typeof window.global === 'undefined') window.global = window;
+    if (typeof process === 'undefined') {
+      window.process = { env: {}, browser: true, version: '', versions: { node: '' } };
+    }
   })();
 </script>
 <script src="https://unpkg.com/@solana/web3.js@1.95.4/lib/index.iife.min.js"></script>
@@ -602,7 +610,7 @@ h1{
             await connectWallet();
             return;
           }
-          if(!window.Buffer){
+          if(!window.Buffer || typeof window.Buffer.from !== 'function'){
             toast('Buffer polyfill missing — hard refresh the page', 'err');
             return;
           }
@@ -759,7 +767,7 @@ h1{
       await connectWallet();
       return;
     }
-    if(!window.solanaWeb3 || !window.Buffer){
+    if(!window.solanaWeb3 || !window.Buffer || typeof window.Buffer.from !== 'function'){
       toast('Solana libs not ready — hard refresh and try again', 'err');
       return;
     }
