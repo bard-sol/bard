@@ -25,7 +25,8 @@
 
   var TEAM_KEY = 'bard_team_v1';
   var HOLDER_KEY = 'bard_holder_v1';
-  var RPC = 'https://api.mainnet-beta.solana.com';
+  // Public mainnet RPC — official endpoint often returns 403 from browsers
+  var RPC = 'https://solana-rpc.publicnode.com';
 
   var sb = null;
   var mode = 'local';
