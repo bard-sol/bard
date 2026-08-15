@@ -180,6 +180,22 @@
 
   async function createCampaign(projectId, input) {
     await init();
+    // Require onboard fee paid before any campaign can be created
+    if (mode === 'supabase' && sb) {
+      var proj = await sb.from('projects').select('id, fee_paid').eq('id', projectId).maybeSingle();
+      if (proj.error) throw proj.error;
+      if (!proj.data) throw new Error('Project not found');
+      if (!proj.data.fee_paid) {
+        throw new Error('Pay the 0.25 SOL onboard fee before creating campaigns');
+      }
+    } else {
+      var stateCheck = localTeam();
+      var pCheck = stateCheck.projects.find(function (x) { return x.id === projectId; });
+      if (!pCheck) throw new Error('Project not found');
+      if (!pCheck.feePaid) {
+        throw new Error('Pay the 0.25 SOL onboard fee before creating campaigns');
+      }
+    }
     if (mode === 'supabase' && sb) {
       var res = await sb
         .from('campaigns')
