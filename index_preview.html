@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bard — reward the people who show up</title>
+<meta name="description" content="Bard is where Solana projects run campaigns, leaderboards and airdrops. Flat SOL fees, 0% of your token.">
+<meta name="robots" content="noindex">
+<link rel="icon" href="/transparentbardsmile.png" type="image/png">
+<link rel="preload" as="image" href="/transparentbardsmile.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#1c1e26;
+  --bg-deep:#14161c;
+  --surface:#262930;
+  --surface-2:#2d3039;
+  --purple:#a78bfa;
+  --purple-bright:#c4b5fd;
+  --text:#f4f4f5;
+  --muted:#a1a1aa;
+  --body:#d5d5da;
+  --line:rgba(244,244,245,.08);
+  --line-strong:rgba(244,244,245,.16);
+  --purple-soft:rgba(167,139,250,.12);
+  --purple-line:rgba(167,139,250,.35);
+  --font:"Archivo","Helvetica Neue",Helvetica,Arial,sans-serif;
+  --r:14px;
+  --gutter:clamp(20px,5vw,64px);
+  --max:1120px;
+  --ease:cubic-bezier(.22,1,.36,1);
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;-webkit-text-size-adjust:100%}
+body{
+  margin:0;background:var(--bg-deep);color:var(--text);
+  font-family:var(--font);font-size:17px;line-height:1.7;
+  font-variation-settings:"wdth" 100,"wght" 420;
+  -webkit-font-smoothing:antialiased;overflow-x:hidden;
+  cursor:none;
+}
+body.is-touch{cursor:auto}
+body.is-touch .cursor,body.is-touch .cursor-ring{display:none!important}
+img{display:block;max-width:100%}
+a{color:inherit;text-decoration:none}
+button{font:inherit;color:inherit;background:none;border:none;cursor:none;padding:0}
+body.is-touch button,body.is-touch a{cursor:pointer}
+:focus-visible{outline:2px solid var(--purple);outline-offset:3px;border-radius:4px}
+[id]{scroll-margin-top:100px}
+.num{font-variant-numeric:tabular-nums}
+.wrap{max-width:var(--max);margin:0 auto;padding-left:var(--gutter);padding-right:var(--gutter)}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);border:0}
+#field{position:fixed;inset:0;z-index:0;pointer-events:none;opacity:.9}
+.vignette{
+  position:fixed;inset:0;z-index:1;pointer-events:none;
+  background:
+    radial-gradient(ellipse 80% 60% at 50% -10%, rgba(167,139,250,.14), transparent 55%),
+    radial-gradient(ellipse 50% 40% at 90% 80%, rgba(167,139,250,.06), transparent 50%),
+    radial-gradient(ellipse 100% 100% at 50% 50%, transparent 40%, rgba(20,22,28,.75) 100%);
+}
+.cursor,.cursor-ring{
+  position:fixed;top:0;left:0;z-index:9999;pointer-events:none;
+  border-radius:50%;transform:translate(-50%,-50%);
+  transition:width .25s var(--ease),height .25s var(--ease),background .2s,border-color .2s,opacity .2s;
+}
+.cursor{width:8px;height:8px;background:var(--purple-bright);box-shadow:0 0 20px rgba(167,139,250,.55);mix-blend-mode:screen}
+.cursor-ring{width:36px;height:36px;border:1px solid rgba(167,139,250,.45);background:transparent}
+.cursor.is-hot{width:12px;height:12px;background:#fff}
+.cursor-ring.is-hot{width:56px;height:56px;border-color:rgba(196,181,253,.7);background:rgba(167,139,250,.06)}
+.cursor.is-down{transform:translate(-50%,-50%) scale(.7)}
+.head{
+  position:fixed;top:0;left:0;right:0;z-index:50;
+  transition:background .35s,border-color .35s,backdrop-filter .35s;
+  border-bottom:1px solid transparent;
+}
+.head.is-scrolled{
+  background:rgba(20,22,28,.72);
+  backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
+  border-bottom-color:var(--line);
+}
+.head__in{
+  display:flex;align-items:center;gap:18px;
+  min-height:76px;max-width:var(--max);margin:0 auto;padding:12px var(--gutter);
+}
+.mark{
+  display:inline-flex;flex-direction:column;align-items:center;
+  gap:3px;margin-right:auto;line-height:1;text-align:center;
+}
+.mark__word{font-size:1.2rem;font-variation-settings:"wdth" 112,"wght" 720;letter-spacing:-.02em}
+.mark__smile{
+  width:28px;height:17px;object-fit:contain;
+  transition:transform .45s var(--ease),filter .45s;
+  filter:drop-shadow(0 0 8px rgba(167,139,250,.25));
+}
+.mark:hover .mark__smile{transform:scale(1.12) translateY(1px);filter:drop-shadow(0 0 14px rgba(167,139,250,.55))}
+.nav{display:flex;align-items:center;gap:6px}
+.nav a{font-size:.9rem;color:var(--muted);padding:8px 12px;border-radius:8px;transition:color .2s,background .2s}
+.nav a:hover{color:var(--text);background:var(--purple-soft)}
+.nav__cta{background:var(--purple)!important;color:#191320!important;font-variation-settings:"wght" 620;padding:9px 16px!important;margin-left:6px}
+.nav__cta:hover{background:#b9a3ff!important}
+.sound-btn{
+  width:38px;height:38px;border-radius:9px;border:1px solid var(--line-strong);
+  display:grid;place-items:center;color:var(--muted);
+  transition:border-color .2s,color .2s,background .2s;margin-left:4px;
+}
+.sound-btn:hover,.sound-btn.is-on{border-color:var(--purple-line);color:var(--purple);background:var(--purple-soft)}
+.sound-btn svg{width:16px;height:16px}
+.hero{
+  position:relative;z-index:2;
+  min-height:100vh;min-height:100dvh;
+  display:flex;align-items:center;padding:120px 0 80px;
+}
+.hero__grid{
+  display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,.95fr);
+  gap:clamp(40px,6vw,80px);align-items:center;
+}
+@media(max-width:960px){.hero__grid{grid-template-columns:1fr;gap:48px}}
+.eyebrow{
+  display:inline-flex;align-items:center;gap:10px;
+  font-size:.78rem;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--purple);font-variation-settings:"wght" 600;margin-bottom:22px;
+}
+.eyebrow::before{content:"";width:28px;height:1px;background:var(--purple);box-shadow:0 0 8px rgba(167,139,250,.6)}
+h1{
+  margin:0 0 22px;font-size:clamp(2.6rem,6.5vw,4.4rem);
+  line-height:.98;letter-spacing:-.035em;font-variation-settings:"wdth" 108,"wght" 700;
+}
+h1 .line{display:block;overflow:hidden}
+h1 .line span{display:inline-block;transform:translateY(110%);transition:transform 1s var(--ease)}
+.hero.is-in h1 .line span{transform:translateY(0)}
+h1 em{font-style:normal;color:var(--purple);text-shadow:0 0 40px rgba(167,139,250,.35)}
+.hero__sub{
+  color:var(--body);font-size:1.12rem;line-height:1.75;max-width:46ch;margin:0 0 32px;
+  opacity:0;transform:translateY(18px);
+  transition:opacity .9s var(--ease) .25s,transform .9s var(--ease) .25s;
+}
+.hero.is-in .hero__sub{opacity:1;transform:none}
+.hero__sub b{color:var(--text);font-variation-settings:"wght" 620;font-weight:normal}
+.actions{display:flex;flex-wrap:wrap;gap:12px}
+.hero .actions,.hero .hero__note{opacity:0;transform:translateY(16px);transition:opacity .9s var(--ease) .4s,transform .9s var(--ease) .4s}
+.hero.is-in .actions,.hero.is-in .hero__note{opacity:1;transform:none}
+.hero__note{margin-top:22px;font-size:.92rem;color:var(--muted)}
+.hero__note b{color:var(--body);font-variation-settings:"wght" 600;font-weight:normal}
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:8px;
+  padding:14px 24px;border-radius:10px;font-size:.95rem;font-variation-settings:"wght" 620;
+  border:1px solid transparent;transition:background .2s,border-color .2s,transform .2s var(--ease),box-shadow .25s;
+}
+.btn--solid{background:var(--purple);color:#191320}
+.btn--solid:hover{background:#b9a3ff;box-shadow:0 8px 32px -8px rgba(167,139,250,.55);transform:translateY(-1px)}
+.btn--ghost{border-color:var(--line-strong);color:var(--text);background:rgba(38,41,48,.4)}
+.btn--ghost:hover{border-color:var(--purple-line);background:var(--purple-soft);transform:translateY(-1px)}
+.orb{position:relative;width:min(100%,420px);aspect-ratio:1;margin:0 auto;display:grid;place-items:center}
+.orb__ring{position:absolute;inset:8%;border-radius:50%;border:1px solid rgba(167,139,250,.18);animation:spin 28s linear infinite}
+.orb__ring::before,.orb__ring::after{content:"";position:absolute;border-radius:50%;background:var(--purple);box-shadow:0 0 16px rgba(167,139,250,.7)}
+.orb__ring::before{width:7px;height:7px;top:-3px;left:50%;margin-left:-3px}
+.orb__ring::after{width:4px;height:4px;bottom:12%;right:8%;opacity:.6}
+.orb__ring-2{position:absolute;inset:18%;border-radius:50%;border:1px dashed rgba(167,139,250,.12);animation:spin 42s linear infinite reverse}
+.orb__core{
+  position:relative;z-index:2;width:58%;aspect-ratio:1;border-radius:50%;
+  background:radial-gradient(circle at 35% 30%, rgba(196,181,253,.2), transparent 45%),radial-gradient(circle at 50% 55%, rgba(38,41,48,.95), rgba(28,30,38,.98));
+  border:1px solid rgba(167,139,250,.28);
+  box-shadow:0 0 60px rgba(167,139,250,.2),inset 0 0 40px rgba(167,139,250,.06);
+  display:grid;place-items:center;transition:box-shadow .5s;
+}
+.orb:hover .orb__core{box-shadow:0 0 80px rgba(167,139,250,.35),inset 0 0 50px rgba(167,139,250,.1)}
+.orb__smile{width:48%;height:auto;filter:drop-shadow(0 0 12px rgba(167,139,250,.4));animation:breathe 4.5s ease-in-out infinite}
+.orb__pulse{position:absolute;inset:22%;border-radius:50%;border:1px solid rgba(167,139,250,.25);animation:pulse 3.2s ease-out infinite;pointer-events:none}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes breathe{0%,100%{transform:scale(1)}50%{transform:scale(1.06)}}
+@keyframes pulse{0%{transform:scale(.85);opacity:.6}100%{transform:scale(1.35);opacity:0}}
+.sec{position:relative;z-index:2;padding:clamp(72px,12vw,120px) 0}
+.sec--tight{padding-top:40px}
+.sec__head{max-width:560px;margin-bottom:40px}
+.sec__head h2{margin:0 0 12px;font-size:clamp(1.7rem,3.2vw,2.35rem);letter-spacing:-.028em;line-height:1.15;font-variation-settings:"wdth" 108,"wght" 700}
+.sec__head p{margin:0;color:var(--body);font-size:1.05rem}
+.label{display:inline-block;font-size:.78rem;letter-spacing:.1em;text-transform:uppercase;color:var(--purple);font-variation-settings:"wght" 600;margin-bottom:12px}
+.reveal{opacity:0;transform:translateY(28px);transition:opacity .9s var(--ease),transform .9s var(--ease)}
+.reveal.is-in{opacity:1;transform:none}
+.reveal-d1{transition-delay:.08s}.reveal-d2{transition-delay:.16s}.reveal-d3{transition-delay:.24s}
+.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+@media(max-width:800px){.steps{grid-template-columns:1fr}}
+.step{
+  background:linear-gradient(165deg,rgba(38,41,48,.9),rgba(28,30,38,.6));
+  border:1px solid var(--line);border-radius:var(--r);padding:28px 24px;
+  transition:border-color .3s,transform .35s var(--ease),box-shadow .35s;position:relative;overflow:hidden;
+}
+.step::before{
+  content:"";position:absolute;inset:0;
+  background:radial-gradient(600px circle at var(--mx,50%) var(--my,50%), rgba(167,139,250,.08), transparent 40%);
+  opacity:0;transition:opacity .3s;pointer-events:none;
+}
+.step:hover{border-color:var(--purple-line);transform:translateY(-3px);box-shadow:0 20px 40px -24px rgba(0,0,0,.6)}
+.step:hover::before{opacity:1}
+.step__n{font-size:.75rem;color:var(--purple);font-variation-settings:"wght" 700;letter-spacing:.08em;margin-bottom:14px}
+.step h3{margin:0 0 10px;font-size:1.15rem;font-variation-settings:"wght" 640;letter-spacing:-.015em}
+.step p{margin:0;color:var(--muted);font-size:.95rem;line-height:1.65}
+.step p b{color:var(--body);font-variation-settings:"wght" 600;font-weight:normal}
+.step .mini{display:inline;width:18px;height:11px;vertical-align:-1px;margin-left:4px}
+.grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+@media(max-width:800px){.grid-3{grid-template-columns:1fr}}
+.tile{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:24px;transition:border-color .25s,transform .3s var(--ease)}
+.tile:hover{border-color:var(--purple-line);transform:translateY(-2px)}
+.tile h3{margin:0 0 8px;font-size:1.05rem;font-variation-settings:"wght" 640}
+.tile p{margin:0;color:var(--muted);font-size:.92rem}
+.split{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:720px){.split{grid-template-columns:1fr}}
+.panel{background:linear-gradient(160deg,rgba(38,41,48,.95),rgba(28,30,38,.7));border:1px solid var(--line);border-radius:var(--r);padding:28px 26px}
+.panel ul{list-style:none;margin:16px 0 20px;padding:0}
+.panel li{display:flex;gap:12px;align-items:flex-start;padding:10px 0;border-bottom:1px solid var(--line);color:var(--body);font-size:.95rem}
+.panel li:last-child{border-bottom:none}
+.panel li i{flex:none;width:22px;height:22px;border-radius:6px;background:var(--purple-soft);color:var(--purple);display:grid;place-items:center;font-size:.72rem;font-style:normal;font-variation-settings:"wght" 700;margin-top:2px}
+.txt{color:var(--purple);font-size:.92rem;font-variation-settings:"wght" 600}
+.txt:hover{color:var(--purple-bright)}
+.fees{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+@media(max-width:900px){.fees{grid-template-columns:1fr 1fr}}
+@media(max-width:480px){.fees{grid-template-columns:1fr}}
+.fee{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:22px 20px;transition:border-color .25s,box-shadow .3s}
+.fee:hover{border-color:var(--purple-line);box-shadow:0 0 30px -10px rgba(167,139,250,.25)}
+.fee__lbl{font-size:.8rem;color:var(--muted);margin-bottom:8px}
+.fee__val{font-size:1.7rem;font-variation-settings:"wght" 700;letter-spacing:-.03em}
+.fee__val span{font-size:.95rem;color:var(--purple);font-variation-settings:"wght" 600}
+.fee--zero .fee__val{color:var(--purple)}
+.qa{max-width:720px}
+.qa__row{padding:22px 0;border-bottom:1px solid var(--line)}
+.qa__q{margin:0 0 8px;font-size:1.05rem;font-variation-settings:"wght" 620}
+.qa__a{margin:0;color:var(--muted);font-size:.98rem}
+.qa__a b{color:var(--body);font-variation-settings:"wght" 600;font-weight:normal}
+.seal{position:relative;z-index:2;padding:clamp(80px,14vw,140px) 0 100px;text-align:center}
+.seal__lockup{display:inline-flex;flex-direction:column;align-items:center;gap:6px;margin-bottom:28px}
+.seal__lockup .mark__word{font-size:2rem;font-variation-settings:"wdth" 112,"wght" 720}
+.seal__lockup .mark__smile{width:48px;height:30px;filter:drop-shadow(0 0 20px rgba(167,139,250,.5));animation:breathe 4s ease-in-out infinite}
+.seal h2{margin:0 0 14px;font-size:clamp(1.6rem,3vw,2.2rem);letter-spacing:-.025em;font-variation-settings:"wdth" 108,"wght" 700}
+.seal p{margin:0 auto 28px;max-width:48ch;color:var(--body)}
+.seal .actions{justify-content:center}
+.foot{position:relative;z-index:2;border-top:1px solid var(--line);padding:28px 0 40px}
+.foot__in{display:flex;flex-wrap:wrap;align-items:center;gap:16px;justify-content:space-between;font-size:.86rem;color:var(--muted)}
+.foot a{color:var(--muted);transition:color .2s}
+.foot a:hover{color:var(--text)}
+.preview-banner{
+  position:fixed;bottom:16px;left:50%;transform:translateX(-50%);z-index:100;
+  background:rgba(38,41,48,.92);border:1px solid var(--purple-line);
+  backdrop-filter:blur(12px);border-radius:999px;padding:10px 18px;
+  font-size:.82rem;color:var(--body);box-shadow:0 12px 40px -12px rgba(0,0,0,.6);
+  display:flex;align-items:center;gap:12px;white-space:nowrap;
+}
+.preview-banner b{color:var(--purple);font-variation-settings:"wght" 620;font-weight:normal}
+.preview-banner span{color:var(--muted)}
+@media(prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
+  .cursor,.cursor-ring{display:none!important}body{cursor:auto}
+  h1 .line span,.hero__sub,.hero .actions,.hero .hero__note,.reveal{opacity:1!important;transform:none!important}
+}
+</style>
+</head>
+<body>
+<canvas id="field" aria-hidden="true"></canvas>
+<div class="vignette" aria-hidden="true"></div>
+<div class="cursor" id="cursor" aria-hidden="true"></div>
+<div class="cursor-ring" id="cursor-ring" aria-hidden="true"></div>
+<div class="preview-banner" role="status">
+  <b>Preview</b>
+  <span>Experimental landing — not live. Tell me if you want this committed.</span>
+</div>
+<header class="head" id="head">
+  <div class="head__in">
+    <a class="mark" href="/" aria-label="Bard home">
+      <span class="mark__word">Bard</span>
+      <img class="mark__smile" src="/transparentbardsmile.png" alt="">
+    </a>
+    <nav class="nav" aria-label="Primary">
+      <a href="#how">How it works</a>
+      <a href="#fees">Fees</a>
+      <a href="/explore.html">Explore</a>
+      <a href="/admin.html">For teams</a>
+      <a class="nav__cta" href="/dashboard.html">Open Bard</a>
+    </nav>
+    <button class="sound-btn" id="sound-btn" type="button" aria-pressed="false" title="Toggle ambient sound">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+        <path d="M11 5L6 9H3v6h3l5 4V5z"/>
+        <path d="M15.5 9.5a4 4 0 010 5"/>
+        <path d="M18 7a7 7 0 010 10"/>
+      </svg>
+      <span class="sr-only">Toggle sound</span>
+    </button>
+  </div>
+</header>
+<main>
+  <section class="hero" id="hero">
+    <div class="wrap hero__grid">
+      <div>
+        <p class="eyebrow">Solana · campaigns · claims</p>
+        <h1>
+          <span class="line"><span>Reward the people</span></span>
+          <span class="line"><span>who <em>show up.</em></span></span>
+        </h1>
+        <p class="hero__sub">
+          Bard is where Solana projects run campaigns, leaderboards and airdrops.
+          A team sets a clear rule — do this, earn that.
+          <b>Bard keeps the record, shows the ranking, and handles claims</b>
+          so you’re not running it from a spreadsheet.
+        </p>
+        <div class="actions">
+          <a class="btn btn--solid magnetic" href="/admin.html" data-magnetic>Start a campaign</a>
+          <a class="btn btn--ghost magnetic" href="/explore.html" data-magnetic>Explore projects</a>
+        </div>
+        <p class="hero__note">Flat fees in SOL, published upfront. <b>0% of your token, ever.</b></p>
+      </div>
+      <div class="orb reveal" id="orb" aria-hidden="true">
+        <div class="orb__ring"></div>
+        <div class="orb__ring-2"></div>
+        <div class="orb__pulse"></div>
+        <div class="orb__core">
+          <img class="orb__smile" src="/transparentbardsmile.png" alt="">
+        </div>
+      </div>
+    </div>
+  </section>
+  <section class="sec" id="how">
+    <div class="wrap">
+      <div class="sec__head reveal">
+        <span class="label">Flow</span>
+        <h2>How it works</h2>
+        <p>Three steps. No spreadsheet. No private chat screenshots as proof of work.</p>
+      </div>
+      <div class="steps">
+        <article class="step reveal reveal-d1" data-tilt>
+          <div class="step__n">01</div>
+          <h3>Publish a rule</h3>
+          <p>Hold, raid, refer, or custom. Teams write what “showing up” means so holders know exactly what earns.</p>
+        </article>
+        <article class="step reveal reveal-d2" data-tilt>
+          <div class="step__n">02</div>
+          <h3>Track who shows up</h3>
+          <p>Public ranking. Hold checks can read the chain. Raids and other styles use the same shared leaderboard.</p>
+        </article>
+        <article class="step reveal reveal-d3" data-tilt>
+          <div class="step__n">03</div>
+          <h3>Settle the claim</h3>
+          <p>When someone qualifies, they claim from the dashboard. <b>A settled claim gets the smile</b><img class="mini" src="/transparentbardsmile.png" alt=""> — that’s the mark.</p>
+        </article>
+      </div>
+    </div>
+  </section>
+  <section class="sec sec--tight">
+    <div class="wrap">
+      <div class="sec__head reveal">
+        <span class="label">Campaigns</span>
+        <h2>What you can run on Bard</h2>
+        <p>Same claim flow. Different ways to define the work.</p>
+      </div>
+      <div class="grid-3">
+        <div class="tile reveal reveal-d1"><h3>Hold</h3><p>Balance and duration rules checked on-chain. Diamond hands, written down.</p></div>
+        <div class="tile reveal reveal-d2"><h3>Raid</h3><p>Social actions and checklists. Rank the people who actually push the narrative.</p></div>
+        <div class="tile reveal reveal-d3"><h3>Refer</h3><p>Invite wallets that hold. Growth with a public scoreboard, not a private sheet.</p></div>
+      </div>
+    </div>
+  </section>
+  <section class="sec">
+    <div class="wrap">
+      <div class="sec__head reveal"><span class="label">Sides</span><h2>Built for both sides</h2></div>
+      <div class="split">
+        <div class="panel reveal reveal-d1">
+          <span class="label">For teams</span>
+          <ul>
+            <li><i>1</i> Onboard a token once</li>
+            <li><i>2</i> Launch hold, raid, refer, or custom campaigns</li>
+            <li><i>3</i> Approve joins, track progress, settle claims</li>
+          </ul>
+          <a class="txt" href="/admin.html">Open team admin →</a>
+        </div>
+        <div class="panel reveal reveal-d2">
+          <span class="label">For holders</span>
+          <ul>
+            <li><i>1</i> Connect a wallet and join live campaigns</li>
+            <li><i>2</i> Climb the public ranking</li>
+            <li><i>3</i> Claim rewards from the same dashboard</li>
+          </ul>
+          <a class="txt" href="/dashboard.html">Open the dashboard →</a>
+        </div>
+      </div>
+    </div>
+  </section>
+  <section class="sec" id="fees">
+    <div class="wrap">
+      <div class="sec__head reveal">
+        <span class="label">Pricing</span>
+        <h2>Flat fees. Nothing off the top.</h2>
+        <p>Published in SOL. Never a cut of your supply.</p>
+      </div>
+      <div class="fees">
+        <div class="fee reveal reveal-d1"><div class="fee__lbl">Onboard a project</div><div class="fee__val">0.25 <span>SOL</span></div></div>
+        <div class="fee reveal reveal-d2"><div class="fee__lbl">Create a campaign</div><div class="fee__val">0.25 <span>SOL</span></div></div>
+        <div class="fee reveal reveal-d3"><div class="fee__lbl">Settle a claim</div><div class="fee__val">0.1 <span>SOL</span></div></div>
+        <div class="fee fee--zero reveal"><div class="fee__lbl">Of your token</div><div class="fee__val">0%</div></div>
+      </div>
+    </div>
+  </section>
+  <section class="sec" id="answers">
+    <div class="wrap">
+      <div class="sec__head reveal"><h2>Straight answers</h2><p>The questions teams ask in the first five minutes.</p></div>
+      <div class="qa">
+        <div class="qa__row reveal"><p class="qa__q">Do you take a percentage of my token?</p><p class="qa__a"><b>No.</b> Not at onboarding, not from the reward pool, not later. Bard is paid in SOL at the prices listed above, and nowhere else.</p></div>
+        <div class="qa__row reveal"><p class="qa__q">Do I need to hold a Bard token to use this?</p><p class="qa__a"><b>No.</b> The platform stands on its own. If a Bard token ever exists, it will be separate — using the platform will never depend on it.</p></div>
+        <div class="qa__row reveal"><p class="qa__q">Who decides who qualifies?</p><p class="qa__a"><b>The rule you publish.</b> Hold-style rules can be checked on-chain. Other campaign types use the same public leaderboard and claim flow so results aren’t hidden in a private chat.</p></div>
+        <div class="qa__row reveal"><p class="qa__q">What if a campaign flops?</p><p class="qa__a"><b>You’re out the campaign fee.</b> Claim fees only apply when rewards are actually claimed, so a campaign nobody finishes costs almost nothing.</p></div>
+        <div class="qa__row reveal"><p class="qa__q">Is any of it public?</p><p class="qa__a"><b>Rankings and settled claims are meant to be.</b> That’s the point of a shared record — the community can see what was earned without asking for a screenshot.</p></div>
+      </div>
+    </div>
+  </section>
+  <section class="seal">
+    <div class="wrap">
+      <div class="seal__lockup reveal">
+        <span class="mark__word">Bard</span>
+        <img class="mark__smile" src="/transparentbardsmile.png" alt="The Bard smile">
+      </div>
+      <h2 class="reveal">The smile sits under the name.</h2>
+      <p class="reveal">It’s the mark for a settled claim — when the work was recorded and the reward actually moved. Collect enough of them and the record speaks for itself.</p>
+      <div class="actions reveal">
+        <a class="btn btn--solid magnetic" href="/admin.html" data-magnetic>Start a campaign</a>
+        <a class="btn btn--ghost magnetic" href="/explore.html" data-magnetic>Explore projects</a>
+      </div>
+    </div>
+  </section>
+</main>
+<footer class="foot">
+  <div class="wrap foot__in">
+    <span>Bard · campaigns for Solana projects</span>
+    <span><a href="/admin.html">Teams</a> · <a href="/dashboard.html">Holders</a> · <a href="/explore.html">Explore</a></span>
+  </div>
+</footer>
+<script>
+(function(){
+  var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var touch = matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window;
+  if(touch) document.body.classList.add('is-touch');
+  var cur = document.getElementById('cursor');
+  var ring = document.getElementById('cursor-ring');
+  var mx = innerWidth/2, my = innerHeight/2, rx = mx, ry = my;
+  if(!touch && !reduce){
+    window.addEventListener('mousemove', function(e){ mx = e.clientX; my = e.clientY; cur.style.left = mx + 'px'; cur.style.top = my + 'px'; }, {passive:true});
+    window.addEventListener('mousedown', function(){ cur.classList.add('is-down'); });
+    window.addEventListener('mouseup', function(){ cur.classList.remove('is-down'); });
+    (function loop(){ rx += (mx - rx) * 0.14; ry += (my - ry) * 0.14; ring.style.left = rx + 'px'; ring.style.top = ry + 'px'; requestAnimationFrame(loop); })();
+    document.querySelectorAll('a,button,.step,.tile,.fee').forEach(function(el){
+      el.addEventListener('mouseenter', function(){ cur.classList.add('is-hot'); ring.classList.add('is-hot'); });
+      el.addEventListener('mouseleave', function(){ cur.classList.remove('is-hot'); ring.classList.remove('is-hot'); });
+    });
+  }
+  if(!touch && !reduce){
+    document.querySelectorAll('[data-magnetic]').forEach(function(btn){
+      btn.addEventListener('mousemove', function(e){
+        var r = btn.getBoundingClientRect();
+        btn.style.transform = 'translate(' + ((e.clientX - (r.left + r.width/2))*0.18) + 'px,' + ((e.clientY - (r.top + r.height/2))*0.22) + 'px)';
+      });
+      btn.addEventListener('mouseleave', function(){ btn.style.transform = ''; });
+    });
+  }
+  document.querySelectorAll('[data-tilt]').forEach(function(el){
+    el.addEventListener('mousemove', function(e){
+      var r = el.getBoundingClientRect();
+      el.style.setProperty('--mx', (e.clientX - r.left) + 'px');
+      el.style.setProperty('--my', (e.clientY - r.top) + 'px');
+    });
+  });
+  var head = document.getElementById('head');
+  var hero = document.getElementById('hero');
+  function onScroll(){ head.classList.toggle('is-scrolled', scrollY > 24); }
+  onScroll(); window.addEventListener('scroll', onScroll, {passive:true});
+  requestAnimationFrame(function(){ hero.classList.add('is-in'); });
+  if('IntersectionObserver' in window){
+    var io = new IntersectionObserver(function(entries){
+      entries.forEach(function(en){ if(en.isIntersecting){ en.target.classList.add('is-in'); io.unobserve(en.target); } });
+    }, {threshold:0.12, rootMargin:'0px 0px -6% 0px'});
+    document.querySelectorAll('.reveal').forEach(function(el){ io.observe(el); });
+  } else {
+    document.querySelectorAll('.reveal').forEach(function(el){ el.classList.add('is-in'); });
+  }
+  var canvas = document.getElementById('field');
+  var ctx = canvas.getContext('2d');
+  var W, H, dpr, particles = [], nodes = [];
+  var pointer = {x:0, y:0, active:false};
+  function resize(){
+    dpr = Math.min(devicePixelRatio || 1, 2);
+    W = innerWidth; H = innerHeight;
+    canvas.width = W * dpr; canvas.height = H * dpr;
+    canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+  }
+  resize(); window.addEventListener('resize', resize);
+  var COUNT = reduce ? 24 : (W < 700 ? 48 : 90);
+  for(var i=0;i<COUNT;i++){
+    particles.push({ x: Math.random()*W, y: Math.random()*H, vx: (Math.random()-0.5)*0.35, vy: (Math.random()-0.5)*0.35, r: Math.random()*1.6 + 0.4, a: Math.random()*0.35 + 0.1 });
+  }
+  for(var j=0;j<12;j++){
+    nodes.push({ ang: (j/12)*Math.PI*2, rad: 120 + (j%3)*40, speed: 0.0012 + (j%4)*0.0003, r: 1.5 + (j%3)*0.5 });
+  }
+  window.addEventListener('mousemove', function(e){ pointer.x = e.clientX; pointer.y = e.clientY; pointer.active = true; }, {passive:true});
+  window.addEventListener('mouseleave', function(){ pointer.active = false; });
+  function frame(t){
+    ctx.clearRect(0,0,W,H);
+    var cx = W < 960 ? W*0.5 : W*0.72, cy = W < 960 ? H*0.28 : H*0.42;
+    var g = ctx.createRadialGradient(cx, cy, 0, cx, cy, 280);
+    g.addColorStop(0, 'rgba(167,139,250,0.07)'); g.addColorStop(1, 'rgba(167,139,250,0)');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, 280, 0, Math.PI*2); ctx.fill();
+    nodes.forEach(function(n){
+      n.ang += n.speed;
+      var x = cx + Math.cos(n.ang)*n.rad, y = cy + Math.sin(n.ang)*n.rad*0.62;
+      ctx.beginPath(); ctx.fillStyle = 'rgba(167,139,250,' + (0.25 + 0.2*Math.sin(t*0.001+n.ang)) + ')';
+      ctx.arc(x, y, n.r, 0, Math.PI*2); ctx.fill();
+    });
+    for(var i=0;i<particles.length;i++){
+      var p = particles[i];
+      p.x += p.vx; p.y += p.vy;
+      if(p.x < -20) p.x = W+20; if(p.x > W+20) p.x = -20;
+      if(p.y < -20) p.y = H+20; if(p.y > H+20) p.y = -20;
+      if(pointer.active){
+        var dx = p.x - pointer.x, dy = p.y - pointer.y, d2 = dx*dx + dy*dy;
+        if(d2 < 16000){ var f = (1 - d2/16000) * 0.04; p.vx += dx * f * 0.02; p.vy += dy * f * 0.02; }
+      }
+      p.vx *= 0.995; p.vy *= 0.995;
+      p.vx += (Math.random()-0.5)*0.01; p.vy += (Math.random()-0.5)*0.01;
+      ctx.beginPath(); ctx.fillStyle = 'rgba(196,181,253,' + p.a + ')'; ctx.arc(p.x, p.y, p.r, 0, Math.PI*2); ctx.fill();
+      for(var k=i+1;k<particles.length;k++){
+        var q = particles[k], ddx = p.x-q.x, ddy = p.y-q.y, dd = ddx*ddx + ddy*ddy;
+        if(dd < 12000){
+          ctx.beginPath(); ctx.strokeStyle = 'rgba(167,139,250,' + (0.08 * (1-dd/12000)) + ')'; ctx.lineWidth = 1;
+          ctx.moveTo(p.x,p.y); ctx.lineTo(q.x,q.y); ctx.stroke();
+        }
+      }
+    }
+    requestAnimationFrame(frame);
+  }
+  if(!reduce) requestAnimationFrame(frame);
+  var soundOn = false, audioCtx = null, master = null;
+  function startSound(){
+    if(audioCtx) return;
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    master = audioCtx.createGain(); master.gain.value = 0.035; master.connect(audioCtx.destination);
+    [110, 164.81, 220].forEach(function(freq, idx){
+      var o = audioCtx.createOscillator(), g = audioCtx.createGain();
+      o.type = idx === 2 ? 'triangle' : 'sine'; o.frequency.value = freq;
+      g.gain.value = idx === 0 ? 0.4 : 0.22; o.connect(g); g.connect(master); o.start();
+    });
+    var lfo = audioCtx.createOscillator(), lfoG = audioCtx.createGain();
+    lfo.frequency.value = 0.08; lfoG.gain.value = 0.012; lfo.connect(lfoG); lfoG.connect(master.gain); lfo.start();
+  }
+  function stopSound(){ if(!audioCtx) return; try{ audioCtx.close(); }catch(e){} audioCtx = null; master = null; }
+  document.getElementById('sound-btn').addEventListener('click', function(){
+    soundOn = !soundOn;
+    this.classList.toggle('is-on', soundOn);
+    this.setAttribute('aria-pressed', soundOn ? 'true' : 'false');
+    if(soundOn) startSound(); else stopSound();
+  });
+})();
+</script>
+</body>
+</html>
