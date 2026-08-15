@@ -382,7 +382,6 @@ h1{
 <script src="https://bundle.run/buffer@6.0.3"></script>
 <script>
   (function () {
-    // bundle.run UMD: window.buffer = { Buffer, SlowBuffer, ... }
     var mod = (typeof buffer !== 'undefined') ? buffer : null;
     var B = mod && (mod.Buffer || (typeof mod.from === 'function' ? mod : null));
     if (!B || typeof B.from !== 'function') {
@@ -651,7 +650,14 @@ h1{
           '<p>Create a hold, raid, refer, or custom campaign for $' + escapeHtml(p.ticker) + '.</p>' +
           '<button class="btn btn--solid" id="empty-camp">New campaign</button>' +
         '</div>';
-      document.getElementById('empty-camp').onclick = function(){ show('new-campaign'); };
+      document.getElementById('empty-camp').onclick = function(){
+        if(!p.feePaid){
+          toast('Pay the 0.25 SOL onboard fee in Settings before creating campaigns', 'err');
+          renderProjectTabs('settings');
+          return;
+        }
+        show('new-campaign');
+      };
       return;
     }
     campsEl.innerHTML = camps.slice().reverse().map(function(c){
@@ -733,7 +739,16 @@ h1{
     }
   };
   document.getElementById('btn-new-project').onclick = function(){ show('onboard'); };
-  document.getElementById('btn-new-campaign').onclick = function(){ show('new-campaign'); };
+  document.getElementById('btn-new-campaign').onclick = function(){
+    var p = findProject(currentProjectId);
+    if(!p){ toast('Open a project first', 'err'); return; }
+    if(!p.feePaid){
+      toast('Pay the 0.25 SOL onboard fee in Settings before creating campaigns', 'err');
+      renderProjectTabs('settings');
+      return;
+    }
+    show('new-campaign');
+  };
   document.querySelectorAll('[data-go]').forEach(function(btn){
     btn.addEventListener('click', function(){
       var go = btn.getAttribute('data-go');
@@ -825,6 +840,12 @@ h1{
     var days = parseInt(document.getElementById('c-days').value, 10) || 7;
     if(!title || !rule){
       toast('Add a name and rule', 'err');
+      return;
+    }
+    if(!p.feePaid){
+      toast('Pay the 0.25 SOL onboard fee in Settings before creating campaigns', 'err');
+      show('project');
+      renderProjectTabs('settings');
       return;
     }
     if(!wallet || !provider){
