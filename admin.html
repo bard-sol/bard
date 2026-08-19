@@ -40,7 +40,15 @@ h1{margin:0 0 10px;font-size:clamp(1.7rem,3.5vw,2.3rem);line-height:1.15;font-va
 .builder-sec{border:1px solid var(--line);border-radius:var(--r);padding:16px 16px 14px;background:rgba(38,41,48,.45)}.builder-sec+.builder-sec{margin-top:4px}.builder-sec__title{font-size:.78rem;letter-spacing:.06em;text-transform:uppercase;color:var(--purple);font-variation-settings:"wght" 650;margin:0 0 12px}
 .choice-row{display:flex;flex-wrap:wrap;gap:8px}.choice{flex:1;min-width:110px;text-align:left;border:1px solid var(--line-strong);background:var(--surface-2);border-radius:9px;padding:10px 12px;cursor:pointer;transition:border-color .15s,background .15s}.choice:hover{border-color:var(--purple-line)}.choice.is-on{border-color:var(--purple-line);background:var(--purple-soft)}.choice strong{display:block;font-size:.88rem;font-variation-settings:"wght" 620;margin-bottom:2px}.choice span{display:block;font-size:.74rem;color:var(--muted);line-height:1.35}
 .builder-preview{border:1px dashed var(--purple-line);border-radius:var(--r);padding:14px 16px;background:var(--purple-soft);font-size:.9rem;color:var(--body)}.builder-preview b{color:var(--text);font-variation-settings:"wght" 620;font-weight:normal}
-.mod-block{display:none}.mod-block.is-on{display:block}.meta-row{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.vault-badge{display:flex;gap:14px;align-items:flex-start;border:1px solid rgba(74,222,128,.38);background:rgba(74,222,128,.08);border-radius:12px;padding:16px 18px;margin-bottom:14px}
+.vault-badge__mark{width:36px;height:36px;border-radius:10px;background:rgba(74,222,128,.16);display:grid;place-items:center;flex:none}
+.vault-badge__mark img{width:22px;height:14px;object-fit:contain}
+.vault-badge strong{display:block;font-variation-settings:"wght" 640;margin-bottom:4px}
+.vault-badge p{margin:0;font-size:.88rem;color:var(--body)}
+.vault-steps{margin:0;padding-left:18px;color:var(--body);font-size:.92rem}
+.vault-steps li{margin:6px 0}
+.copy-row{display:flex;gap:8px;align-items:center}
+.copy-row .inp{flex:1}
 </style>
 </head>
 <body>
@@ -83,8 +91,8 @@ h1{margin:0 0 10px;font-size:clamp(1.7rem,3.5vw,2.3rem);line-height:1.15;font-va
 <p class="kicker" id="proj-kicker">Project</p><h1 id="proj-title">—</h1><p class="lead" id="proj-meta" style="margin-bottom:0">—</p>
 </div><button class="btn btn--solid" id="btn-new-campaign">New campaign</button></div>
 <div class="gap"></div>
-<div class="tabs" role="tablist"><button class="tab is-on" data-tab="campaigns">Campaigns</button><button class="tab" data-tab="settings">Settings</button></div>
-<div id="proj-campaigns"></div><div id="proj-settings" style="display:none"></div>
+<div class="tabs" role="tablist"><button class="tab is-on" data-tab="campaigns">Campaigns</button><button class="tab" data-tab="vault">Vault</button><button class="tab" data-tab="settings">Settings</button></div>
+<div id="proj-campaigns"></div><div id="proj-vault" style="display:none"></div><div id="proj-settings" style="display:none"></div>
 </section>
 <section class="page" id="page-new-campaign">
 <button class="back" id="back-from-campaign">← Back to project</button>
@@ -118,6 +126,12 @@ h1{margin:0 0 10px;font-size:clamp(1.7rem,3.5vw,2.3rem);line-height:1.15;font-va
 </div><input type="hidden" id="c-reward-mode" value="fixed">
 <div class="grid-2" style="margin-top:12px"><div class="field"><label for="c-reward" id="c-reward-label">Reward amount</label><input class="inp" id="c-reward" placeholder="0.5"></div><div class="field"><label for="c-unit">Unit</label><select class="sel" id="c-unit"><option value="SOL">SOL</option><option value="TOKEN">Project token</option></select></div></div>
 <div class="grid-2" style="margin-top:12px"><div class="field"><label for="c-pool" id="c-pool-label">Total pool</label><input class="inp" id="c-pool" placeholder="12"></div><div class="field"><label for="c-days">Length (days)</label><input class="inp" id="c-days" type="number" min="1" max="365" value="7"></div></div>
+<div class="field" style="margin-top:12px">
+<label class="choice" style="display:flex;align-items:flex-start;gap:10px;min-width:0">
+<input type="checkbox" id="c-lock-vault" style="margin-top:4px;width:auto">
+<span><strong>Lock this prize in the vault</strong><span>Reserve project tokens from the 2-of-2. Holders see the lock badge.</span></span>
+</label>
+</div>
 <div class="field mod-block" id="mod-top3" style="margin-top:12px"><label for="c-top3">Top 3 split</label><input class="inp" id="c-top3" placeholder="50 / 30 / 20"></div>
 </div>
 <div class="builder-preview"><b>Summary:</b> <span id="camp-preview-text">Open · Fixed · 7 days</span></div>
@@ -132,8 +146,24 @@ h1{margin:0 0 10px;font-size:clamp(1.7rem,3.5vw,2.3rem);line-height:1.15;font-va
 </div><button class="btn btn--ghost btn--sm" id="btn-end-campaign">End campaign</button></div>
 <div class="gap"></div>
 <div class="grid-2" style="margin-bottom:18px"><div class="stat"><div class="stat__lbl">Pool</div><div class="stat__val num" id="camp-pool">—</div></div><div class="stat"><div class="stat__lbl">Claims settled</div><div class="stat__val p num" id="camp-claims">0</div></div></div>
-<div class="card"><div class="row row--between" style="margin-bottom:12px"><strong style="font-variation-settings:'wght' 620">Leaderboard</strong><span class="muted" style="font-size:.82rem">Demo until real joins</span></div>
-<div style="overflow-x:auto"><table class="table"><thead><tr><th>#</th><th>Wallet</th><th>Progress</th><th>Status</th></tr></thead><tbody id="camp-lb"></tbody></table></div></div>
+<div id="camp-vault-badge"></div>
+<div class="card" style="margin-bottom:12px">
+  <div class="row row--between" style="margin-bottom:12px">
+    <strong style="font-variation-settings:'wght' 620">Holders</strong>
+    <span class="muted" style="font-size:.82rem" id="camp-joins-meta">Approve · +1 · Qualify</span>
+  </div>
+  <div style="overflow-x:auto"><table class="table"><thead><tr><th>Wallet</th><th>X</th><th>Progress</th><th>Status</th><th></th></tr></thead><tbody id="camp-lb"></tbody></table></div>
+</div>
+<div class="card" id="camp-settle-card">
+  <div class="row row--between" style="margin-bottom:10px;gap:10px">
+    <div>
+      <strong style="font-variation-settings:'wght' 620">Settle from vault</strong>
+      <p class="muted" style="margin:4px 0 0;font-size:.86rem">Bard proposes the batch. You co-sign once. Then record the Squads tx.</p>
+    </div>
+    <button class="btn btn--solid btn--sm" type="button" id="btn-propose-settle">Propose payout</button>
+  </div>
+  <div id="camp-settle"></div>
+</div>
 </section>
 </div></main>
 <div class="toast" id="toast" role="status"></div>

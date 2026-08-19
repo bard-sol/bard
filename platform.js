@@ -72,11 +72,104 @@
   }
   function saveLocalHolder(h) { localStorage.setItem(HOLDER_KEY, JSON.stringify(h)); }
 
+  /** Bard's member of every Phase-1 Squads 2-of-2. Same key as fee treasury for now. */
+  function getVaultBardMember() { return FEE_TREASURY; }
+
+  function parseTweetId(url) {
+    if (!url) return null;
+    var m = String(url).match(/(?:status|statuses)\/(\d{2,30})/i);
+    if (m) return m[1];
+    if (/^\d{2,30}$/.test(String(url).trim())) return String(url).trim();
+    return null;
+  }
+  function xIntentUrls(postUrl, quoteText) {
+    var id = parseTweetId(postUrl);
+    if (!id) return null;
+    var tweetUrl = 'https://x.com/i/status/' + id;
+    var quote = quoteText ? String(quoteText) : '';
+    return {
+      tweetId: id,
+      tweetUrl: tweetUrl,
+      like: 'https://x.com/intent/like?tweet_id=' + encodeURIComponent(id),
+      rt: 'https://x.com/intent/retweet?tweet_id=' + encodeURIComponent(id),
+      quote: 'https://x.com/intent/post?url=' + encodeURIComponent(tweetUrl) + (quote ? '&text=' + encodeURIComponent(quote) : '')
+    };
+  }
+
+  function isBase58Addr(s) {
+    return typeof s === 'string' && s.length >= 32 && s.length <= 44 && /^[1-9A-HJ-NP-Za-km-z]+$/.test(s);
+  }
+
+  async function fetchVaultOnchain(address, mint) {
+    if (!isBase58Addr(address)) throw new Error('Invalid vault address');
+    if (!global.solanaWeb3) throw new Error('Solana web3 not loaded');
+    var Connection = global.solanaWeb3.Connection;
+    var PublicKey = global.solanaWeb3.PublicKey;
+    var conn = new Connection(RPC, 'confirmed');
+    var owner = new PublicKey(address);
+    var TOKEN_PROGRAM = new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
+    var uiAmount = 0;
+    var raw = '0';
+    var decimals = 0;
+    var source = 'empty';
+    try {
+      var info = await conn.getParsedAccountInfo(owner, 'confirmed');
+      var parsed = info && info.value && info.value.data && info.value.data.parsed;
+      if (parsed && parsed.type === 'account' && parsed.info && parsed.info.tokenAmount) {
+        uiAmount = Number(parsed.info.tokenAmount.uiAmount || 0);
+        raw = String(parsed.info.tokenAmount.amount || '0');
+        decimals = parsed.info.tokenAmount.decimals || 0;
+        source = 'token-account';
+        return { address: address, mint: parsed.info.mint || mint || null, uiAmount: uiAmount, raw: raw, decimals: decimals, source: source, solscan: 'https://solscan.io/account/' + address };
+      }
+    } catch (e) {}
+    var filter = mint && isBase58Addr(mint) ? { mint: new PublicKey(mint) } : { programId: TOKEN_PROGRAM };
+    try {
+      var accs = await conn.getParsedTokenAccountsByOwner(owner, filter, 'confirmed');
+      (accs.value || []).forEach(function (a) {
+        var ta = a.account.data.parsed && a.account.data.parsed.info && a.account.data.parsed.info.tokenAmount;
+        if (!ta) return;
+        uiAmount += Number(ta.uiAmount || 0);
+        raw = String(Number(raw) + Number(ta.amount || 0));
+        decimals = ta.decimals || decimals;
+        source = 'owner-atas';
+      });
+    } catch (e2) {}
+    if (uiAmount === 0 && (!mint || mint === 'SOL')) {
+      try {
+        var lamports = await conn.getBalance(owner, 'confirmed');
+        uiAmount = lamports / 1e9;
+        raw = String(lamports);
+        decimals = 9;
+        source = 'sol';
+      } catch (e3) {}
+    }
+    return { address: address, mint: mint || null, uiAmount: uiAmount, raw: String(raw), decimals: decimals, source: source, solscan: 'https://solscan.io/account/' + address };
+  }
+
+
   function mapProjectRow(r, campaigns) {
-    return { id: r.id, name: r.name, ticker: r.ticker, mint: r.mint, admin: r.admin_wallet || '', chain: r.chain || 'solana', feePaid: !!r.fee_paid, feeTx: r.fee_tx || null, createdAt: r.created_at, campaigns: campaigns || [] };
+    return {
+      id: r.id, name: r.name, ticker: r.ticker, mint: r.mint, admin: r.admin_wallet || '', chain: r.chain || 'solana',
+      feePaid: !!r.fee_paid, feeTx: r.fee_tx || null, createdAt: r.created_at, campaigns: campaigns || [],
+      vaultAddress: r.vault_address || r.vaultAddress || '',
+      vaultMint: r.vault_mint || r.vaultMint || r.mint || '',
+      vaultReserved: Number(r.vault_reserved != null ? r.vault_reserved : (r.vaultReserved || 0)),
+      vaultStatus: r.vault_status || r.vaultStatus || 'none',
+      vaultLinkedAt: r.vault_linked_at || r.vaultLinkedAt || null
+    };
   }
   function mapCampaignRow(c) {
-    return { id: c.id, title: c.title, type: c.type, rule: c.rule_text || '', reward: c.reward || '', unit: c.reward_unit || 'SOL', pool: c.pool_size || '', days: c.duration_days || 7, status: c.status || 'active', settled: c.settled_count || 0, feePaid: !!c.fee_paid, feeTx: c.fee_tx || null, createdAt: c.created_at, accessMode: c.access_mode || 'open', raidMode: c.raid_mode || null, rewardMode: c.reward_mode || 'fixed', postUrl: c.post_url || '', targets: c.targets || '', bonusHandle: c.bonus_handle || '', config: c.config || {} };
+    var camp = {
+      id: c.id, title: c.title, type: c.type, rule: c.rule_text || '', reward: c.reward || '',
+      unit: c.reward_unit || 'SOL', pool: c.pool_size || '', days: c.duration_days || 7,
+      status: c.status || 'active', settled: c.settled_count || 0, feePaid: !!c.fee_paid, feeTx: c.fee_tx || null,
+      createdAt: c.created_at, accessMode: c.access_mode || 'open', raidMode: c.raid_mode || null,
+      rewardMode: c.reward_mode || 'fixed', postUrl: c.post_url || '', targets: c.targets || '',
+      bonusHandle: c.bonus_handle || '', config: c.config || {},
+      vaultReserved: Number(c.vault_reserved || 0)
+    };
+    return camp;
   }
   function mapJoinRow(j) {
     return { id: j.id, project_id: j.project_id, campaign_id: j.campaign_id, wallet: j.wallet, x_handle: j.x_handle || null, qualified: !!j.qualified, qualified_at: j.qualified_at || null, joined_at: j.joined_at, status: j.status || 'approved', progress: j.progress || 0, note: j.note || null };
@@ -143,6 +236,208 @@
     p.campaigns = p.campaigns || []; p.campaigns.push(camp); saveLocalTeam(state); return camp;
   }
 
+  async function updateProjectVault(projectId, input) {
+    await init();
+    var addr = (input && input.address) ? String(input.address).trim() : '';
+    if (addr && !isBase58Addr(addr)) throw new Error('Vault address looks invalid');
+    var mint = (input && input.mint) ? String(input.mint).trim() : null;
+    var status = addr ? 'linked' : 'none';
+    var payload = {
+      vault_address: addr || null,
+      vault_mint: mint || null,
+      vault_status: status,
+      vault_linked_at: addr ? new Date().toISOString() : null
+    };
+    if (mode === 'supabase' && sb) {
+      var res = await sb.from('projects').update(payload).eq('id', projectId).select('*').single();
+      if (res.error) throw res.error;
+      return mapProjectRow(res.data, []);
+    }
+    var state = localTeam();
+    var p = state.projects.find(function (x) { return x.id === projectId; });
+    if (!p) throw new Error('Project not found');
+    p.vaultAddress = addr;
+    p.vaultMint = mint || p.mint;
+    p.vaultStatus = status;
+    p.vaultLinkedAt = payload.vault_linked_at;
+    saveLocalTeam(state);
+    return p;
+  }
+
+  async function reserveVault(projectId, campaignId, amount) {
+    await init();
+    var n = Number(amount);
+    if (!(n > 0)) throw new Error('Reserve amount must be greater than 0');
+    if (mode === 'supabase' && sb) {
+      var proj = await sb.from('projects').select('*').eq('id', projectId).maybeSingle();
+      if (proj.error) throw proj.error;
+      if (!proj.data) throw new Error('Project not found');
+      if (!proj.data.vault_address) throw new Error('Link a vault first');
+      var current = Number(proj.data.vault_reserved || 0);
+      var next = current + n;
+      var up = await sb.from('projects').update({ vault_reserved: next }).eq('id', projectId).select('*').single();
+      if (up.error) throw up.error;
+      if (campaignId) {
+        await sb.from('campaigns').update({ vault_reserved: n }).eq('id', campaignId);
+        await sb.from('vault_reservations').insert({
+          project_id: projectId, campaign_id: campaignId, amount: n, status: 'reserved'
+        });
+      }
+      return { reserved: next, added: n };
+    }
+    var state = localTeam();
+    var p = state.projects.find(function (x) { return x.id === projectId; });
+    if (!p) throw new Error('Project not found');
+    if (!p.vaultAddress) throw new Error('Link a vault first');
+    p.vaultReserved = Number(p.vaultReserved || 0) + n;
+    (p.campaigns || []).forEach(function (c) { if (c.id === campaignId) c.vaultReserved = n; });
+    saveLocalTeam(state);
+    return { reserved: p.vaultReserved, added: n };
+  }
+
+  function roundAmt(n) {
+    return Math.round(Number(n) * 1e6) / 1e6;
+  }
+
+  function payoutHash(payouts) {
+    var s = (payouts || []).map(function (x) { return String(x.wallet) + ':' + String(x.amount); }).join('|');
+    var h = 0;
+    for (var i = 0; i < s.length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0;
+    return 'b' + (h >>> 0).toString(16);
+  }
+
+  function computePayouts(campaign, joins) {
+    var rows = (joins || []).filter(function (j) {
+      if (j.status === 'rejected') return false;
+      return !!(j.qualified || (j.status === 'approved' && (j.progress || 0) > 0));
+    }).slice().sort(function (a, b) {
+      if (!!b.qualified !== !!a.qualified) return b.qualified ? 1 : -1;
+      return (b.progress || 0) - (a.progress || 0);
+    });
+    if (!rows.length) throw new Error('No qualified or scored holders to pay');
+    var mode = campaign.rewardMode || campaign.reward_mode || 'fixed';
+    var unit = campaign.unit || 'TOKEN';
+    var pool = Number(campaign.vaultReserved || campaign.pool || campaign.reward || 0);
+    var fixed = Number(campaign.reward || 0);
+    var payouts = [];
+    if (mode === 'fixed') {
+      var each = fixed > 0 ? fixed : (pool > 0 ? roundAmt(pool / rows.length) : 0);
+      if (!(each > 0)) throw new Error('Set a reward amount or pool first');
+      payouts = rows.map(function (j) { return { wallet: j.wallet, amount: each, progress: j.progress || 0 }; });
+    } else if (mode === 'top3' || mode === 'topn') {
+      var top = rows.slice(0, 3);
+      var parts = [0.5, 0.3, 0.2];
+      if (!(pool > 0)) throw new Error('Top N needs a pool size');
+      payouts = top.map(function (j, i) { return { wallet: j.wallet, amount: roundAmt(pool * (parts[i] || 0)), progress: j.progress || 0 }; });
+    } else if (mode === 'growing') {
+      if (!(pool > 0)) throw new Error('Growing pool needs a reserved amount');
+      payouts = [{ wallet: rows[0].wallet, amount: pool, progress: rows[0].progress || 0 }];
+    } else {
+      if (!(pool > 0)) throw new Error('Shared pool needs a pool size');
+      var slice = roundAmt(pool / rows.length);
+      payouts = rows.map(function (j) { return { wallet: j.wallet, amount: slice, progress: j.progress || 0 }; });
+    }
+    payouts = payouts.filter(function (x) { return x.amount > 0 && x.wallet; });
+    var total = roundAmt(payouts.reduce(function (s, x) { return s + Number(x.amount); }, 0));
+    return { payouts: payouts, total: total, unit: unit, hash: payoutHash(payouts) };
+  }
+
+  async function proposeSettlement(projectId, campaignId, campaign, joins) {
+    await init();
+    var built = computePayouts(campaign, joins);
+    var row = {
+      project_id: projectId,
+      campaign_id: campaignId,
+      payouts: built.payouts,
+      total: built.total,
+      unit: built.unit,
+      payout_hash: built.hash,
+      status: 'proposed'
+    };
+    if (mode === 'supabase' && sb) {
+      var res = await sb.from('vault_settlements').insert(row).select('*').single();
+      if (res.error) throw res.error;
+      return res.data;
+    }
+    row.id = 'set_' + Date.now();
+    row.proposed_at = new Date().toISOString();
+    var state = localTeam();
+    state.settlements = state.settlements || [];
+    state.settlements.push(row);
+    saveLocalTeam(state);
+    return row;
+  }
+
+  async function listSettlements(campaignId) {
+    await init();
+    if (mode === 'supabase' && sb) {
+      var res = await sb.from('vault_settlements').select('*').eq('campaign_id', campaignId).order('proposed_at', { ascending: false });
+      if (res.error) throw res.error;
+      return res.data || [];
+    }
+    return (localTeam().settlements || []).filter(function (s) { return s.campaign_id === campaignId; });
+  }
+
+  async function cosignSettlement(settlementId, wallet, sig) {
+    await init();
+    var payload = {
+      status: 'cosigned',
+      cosigned_wallet: wallet,
+      cosigned_at: new Date().toISOString(),
+      cosign_sig: sig || null
+    };
+    if (mode === 'supabase' && sb) {
+      var res = await sb.from('vault_settlements').update(payload).eq('id', settlementId).select('*').single();
+      if (res.error) throw res.error;
+      return res.data;
+    }
+    var state = localTeam();
+    (state.settlements || []).forEach(function (s) { if (s.id === settlementId) Object.assign(s, payload); });
+    saveLocalTeam(state);
+    return Object.assign({ id: settlementId }, payload);
+  }
+
+  async function executeSettlement(settlementId, txSignature, projectId) {
+    await init();
+    var payload = {
+      status: 'executed',
+      tx_signature: txSignature || null,
+      executed_at: new Date().toISOString()
+    };
+    if (mode === 'supabase' && sb) {
+      var res = await sb.from('vault_settlements').update(payload).eq('id', settlementId).select('*').single();
+      if (res.error) throw res.error;
+      var s = res.data;
+      if (s && s.campaign_id && Array.isArray(s.payouts)) {
+        for (var i = 0; i < s.payouts.length; i++) {
+          var w = s.payouts[i];
+          try {
+            await sb.from('campaign_joins').update({ qualified: true, qualified_at: new Date().toISOString() })
+              .eq('campaign_id', s.campaign_id).eq('wallet', w.wallet);
+            await sb.from('platform_claims').upsert({
+              project_id: s.project_id, campaign_id: s.campaign_id, wallet: w.wallet,
+              amount: String(w.amount), unit: s.unit, settled: true, settled_at: new Date().toISOString(),
+              fee_paid: !FEES_ENABLED, fee_amount_sol: FEES.claim
+            }, { onConflict: 'campaign_id,wallet' });
+          } catch (e) { console.warn('[Bard] settle winner', e); }
+        }
+        try {
+          await sb.from('vault_reservations').update({ status: 'settled' }).eq('campaign_id', s.campaign_id).eq('status', 'reserved');
+          if (projectId && s.total) {
+            var proj = await sb.from('projects').select('vault_reserved').eq('id', projectId).maybeSingle();
+            var cur = Number((proj.data && proj.data.vault_reserved) || 0);
+            await sb.from('projects').update({ vault_reserved: Math.max(0, cur - Number(s.total)) }).eq('id', projectId);
+          }
+        } catch (e2) { console.warn('[Bard] release reserve', e2); }
+      }
+      return s;
+    }
+    var state = localTeam();
+    (state.settlements || []).forEach(function (x) { if (x.id === settlementId) Object.assign(x, payload); });
+    saveLocalTeam(state);
+    return Object.assign({ id: settlementId }, payload);
+  }
+
   async function updateCampaignStatus(campaignId, status) {
     await init();
     if (mode === 'supabase' && sb) {
@@ -156,7 +451,12 @@
 
   async function listLiveCampaigns() {
     var projects = await listProjects(); var out = [];
-    projects.forEach(function (p) { (p.campaigns || []).forEach(function (c) { if (c.status === 'active') out.push({ projectId: p.id, projectName: p.name, ticker: p.ticker, mint: p.mint, campaign: c }); }); });
+    projects.forEach(function (p) { (p.campaigns || []).forEach(function (c) {
+      if (c.status === 'active') out.push({
+        projectId: p.id, projectName: p.name, ticker: p.ticker, mint: p.mint, campaign: c,
+        vault: { address: p.vaultAddress || '', status: p.vaultStatus || 'none', reserved: p.vaultReserved || 0, mint: p.vaultMint || p.mint }
+      });
+    }); });
     out.sort(function (a, b) { return String(b.campaign.createdAt || '').localeCompare(String(a.campaign.createdAt || '')); });
     return out;
   }
@@ -385,6 +685,16 @@
     listJoinsForCampaign: listJoinsForCampaign, setJoinStatus: setJoinStatus, setJoinProgress: setJoinProgress,
     markQualified: markQualified, settleClaim: settleClaim,
     listJoinsForWallet: listJoinsForWallet, listClaimsForWallet: listClaimsForWallet,
-    localHolder: localHolder, saveLocalHolder: saveLocalHolder
+    localHolder: localHolder, saveLocalHolder: saveLocalHolder,
+    parseTweetId: parseTweetId, xIntentUrls: xIntentUrls,
+    getVaultBardMember: getVaultBardMember,
+    fetchVaultOnchain: fetchVaultOnchain,
+    updateProjectVault: updateProjectVault,
+    reserveVault: reserveVault,
+    computePayouts: computePayouts,
+    proposeSettlement: proposeSettlement,
+    listSettlements: listSettlements,
+    cosignSettlement: cosignSettlement,
+    executeSettlement: executeSettlement
   };
 })(typeof window !== 'undefined' ? window : globalThis);

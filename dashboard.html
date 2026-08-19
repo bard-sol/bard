@@ -188,6 +188,10 @@ h1{
 .toast.is-on{opacity:1;transform:none}
 .toast.ok{border-color:rgba(74,222,128,.35);color:var(--green)}
 .toast.err{border-color:rgba(248,113,113,.35);color:#f87171}
+.vault-badge{display:flex;gap:12px;align-items:flex-start;border:1px solid rgba(74,222,128,.38);background:rgba(74,222,128,.08);border-radius:12px;padding:14px 16px;margin-bottom:14px}
+.vault-badge img{width:22px;height:14px;object-fit:contain;margin-top:3px}
+.vault-badge strong{display:block;font-variation-settings:"wght" 640;margin-bottom:2px}
+.vault-badge p{margin:0;font-size:.86rem;color:var(--body)}
 
 .connect{
   min-height:100vh;display:flex;align-items:center;justify-content:center;
@@ -331,6 +335,7 @@ h1{
           <div class="stat"><div class="stat__lbl">Reward</div><div class="stat__val num" id="detail-reward">—</div></div>
           <div class="stat"><div class="stat__lbl">Your status</div><div class="stat__val" id="detail-you">—</div></div>
         </div>
+        <div id="detail-vault"></div>
         <div class="card" style="margin-bottom:12px">
           <div class="item" style="justify-content:space-between;gap:12px;flex-wrap:wrap">
             <div>
@@ -793,6 +798,23 @@ h1{
     xneed.style.display = xRequired ? '' : 'none';
     document.getElementById('detail-meta').textContent = c.type + (c.days ? ' · ' + c.days + ' days' : '');
     document.getElementById('detail-reward').textContent = (c.reward || '—') + (c.unit ? ' ' + c.unit : '');
+    var vbox = document.getElementById('detail-vault');
+    var v = match.vault || {};
+    if (vbox) {
+      if (v.address) {
+        vbox.innerHTML =
+          '<div class="vault-badge">' +
+            '<img src="/transparentbardsmile.png" alt="">' +
+            '<div><strong>Locked in 2-of-2 vault — no single party can withdraw.</strong>' +
+            '<p>Rewards for this campaign sit in a Squads vault. <a href="https://solscan.io/account/' +
+            encodeURIComponent(v.address) + '" target="_blank" rel="noopener" style="color:var(--purple)">Verify on Solscan</a>.</p></div></div>';
+        if (settled) {
+          vbox.innerHTML += '<p class="muted" style="margin-top:-6px;margin-bottom:14px;font-size:.82rem">Payout recorded from the vault.</p>';
+        }
+      } else {
+        vbox.innerHTML = '';
+      }
+    }
 
     var you = 'Not joined';
     if(settled) you = 'Claimed';
