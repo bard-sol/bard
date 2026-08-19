@@ -175,7 +175,10 @@
       createdAt: c.created_at, accessMode: c.access_mode || 'open', raidMode: c.raid_mode || null,
       rewardMode: c.reward_mode || 'fixed', postUrl: c.post_url || '', targets: c.targets || '',
       bonusHandle: c.bonus_handle || '', config: c.config || {},
-      vaultReserved: Number(c.vault_reserved || 0)
+      vaultReserved: Number(c.vault_reserved || 0),
+      drawSeed: c.draw_seed || c.drawSeed || null,
+      drawAt: c.draw_at || c.drawAt || null,
+      drawWinners: c.draw_winners || c.drawWinners || null
     };
     return camp;
   }
@@ -657,12 +660,19 @@
 
   async function joinCampaign(projectId, campaignId, wallet, xHandle) {
     await init();
+    var rosterRole = null;
     if (mode === 'supabase' && sb) {
+      try {
+        var rr = await sb.from('project_roster').select('role').eq('project_id', projectId).eq('wallet', wallet).maybeSingle();
+        if (rr.data) rosterRole = rr.data.role;
+      } catch (e) {}
+      if (rosterRole === 'blocked') throw new Error('This wallet is blocked from this project');
       var campRes = await sb.from('campaigns').select('id, access_mode, type').eq('id', campaignId).maybeSingle();
       if (campRes.error) throw campRes.error;
       if (!campRes.data) throw new Error('Campaign not found');
       var needsApproval = (campRes.data.access_mode || 'open') === 'approval';
-      var joinStatus = needsApproval ? 'pending' : 'approved';
+      var auto = rosterRole === 'trusted' || rosterRole === 'whale';
+      var joinStatus = auto ? 'approved' : (needsApproval ? 'pending' : 'approved');
       var res = await sb.from('campaign_joins').upsert({ project_id: projectId, campaign_id: campaignId, wallet: wallet, x_handle: xHandle || null, qualified: false, joined_at: new Date().toISOString(), status: joinStatus, progress: 0 }, { onConflict: 'campaign_id,wallet' }).select('*').single();
       if (res.error) throw res.error; return mapJoinRow(res.data);
     }
@@ -729,6 +739,112 @@
     saveLocalHolder(h); return h.claims[key];
   }
 
+  function mapRosterRow(r) {
+    return { id: r.id, projectId: r.project_id, wallet: r.wallet, role: r.role, note: r.note || '', createdAt: r.created_at };
+  }
+
+  async function listRoster(projectId) {
+    await init();
+    if (mode === 'supabase' && sb) {
+      var res = await sb.from('project_roster').select('*').eq('project_id', projectId).order('created_at', { ascending: false });
+      if (res.error) throw res.error;
+      return (res.data || []).map(mapRosterRow);
+    }
+    var p = (localTeam().projects || []).find(function (x) { return x.id === projectId; });
+    return (p && p.roster) || [];
+  }
+
+  async function upsertRoster(projectId, wallet, role, note) {
+    await init();
+    if (!wallet) throw new Error('Wallet required');
+    if (['trusted', 'whale', 'blocked'].indexOf(role) < 0) throw new Error('Role must be trusted, whale, or blocked');
+    if (mode === 'supabase' && sb) {
+      var res = await sb.from('project_roster').upsert({
+        project_id: projectId, wallet: wallet, role: role, note: note || null
+      }, { onConflict: 'project_id,wallet' }).select('*').single();
+      if (res.error) throw res.error;
+      return mapRosterRow(res.data);
+    }
+    var state = localTeam();
+    var p = state.projects.find(function (x) { return x.id === projectId; });
+    if (!p) throw new Error('Project not found');
+    p.roster = (p.roster || []).filter(function (r) { return r.wallet !== wallet; });
+    p.roster.unshift({ projectId: projectId, wallet: wallet, role: role, note: note || '', createdAt: new Date().toISOString() });
+    saveLocalTeam(state);
+    return p.roster[0];
+  }
+
+  async function removeRoster(projectId, wallet) {
+    await init();
+    if (mode === 'supabase' && sb) {
+      var res = await sb.from('project_roster').delete().eq('project_id', projectId).eq('wallet', wallet);
+      if (res.error) throw res.error;
+      return true;
+    }
+    var state = localTeam();
+    var p = state.projects.find(function (x) { return x.id === projectId; });
+    if (p) p.roster = (p.roster || []).filter(function (r) { return r.wallet !== wallet; });
+    saveLocalTeam(state);
+    return true;
+  }
+
+  function mulberry32(a) {
+    return function () {
+      a |= 0; a = a + 0x6D2B79F5 | 0;
+      var t = Math.imul(a ^ a >>> 15, 1 | a);
+      t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+      return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+  }
+  function seedToInt(s) {
+    var h = 2166136261;
+    s = String(s || '');
+    for (var i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619);
+    return h >>> 0;
+  }
+  function shuffleSeeded(list, seed) {
+    var rng = mulberry32(seedToInt(seed));
+    var a = list.slice();
+    for (var i = a.length - 1; i > 0; i--) {
+      var j = Math.floor(rng() * (i + 1));
+      var t = a[i]; a[i] = a[j]; a[j] = t;
+    }
+    return a;
+  }
+
+  async function drawAirdrop(campaignId, topN) {
+    await init();
+    var joins = await listJoinsForCampaign(campaignId);
+    var pool = joins.filter(function (j) { return j.status !== 'rejected' && (j.qualified || j.status === 'approved'); });
+    if (!pool.length) throw new Error('No eligible holders to draw');
+    var entropy = String(Date.now());
+    try {
+      if (global.solanaWeb3) {
+        var conn = new global.solanaWeb3.Connection(RPC, 'confirmed');
+        var bh = await conn.getLatestBlockhash('finalized');
+        if (bh && bh.blockhash) entropy = bh.blockhash;
+      }
+    } catch (e) {}
+    var seed = String(campaignId) + '::' + entropy;
+    var shuffled = shuffleSeeded(pool.map(function (j) { return { wallet: j.wallet, x_handle: j.x_handle, progress: j.progress || 0 }; }), seed);
+    var n = Math.max(1, parseInt(topN, 10) || shuffled.length);
+    var winners = shuffled.slice(0, n);
+    var payload = { draw_seed: seed, draw_at: new Date().toISOString(), draw_winners: winners };
+    if (mode === 'supabase' && sb) {
+      var res = await sb.from('campaigns').update(payload).eq('id', campaignId).select('*').single();
+      if (res.error) throw res.error;
+      return mapCampaignRow(res.data);
+    }
+    var state = localTeam();
+    state.projects.forEach(function (p) {
+      (p.campaigns || []).forEach(function (c) {
+        if (c.id === campaignId) { c.drawSeed = seed; c.drawAt = payload.draw_at; c.drawWinners = winners; }
+      });
+    });
+    saveLocalTeam(state);
+    return { id: campaignId, drawSeed: seed, drawAt: payload.draw_at, drawWinners: winners };
+  }
+
   async function listJoinsForWallet(wallet) {
     await init();
     if (mode === 'supabase' && sb && wallet) {
@@ -773,6 +889,8 @@
     recordFee: recordFee, payFee: payFee, markFeeConfirmed: markFeeConfirmed,
     upsertHolder: upsertHolder, joinCampaign: joinCampaign,
     listJoinsForCampaign: listJoinsForCampaign, setJoinStatus: setJoinStatus, setJoinProgress: setJoinProgress,
+    listRoster: listRoster, upsertRoster: upsertRoster, removeRoster: removeRoster,
+    drawAirdrop: drawAirdrop,
     markQualified: markQualified, settleClaim: settleClaim,
     listJoinsForWallet: listJoinsForWallet, listClaimsForWallet: listClaimsForWallet,
     localHolder: localHolder, saveLocalHolder: saveLocalHolder,

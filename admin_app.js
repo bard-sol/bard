@@ -131,7 +131,45 @@ async function renderVaultPanel(p){
     document.getElementById('vault-bal-meta').textContent='Create the vault to read the on-chain balance.';
   }
 }
-function renderProjectTabs(tab){var p=findProject(currentProjectId);if(!p)return;document.querySelectorAll('#page-project .tab').forEach(function(t){t.classList.toggle('is-on',t.getAttribute('data-tab')===tab);});var campsEl=document.getElementById('proj-campaigns');var setEl=document.getElementById('proj-settings');var vaultEl=document.getElementById('proj-vault');if(tab==='vault'){campsEl.style.display='none';setEl.style.display='none';vaultEl.style.display='block';renderVaultPanel(p);return;}if(tab==='settings'){campsEl.style.display='none';if(vaultEl)vaultEl.style.display='none';setEl.style.display='block';var feesOn=BardPlatform.feesEnabled&&BardPlatform.feesEnabled();var feeStatus=!feesOn?'<span class="pill pill--paid">waived (testing)</span>':(p.feePaid?'<span class="pill pill--paid">paid</span>':'<span class="pill pill--pending">pending</span>');setEl.innerHTML='<div class="card"><div class="form"><div class="field"><label>Name</label><div>'+escapeHtml(p.name)+'</div></div><div class="field"><label>Ticker</label><div>$'+escapeHtml(p.ticker)+'</div></div><div class="field"><label>Mint</label><div class="num" style="word-break:break-all">'+escapeHtml(p.mint)+'</div></div><div class="field"><label>Plan</label><div>'+escapeHtml((p.plan||'free'))+(p.plan==='free'?' · raids only':' · vault, boards, pools, airdrops')+'</div>'+(p.plan==='free'?'<button type="button" class="btn btn--solid btn--sm" id="btn-upgrade-starter" style="margin-top:10px">Upgrade to Starter (1 SOL)</button>':'')+'</div><div class="field"><label>Onboard fee</label><div>'+feeStatus+'</div></div><div class="field"><label>Data mode</label><div>'+escapeHtml(dataMode)+'</div></div></div></div>';
+async function renderRosterPanel(p){
+  var el=document.getElementById('proj-roster');
+  if(!el) return;
+  el.innerHTML='<div class="card" style="margin-bottom:12px"><p class="kicker">Trusted list</p><p style="margin:0 0 12px;color:var(--body)">Your real ones, remembered across every campaign. Trusted and whales skip approval. Blocked never get in.</p>'+
+    '<div class="grid-2"><div class="field"><label>Wallet</label><input class="inp num" id="roster-wallet" placeholder="Solana address"></div>'+
+    '<div class="field"><label>Role</label><select class="sel" id="roster-role"><option value="trusted">Trusted — auto-approve</option><option value="whale">Whale — auto-approve, tagged</option><option value="blocked">Blocked — never join</option></select></div></div>'+
+    '<div class="field" style="margin-top:10px"><label>Note (optional)</label><input class="inp" id="roster-note" placeholder="core, KOL friend, sniper…"></div>'+
+    '<button type="button" class="btn btn--solid" id="btn-roster-add" style="margin-top:12px">Save to roster</button></div><div id="roster-list"></div>';
+  document.getElementById('btn-roster-add').onclick=async function(){
+    var w=document.getElementById('roster-wallet').value.trim();
+    var role=document.getElementById('roster-role').value;
+    var note=document.getElementById('roster-note').value.trim();
+    if(!w){ toast('Paste a wallet','err'); return; }
+    try{
+      await BardPlatform.upsertRoster(p.id,w,role,note);
+      toast(role==='blocked'?'Blocked for this project':'Remembered across campaigns','ok');
+      renderRosterPanel(p);
+    }catch(e){ toast((e&&e.message)||'Could not save','err'); }
+  };
+  var box=document.getElementById('roster-list');
+  var rows=[];
+  try{ rows=await BardPlatform.listRoster(p.id); }catch(e){}
+  if(!rows.length){
+    box.innerHTML='<div class="empty"><h3>Empty roster</h3><p>Add a wallet once. They stay trusted, whale, or blocked on every campaign you run.</p></div>';
+    return;
+  }
+  box.innerHTML='<div class="card" style="padding:0 8px"><table class="table"><thead><tr><th>Wallet</th><th>Role</th><th>Note</th><th></th></tr></thead><tbody>'+
+    rows.map(function(r){
+      var pill=r.role==='blocked'?'pill--ended':(r.role==='whale'?'pill--live':'pill--paid');
+      return '<tr><td class="num">'+escapeHtml(shortAddr(r.wallet))+'</td><td><span class="pill '+pill+'">'+escapeHtml(r.role)+'</span></td><td>'+escapeHtml(r.note||'—')+'</td><td><button class="btn btn--ghost btn--sm" data-drop="'+escapeHtml(r.wallet)+'">Remove</button></td></tr>';
+    }).join('')+'</tbody></table></div>';
+  box.querySelectorAll('[data-drop]').forEach(function(btn){
+    btn.onclick=async function(){
+      try{ await BardPlatform.removeRoster(p.id, btn.getAttribute('data-drop')); renderRosterPanel(p); }
+      catch(e){ toast('Remove failed','err'); }
+    };
+  });
+}
+function renderProjectTabs(tab){var p=findProject(currentProjectId);if(!p)return;document.querySelectorAll('#page-project .tab').forEach(function(t){t.classList.toggle('is-on',t.getAttribute('data-tab')===tab);});var campsEl=document.getElementById('proj-campaigns');var setEl=document.getElementById('proj-settings');var vaultEl=document.getElementById('proj-vault');var rosterEl=document.getElementById('proj-roster');if(tab==='roster'){campsEl.style.display='none';if(setEl)setEl.style.display='none';if(vaultEl)vaultEl.style.display='none';if(rosterEl){rosterEl.style.display='block';renderRosterPanel(p);}return;}if(tab==='vault'){campsEl.style.display='none';setEl.style.display='none';vaultEl.style.display='block';renderVaultPanel(p);return;}if(tab==='settings'){campsEl.style.display='none';if(vaultEl)vaultEl.style.display='none';if(rosterEl)rosterEl.style.display='none';setEl.style.display='block';var feesOn=BardPlatform.feesEnabled&&BardPlatform.feesEnabled();var feeStatus=!feesOn?'<span class="pill pill--paid">waived (testing)</span>':(p.feePaid?'<span class="pill pill--paid">paid</span>':'<span class="pill pill--pending">pending</span>');setEl.innerHTML='<div class="card"><div class="form"><div class="field"><label>Name</label><div>'+escapeHtml(p.name)+'</div></div><div class="field"><label>Ticker</label><div>$'+escapeHtml(p.ticker)+'</div></div><div class="field"><label>Mint</label><div class="num" style="word-break:break-all">'+escapeHtml(p.mint)+'</div></div><div class="field"><label>Plan</label><div>'+escapeHtml((p.plan||'free'))+(p.plan==='free'?' · raids only':' · vault, boards, pools, airdrops')+'</div>'+(p.plan==='free'?'<button type="button" class="btn btn--solid btn--sm" id="btn-upgrade-starter" style="margin-top:10px">Upgrade to Starter (1 SOL)</button>':'')+'</div><div class="field"><label>Onboard fee</label><div>'+feeStatus+'</div></div><div class="field"><label>Data mode</label><div>'+escapeHtml(dataMode)+'</div></div></div></div>';
       var up=document.getElementById('btn-upgrade-starter');
       if(up) up.onclick=async function(){
         var feesOn=BardPlatform.feesEnabled&&BardPlatform.feesEnabled();
@@ -148,7 +186,7 @@ function renderProjectTabs(tab){var p=findProject(currentProjectId);if(!p)return
         }catch(e){ toast((e&&e.message)||'Upgrade failed','err'); }
         finally{ up.disabled=false; up.textContent='Upgrade to Starter (1 SOL)'; }
       };
-      return;}if(vaultEl)vaultEl.style.display='none';setEl.style.display='none';campsEl.style.display='block';var camps=p.campaigns||[];if(!camps.length){campsEl.innerHTML='<div class="empty"><h3>No campaigns yet</h3><p>Create a hold, raid, refer, or custom campaign for $'+escapeHtml(p.ticker)+'.</p><button class="btn btn--solid" id="empty-camp">New campaign</button></div>';document.getElementById('empty-camp').onclick=function(){resetCampaignBuilder();show('new-campaign');};return;}campsEl.innerHTML=camps.slice().reverse().map(function(c){var pill=c.status==='active'?'pill--live':(c.status==='ended'?'pill--ended':'pill--draft');var fee=c.feePaid?'<span class="pill pill--paid">fee paid</span>':'<span class="pill pill--pending">fee pending</span>';var sub=[c.type,(c.accessMode||c.access_mode)==='approval'?'approval':'open',c.rewardMode||c.reward_mode||'fixed',(c.rule||'').slice(0,48)].filter(Boolean).join(' · ');return'<div class="card card--hover" data-open-camp="'+c.id+'"><div class="item" style="padding:0;border:none"><div class="item__body"><div class="item__title">'+escapeHtml(c.title)+'</div><div class="item__sub">'+escapeHtml(sub)+((c.rule||'').length>48?'…':'')+'</div></div><div class="item__right" style="display:flex;flex-direction:column;align-items:flex-end;gap:6px"><span class="pill '+pill+'">'+escapeHtml(c.status)+'</span>'+fee+'</div></div></div>';}).join('');campsEl.querySelectorAll('[data-open-camp]').forEach(function(el){el.addEventListener('click',function(){openCampaign(el.getAttribute('data-open-camp'));});});}
+      return;}if(vaultEl)vaultEl.style.display='none';if(rosterEl)rosterEl.style.display='none';setEl.style.display='none';campsEl.style.display='block';var camps=p.campaigns||[];if(!camps.length){campsEl.innerHTML='<div class="empty"><h3>No campaigns yet</h3><p>Create a hold, raid, refer, or custom campaign for $'+escapeHtml(p.ticker)+'.</p><button class="btn btn--solid" id="empty-camp">New campaign</button></div>';document.getElementById('empty-camp').onclick=function(){resetCampaignBuilder();show('new-campaign');};return;}campsEl.innerHTML=camps.slice().reverse().map(function(c){var pill=c.status==='active'?'pill--live':(c.status==='ended'?'pill--ended':'pill--draft');var fee=c.feePaid?'<span class="pill pill--paid">fee paid</span>':'<span class="pill pill--pending">fee pending</span>';var sub=[c.type,(c.accessMode||c.access_mode)==='approval'?'approval':'open',c.rewardMode||c.reward_mode||'fixed',(c.rule||'').slice(0,48)].filter(Boolean).join(' · ');return'<div class="card card--hover" data-open-camp="'+c.id+'"><div class="item" style="padding:0;border:none"><div class="item__body"><div class="item__title">'+escapeHtml(c.title)+'</div><div class="item__sub">'+escapeHtml(sub)+((c.rule||'').length>48?'…':'')+'</div></div><div class="item__right" style="display:flex;flex-direction:column;align-items:flex-end;gap:6px"><span class="pill '+pill+'">'+escapeHtml(c.status)+'</span>'+fee+'</div></div></div>';}).join('');campsEl.querySelectorAll('[data-open-camp]').forEach(function(el){el.addEventListener('click',function(){openCampaign(el.getAttribute('data-open-camp'));});});}
 function openCampaign(cid){var c=findCampaign(currentProjectId,cid);var p=findProject(currentProjectId);if(!c||!p)return;currentCampaignId=cid;document.getElementById('camp-kicker').textContent=p.name+' · $'+p.ticker;document.getElementById('camp-title').textContent=c.title;document.getElementById('camp-rule').textContent=c.rule;var st=document.getElementById('camp-status');st.textContent=c.status;st.className='pill '+(c.status==='active'?'pill--live':'pill--ended');var access=c.accessMode||c.access_mode||'open';var rewardMode=c.rewardMode||c.reward_mode||'fixed';var raidMode=c.raidMode||c.raid_mode||null;document.getElementById('camp-access-pill').textContent=access==='approval'?'Approval required':'Open join';document.getElementById('camp-reward-pill').textContent=({fixed:'Fixed payout',top3:'Top 3',pool:'Shared pool',growing:'Growing pool',vested:'Vested'})[rewardMode]||rewardMode;var raidPill=document.getElementById('camp-raid-pill');if(c.type==='raid'&&raidMode){raidPill.style.display='';raidPill.textContent=({open:'Open raid',post:'Specific post',kol_list:'KOL targets'})[raidMode]||raidMode;}else{raidPill.style.display='none';}var poolLabel=(c.pool||'—')+(c.unit?' '+c.unit:'');if(c.reward)poolLabel=(c.reward+' '+(c.unit||'')+' · pool '+poolLabel).trim();document.getElementById('camp-pool').textContent=poolLabel;document.getElementById('camp-claims').textContent=(c.settled||0);
     var badge=document.getElementById('camp-vault-badge');
     if(badge){
@@ -176,7 +214,8 @@ async function loadCampaignOps(p,c){
       var acts='';
       if(j.status==='pending') acts+='<button class="btn btn--ghost btn--sm" data-js="approve" data-w="'+escapeHtml(j.wallet)+'">Approve</button> <button class="btn btn--ghost btn--sm" data-js="reject" data-w="'+escapeHtml(j.wallet)+'">Reject</button> ';
       if(j.status==='approved'||j.qualified) acts+='<button class="btn btn--ghost btn--sm" data-js="plus" data-w="'+escapeHtml(j.wallet)+'" data-p="'+(j.progress||0)+'">+1</button> <button class="btn btn--ghost btn--sm" data-js="minus" data-w="'+escapeHtml(j.wallet)+'" data-p="'+(j.progress||0)+'">−1</button> ';
-      if(!j.qualified && j.status!=='rejected') acts+='<button class="btn btn--solid btn--sm" data-js="qual" data-w="'+escapeHtml(j.wallet)+'">Qualify</button>';
+      if(!j.qualified && j.status!=='rejected') acts+='<button class="btn btn--solid btn--sm" data-js="qual" data-w="'+escapeHtml(j.wallet)+'">Qualify</button> ';
+      acts+='<button class="btn btn--ghost btn--sm" data-js="trust" data-w="'+escapeHtml(j.wallet)+'">Remember</button> <button class="btn btn--ghost btn--sm" data-js="whale" data-w="'+escapeHtml(j.wallet)+'">Whale</button> <button class="btn btn--ghost btn--sm" data-js="block" data-w="'+escapeHtml(j.wallet)+'">Block</button>';
       return '<tr><td class="num">'+escapeHtml(shortAddr(j.wallet))+'</td><td>'+escapeHtml(j.x_handle||'—')+'</td><td class="num">'+(j.progress||0)+'</td><td><span class="pill '+pill+'">'+escapeHtml(st)+'</span></td><td style="white-space:nowrap">'+acts+'</td></tr>';
     }).join('');
     tbody.querySelectorAll('[data-js]').forEach(function(btn){
@@ -188,6 +227,9 @@ async function loadCampaignOps(p,c){
           if(act==='plus') await BardPlatform.setJoinProgress(c.id,w,prog+1);
           if(act==='minus') await BardPlatform.setJoinProgress(c.id,w,Math.max(0,prog-1));
           if(act==='qual') await BardPlatform.markQualified(p.id,c.id,w);
+          if(act==='trust') await BardPlatform.upsertRoster(p.id,w,'trusted','from campaign');
+          if(act==='whale') await BardPlatform.upsertRoster(p.id,w,'whale','from campaign');
+          if(act==='block'){ await BardPlatform.upsertRoster(p.id,w,'blocked','from campaign'); await BardPlatform.setJoinStatus(c.id,w,'rejected'); }
           await refreshState();
           openCampaign(c.id);
         }catch(err){ toast((err&&err.message)||'Update failed','err'); }
@@ -197,6 +239,39 @@ async function loadCampaignOps(p,c){
   var sets=[];
   try{ sets = await BardPlatform.listSettlements(c.id); }catch(e){ console.error(e); }
   renderSettleBox(p,c,joins,sets);
+  renderDrawBox(p,c,joins);
+}
+function renderDrawBox(p,c,joins){
+  var host=document.getElementById('camp-settle');
+  if(!host) return;
+  var wrap=document.createElement('div');
+  wrap.style.marginTop='18px';
+  wrap.style.paddingTop='14px';
+  wrap.style.borderTop='1px solid rgba(244,244,245,.08)';
+  var winners=c.drawWinners||[];
+  if(c.drawSeed){
+    wrap.innerHTML='<strong style="font-variation-settings:\'wght\' 620">Airdrop draw</strong>'+
+      '<p class="muted" style="margin:6px 0 8px;font-size:.86rem">Provable. Seed is public. Same seed always yields the same order.</p>'+
+      '<p class="num" style="font-size:.78rem;word-break:break-all;color:var(--muted)">'+escapeHtml(c.drawSeed)+'</p>'+
+      '<table class="table"><thead><tr><th>#</th><th>Wallet</th></tr></thead><tbody>'+
+      winners.map(function(w,i){ return '<tr><td class="num">'+(i+1)+'</td><td class="num">'+escapeHtml(shortAddr(w.wallet||w))+'</td></tr>'; }).join('')+
+      '</tbody></table>';
+    host.appendChild(wrap);
+    return;
+  }
+  wrap.innerHTML='<strong style="font-variation-settings:\'wght\' 620">Airdrop draw</strong>'+
+    '<p class="muted" style="margin:6px 0 10px;font-size:.86rem">Set the rules, we draw. Seed uses a Solana blockhash so nobody can pick the order.</p>'+
+    '<button type="button" class="btn btn--ghost btn--sm" id="btn-draw">Draw now</button>';
+  host.appendChild(wrap);
+  var btn=document.getElementById('btn-draw');
+  if(btn) btn.onclick=async function(){
+    try{
+      await BardPlatform.drawAirdrop(c.id, 0);
+      toast('Draw locked. Holders can verify the seed.','ok');
+      await refreshState();
+      openCampaign(c.id);
+    }catch(e){ toast((e&&e.message)||'Draw failed','err'); }
+  };
 }
 function renderSettleBox(p,c,joins,sets){
   var box=document.getElementById('camp-settle');
