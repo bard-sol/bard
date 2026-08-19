@@ -49,6 +49,16 @@ h1{margin:0 0 10px;font-size:clamp(1.7rem,3.5vw,2.3rem);line-height:1.15;font-va
 .vault-steps li{margin:6px 0}
 .copy-row{display:flex;gap:8px;align-items:center}
 .copy-row .inp{flex:1}
+.notify{border:1px solid var(--purple-line);background:var(--purple-soft);border-radius:12px;padding:16px 18px;margin-bottom:16px}
+.notify h3{margin:0 0 6px;font-size:1.02rem;font-variation-settings:"wght" 640}
+.notify p{margin:0 0 12px;color:var(--body);font-size:.9rem}
+.signers{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:12px 0}
+@media(max-width:640px){.signers{grid-template-columns:1fr}}
+.signer{border:1px solid var(--line-strong);border-radius:10px;padding:12px 14px;background:var(--surface-2)}
+.signer.is-yes{border-color:rgba(74,222,128,.4);background:rgba(74,222,128,.08)}
+.signer.is-wait{border-color:rgba(251,191,36,.35);background:rgba(251,191,36,.08)}
+.signer b{display:block;font-variation-settings:"wght" 640;margin-bottom:4px}
+.signer span{font-size:.82rem;color:var(--muted)}
 </style>
 </head>
 <body>
@@ -66,6 +76,7 @@ h1{margin:0 0 10px;font-size:clamp(1.7rem,3.5vw,2.3rem);line-height:1.15;font-va
 <h1>Your projects</h1>
 <p class="lead" style="margin-bottom:0">Onboard a token, run campaigns, and settle claims. Fees are off for testing.</p>
 </div><button class="btn btn--solid" id="btn-new-project">Onboard a project</button></div>
+<div id="home-inbox"></div>
 <div class="gap"></div>
 <div class="grid-2" id="home-stats">
 <div class="stat"><div class="stat__lbl">Projects</div><div class="stat__val p num" id="stat-projects">0</div></div>
@@ -158,7 +169,7 @@ h1{margin:0 0 10px;font-size:clamp(1.7rem,3.5vw,2.3rem);line-height:1.15;font-va
   <div class="row row--between" style="margin-bottom:10px;gap:10px">
     <div>
       <strong style="font-variation-settings:'wght' 620">Settle from vault</strong>
-      <p class="muted" style="margin:4px 0 0;font-size:.86rem">Bard proposes the batch. You co-sign once. Then record the Squads tx.</p>
+      <p class="muted" style="margin:4px 0 0;font-size:.86rem">Bard proposes the airdrop. You sign. Bard signs. Tokens move. Neither can do it alone.</p>
     </div>
     <button class="btn btn--solid btn--sm" type="button" id="btn-propose-settle">Propose payout</button>
   </div>
@@ -170,6 +181,7 @@ h1{margin:0 0 10px;font-size:clamp(1.7rem,3.5vw,2.3rem);line-height:1.15;font-va
 <script src="https://bundle.run/buffer@6.0.3"></script>
 <script>(function(){var mod=typeof buffer!=='undefined'?buffer:null;var B=mod&&(mod.Buffer||(typeof mod.from==='function'?mod:null));if(B&&typeof B.from==='function'){window.Buffer=B;if(typeof globalThis!=='undefined')globalThis.Buffer=B;if(!window.buffer||!window.buffer.Buffer)window.buffer={Buffer:B}}if(typeof window.global==='undefined')window.global=window;if(typeof process==='undefined')window.process={env:{},browser:true,version:'',versions:{node:''}}})();</script>
 <script src="https://unpkg.com/@solana/web3.js@1.95.4/lib/index.iife.min.js"></script>
+<script src="/bard-vault.js"></script>
 <script src="/platform.js"></script>
 <script src="/admin_app.js"></script>
 </body></html>

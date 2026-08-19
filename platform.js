@@ -156,7 +156,8 @@
       vaultMint: r.vault_mint || r.vaultMint || r.mint || '',
       vaultReserved: Number(r.vault_reserved != null ? r.vault_reserved : (r.vaultReserved || 0)),
       vaultStatus: r.vault_status || r.vaultStatus || 'none',
-      vaultLinkedAt: r.vault_linked_at || r.vaultLinkedAt || null
+      vaultLinkedAt: r.vault_linked_at || r.vaultLinkedAt || null,
+      vaultMultisig: r.vault_multisig || r.vaultMultisig || ''
     };
   }
   function mapCampaignRow(c) {
@@ -246,7 +247,8 @@
       vault_address: addr || null,
       vault_mint: mint || null,
       vault_status: status,
-      vault_linked_at: addr ? new Date().toISOString() : null
+      vault_linked_at: addr ? new Date().toISOString() : null,
+      vault_multisig: (input && input.multisig) ? String(input.multisig).trim() : null
     };
     if (mode === 'supabase' && sb) {
       var res = await sb.from('projects').update(payload).eq('id', projectId).select('*').single();
@@ -260,6 +262,7 @@
     p.vaultMint = mint || p.mint;
     p.vaultStatus = status;
     p.vaultLinkedAt = payload.vault_linked_at;
+    p.vaultMultisig = payload.vault_multisig || '';
     saveLocalTeam(state);
     return p;
   }
@@ -352,7 +355,10 @@
       total: built.total,
       unit: built.unit,
       payout_hash: built.hash,
-      status: 'proposed'
+      status: 'proposed',
+      team_signed: false,
+      bard_signed: false,
+      vault_multisig: (campaign && (campaign.vaultMultisig || '')) || null
     };
     if (mode === 'supabase' && sb) {
       var res = await sb.from('vault_settlements').insert(row).select('*').single();
@@ -367,6 +373,54 @@
     saveLocalTeam(state);
     return row;
   }
+
+  async function listOpenSettlements() {
+    await init();
+    if (mode === 'supabase' && sb) {
+      var res = await sb.from('vault_settlements').select('*').in('status', ['proposed', 'awaiting_bard', 'awaiting_team', 'both_signed', 'cosigned']).order('proposed_at', { ascending: false });
+      if (res.error) throw res.error;
+      return res.data || [];
+    }
+    return (localTeam().settlements || []).filter(function (s) { return s.status !== 'executed' && s.status !== 'cancelled'; });
+  }
+
+  async function signSettlement(settlementId, who, extra) {
+    await init();
+    var payload = {};
+    if (who === 'team') {
+      payload.team_signed = true;
+      payload.team_signed_at = new Date().toISOString();
+      payload.cosigned_wallet = extra && extra.wallet;
+      payload.cosign_sig = extra && extra.sig;
+    }
+    if (who === 'bard') {
+      payload.bard_signed = true;
+      payload.bard_signed_at = new Date().toISOString();
+    }
+    if (extra && extra.txIndex) payload.tx_index = extra.txIndex;
+    if (extra && extra.multisig) payload.vault_multisig = extra.multisig;
+    if (mode === 'supabase' && sb) {
+      var cur = await sb.from('vault_settlements').select('*').eq('id', settlementId).maybeSingle();
+      if (cur.error) throw cur.error;
+      var row = Object.assign({}, cur.data || {}, payload);
+      var team = !!(row.team_signed);
+      var bard = !!(row.bard_signed);
+      payload.status = team && bard ? 'both_signed' : (team ? 'awaiting_bard' : (bard ? 'awaiting_team' : 'proposed'));
+      var res = await sb.from('vault_settlements').update(payload).eq('id', settlementId).select('*').single();
+      if (res.error) throw res.error;
+      return res.data;
+    }
+    var state = localTeam();
+    (state.settlements || []).forEach(function (s) {
+      if (s.id !== settlementId) return;
+      Object.assign(s, payload);
+      s.status = (s.team_signed && s.bard_signed) ? 'both_signed' : (s.team_signed ? 'awaiting_bard' : (s.bard_signed ? 'awaiting_team' : 'proposed'));
+    });
+    saveLocalTeam(state);
+    return (state.settlements || []).find(function (s) { return s.id === settlementId; });
+  }
+
+  function getRpc() { return RPC; }
 
   async function listSettlements(campaignId) {
     await init();
@@ -694,7 +748,10 @@
     computePayouts: computePayouts,
     proposeSettlement: proposeSettlement,
     listSettlements: listSettlements,
+    listOpenSettlements: listOpenSettlements,
+    signSettlement: signSettlement,
     cosignSettlement: cosignSettlement,
-    executeSettlement: executeSettlement
+    executeSettlement: executeSettlement,
+    getRpc: getRpc
   };
 })(typeof window !== 'undefined' ? window : globalThis);
