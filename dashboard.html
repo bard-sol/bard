@@ -1,1 +1,112 @@
-PLACEHOLDER
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bard — holder dashboard</title>
+<meta name="description" content="Join campaigns, smash raids, track boards, and claim from the vault.">
+<link rel="icon" href="/transparentbardsmile.png" type="image/png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#1c1e26;--surface:#262930;--surface-2:#2d3039;--purple:#a78bfa;--text:#f4f4f5;--muted:#a1a1aa;--body:#d5d5da;--line:rgba(244,244,245,.08);--line-strong:rgba(244,244,245,.16);--purple-soft:rgba(167,139,250,.12);--purple-line:rgba(167,139,250,.35);--green:#4ade80;--amber:#fbbf24;--font:"Archivo","Helvetica Neue",Helvetica,Arial,sans-serif;--r:12px;--gutter:clamp(18px,4vw,40px);--max:960px}
+*{box-sizing:border-box}html{-webkit-text-size-adjust:100%}body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font);font-size:16px;line-height:1.55;font-variation-settings:"wdth" 100,"wght" 420;-webkit-font-smoothing:antialiased;min-height:100vh}
+img{display:block;max-width:100%}a{color:inherit;text-decoration:none}button,input,select,textarea{font:inherit;color:inherit}button{background:none;border:none;cursor:pointer;padding:0}:focus-visible{outline:2px solid var(--purple);outline-offset:3px;border-radius:4px}.num{font-variant-numeric:tabular-nums}.wrap{max-width:var(--max);margin:0 auto;padding:0 var(--gutter)}
+.head{position:sticky;top:0;z-index:40;background:rgba(28,30,38,.92);backdrop-filter:blur(14px);border-bottom:1px solid var(--line)}
+.head__in{display:flex;align-items:center;gap:12px;min-height:64px;max-width:var(--max);margin:0 auto;padding:8px var(--gutter)}
+.mark{display:inline-flex;flex-direction:column;align-items:center;gap:2px;margin-right:auto;line-height:1}
+.mark__word{font-size:1.1rem;font-variation-settings:"wdth" 112,"wght" 720}.mark__smile{width:24px;height:14px;object-fit:contain}
+.head__link{font-size:.88rem;color:var(--muted);padding:6px 10px;border-radius:8px}.head__link:hover{color:var(--text);background:var(--purple-soft)}
+.wallet-btn{display:inline-flex;align-items:center;gap:6px;padding:7px 12px;border-radius:8px;font-size:.84rem;font-variation-settings:"wght" 560;border:1px solid var(--line-strong)}.wallet-btn.is-on{border-color:rgba(74,222,128,.35);color:var(--green)}
+.main{padding:clamp(24px,4vw,40px) 0 72px}.kicker{font-size:.78rem;color:var(--purple);font-variation-settings:"wght" 600;margin:0 0 8px}
+h1{margin:0 0 8px;font-size:clamp(1.55rem,3.2vw,2rem);line-height:1.15;font-variation-settings:"wdth" 108,"wght" 700;letter-spacing:-.02em}.lead{margin:0 0 22px;color:var(--body);max-width:48ch;font-size:.98rem}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:11px 18px;border-radius:9px;font-size:.92rem;font-variation-settings:"wght" 620;border:1px solid transparent}.btn--solid{background:var(--purple);color:#191320}.btn--solid:hover{background:#b9a3ff}.btn--ghost{border-color:var(--line-strong)}.btn--ghost:hover{border-color:var(--purple-line);background:var(--purple-soft)}.btn--sm{padding:7px 12px;font-size:.84rem}.btn:disabled{opacity:.45;cursor:not-allowed}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:18px 20px}.card+.card{margin-top:10px}.card--hover{cursor:pointer;transition:border-color .15s}.card--hover:hover{border-color:var(--purple-line)}
+.pill{display:inline-flex;align-items:center;font-size:.72rem;padding:3px 9px;border-radius:99px;font-variation-settings:"wght" 600}.pill--live{background:var(--purple-soft);color:var(--purple)}.pill--draft{background:rgba(244,244,245,.06);color:var(--muted)}.pill--paid{background:rgba(74,222,128,.12);color:var(--green)}.pill--pending{background:rgba(251,191,36,.12);color:var(--amber)}
+.muted{color:var(--muted)}.gap{height:18px}.row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.row--between{justify-content:space-between}
+.smash-row{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}
+.smash-row a,.smash-row button{flex:1;min-width:100px;text-align:center;padding:12px 10px;border-radius:10px;border:1px solid var(--line-strong);background:var(--surface-2);font-variation-settings:"wght" 600;font-size:.9rem}
+.smash-row a:hover,.smash-row button:hover{border-color:var(--purple-line);background:var(--purple-soft)}
+.pool-meter{height:8px;background:var(--surface-2);border-radius:99px;overflow:hidden;margin:10px 0}
+.pool-meter > span{display:block;height:100%;background:var(--purple);border-radius:99px}
+.vault-badge{display:flex;gap:12px;align-items:flex-start;border:1px solid rgba(74,222,128,.35);background:rgba(74,222,128,.07);border-radius:12px;padding:14px 16px;margin-bottom:12px}
+.vault-badge strong{display:block;font-variation-settings:"wght" 640;margin-bottom:2px}
+.vault-badge p{margin:0;font-size:.86rem;color:var(--body)}
+.empty{text-align:center;padding:40px 20px;border:1px dashed var(--line-strong);border-radius:var(--r);background:var(--surface)}
+.empty h3{margin:0 0 6px;font-size:1.1rem;font-variation-settings:"wght" 640}.empty p{margin:0 0 16px;color:var(--muted)}
+.toast{position:fixed;bottom:20px;right:20px;z-index:100;background:var(--surface);border:1px solid var(--line-strong);border-radius:10px;padding:11px 14px;font-size:.88rem;opacity:0;transform:translateY(8px);pointer-events:none;transition:opacity .25s,transform .25s;max-width:300px}.toast.is-on{opacity:1;transform:none}.toast.ok{border-color:rgba(74,222,128,.35);color:var(--green)}.toast.err{border-color:rgba(248,113,113,.35);color:#f87171}
+.team-link{font-size:.8rem;color:var(--muted);margin-top:24px;text-align:center}.team-link a{color:var(--purple)}
+</style>
+</head>
+<body>
+<header class="head"><div class="head__in"><a class="mark" href="/" aria-label="Bard home"><span class="mark__word">Bard</span><img class="mark__smile" src="/transparentbardsmile.png" alt=""></a><a class="head__link" href="/admin.html">Team workspace</a><a class="head__link" href="/">Landing</a><button class="wallet-btn" id="btn-wallet" type="button">Connect wallet</button></div></header>
+<main class="main"><div class="wrap">
+  <p class="kicker">Holder dashboard</p>
+  <h1>Your campaigns</h1>
+  <p class="lead">Connect a wallet, join live missions, smash the call, and watch the vault lock.</p>
+  <div id="holder-list"></div>
+  <div class="team-link">Are you a team? <a href="/admin.html">Open the team workspace</a></div>
+</div></main>
+<div class="toast" id="toast" role="status"></div>
+<script src="https://bundle.run/buffer@6.0.3"></script>
+<script>(function(){var mod=typeof buffer!=='undefined'?buffer:null;var B=mod&&(mod.Buffer||(typeof mod.from==='function'?mod:null));if(B&&typeof B.from==='function'){window.Buffer=B;if(typeof globalThis!=='undefined')globalThis.Buffer=B;if(!window.buffer||!window.buffer.Buffer)window.buffer={Buffer:B}}if(typeof window.global==='undefined')window.global=window;if(typeof process==='undefined')window.process={env:{},browser:true,version:'',versions:{node:''}}})();</script>
+<script src="https://unpkg.com/@solana/web3.js@1.95.4/lib/index.iife.min.js"></script>
+<script src="/platform.js"></script>
+<script>
+(function(){
+  var wallet=null, provider=null;
+  function toast(msg,kind){var el=document.getElementById('toast');el.textContent=msg;el.className='toast is-on'+(kind?' '+kind:'');clearTimeout(toast._t);toast._t=setTimeout(function(){el.className='toast';},3000);}
+  function shortAddr(a){if(!a)return'—';if(a.length<10)return a;return a.slice(0,4)+'…'+a.slice(-4);}
+  function escapeHtml(s){return String(s==null?'':s).replace(/&/g,'&').replace(/</g,'<').replace(/>/g,'>').replace(/"/g,'"');}
+  function fmtAmt(n){if(n==null||isNaN(Number(n)))return'—';var x=Number(n);if(x>=1e6)return(x/1e6).toFixed(2)+'M';if(x>=1e3)return(x/1e3).toFixed(2)+'k';return String(x);}
+  function updateWalletUI(){var btn=document.getElementById('btn-wallet');if(wallet){btn.textContent=shortAddr(wallet);btn.classList.add('is-on');}else{btn.textContent='Connect wallet';btn.classList.remove('is-on');}}
+  async function connectWallet(){try{var p=(window.phantom&&window.phantom.solana)||window.solflare||window.solana;if(!p){toast('Install Phantom or Solflare','err');return;}var resp=await p.connect();wallet=(resp.publicKey&&resp.publicKey.toString())||(p.publicKey&&p.publicKey.toString());if(!wallet){toast('Could not read wallet','err');return;}provider=p;localStorage.setItem('bard_holder_wallet',wallet);updateWalletUI();toast('Connected','ok');load(); }catch(e){toast('Cancelled','err');}}
+  document.getElementById('btn-wallet').onclick=function(){if(wallet){if(confirm('Disconnect?')){wallet=null;provider=null;localStorage.removeItem('bard_holder_wallet');updateWalletUI();load();}}else connectWallet();};
+  async function load(){
+    var box=document.getElementById('holder-list');
+    box.innerHTML='<p class="muted">Loading…</p>';
+    try{
+      await BardPlatform.init();
+      var live=await BardPlatform.listLiveCampaigns();
+      if(!live.length){box.innerHTML='<div class="empty"><h3>No live campaigns</h3><p>When teams go live, they appear here.</p></div>';return;}
+      var joins=[];
+      if(wallet){try{joins=await BardPlatform.listJoinsForWallet(wallet);}catch(e){}}
+      var joinMap={};joins.forEach(function(j){joinMap[j.campaign_id]=j;});
+      box.innerHTML=live.map(function(item){
+        var c=item.campaign; var j=joinMap[c.id];
+        var joined=!!j; var status=j?(j.qualified?'Qualified':(j.status||'in')):'';
+        var vaultHtml='';
+        if(item.vault&&item.vault.address){
+          vaultHtml='<div class="vault-badge"><div><strong>Prize locked in 2-of-2 vault</strong><p>'+escapeHtml(fmtAmt(item.vault.reserved||c.vaultReserved||0))+' $'+escapeHtml(item.ticker)+' reserved · <a href="https://solscan.io/account/'+encodeURIComponent(item.vault.address)+'" target="_blank" rel="noopener" style="color:var(--purple)">Solscan</a></p></div></div>';
+        }
+        var smash='';
+        if(c.type==='raid'&&c.postUrl){
+          var intents=BardPlatform.xIntentUrls?BardPlatform.xIntentUrls(c.postUrl):null;
+          if(intents){
+            smash='<div class="smash-row"><a href="'+escapeHtml(intents.like)+'" target="_blank" rel="noopener">Like</a><a href="'+escapeHtml(intents.rt)+'" target="_blank" rel="noopener">RT</a><a href="'+escapeHtml(intents.quote)+'" target="_blank" rel="noopener">Quote</a></div>';
+          }
+        }
+        var joinBtn=joined?'<span class="pill pill--paid">'+escapeHtml(status)+'</span>':'<button class="btn btn--solid btn--sm" data-join="'+escapeHtml(c.id)+'" data-project="'+escapeHtml(item.projectId)+'">Join</button>';
+        return '<div class="card" style="margin-bottom:12px"><div class="row row--between" style="margin-bottom:8px"><div><strong style="font-variation-settings:\'wght\' 620">'+escapeHtml(c.title)+'</strong><div class="muted" style="font-size:.84rem;margin-top:2px">$'+escapeHtml(item.ticker)+' · '+escapeHtml(c.type)+'</div></div>'+joinBtn+'</div><p style="margin:0 0 8px;color:var(--body);font-size:.92rem">'+escapeHtml(c.rule)+'</p>'+vaultHtml+smash+'</div>';
+      }).join('');
+      box.querySelectorAll('[data-join]').forEach(function(btn){
+        btn.onclick=async function(){
+          if(!wallet){await connectWallet();return;}
+          try{
+            await BardPlatform.joinCampaign(btn.getAttribute('data-project'),btn.getAttribute('data-join'),wallet,null);
+            toast('Joined','ok'); load();
+          }catch(e){toast((e&&e.message)||'Join failed','err');}
+        };
+      });
+    }catch(e){console.error(e);box.innerHTML='<div class="empty"><h3>Could not load</h3><p>'+escapeHtml(e&&e.message||'error')+'</p></div>';}
+  }
+  (async function(){
+    var saved=localStorage.getItem('bard_holder_wallet');
+    if(saved){try{var p=(window.phantom&&window.phantom.solana)||window.solflare||window.solana;if(p&&p.isConnected){wallet=(p.publicKey&&p.publicKey.toString())||saved;provider=p;}else wallet=saved;}catch(e){}}
+    updateWalletUI(); load();
+  })();
+})();
+</script>
+</body>
+</html>
