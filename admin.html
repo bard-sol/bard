@@ -59,6 +59,16 @@ h1{margin:0 0 10px;font-size:clamp(1.7rem,3.5vw,2.3rem);line-height:1.15;font-va
 .signer.is-wait{border-color:rgba(251,191,36,.35);background:rgba(251,191,36,.08)}
 .signer b{display:block;font-variation-settings:"wght" 640;margin-bottom:4px}
 .signer span{font-size:.82rem;color:var(--muted)}
+.plans{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media(max-width:640px){.plans{grid-template-columns:1fr}}
+.plan{text-align:left;border:1px solid var(--line-strong);background:var(--surface-2);border-radius:12px;padding:14px 16px;cursor:pointer;transition:border-color .15s,background .15s}
+.plan:hover{border-color:var(--purple-line)}
+.plan.is-on{border-color:var(--purple-line);background:var(--purple-soft)}
+.plan.is-soon{opacity:.55;cursor:not-allowed}
+.plan strong{display:block;font-size:.95rem;font-variation-settings:"wght" 640;margin-bottom:4px}
+.plan .price{color:var(--purple);font-variation-settings:"wght" 640}
+.plan span{display:block;font-size:.8rem;color:var(--muted);line-height:1.4;margin-top:6px}
+.plan-lock{margin-top:10px;padding:10px 12px;border-radius:9px;background:var(--purple-soft);font-size:.86rem;color:var(--body)}
 </style>
 </head>
 <body>
@@ -86,13 +96,21 @@ h1{margin:0 0 10px;font-size:clamp(1.7rem,3.5vw,2.3rem);line-height:1.15;font-va
 <section class="page" id="page-onboard">
 <button class="back" data-go="home">← Back to projects</button>
 <p class="kicker">Onboarding</p><h1>Add a project</h1>
-<p class="lead">One-time setup per token. After this you can launch campaigns without re-onboarding.</p>
-<div class="card" style="max-width:560px"><form class="form" id="form-onboard">
+<p class="lead">One-time setup per token. Raids are free. Starter is the “we’re serious” pack — vault, boards, pools, airdrops.</p>
+<div class="card" style="max-width:640px"><form class="form" id="form-onboard">
 <div class="field"><label for="p-name">Project name</label><input class="inp" id="p-name" required maxlength="48" placeholder="e.g. Frogz"></div>
 <div class="grid-2"><div class="field"><label for="p-ticker">Ticker</label><input class="inp" id="p-ticker" required maxlength="12" placeholder="FROGZ"></div>
 <div class="field"><label for="p-chain">Chain</label><select class="sel" id="p-chain"><option value="solana">Solana</option></select></div></div>
 <div class="field"><label for="p-mint">Token mint address</label><input class="inp" id="p-mint" required minlength="32" maxlength="64" placeholder="Solana mint address"><span class="hint">Used to identify holders and run hold-style rules.</span></div>
-<div class="fee-note"><span>Onboard fee</span><b class="num">free while testing</b></div>
+<div class="field"><label>Plan</label>
+<div class="plans">
+<button type="button" class="plan is-on" data-plan="free"><strong>Free · raids</strong><div class="price">0 SOL</div><span>One-tap smash. Example: drop the call tweet, holders hit Like / RT / Quote. Beats Telegram for $0.</span></button>
+<button type="button" class="plan" data-plan="starter"><strong>Starter · the lock</strong><div class="price">1 SOL</div><span>Vault + boards + pools + airdrops. Example: lock 10M, run Diamond Week, holders see you’re serious.</span></button>
+</div>
+<input type="hidden" id="p-plan" value="free">
+<p class="hint" style="margin:8px 0 0">Pro (X auto-scan) comes later. Fees are off while testing — pick Starter to unlock the pack without paying.</p>
+</div>
+<div class="fee-note"><span id="onboard-fee-lbl">Onboard</span><b class="num" id="onboard-fee-amt">free</b></div>
 <p class="hint" style="margin:0" id="onboard-wallet-hint">Fees are off for testing — create freely. Wallet optional.</p>
 <button class="btn btn--solid" type="submit" id="btn-submit-onboard">Create project</button>
 </form></div></section>
@@ -113,7 +131,14 @@ h1{margin:0 0 10px;font-size:clamp(1.7rem,3.5vw,2.3rem);line-height:1.15;font-va
 <div class="builder-sec"><p class="builder-sec__title">Basics</p>
 <div class="field"><label for="c-title">Campaign name</label><input class="inp" id="c-title" required maxlength="64" placeholder="e.g. Diamond Week · KOL Raid"></div>
 <div class="field" style="margin-top:12px"><label for="c-type">Campaign type</label>
-<select class="sel" id="c-type"><option value="hold">Hold — on-chain balance / duration</option><option value="raid">Raid — narrative / social / KOL</option><option value="refer">Refer — invite wallets that hold</option><option value="custom">Custom — any rule you write</option></select></div></div>
+<select class="sel" id="c-type">
+<option value="raid">Raid — free. Smash a call. We count.</option>
+<option value="hold">Hold — Starter. Stay in, get paid.</option>
+<option value="refer">Refer — Starter. Invite wallets that hold.</option>
+<option value="custom">Board / custom — Starter. Any rule you write.</option>
+</select>
+<div class="plan-lock" id="c-plan-note" style="display:none"></div>
+</div></div>
 <div class="builder-sec"><p class="builder-sec__title">Who can join</p>
 <div class="choice-row"><button type="button" class="choice is-on" data-access="open"><strong>Open</strong><span>Anyone can join</span></button><button type="button" class="choice" data-access="approval"><strong>Team approval</strong><span>You accept joins</span></button></div>
 <input type="hidden" id="c-access" value="open"></div>

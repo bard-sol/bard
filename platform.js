@@ -23,8 +23,12 @@
     onboard: 0.25,
     campaign: 0.25,
     claim: 0.1,
-    stake: 0.05
+    stake: 0.05,
+    starter: 1,
+    pro: 3
   };
+
+  var PREMIUM_TYPES = { hold: true, refer: true, custom: true, board: true, pool: true, airdrop: true };
 
   var TEAM_KEY = 'bard_team_v1';
   var HOLDER_KEY = 'bard_holder_v1';
@@ -157,7 +161,10 @@
       vaultReserved: Number(r.vault_reserved != null ? r.vault_reserved : (r.vaultReserved || 0)),
       vaultStatus: r.vault_status || r.vaultStatus || 'none',
       vaultLinkedAt: r.vault_linked_at || r.vaultLinkedAt || null,
-      vaultMultisig: r.vault_multisig || r.vaultMultisig || ''
+      vaultMultisig: r.vault_multisig || r.vaultMultisig || '',
+      plan: r.plan || r.plan || 'free',
+      planTx: r.plan_tx || r.planTx || null,
+      planPaidAt: r.plan_paid_at || r.planPaidAt || null
     };
   }
   function mapCampaignRow(c) {
@@ -193,31 +200,33 @@
   async function createProject(input) {
     await init();
     var paid = !FEES_ENABLED;
-    var payload = { name: input.name, ticker: input.ticker, mint: input.mint, chain: input.chain || 'solana', admin_wallet: input.admin || null, created_by: input.createdBy || input.admin || null, fee_paid: paid, fee_amount_sol: FEES.onboard };
+    var payload = { name: input.name, ticker: input.ticker, mint: input.mint, chain: input.chain || 'solana', admin_wallet: input.admin || null, created_by: input.createdBy || input.admin || null, fee_paid: paid, fee_amount_sol: FEES.onboard, plan: input.plan || 'free' };
     if (mode === 'supabase' && sb) {
       var res = await sb.from('projects').insert(payload).select('*').single();
       if (res.error) throw res.error;
       return mapProjectRow(res.data, []);
     }
     var state = localTeam();
-    var project = { id: 'id_' + Math.random().toString(36).slice(2, 10), name: payload.name, ticker: payload.ticker, mint: payload.mint, admin: payload.admin_wallet || '', chain: payload.chain, feePaid: paid, createdAt: new Date().toISOString(), campaigns: [] };
+    var project = { id: 'id_' + Math.random().toString(36).slice(2, 10), name: payload.name, ticker: payload.ticker, mint: payload.mint, admin: payload.admin_wallet || '', chain: payload.chain, feePaid: paid, createdAt: new Date().toISOString(), campaigns: [], plan: payload.plan || 'free' };
     state.projects.push(project); saveLocalTeam(state); return project;
   }
 
   async function createCampaign(projectId, input) {
     await init();
-    if (FEES_ENABLED) {
-      if (mode === 'supabase' && sb) {
-        var proj = await sb.from('projects').select('id, fee_paid').eq('id', projectId).maybeSingle();
-        if (proj.error) throw proj.error;
-        if (!proj.data) throw new Error('Project not found');
-        if (!proj.data.fee_paid) throw new Error('Pay the 0.25 SOL onboard fee before creating campaigns');
-      } else {
-        var stateCheck = localTeam();
-        var pCheck = stateCheck.projects.find(function (x) { return x.id === projectId; });
-        if (!pCheck) throw new Error('Project not found');
-        if (!pCheck.feePaid) throw new Error('Pay the 0.25 SOL onboard fee before creating campaigns');
-      }
+    var plan = 'free';
+    if (mode === 'supabase' && sb) {
+      var proj = await sb.from('projects').select('id, fee_paid, plan').eq('id', projectId).maybeSingle();
+      if (proj.error) throw proj.error;
+      if (!proj.data) throw new Error('Project not found');
+      plan = proj.data.plan || 'free';
+    } else {
+      var stateCheck = localTeam();
+      var pCheck = stateCheck.projects.find(function (x) { return x.id === projectId; });
+      if (!pCheck) throw new Error('Project not found');
+      plan = pCheck.plan || 'free';
+    }
+    if (plan === 'free' && PREMIUM_TYPES[input.type]) {
+      throw new Error('Starter unlocks holds, boards, pools, and airdrops. Raids stay free.');
     }
     if (mode === 'supabase' && sb) {
       var res = await sb.from('campaigns').insert({
@@ -297,6 +306,26 @@
     saveLocalTeam(state);
     return { reserved: p.vaultReserved, added: n };
   }
+
+  async function setProjectPlan(projectId, plan) {
+    await init();
+    if (plan !== 'free' && plan !== 'starter' && plan !== 'pro') throw new Error('Unknown plan');
+    var payload = { plan: plan };
+    if (plan !== 'free') payload.plan_paid_at = new Date().toISOString();
+    if (mode === 'supabase' && sb) {
+      var res = await sb.from('projects').update(payload).eq('id', projectId).select('*').single();
+      if (res.error) throw res.error;
+      return mapProjectRow(res.data, []);
+    }
+    var state = localTeam();
+    var p = state.projects.find(function (x) { return x.id === projectId; });
+    if (!p) throw new Error('Project not found');
+    p.plan = plan;
+    saveLocalTeam(state);
+    return p;
+  }
+
+  function isPremiumType(type) { return !!PREMIUM_TYPES[String(type || '').toLowerCase()]; }
 
   function roundAmt(n) {
     return Math.round(Number(n) * 1e6) / 1e6;
@@ -529,6 +558,11 @@
     if (mode === 'supabase' && sb) {
       await sb.from('fee_payments').update({ status: 'confirmed', tx_signature: txSignature, confirmed_at: new Date().toISOString() }).eq('id', feeId);
       if (kind === 'onboard' && refs && refs.projectId) await sb.from('projects').update({ fee_paid: true, fee_tx: txSignature }).eq('id', refs.projectId);
+      if ((kind === 'starter' || kind === 'pro') && refs && refs.projectId) {
+        await sb.from('projects').update({
+          fee_paid: true, fee_tx: txSignature, plan: kind, plan_tx: txSignature, plan_paid_at: new Date().toISOString()
+        }).eq('id', refs.projectId);
+      }
       if (kind === 'campaign' && refs && refs.campaignId) await sb.from('campaigns').update({ fee_paid: true, fee_tx: txSignature }).eq('id', refs.campaignId);
       if (kind === 'claim' && refs && refs.claimId) await sb.from('platform_claims').update({ fee_paid: true, fee_tx: txSignature, settled: true, settled_at: new Date().toISOString() }).eq('id', refs.claimId);
     } else if (kind === 'onboard' && refs && refs.projectId) {
@@ -729,6 +763,8 @@
     init: init, FEES: FEES,
     feesEnabled: function () { return FEES_ENABLED; },
     setFeesEnabled: function (on) { FEES_ENABLED = !!on; },
+    isPremiumType: isPremiumType,
+    setProjectPlan: setProjectPlan,
     getFeeTreasury: function () { return FEE_TREASURY; },
     setFeeTreasury: function (addr) { FEE_TREASURY = addr || ''; },
     getMode: function () { return mode; },
