@@ -1,0 +1,102 @@
+name: restore-vest-removal
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/restore-vest-removal.yml'
+jobs:
+  restore:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Restore good files and remove separate Vested
+        run: |
+          set -e
+          GOOD=5443ca174f8a06a0c81e6cd3f6b6f6196e29f743
+          git checkout "$GOOD" -- admin.html admin_app.js platform.js
+          # admin.html — drop Vested choice button
+          python3 - <<'PY'
+          from pathlib import Path
+          html = Path('admin.html').read_text()
+          html = html.replace(
+              '<button type="button" class="choice" data-reward="vested"><strong>Vested</strong><span>Premium · weekly unlock</span></button>\n',
+              ''
+          )
+          html = html.replace(
+              '<button type="button" class="choice" data-reward="vested"><strong>Vested</strong><span>Premium · weekly unlock</span></button>',
+              ''
+          )
+          html = html.replace('No growing / vested / shared prize pools', 'No growing / shared / top-3 prize pools')
+          html = html.replace('Vested unlocks, shared pool, top 3 podium', 'Shared pool, top 3 podium, growing pool that accumulates')
+          assert 'data-reward="vested"' not in html
+          Path('admin.html').write_text(html)
+          print('admin.html ok')
+          PY
+          # admin_app.js — drop vested labels + vested else UI
+          python3 - <<'PY'
+          from pathlib import Path
+          js = Path('admin_app.js').read_text()
+          js = js.replace(
+              "({fixed:'Fixed payout',top3:'Top 3',pool:'Shared pool',growing:'Growing pool',vested:'Vested'})[rewardMode]||rewardMode",
+              "({fixed:'Fixed payout',top3:'Top 3',pool:'Shared pool',growing:'Growing pool'})[rewardMode]||rewardMode"
+          )
+          js = js.replace(
+              "({fixed:'fixed',top3:'top 3',pool:'shared pool',growing:'accumulating pool',vested:'vested'})[rewardMode]||rewardMode",
+              "({fixed:'fixed',top3:'top 3',pool:'shared pool',growing:'accumulating pool'})[rewardMode]||rewardMode"
+          )
+          js = js.replace('Growing / vested / shared / top 3', 'Growing / shared / top 3')
+          old = """  } else {
+    if(rTeach) rTeach.innerHTML='<b>Vested — Premium.</b> Total amount unlocks over the window you set, weekly.';
+    if(amountWrap){ amountWrap.style.display='grid'; amountWrap.style.gridTemplateColumns='1fr 1fr'; }
+    if(firstAmt) firstAmt.style.display='flex';
+    if(unitField) unitField.style.display='flex';
+    if(poolRow) poolRow.style.display='grid';
+    if(daysEl) daysEl.style.display='flex';
+    if(rewardLbl) rewardLbl.textContent='Total vested amount';
+    if(poolLbl) poolLbl.textContent='Unlock window (days)';
+    if(poolHint) poolHint.textContent='Payouts unlock over this many days.';
+  }"""
+          new = """  } else {
+    /* vested is no longer a separate reward model — fall back to fixed UI */
+    if(rTeach) rTeach.innerHTML='<b>Fixed.</b> Every qualified holder gets the same payout.';
+    if(amountWrap){ amountWrap.style.display='grid'; amountWrap.style.gridTemplateColumns='1fr 1fr'; }
+    if(firstAmt) firstAmt.style.display='flex';
+    if(unitField) unitField.style.display='flex';
+    if(poolRow) poolRow.style.display='grid';
+    if(daysEl) daysEl.style.display='flex';
+    if(rewardLbl) rewardLbl.textContent='Payout per winner';
+    if(poolLbl) poolLbl.textContent='Max budget (optional)';
+    if(poolHint) poolHint.textContent='Stop paying once this is gone.';
+  }"""
+          if old not in js:
+              raise SystemExit('vested else branch not found')
+          js = js.replace(old, new)
+          Path('admin_app.js').write_text(js)
+          print('admin_app.js ok')
+          PY
+          # platform.js — drop vested from PREMIUM_REWARDS
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('platform.js').read_text()
+          p = p.replace(
+              'var PREMIUM_REWARDS = { top3: true, pool: true, growing: true, vested: true };',
+              'var PREMIUM_REWARDS = { top3: true, pool: true, growing: true };'
+          )
+          assert 'vested: true' not in p
+          Path('platform.js').write_text(p)
+          print('platform.js ok')
+          PY
+          git config user.name 'bard-sol'
+          git config user.email 'bardsoltoken@gmail.com'
+          git add admin.html admin_app.js platform.js
+          if git diff --cached --quiet; then
+            echo 'No changes to commit'
+          else
+            git commit -m 'Remove separate Vested reward model; vesting belongs inside Growing only'
+            git push origin HEAD:main
+          fi
