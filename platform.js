@@ -25,10 +25,11 @@
     claim: 0.1,
     stake: 0.05,
     starter: 1,
-    pro: 3
+    pro: 4
   };
 
   var PREMIUM_TYPES = { hold: true, refer: true, custom: true, board: true, pool: true, airdrop: true };
+  var PREMIUM_REWARDS = { top3: true, pool: true, growing: true, vested: true };
 
   var TEAM_KEY = 'bard_team_v1';
   var HOLDER_KEY = 'bard_holder_v1';
@@ -170,11 +171,11 @@
   function mapCampaignRow(c) {
     var camp = {
       id: c.id, title: c.title, type: c.type, rule: c.rule_text || '', reward: c.reward || '',
-      unit: c.reward_unit || 'TOKEN', pool: c.pool_size || '', days: c.duration_days || 7,
+      unit: c.reward_unit || 'SOL', pool: c.pool_size || '', days: (c.duration_days == null ? 7 : c.duration_days),
       status: c.status || 'active', settled: c.settled_count || 0, feePaid: !!c.fee_paid, feeTx: c.fee_tx || null,
       createdAt: c.created_at, accessMode: c.access_mode || 'open', raidMode: c.raid_mode || null,
       rewardMode: c.reward_mode || 'fixed', postUrl: c.post_url || '', targets: c.targets || '',
-      bonusHandle: c.bonus_handle || '', config: c.config || {},
+      bonusHandle: c.bonus_handle || '', config: (function(cfg){ if (!cfg) return {}; if (typeof cfg === 'string') { try { return JSON.parse(cfg); } catch (e) { return {}; } } return cfg; })(c.config),
       vaultReserved: Number(c.vault_reserved || 0),
       drawSeed: c.draw_seed || c.drawSeed || null,
       drawAt: c.draw_at || c.drawAt || null,
@@ -203,14 +204,14 @@
   async function createProject(input) {
     await init();
     var paid = !FEES_ENABLED;
-    var payload = { name: input.name, ticker: input.ticker, mint: input.mint, chain: input.chain || 'solana', admin_wallet: input.admin || null, created_by: input.createdBy || input.admin || null, fee_paid: paid, fee_amount_sol: FEES.onboard, plan: input.plan || 'free' };
+    var payload = { name: input.name, ticker: input.ticker, mint: input.mint, chain: input.chain || 'solana', admin_wallet: input.admin || null, created_by: input.createdBy || input.admin || null, fee_paid: paid, fee_amount_sol: FEES.onboard, plan: input.plan || 'starter' };
     if (mode === 'supabase' && sb) {
       var res = await sb.from('projects').insert(payload).select('*').single();
       if (res.error) throw res.error;
       return mapProjectRow(res.data, []);
     }
     var state = localTeam();
-    var project = { id: 'id_' + Math.random().toString(36).slice(2, 10), name: payload.name, ticker: payload.ticker, mint: payload.mint, admin: payload.admin_wallet || '', chain: payload.chain, feePaid: paid, createdAt: new Date().toISOString(), campaigns: [], plan: payload.plan || 'free' };
+    var project = { id: 'id_' + Math.random().toString(36).slice(2, 10), name: payload.name, ticker: payload.ticker, mint: payload.mint, admin: payload.admin_wallet || '', chain: payload.chain, feePaid: paid, createdAt: new Date().toISOString(), campaigns: [], plan: payload.plan || 'starter' };
     state.projects.push(project); saveLocalTeam(state); return project;
   }
 
@@ -228,14 +229,14 @@
       if (!pCheck) throw new Error('Project not found');
       plan = pCheck.plan || 'free';
     }
-    if (plan === 'free' && PREMIUM_TYPES[input.type]) {
-      throw new Error('Starter unlocks holds, boards, pools, and airdrops. Raids stay free.');
+    if (!isPremiumPlan(plan) && (PREMIUM_TYPES[input.type] || PREMIUM_REWARDS[input.rewardMode])) {
+      throw new Error('Premium (4 SOL) unlocks holds, boards, growing pools, and airdrops. Starter is raids with a fixed payout.');
     }
     if (mode === 'supabase' && sb) {
       var res = await sb.from('campaigns').insert({
         project_id: projectId, title: input.title, type: input.type, rule_text: input.rule,
-        reward: input.reward || null, reward_unit: input.unit || 'TOKEN', pool_size: input.pool || null,
-        duration_days: input.days || 7, status: 'active', fee_paid: !FEES_ENABLED, fee_amount_sol: FEES.campaign,
+        reward: input.reward || null, reward_unit: input.unit || 'SOL', pool_size: input.pool || null,
+        duration_days: (input.days === 0 || input.days === '0') ? 0 : (parseInt(input.days, 10) || 7), status: 'active', fee_paid: !FEES_ENABLED, fee_amount_sol: FEES.campaign,
         access_mode: input.accessMode || 'open', raid_mode: input.raidMode || null, reward_mode: input.rewardMode || 'fixed',
         post_url: input.postUrl || null, targets: input.targets || null, bonus_handle: input.bonusHandle || null, config: input.config || {}
       }).select('*').single();
@@ -245,7 +246,7 @@
     var state = localTeam();
     var p = state.projects.find(function (x) { return x.id === projectId; });
     if (!p) throw new Error('Project not found');
-    var camp = { id: 'id_' + Math.random().toString(36).slice(2, 10), title: input.title, type: input.type, rule: input.rule, reward: input.reward || '', unit: input.unit || 'TOKEN', pool: input.pool || '', days: input.days || 7, status: 'active', settled: 0, feePaid: !FEES_ENABLED, createdAt: new Date().toISOString(), accessMode: input.accessMode || 'open', raidMode: input.raidMode || null, rewardMode: input.rewardMode || 'fixed', postUrl: input.postUrl || '', targets: input.targets || '', bonusHandle: input.bonusHandle || '', config: input.config || {} };
+    var camp = { id: 'id_' + Math.random().toString(36).slice(2, 10), title: input.title, type: input.type, rule: input.rule, reward: input.reward || '', unit: input.unit || 'SOL', pool: input.pool || '', days: (input.days === 0 || input.days === '0') ? 0 : (parseInt(input.days, 10) || 7), status: 'active', settled: 0, feePaid: !FEES_ENABLED, createdAt: new Date().toISOString(), accessMode: input.accessMode || 'open', raidMode: input.raidMode || null, rewardMode: input.rewardMode || 'fixed', postUrl: input.postUrl || '', targets: input.targets || '', bonusHandle: input.bonusHandle || '', config: input.config || {} };
     p.campaigns = p.campaigns || []; p.campaigns.push(camp); saveLocalTeam(state); return camp;
   }
 
@@ -329,6 +330,39 @@
   }
 
   function isPremiumType(type) { return !!PREMIUM_TYPES[String(type || '').toLowerCase()]; }
+  function isPremiumReward(mode) { return !!PREMIUM_REWARDS[String(mode || '').toLowerCase()]; }
+  function isPremiumPlan(plan) { return String(plan || '') === 'pro'; }
+  function planLabel(plan) { return isPremiumPlan(plan) ? 'Premium' : 'Starter'; }
+  function normalizePlan(plan) { return isPremiumPlan(plan) ? 'pro' : 'starter'; }
+
+  function growingNow(campaign) {
+    var cfg = campaign && campaign.config ? campaign.config : {};
+    if (typeof cfg === 'string') { try { cfg = JSON.parse(cfg); } catch (e) { cfg = {}; } }
+    var start = Number(cfg.growStart != null ? cfg.growStart : (campaign && (campaign.pool || campaign.reward)) || 0);
+    var add = Number(cfg.growAdd || 0);
+    var every = cfg.growEvery || 'week';
+    var cap = Number(cfg.growCap || 0);
+    var created = campaign && campaign.createdAt ? new Date(campaign.createdAt).getTime() : Date.now();
+    var ms = every === 'day' ? 86400000 : 7 * 86400000;
+    var periods = Math.max(0, Math.floor((Date.now() - created) / ms));
+    var now = start + add * periods;
+    if (cap > 0) now = Math.min(now, cap);
+    return now;
+  }
+  function growingMeta(campaign) {
+    var cfg = campaign && campaign.config ? campaign.config : {};
+    if (typeof cfg === 'string') { try { cfg = JSON.parse(cfg); } catch (e) { cfg = {}; } }
+    var every = cfg.growEvery || 'week';
+    var add = Number(cfg.growAdd || 0);
+    var start = Number(cfg.growStart != null ? cfg.growStart : (campaign && (campaign.pool || campaign.reward)) || 0);
+    var cap = Number(cfg.growCap || 0);
+    var now = growingNow(campaign);
+    var unit = (campaign && campaign.unit) || '';
+    return {
+      start: start, add: add, every: every, cap: cap, now: now, unit: unit,
+      line: 'Started at ' + start + (add ? (', adds ' + add + ' every ' + every) : '') + (cap ? (', caps at ' + cap) : ', no cap') + '. Now ' + now + (unit ? (' ' + unit) : '') + '.'
+    };
+  }
 
   function roundAmt(n) {
     return Math.round(Number(n) * 1e6) / 1e6;
@@ -361,11 +395,17 @@
       payouts = rows.map(function (j) { return { wallet: j.wallet, amount: each, progress: j.progress || 0 }; });
     } else if (mode === 'top3' || mode === 'topn') {
       var top = rows.slice(0, 3);
-      var parts = [0.5, 0.3, 0.2];
+      var cfg = campaign.config || {};
+      var parts = [
+        Number(cfg.top3First != null ? cfg.top3First : 50) / 100,
+        Number(cfg.top3Second != null ? cfg.top3Second : 30) / 100,
+        Number(cfg.top3Third != null ? cfg.top3Third : 20) / 100
+      ];
       if (!(pool > 0)) throw new Error('Top N needs a pool size');
       payouts = top.map(function (j, i) { return { wallet: j.wallet, amount: roundAmt(pool * (parts[i] || 0)), progress: j.progress || 0 }; });
     } else if (mode === 'growing') {
-      if (!(pool > 0)) throw new Error('Growing pool needs a reserved amount');
+      pool = Number(growingNow(campaign) || pool);
+      if (!(pool > 0)) throw new Error('Growing pool needs a starting size');
       payouts = [{ wallet: rows[0].wallet, amount: pool, progress: rows[0].progress || 0 }];
     } else {
       if (!(pool > 0)) throw new Error('Shared pool needs a pool size');
@@ -708,7 +748,7 @@
     var n = Math.max(0, parseInt(progress, 10) || 0);
     if (mode === 'supabase' && sb) {
       var payload = { progress: n }; if (note != null) payload.note = String(note);
-      var res = await sb.from('campaign_joins').update(payload).eq('campaign_id', wallet).eq('wallet', wallet).select('*').single();
+      var res = await sb.from('campaign_joins').update(payload).eq('campaign_id', campaignId).eq('wallet', wallet).select('*').single();
       if (res.error) throw res.error; return mapJoinRow(res.data);
     }
     return { campaign_id: campaignId, wallet: wallet, progress: n, note: note || null };
@@ -727,7 +767,7 @@
   async function settleClaim(projectId, campaignId, wallet, xHandle, amount, unit) {
     await init();
     if (mode === 'supabase' && sb) {
-      var res = await sb.from('platform_claims').upsert({ project_id: projectId, campaign_id: campaignId, wallet: wallet, x_handle: xHandle || null, amount: amount || null, unit: unit || 'TOKEN', settled: true, settled_at: new Date().toISOString(), fee_paid: !FEES_ENABLED, fee_amount_sol: FEES.claim }, { onConflict: 'campaign_id,wallet' }).select('*').single();
+      var res = await sb.from('platform_claims').upsert({ project_id: projectId, campaign_id: campaignId, wallet: wallet, x_handle: xHandle || null, amount: amount || null, unit: unit || 'SOL', settled: true, settled_at: new Date().toISOString(), fee_paid: !FEES_ENABLED, fee_amount_sol: FEES.claim }, { onConflict: 'campaign_id,wallet' }).select('*').single();
       if (res.error) throw res.error;
       var camp = await sb.from('campaigns').select('settled_count').eq('id', campaignId).single();
       var n = (camp.data && camp.data.settled_count) || 0;
@@ -880,6 +920,11 @@
     feesEnabled: function () { return FEES_ENABLED; },
     setFeesEnabled: function (on) { FEES_ENABLED = !!on; },
     isPremiumType: isPremiumType,
+    isPremiumReward: isPremiumReward,
+    isPremiumPlan: isPremiumPlan,
+    planLabel: planLabel,
+    growingNow: growingNow,
+    growingMeta: growingMeta,
     setProjectPlan: setProjectPlan,
     getFeeTreasury: function () { return FEE_TREASURY; },
     setFeeTreasury: function (addr) { FEE_TREASURY = addr || ''; },
