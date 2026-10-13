@@ -1,0 +1,28 @@
+{
+  "name": "Grenna Ironvow",
+  "symbol": "GRE",
+  "description": "An ex-champion of the pit, fighting onto the Last Page to pay a debt she will not name. Season 0 devnet token. Bard is the narrator, not a contestant.",
+  "image": "https://bard.is/season0/meta/grenna.svg",
+  "attributes": [
+    {
+      "trait_type": "Archetype",
+      "value": "The Brawler"
+    },
+    {
+      "trait_type": "STR",
+      "value": "75"
+    },
+    {
+      "trait_type": "CUN",
+      "value": "30"
+    },
+    {
+      "trait_type": "CHA",
+      "value": "45"
+    },
+    {
+      "trait_type": "LCK",
+      "value": "50"
+    }
+  ]
+}

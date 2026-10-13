@@ -1,6 +1,13 @@
 name = "noisysurg11"
 main = "worker.js"
 compatibility_date = "2024-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Season 0 secrets are set with `wrangler secret put`, never committed:
+#   BARD_VAULT_SECRET   devnet Squads member key (base58 or JSON array)
+#   BARD_SEASON_SECRET  HMAC key for one-time spend codes
+#   BARD_DRIP_SECRET    devnet SOL/tBard drip key
+#   SEASON_SUPABASE_URL must not be the live project pxdiyukxgnphxlknhmke
 
 [assets]
 directory = "."

@@ -1,14 +1,16 @@
+import { handleApi } from './season0/worker/handlers.js';
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
-    if (url.pathname === '/api/vault/bard-sign' && request.method === 'POST') {
-      // Bard's second key lives in env.BARD_VAULT_SECRET (never in the browser).
-      // Until that secret is set, we return waiting so the team UI can show
-      // "You signed · waiting for Bard".
-      if (!env.BARD_VAULT_SECRET) {
-        return Response.json({ ok: false, waiting: true, reason: 'bard_signer_offline' });
-      }
-      return Response.json({ ok: false, waiting: true, reason: 'bard_signer_not_wired' });
+    if (url.pathname.startsWith('/api/')) {
+      return handleApi(request, env || {});
+    }
+    const night = url.pathname.match(/^\/night\/(\d+)\/?$/);
+    if (night) {
+      url.pathname = '/night.html';
+      url.searchParams.set('chapter', night[1]);
+      return env.ASSETS.fetch(new Request(url, request));
     }
     return env.ASSETS.fetch(request);
   }

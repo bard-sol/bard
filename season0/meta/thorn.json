@@ -1,0 +1,28 @@
+{
+  "name": "Thorn",
+  "symbol": "THO",
+  "description": "Raised by wolves in the book's torn margins. Thorn trusts no reader. Season 0 devnet token. Bard is the narrator, not a contestant.",
+  "image": "https://bard.is/season0/meta/thorn.svg",
+  "attributes": [
+    {
+      "trait_type": "Archetype",
+      "value": "The Feral"
+    },
+    {
+      "trait_type": "STR",
+      "value": "70"
+    },
+    {
+      "trait_type": "CUN",
+      "value": "55"
+    },
+    {
+      "trait_type": "CHA",
+      "value": "25"
+    },
+    {
+      "trait_type": "LCK",
+      "value": "50"
+    }
+  ]
+}

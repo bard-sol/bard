@@ -1,0 +1,28 @@
+{
+  "name": "Pip Fennick",
+  "symbol": "PIP",
+  "description": "He has survived three shipwrecks, a hanging and a dragon, every one by accident. Season 0 devnet token. Bard is the narrator, not a contestant.",
+  "image": "https://bard.is/season0/meta/pip.svg",
+  "attributes": [
+    {
+      "trait_type": "Archetype",
+      "value": "The Lucky Fool"
+    },
+    {
+      "trait_type": "STR",
+      "value": "35"
+    },
+    {
+      "trait_type": "CUN",
+      "value": "40"
+    },
+    {
+      "trait_type": "CHA",
+      "value": "45"
+    },
+    {
+      "trait_type": "LCK",
+      "value": "80"
+    }
+  ]
+}
