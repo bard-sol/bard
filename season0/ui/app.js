@@ -10,9 +10,11 @@ import {
   bannerStack,
   headerCopy,
   screenState,
-  standings
+  standings,
+  voidCardLine
 } from './view.js';
 import { bustSvg } from './portraits.js';
+import { looksLikeMainnet, phantomBrowseUrl, solflareBrowseUrl, wrongNetworkHelp } from './wallet.js';
 
 const params = new URLSearchParams(location.search);
 const anchor = Date.now();
@@ -35,7 +37,9 @@ const ui = {
   cheer: store.cheer || null,
   revivalPaid: store.revivalPaid || 0,
   eligibility: null,
-  toast: ''
+  toast: '',
+  walletKind: store.walletKind || null,
+  wrongNetwork: params.get('wrong-network')
 };
 
 function loadStore() {
@@ -46,6 +50,7 @@ function loadStore() {
 function saveStore() {
   localStorage.setItem('bard-s0', JSON.stringify({
     wallet: ui.wallet,
+    walletKind: ui.walletKind,
     pick: ui.pick,
     cheer: ui.cheer,
     revivalPaid: ui.revivalPaid,
@@ -113,7 +118,6 @@ function cardClass(row, s) {
 
 function chipsFor(row, s) {
   const chips = [];
-  if (row.id === s.relicId) chips.push('RELIC');
   if (s.voided) chips.push('NOT FINAL');
   else if (s.marked === row.id && s.revivalOpen) chips.push('REVIVAL OPEN');
   else if (s.marked === row.id) chips.push('MARKED');
@@ -143,13 +147,20 @@ function renderHeader(s) {
     '<img class="mark" src="/transparentbardsmile.png" alt="">' +
     '<span class="kicker">Bard · S0 · Ch ' + esc(s.chapter) + '/7</span>' +
     '<span class="badge">DEVNET</span>' +
-    (s.chapterNight ? '<a class="live" href="/night/' + s.chapter + '">LIVE</a>' : '') +
-    '<button class="wallet" type="button" data-act="signin">' + esc(shortWallet(ui.wallet)) + '</button>' +
+    (s.chapterNight ? '<a class="live" href="/play/night/' + s.chapter + '">LIVE</a>' : '') +
+    '<button class="wallet" type="button" data-act="signin" data-wallet="' + (ui.wrongNetwork ? 'wrong-network' : (ui.wallet ? 'signed-in' : 'signed-out')) + '">' + esc(ui.wrongNetwork ? 'Wrong network' : shortWallet(ui.wallet)) + '</button>' +
     '</div>' +
     '<div class="phasebar' + hatch + '" aria-hidden="true">' + segs + '</div>' +
     (s.travel ? '<p class="travel">Time travel · ' + esc(s.phase) + ' · not the live clock</p>' : '') +
     '<p class="headline" data-clock="headline">' + esc(copy.title) + '</p>' +
-    '<p class="footnote" data-clock="footnote">' + esc(copy.footnote) + '</p>';
+    '<p class="footnote" data-clock="footnote">' + esc(copy.footnote) + '</p>' +
+    wrongNetworkBanner();
+}
+
+function wrongNetworkBanner() {
+  if (!ui.wrongNetwork) return '';
+  const help = wrongNetworkHelp(ui.wrongNetwork === '1' ? (ui.walletKind || 'other') : ui.wrongNetwork);
+  return '<p class="banner wrong" data-banner="wrong-network"><strong>' + esc(help.title) + '</strong> ' + esc(help.steps) + '</p>';
 }
 
 function renderBanners(s) {
@@ -158,7 +169,7 @@ function renderBanners(s) {
     '<section class="banner ' + b.tone + '" data-banner="' + b.id + '"><strong>' + esc(b.title) + '</strong><p>' + esc(b.body) + '</p>' +
     (b.id === 'void' ? '<button class="btn" type="button" data-act="open" data-sheet="verify">See the record</button>' : '') +
     (b.id === 'revival' ? '<button class="btn solid" type="button" data-act="open" data-sheet="revive" data-char="' + esc(s.marked) + '">Burn tBard</button>' : '') +
-    (b.id === 'night' ? '<a class="btn" href="/night/' + s.chapter + '">Watch</a>' : '') +
+    (b.id === 'night' ? '<a class="btn" href="/play/night/' + s.chapter + '">Watch</a>' : '') +
     '</section>'
   ).join('');
   const more = stack.extra ? '<p class="meta">+' + stack.extra + ' more</p>' : '';
@@ -176,13 +187,16 @@ function renderCards(s) {
     const gap = row.gap == null ? '—' : (row.gap * 100).toFixed(1) + '%';
     const gapClass = row.lowest ? 'warn' : '';
     const scoreNote = s.voided ? 'Not final: chapter voided' : row.S.toFixed(3);
+    const relic = row.id === s.relicId;
+    const relicChapter = params.get('relicChapter') || '2';
     return '<button class="' + cardClass(row, s) + '" type="button" data-act="open" data-sheet="detail" data-char="' + c.id + '">' +
-      bustSvg(c) +
+      bustSvg(c, 64, relic ? 'relic' : 'alive') +
       '<span><span class="scoreline"><span>' + esc(c.name) + ' <span class="meta">' + esc(c.archetype) + '</span></span>' +
       '<b class="num">#' + row.rank + ' ' + scoreNote + '</b></span>' +
       '<span class="stats">' + statBars(c, row.trained) + '</span>' +
       '<span class="meta">turnout ' + (row.turnout * 100).toFixed(0) + '% · ' + row.handlers + ' handlers · <span class="' + gapClass + '">gap ' + gap + '</span></span>' +
-      (row.id === s.relicId ? '<span class="meta">' + esc(RELIC_NOTE) + '</span>' : '') +
+      (relic ? '<span class="chip">RELIC · inked out in Chapter ' + esc(relicChapter) + '</span><span class="meta">' + esc(RELIC_NOTE) + '</span>' : '') +
+      (s.voided ? '<span class="meta" data-void-card>' + esc(voidCardLine(s.voidReason)) + '</span>' : '') +
       '<span class="chips">' + chipsFor(row, s) + '</span></span></button>';
   }).join('');
 }
@@ -253,13 +267,14 @@ function renderMe(s) {
     ? '<p>Season 0 legacy points carry into Season 1 at full value. The Season 1 early-buy window is on.</p>'
     : '';
   const elig = ui.eligibility
-    ? '<p data-elig="' + (ui.eligibility.eligible ? 'yes' : 'no') + '">' + (ui.eligibility.eligible ? 'Eligible ✓' : 'Not eligible yet') +
-      ' · devnet minimum ' + ui.eligibility.eligibility_min_sol + ' SOL · value shown ' + ui.eligibility.value_sol + ' (not a Season 0 gate)</p>'
+    ? '<p data-elig="' + (ui.eligibility.eligible ? 'yes' : 'no') + '">' +
+      (ui.eligibility.eligible ? 'Eligible ✓ · holding since the sample clock.' : 'Hold any amount for 24h · eligible in 4h 0m.') +
+      ' Devnet minimum ' + ui.eligibility.eligibility_min_sol + ' SOL. Value shown ' + ui.eligibility.value_sol + ' does not gate Season 0.</p>'
     : '<p>Checking eligibility…</p>';
   return '<h2>Legacy</h2>' + early +
     '<h2>Eligibility</h2>' + elig +
     '<p class="footnote">' + esc(ELIGIBILITY_NOTE) + '</p>' +
-    '<p class="meta">Hold Pip for 24h · a zero balance restarts the clock. Faucet tBard never confers eligibility.</p>' +
+    '<p class="meta">Hold any amount for 24h. A zero balance restarts the clock. Faucet tBard never confers eligibility.</p>' +
     '<h2>Faucet</h2>' +
     '<p>First sign-in: 1,000 tBard + 0.05 devnet SOL. Cheer: +100 tBard. Get devnet SOL: 0.5 per day.</p>' +
     '<div class="row"><button class="btn solid" type="button" data-act="faucet">Get devnet SOL</button>' +
@@ -327,14 +342,14 @@ function renderSheet() {
 function sheetDetail(s, c) {
   const row = s.rows.find((r) => r.id === c.id);
   const relic = c.id === s.relicId;
-  sheetWrap(c.name, bustSvg(c, 96) +
+  sheetWrap(c.name, bustSvg(c, 96, relic ? 'relic' : 'alive') +
     '<p class="voice">' + esc(c.voice) + '</p><p>' + esc(c.hook) + '</p>' +
     '<p>Survival score ' + (row ? row.S.toFixed(3) : '') + ' · M ' + (row ? row.M.toFixed(2) : '') +
     ' · U ' + (row ? row.U.toFixed(2) : '') + ' · B ' + (row ? row.B.toFixed(2) : '') +
     ' · P ' + (row ? row.P.toFixed(2) : '') + ' · K ' + (row ? row.K.toFixed(2) : '') + '</p>' +
     '<p class="meta">Market sample is a score input, not the score. Fee on the curve is 2% (incl. 0.4% Meteora) once pools exist.</p>' +
-    (relic ? '<p class="banner">' + esc(RELIC_NOTE) + ' This token still trades. In the game it has no votes, rewards or pot.</p>' : '') +
-    '<p class="meta">Any amount counts. Hold it for 24h to be eligible. Selling to zero resets the 24h clock.</p>' +
+    (relic ? '<p class="banner" data-relic-art>' + esc(RELIC_NOTE) + ' This token still trades. In the game it has no votes, rewards or pot.</p>' : '') +
+    '<p class="meta">Hold any amount for 24h. Selling to zero resets the 24h clock.</p>' +
     '<div class="row">' +
     (relic ? '' : '<button class="btn solid" type="button" data-act="open" data-sheet="strike" data-char="' + c.id + '">Strike</button>') +
     (relic ? '' : '<button class="btn" type="button" data-act="open" data-sheet="train" data-char="' + c.id + '">Train</button>') +
@@ -471,12 +486,16 @@ async function sheetVerify(s) {
     : await post('/api/season/publish', { state });
   const host = document.querySelector('.sheet article');
   if (!host) return;
+  const supabase = plan.supabaseUrl
+    ? '<a data-verify="supabase" href="' + esc(plan.supabaseUrl) + '">Supabase Storage</a>'
+    : '<span data-verify="supabase">Supabase Storage</span>';
   host.insertAdjacentHTML('beforeend',
-    '<p>Devnet proof is the memo hash. The file is mirrored to Supabase Storage and a public GitHub path. Irys is not used on devnet.</p>' +
+    '<p>The memo hash is the proof. The file is in Supabase Storage, with a public GitHub mirror. There is no Arweave copy.</p>' +
     '<p>Memo</p><pre class="log">' + esc(plan.memo || '') + '</pre>' +
-    '<p>Supabase · ' + esc(plan.supabasePath || '') + '</p>' +
-    '<p>GitHub · ' + esc(plan.githubPath || '') + '</p>' +
-    '<p>Irys · ' + esc(plan.irys == null ? 'not used on devnet' : plan.irys) + '</p>' +
+    '<p data-verify="hashes">File sha256 ' + esc(plan.fileHash || plan.hash || '') +
+    '<br>Memo hash ' + esc(plan.memoHash || '') + ' ' + (plan.matches ? 'Matches ✓' : 'Does not match') + '</p>' +
+    '<p>' + supabase + ' · ' + esc(plan.supabasePath || '') + '</p>' +
+    '<p><a data-verify="github" href="' + esc(plan.githubUrl || '') + '">GitHub mirror</a></p>' +
     '<p class="footnote">The snapshot slot is shown here only after the mark. It is never counted down during the final window.</p>');
 }
 
@@ -502,18 +521,38 @@ function sheetWords(s, c) {
 }
 
 function sheetSign() {
+  const page = location.href;
+  const android = /Android/i.test(navigator.userAgent);
   sheetWrap('Sign in to Bard',
     '<p>Sign in to Bard. Free, not a transaction.</p>' +
     '<div class="row"><button class="btn solid" type="button" data-act="wallet" data-which="phantom">Phantom</button>' +
     '<button class="btn" type="button" data-act="wallet" data-which="solflare">Solflare</button>' +
+    '<button class="btn" type="button" data-act="wallet" data-which="backpack">Backpack</button>' +
     '<button class="btn" type="button" data-act="demo">Play without a wallet</button></div>' +
-    '<p class="footnote">This app pins devnet. A mainnet wallet is refused at preflight. Nothing here is sent to mainnet.</p>');
+    (android ? '<p class="meta">On Android Chrome, a Mobile Wallet Adapter entry is listed when a wallet registers one.</p>' : '') +
+    '<p class="meta">Open this page in the wallet app.</p>' +
+    '<div class="row"><a class="btn" data-wallet-link="phantom" href="' + esc(phantomBrowseUrl(page)) + '">Open in Phantom</a>' +
+    '<a class="btn" data-wallet-link="solflare" href="' + esc(solflareBrowseUrl(page)) + '">Open in Solflare</a></div>' +
+    '<p class="footnote">This app pins devnet. A mainnet preflight shows how to switch that wallet.</p>');
+}
+
+function providerFor(which) {
+  if (which === 'solflare') return window.solflare || null;
+  if (which === 'backpack') return (window.backpack && (window.backpack.solana || window.backpack)) || null;
+  return window.solana || (window.phantom && window.phantom.solana) || null;
+}
+
+function noteChainError(message) {
+  if (!looksLikeMainnet(message)) return;
+  ui.wrongNetwork = ui.walletKind || 'other';
+  renderMain();
 }
 
 async function connectWallet(which) {
-  const provider = which === 'solflare' ? window.solflare : window.solana;
+  ui.walletKind = which;
+  const provider = providerFor(which);
   if (!provider) {
-    toast('No ' + which + ' provider in this browser. Use demo play on devnet.');
+    toast('No ' + which + ' provider in this browser. Use Open in ' + which + ', or demo play on devnet.');
     return;
   }
   try {
@@ -658,7 +697,11 @@ async function train(charId) {
     discount
   });
   const log = document.getElementById('train-log');
-  if (!code.ok) { if (log) log.textContent = code.reason || 'rejected'; return; }
+  if (!code.ok) {
+    noteChainError(code.reason);
+    if (log) log.textContent = code.reason || 'rejected';
+    return;
+  }
   if (!ui.publicInfo.tbardMint) {
     if (log) log.textContent = 'Spend code ready. Pools are not created on this devnet yet, so nothing was sent.\n' + code.memo + '\n50/30/20 base units ' + JSON.stringify(code.split);
     return;
@@ -675,7 +718,12 @@ async function revive(charId) {
     chapter: screen().chapter,
     amount
   });
-  if (!code.ok) { ui.flash = code.reason || 'rejected'; renderSheet(); return; }
+  if (!code.ok) {
+    noteChainError(code.reason);
+    ui.flash = code.reason || 'rejected';
+    renderSheet();
+    return;
+  }
   ui.revivalPaid += amount;
   saveStore();
   ui.flash = 'Burn code ready. 100% burn. Nothing was broadcast (no mint configured).\n' + code.memo;

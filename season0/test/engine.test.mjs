@@ -201,6 +201,9 @@ test('state file proof is the memo; devnet does not use Irys', async () => {
   assert.equal(plan.memo.endsWith(plan.hash), true);
   assert.ok(plan.supabasePath.startsWith('season-state/'));
   assert.ok(plan.githubPath.startsWith('season0/mirror/'));
+  assert.equal(plan.githubUrl, 'https://github.com/bard-sol/bard-chapters/blob/main/s0-chapter-2-void.json');
+  assert.equal(plan.matches, true);
+  assert.equal(plan.fileHash, plan.memoHash);
   const finalPlan = await publishPlan({ season: 's0', chapter: 2, status: 'final', scores: [] });
   assert.ok(finalPlan.memo.startsWith('bard:v1:state:s0:2:'));
 });

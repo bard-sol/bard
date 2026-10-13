@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { headerCopy, screenState, PREDICT_NOTE, RELIC_NOTE, ELIGIBILITY_NOTE } from '../ui/view.js';
+import { readFileSync } from 'node:fs';
+import { headerCopy, screenState, PREDICT_NOTE, RELIC_NOTE, ELIGIBILITY_NOTE, voidCardLine } from '../ui/view.js';
 
 test('P4 counts the window down and never names a snapshot time', () => {
   const screen = screenState({ now: Date.now(), query: { phase: 'P4', chapter: '3', elapsed: '0' } });
@@ -36,5 +37,14 @@ test('revival, relics and eligibility copy are the Season 0 rules', () => {
   assert.match(headerCopy(screen).footnote, /100%/);
   assert.match(PREDICT_NOTE, /both the signed time and the server receipt/);
   assert.match(RELIC_NOTE, /just trade/);
+  assert.match(RELIC_NOTE, /in this app only/);
   assert.match(ELIGIBILITY_NOTE, /never makes you eligible/);
+  assert.equal(voidCardLine('vrf'), 'Voided · randomness failed · stakes returned · Train kept');
+  assert.equal(voidCardLine('indexer'), 'Voided · data outage · stakes returned · Train kept');
+});
+
+test('the landing page does not link into Season 0', () => {
+  const html = readFileSync(new URL('../../index.html', import.meta.url), 'utf8');
+  assert.equal(html.includes('/play/'), false);
+  assert.equal(html.includes('season.html'), false);
 });

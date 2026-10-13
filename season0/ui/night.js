@@ -1,5 +1,5 @@
 const params = new URLSearchParams(location.search);
-const fromPath = location.pathname.match(/\/night\/(\d+)/);
+const fromPath = location.pathname.match(/\/play\/night\/(\d+)/) || location.pathname.match(/\/night\/(\d+)/);
 const chapter = params.get('chapter') || (fromPath && fromPath[1]) || '1';
 const voided = params.get('void');
 
@@ -16,13 +16,13 @@ const beats = voided ? [
   'The page turns.',
   'Last words, or the line the ink kept.',
   'Revival is open. Anyone can burn tBard. No refunds.',
-  'Verify the chapter when the memo is posted. Devnet keeps the hash, not Irys.'
+  'Verify the chapter. The memo hash matches the Supabase file and the GitHub mirror.'
 ];
 
 let index = 0;
 const beat = document.getElementById('beat');
 const note = document.getElementById('note');
-document.getElementById('back').href = '/season.html?phase=P7&chapter=' + chapter + (voided ? '&void=' + voided : '');
+document.getElementById('back').href = '/play/?phase=P7&chapter=' + chapter + (voided ? '&void=' + voided : '');
 
 function show() {
   beat.textContent = beats[index];

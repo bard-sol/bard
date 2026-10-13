@@ -174,7 +174,7 @@ export function headerCopy(screen) {
   if (screen.phase === 'P0') {
     return {
       title: 'Season opens in ' + left(screen.t0) + ' · buy now to be eligible for Chapter 1',
-      footnote: 'Any amount counts. Hold it for 24h. Free tBard never makes you eligible.'
+      footnote: 'Hold any amount for 24h. Free tBard never makes you eligible.'
     };
   }
   if (screen.phase === 'announced') {
@@ -292,6 +292,17 @@ export function bannerStack(screen) {
 
 export const ELIGIBILITY_NOTE = 'Free tBard pays for actions. It never makes you eligible. Holding the character for 24h does.';
 
-export const RELIC_NOTE = 'Relics just trade in Season 0. No comeback vote and no relic burns.';
+export const RELIC_NOTE = 'Relics just trade in Season 0. No comeback vote and no relic burns. Relic art is in this app only. The token image in wallets and explorers does not change.';
+
+export const VOID_SHORT = {
+  vrf: 'randomness failed',
+  indexer: 'data outage',
+  exploit: 'exploit'
+};
+
+export function voidCardLine(reason) {
+  const short = VOID_SHORT[reason] || VOID_SHORT.vrf;
+  return 'Voided · ' + short + ' · stakes returned · Train kept';
+}
 
 export const PREDICT_NOTE = 'A pick counts only if both the signed time and the server receipt are before the lock.';

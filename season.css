@@ -28,6 +28,7 @@ a{color:var(--info)}
 .banner{border:1px solid var(--line-strong);border-radius:var(--r-md);padding:12px;margin:8px 0;background:var(--surface)}
 .banner.danger{border-color:var(--danger)}
 .banner.info{border-color:var(--info)}
+.banner.wrong{border-color:var(--devnet)}
 .banner.revive{border-color:var(--revive)}
 .bar{height:10px;background:var(--surface-3);border-radius:var(--r-pill);overflow:hidden}
 .bar > i{display:block;height:100%;background:var(--revive);width:0}

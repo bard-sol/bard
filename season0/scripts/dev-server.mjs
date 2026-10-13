@@ -31,14 +31,27 @@ function staticPath(urlPath) {
   return file;
 }
 
+function redirect(res, location) {
+  res.statusCode = 302;
+  res.setHeader('location', location);
+  res.end();
+}
+
 const server = http.createServer(async (req, res) => {
   try {
     const url = new URL(req.url, 'http://127.0.0.1');
-    const night = url.pathname.match(/^\/night\/(\d+)\/?$/);
+    if (url.pathname === '/season.html') return redirect(res, '/play/' + url.search);
+    if (url.pathname === '/qa.html') return redirect(res, '/play/qa.html' + url.search);
+    if (url.pathname === '/control.html') return redirect(res, '/play/control.html' + url.search);
+    if (url.pathname === '/night.html') return redirect(res, '/play/night.html' + url.search);
+    const oldNight = url.pathname.match(/^\/night\/(\d+)\/?$/);
+    if (oldNight) return redirect(res, '/play/night/' + oldNight[1] + url.search);
+    const night = url.pathname.match(/^\/play\/night\/(\d+)\/?$/);
     if (night) {
-      url.pathname = '/night.html';
+      url.pathname = '/play/night.html';
       url.searchParams.set('chapter', night[1]);
     }
+    if (url.pathname === '/play' || url.pathname === '/play/') url.pathname = '/play/index.html';
     if (url.pathname.startsWith('/api/')) {
       const chunks = [];
       for await (const chunk of req) chunks.push(chunk);
@@ -76,5 +89,5 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(port, '127.0.0.1', () => {
-  process.stdout.write('Season 0 dev server http://127.0.0.1:' + port + '/season.html\n');
+  process.stdout.write('Season 0 dev server http://127.0.0.1:' + port + '/play/\n');
 });

@@ -11,14 +11,18 @@ const BODY = {
   split: '<path d="M32 24v28M18 32h14v16H18zM32 28h14v20H32z"/>'
 };
 
-export function bustSvg(character, size) {
+export function bustSvg(character, size, state) {
   const px = size || 64;
   const fill = character.color;
   const body = BODY[character.silhouette] || BODY.block;
+  const crack = state === 'relic'
+    ? '<path d="M18 10l10 16-8 6 12 22" fill="none" stroke="#0b0b0f" stroke-width="1.4"/>'
+    : '';
   return (
-    '<svg class="bust" viewBox="0 0 64 64" width="' + px + '" height="' + px + '" role="img" aria-label="' + character.name + '">' +
+    '<svg class="bust" viewBox="0 0 64 64" width="' + px + '" height="' + px + '" role="img" aria-label="' + character.name + (state === 'relic' ? ', relic' : '') + '">' +
     '<circle cx="32" cy="32" r="30" fill="#121217" stroke="' + fill + '" stroke-width="3"/>' +
     '<g fill="' + fill + '">' + body + '</g>' +
+    crack +
     '<text x="32" y="18" text-anchor="middle" font-size="11" fill="' + fill + '">' + character.glyph + '</text>' +
     '</svg>'
   );

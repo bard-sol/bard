@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Bard · Season 0 QA</title>
+  <link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75,400;75,600&family=Fraunces:ital,opsz,wght@1,9..144,500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/tokens.css">
+  <link rel="stylesheet" href="/season.css">
+</head>
+<body>
+  <a class="skip" href="#main">Skip</a>
+  <div class="app">
+    <header class="header">
+      <p class="kicker">Season 0 QA · 12 screens</p>
+      <p class="headline">Each card opens the game on a time-travel clock. The amber line on that screen says it is not live.</p>
+    </header>
+    <main id="main">
+      <div class="qa-grid">
+        <article class="qa-card"><h2>1 · Character card</h2><p>Standings, gap, relic sink.</p><a href="/play/?phase=P1&chapter=3">Open P1</a></article>
+        <article class="qa-card"><h2>2 · Strike</h2><p>Ten-second tap. Demo signature submits with the tap.</p><a href="/play/?phase=P1&chapter=1&sheet=strike&char=pip&tab=play">Strike Pip</a></article>
+        <article class="qa-card"><h2>3 · Train</h2><p>50/30/20 and a two-minute discount hold. Nothing is sent until a mint exists.</p><a href="/play/?phase=P1&chapter=1&sheet=train&char=pip">Train</a></article>
+        <article class="qa-card"><h2>4 · Decide</h2><p>Stat and risk only. No odds.</p><a href="/play/?phase=P1&chapter=3&sheet=decide&char=vey">Decide</a></article>
+        <article class="qa-card"><h2>5 · Reaper</h2><p>Window closes in. No snapshot countdown.</p><a href="/play/?phase=P4&chapter=3">P4</a></article>
+        <article class="qa-card"><h2>6 · Revival</h2><p>Anyone can burn. 100%, no refunds.</p><a href="/play/?phase=P8&chapter=3&marked=thorn">Revival</a></article>
+        <article class="qa-card"><h2>7 · Cheer</h2><p>Streak only. Never active for the score.</p><a href="/play/?phase=P1&chapter=1&tab=play">Cheer</a></article>
+        <article class="qa-card"><h2>8 · Predict</h2><p>Open until T0+36h. Both timestamps must beat the lock.</p><a href="/play/?phase=P1&chapter=2&tab=predict">Picks</a></article>
+        <article class="qa-card"><h2>9 · Last words</h2><p>Filter, then bot review, then the fallback line.</p><a href="/play/?phase=P6&chapter=3&marked=thorn&tab=squad&sheet=words&char=thorn">Last words</a></article>
+        <article class="qa-card"><h2>10 · Squad</h2><p>25 seats. Top squad needs 5. Cosmetic vote, first option wins a tie.</p><a href="/play/?phase=P6&chapter=3&tab=squad">Squad</a></article>
+        <article class="qa-card"><h2>11 · Chapter night</h2><p>Shareable stage.</p><a href="/play/night/3">Night 3</a></article>
+        <article class="qa-card"><h2>12 · Relic</h2><p>Relics just trade. Comeback vote and relic burns are off.</p><a href="/play/?phase=P6&chapter=2&relic=grenna&marked=silas">Relic</a></article>
+      </div>
+      <section>
+        <h2>Voided chapter</h2>
+        <p class="banner info">Chapter 3 voided: no elimination. Reason: The Reaper's randomness failed twice (VRF and fallback).</p>
+        <a href="/play/?phase=P4&chapter=3&void=vrf">Open the void banner</a>
+      </section>
+      <section>
+        <h2>Other clocks</h2>
+        <p class="row">
+          <a class="btn" href="/play/?phase=P0">P0 · 72h buy</a>
+          <a class="btn" href="/play/?phase=P2&chapter=3">P2 · shortlist</a>
+          <a class="btn" href="/play/?phase=P3&chapter=3">P3</a>
+          <a class="btn" href="/play/?phase=P5&chapter=3">P5 · turning</a>
+          <a class="btn" href="/play/?phase=P7&chapter=3">P7 · night</a>
+          <a class="btn" href="/play/control.html">Control room</a>
+        </p>
+      </section>
+    </main>
+  </div>
+</body>
+</html>

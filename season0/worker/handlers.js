@@ -9,7 +9,7 @@ import { filterLastWords, reviewLastWords, resolveLastWords } from '../lib/filte
 import { pickCounts } from '../lib/predict.js';
 import { isEligible } from '../lib/eligibility.js';
 import { voidReason, voidMemo, unstakeMemo, batchStakeReturns, VOID_COPY } from '../lib/voidchapter.js';
-import { publishPlan } from '../lib/statefile.js';
+import { publishPlan, mirrorLinks } from '../lib/statefile.js';
 import { fromHex } from '../lib/bytes.js';
 import { canonicalMessage, verifyWalletSignature } from './sig.js';
 import { consumeNonce, rememberNonce, takeNonce } from './store.js';
@@ -286,7 +286,7 @@ function onEligibility(url, body) {
   });
 }
 
-async function onVoid(body) {
+async function onVoid(env, body) {
   const reason = body.reason || voidReason(body);
   if (!reason) return bad('no_void_trigger');
   const state = Object.assign({}, body.state || {}, {
@@ -312,6 +312,8 @@ async function onVoid(body) {
     irys: null,
     supabasePath: plan.supabasePath,
     githubPath: plan.githubPath,
+    githubUrl: plan.githubUrl,
+    ...mirrorLinks(plan, env && env.SEASON_SUPABASE_URL),
     batches,
     effects: {
       returnStakes: true,
@@ -333,9 +335,9 @@ async function onSnapshot(body) {
   });
 }
 
-async function onPublish(body) {
+async function onPublish(env, body) {
   const plan = await publishPlan(body.state || body);
-  return json({ ok: true, ...plan, irys: null });
+  return json({ ok: true, ...plan, ...mirrorLinks(plan, env && env.SEASON_SUPABASE_URL), irys: null });
 }
 
 async function onFaucet(env) {
@@ -379,9 +381,9 @@ export async function handleApi(request, env) {
     if (path === '/api/season/score' && request.method === 'POST') return onScore(await readBody(request));
     if (path === '/api/twap' && request.method === 'POST') return onTwap(await readBody(request));
     if (path === '/api/eligibility') return onEligibility(url, request.method === 'POST' ? await readBody(request) : {});
-    if (path === '/api/season/void' && request.method === 'POST') return onVoid(await readBody(request));
+    if (path === '/api/season/void' && request.method === 'POST') return onVoid(env, await readBody(request));
     if (path === '/api/season/snapshot' && request.method === 'POST') return onSnapshot(await readBody(request));
-    if (path === '/api/season/publish' && request.method === 'POST') return onPublish(await readBody(request));
+    if (path === '/api/season/publish' && request.method === 'POST') return onPublish(env, await readBody(request));
     if (path === '/api/season/faucet' && request.method === 'POST') return onFaucet(env);
     if (path === '/api/season/revival-target' && request.method === 'GET') {
       return json({ ok: true, target: revivalTarget(Number(url.searchParams.get('train') || 0)) });
