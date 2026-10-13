@@ -192,7 +192,13 @@ function onCrowd(body) {
 function onRecap(url) {
   const chapter = Number(url.searchParams.get('chapter') || 1);
   const now = Number(url.searchParams.get('now') || Date.now());
-  const line = url.searchParams.get('crowd') || '';
+  let line = url.searchParams.get('crowd') || '';
+  const wallet = url.searchParams.get('wallet') || '';
+  if (!line && wallet) {
+    const optionId = loopMemory().crowd.get(wallet + '|' + chapter);
+    const option = CROWD_OPTIONS.find((row) => row.id === optionId);
+    if (option) line = option.line;
+  }
   return json({ ok: true, ...buildRecap({ chapter, nowMs: now, crowdLine: line || null }) });
 }
 

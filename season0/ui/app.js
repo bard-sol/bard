@@ -781,7 +781,7 @@ async function sendLetter(choice) {
     return;
   }
   const chest = result.chest || {};
-  ui.loopNote = choice + ' · ' + (chest.rarity || '') + ' ' + (chest.item || '') + ' · cosmetic, not an NFT';
+  ui.loopNote = choice + ' · ' + (chest.rarity || 'chest') + ' · ' + (chest.item || '') + ' · cosmetic, not an NFT';
   renderMain();
 }
 
@@ -802,7 +802,7 @@ async function sendCrowd(option) {
 
 async function loadRecap() {
   const s = screen();
-  const result = await fetch('/api/season/recap?chapter=' + s.chapter + '&now=' + Date.now()).then((r) => r.json());
+  const result = await fetch('/api/season/recap?chapter=' + s.chapter + '&now=' + Date.now() + '&wallet=' + encodeURIComponent(ui.wallet || 'demo')).then((r) => r.json());
   const el = document.querySelector('[data-recap]');
   if (!el) return;
   el.textContent = result.line || '';

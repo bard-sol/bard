@@ -188,6 +188,9 @@ test('recap is narration after 22:00 GST and a crowd vote is once per chapter', 
   assert.equal(vote.body.legacyPoints, 1);
   const twice = await call('/api/season/crowd-vote', { wallet: 'W', chapter: 2, option: 'page', now: at });
   assert.equal(twice.body.reason, 'already');
+  const narrated = await call('/api/season/recap?chapter=2&wallet=W&now=' + at);
+  assert.match(narrated.body.line, /The ink was already sure/);
+  assert.equal(narrated.body.affectsScore, false);
 });
 
 test('legacy cap is 50 and unqualified points stay cosmetic', async () => {
