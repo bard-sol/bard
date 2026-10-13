@@ -72,8 +72,8 @@ export function scoreCast(characters, weights) {
     const B = Math.log10(1 + eligible.length);
     const enc = Number(c.encMod) || 0;
     const P = Math.sqrt(Math.max(0, Number(c.trainCredited) || 0)) * (1 + enc);
-    const strikes = (c.strikeAccuracies || []).filter((n) => Number.isFinite(n));
-    const K = strikes.length ? strikes.reduce((a, b) => a + b, 0) / strikes.length : 0;
+    const days = (c.dailyAccuracies || c.strikeAccuracies || []).filter((n) => Number.isFinite(n));
+    const K = days.length ? days.reduce((a, b) => a + b, 0) / days.length : 0;
     const M = marketRaw(c.twap, c.supply || defaultConfig().supply);
     return { id: c.id, M, U, B, P, K };
   });

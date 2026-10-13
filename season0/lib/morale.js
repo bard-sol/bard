@@ -36,3 +36,37 @@ export function msUntilUtcReset(nowMs) {
   const next = (utcDay(nowMs) + 1) * DAY;
   return next - nowMs;
 }
+
+/**
+ * Letter, Trial, cheer, or crowd vote. The first touch of the UTC day
+ * advances the streak. Repair is never for sale.
+ */
+export function advanceStreak(state, nowMs) {
+  const current = state || {};
+  const result = applyCheer({
+    lastDay: current.lastDay,
+    streak: current.streak,
+    shields: current.shields,
+    nowMs
+  });
+  if (!result.ok && result.reason === 'already') {
+    return {
+      lastDay: current.lastDay,
+      streak: result.streak,
+      shields: result.shields,
+      advanced: false,
+      day: result.day,
+      repairPurchasable: false,
+      activeForScore: false
+    };
+  }
+  return {
+    lastDay: result.day,
+    streak: result.streak,
+    shields: result.shields,
+    advanced: true,
+    day: result.day,
+    repairPurchasable: false,
+    activeForScore: false
+  };
+}

@@ -3,13 +3,39 @@ import { assertNotLiveSupabase } from '../lib/cluster.js';
 const memory = {
   nonces: new Map(),
   used: new Map(),
-  holds: new Map()
+  holds: new Map(),
+  trials: new Map(),
+  streaks: new Map(),
+  letters: new Map(),
+  crowd: new Map(),
+  chests: new Map(),
+  pushSent: new Map(),
+  pushSubs: new Map(),
+  turnstile: new Set(),
+  onchain: new Set()
 };
 
 export function resetMemory() {
   memory.nonces.clear();
   memory.used.clear();
   memory.holds.clear();
+  memory.trials.clear();
+  memory.streaks.clear();
+  memory.letters.clear();
+  memory.crowd.clear();
+  memory.chests.clear();
+  memory.pushSent.clear();
+  memory.pushSubs.clear();
+  memory.turnstile.clear();
+  memory.onchain.clear();
+}
+
+export function loopMemory() {
+  return memory;
+}
+
+export function rememberOnChain(wallet) {
+  if (wallet) memory.onchain.add(wallet);
 }
 
 export function rememberNonce(nonce, record) {

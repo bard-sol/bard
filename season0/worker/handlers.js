@@ -14,6 +14,8 @@ import { fromHex } from '../lib/bytes.js';
 import { canonicalMessage, verifyWalletSignature } from './sig.js';
 import { consumeNonce, rememberNonce, takeNonce } from './store.js';
 import { bardSign } from './bard-sign.js';
+import { handleLoop } from './loop.js';
+import { rememberOnChain } from './store.js';
 
 let ephemeralSecret = null;
 
@@ -174,6 +176,7 @@ async function onVerifySpend(env, body) {
   const consumed = consumeNonce(record.nonce, body.signature);
   if (!consumed.ok) return json(consumed);
   const creditTokens = record.action === 'train' && record.discount ? record.amount * 1.5 : record.amount;
+  rememberOnChain(record.wallet);
   return json({ ok: true, ...check, creditTokens, memo, signature: body.signature, cluster: 'devnet' });
 }
 
@@ -385,6 +388,9 @@ export async function handleApi(request, env) {
     if (path === '/api/season/snapshot' && request.method === 'POST') return onSnapshot(await readBody(request));
     if (path === '/api/season/publish' && request.method === 'POST') return onPublish(env, await readBody(request));
     if (path === '/api/season/faucet' && request.method === 'POST') return onFaucet(env);
+    if (path.startsWith('/api/season/trial') || path.startsWith('/api/season/letter') || path.startsWith('/api/season/touch') || path.startsWith('/api/season/chest') || path.startsWith('/api/season/crowd') || path.startsWith('/api/season/recap') || path.startsWith('/api/season/push') || path.startsWith('/api/season/turnstile') || path.startsWith('/api/season/legacy') || path.startsWith('/api/season/quiz') || path.startsWith('/api/season/story') || path.startsWith('/api/season/card-upgrade') || path.startsWith('/api/season/raid')) {
+      return handleLoop(path, request, env, request.method === 'GET' ? {} : await readBody(request));
+    }
     if (path === '/api/season/revival-target' && request.method === 'GET') {
       return json({ ok: true, target: revivalTarget(Number(url.searchParams.get('train') || 0)) });
     }

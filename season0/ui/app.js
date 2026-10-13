@@ -1,8 +1,11 @@
 import { CAST, characterById } from '../lib/cast.js';
 import { CHAPTERS } from '../lib/chapters.js';
 import { graphemeLength } from '../lib/filter.js';
-import { markerAt } from '../lib/strike.js';
 import { defaultConfig } from '../lib/config.js';
+import { earlyBuyCopy } from '../lib/legacy.js';
+import { intentIcon } from '../lib/trial.js';
+import { QUIZ } from '../lib/quiz.js';
+import { paintTrial } from './trial-view.js';
 import {
   ELIGIBILITY_NOTE,
   PREDICT_NOTE,
@@ -27,7 +30,11 @@ const ui = {
   config: defaultConfig(),
   publicInfo: { pools: {} },
   sheet: null,
-  strike: null,
+  trial: null,
+  trialPaint: null,
+  quizAnswers: [],
+  quizResult: null,
+  loopNote: '',
   train: { amount: 100, holdUntil: 0, state: 'ready' },
   decideChoice: null,
   draft: '',
@@ -211,21 +218,42 @@ function renderArena(s) {
 }
 
 function renderPlay(s) {
-  const locked = s.voided ? '<p class="banner info">Chapter voided: strikes have no score effect. Your Train credit is kept.</p>' : '';
+  const locked = s.voided ? '<p class="banner info">Chapter voided: the daily Trial has no score effect. Your Train credit is kept.</p>' : '';
+  const letter = '<section data-loop="letter"><h2 class="kicker">Morning letter</h2>' +
+    '<p>One tap. Feed, Comfort, or Spar. A free chest follows. It is not an NFT.</p>' +
+    '<div class="row">' +
+    '<button class="btn solid" type="button" data-act="letter" data-choice="feed">Feed</button>' +
+    '<button class="btn" type="button" data-act="letter" data-choice="comfort">Comfort</button>' +
+    '<button class="btn" type="button" data-act="letter" data-choice="spar">Spar</button>' +
+    '</div>' +
+    (ui.loopNote ? '<p data-loop-note>' + esc(ui.loopNote) + '</p>' : '') +
+    '</section>';
+  const trial = '<section data-loop="trial"><h2 class="kicker">Daily Trial</h2>' +
+    '<p>One counted run per UTC day. Same boss for everyone. Practice does not count. K is the average of those days, and a missed day is 0.</p>' +
+    '<button class="btn solid" type="button" data-act="open" data-sheet="trial" data-loop="trial">Trial</button>' +
+    '</section>';
+  const extras = '<div class="row">' +
+    '<button class="btn" type="button" data-act="open" data-sheet="crowd">Crowd vote</button>' +
+    '<button class="btn" type="button" data-act="open" data-sheet="recap">Recap</button>' +
+    '<button class="btn" type="button" data-act="push-on">Notifications</button>' +
+    '<button class="btn" type="button" data-act="open" data-sheet="quiz">Quiz</button>' +
+    '<button class="btn" type="button" data-act="open" data-sheet="story">Story</button>' +
+    '<button class="btn" type="button" data-act="chest-odds">Chest odds</button>' +
+    '</div>';
   const list = CAST.map((c) => {
     const relic = c.id === s.relicId;
     const dead = s.marked === c.id && (s.phase === 'P6' || s.revivalOpen);
     return '<article class="banner"><strong>' + esc(c.name) + '</strong>' +
       '<div class="row">' +
-      (relic || (dead && !s.revivalOpen) ? '<span class="meta">Train, Strike and Decide are closed.</span>' : '') +
-      (!relic && !dead ? '<button class="btn solid" type="button" data-act="open" data-sheet="strike" data-char="' + c.id + '">Strike</button>' : '') +
+      (relic || (dead && !s.revivalOpen) ? '<span class="meta">Train and Decide are closed.</span>' : '') +
       (!relic && !dead ? '<button class="btn" type="button" data-act="open" data-sheet="train" data-char="' + c.id + '">Train</button>' : '') +
       (!relic && !dead ? '<button class="btn" type="button" data-act="open" data-sheet="decide" data-char="' + c.id + '">Decide</button>' : '') +
       '<button class="btn" type="button" data-act="cheer" data-char="' + c.id + '">Cheer</button>' +
       (s.revivalOpen && s.marked === c.id ? '<button class="btn reaper" type="button" data-act="open" data-sheet="revive" data-char="' + c.id + '">Revive</button>' : '') +
       '</div></article>';
   }).join('');
-  return locked + '<p class="footnote">Cheering keeps your streak. It never counts as active for your character.</p>' + list;
+  return locked + letter + trial + extras +
+    '<p class="footnote">A streak advances on the letter, a Trial, a cheer, or a vote. Repair is never for sale. Cheering never counts as active.</p>' + list;
 }
 
 function renderPredict(s) {
@@ -255,7 +283,7 @@ function renderSquad(s) {
   ).join('');
   return top +
     '<p>Ink Debt · ' + esc(marked.name) + ' · 19 / 25 active</p>' +
-    '<p class="meta">Needs 5 members to compete. Active means Strike, Train or Decide before the snapshot.</p>' +
+    '<p class="meta">Needs 5 members to compete. Active means a counted Trial, Train or Decide before the snapshot.</p>' +
     words +
     (s.voided ? '<p class="banner info">No top squad: chapter voided.</p>' : '') +
     '<h2 class="kicker">Cosmetic vote · 3 options · tie goes to the first</h2>' + cosmetic +
@@ -263,9 +291,9 @@ function renderSquad(s) {
 }
 
 function renderMe(s) {
-  const early = s.config.legacy_early_buy_enabled
-    ? '<p>Season 0 legacy points carry into Season 1 at full value. The Season 1 early-buy window is on.</p>'
-    : '';
+  const early = '<p>' + esc(earlyBuyCopy(s.config)) + '</p>' +
+    '<p>Every source shares a cap of 50 for Season 1 early-buy rights. Points above the cap are cosmetic. They count only after a Turnstile check and one finalized on-chain action.</p>' +
+    '<button class="btn" type="button" data-act="legacy-check">Legacy standing</button>';
   const elig = ui.eligibility
     ? '<p data-elig="' + (ui.eligibility.eligible ? 'yes' : 'no') + '">' +
       (ui.eligibility.eligible ? 'Eligible ✓ · holding since the sample clock.' : 'Hold any amount for 24h · eligible in 4h 0m.') +
@@ -305,16 +333,29 @@ function renderMain() {
 }
 
 function openSheet(name, charId) {
+  stopTrialPaint();
   ui.sheet = { name, charId: charId || (ui.sheet && ui.sheet.charId) || 'pip' };
-  if (name === 'strike') ui.strike = { step: 'ready' };
+  if (name === 'trial') ui.trial = null;
+  if (name === 'quiz') { ui.quizAnswers = []; ui.quizResult = null; }
   if (name === 'words') { ui.wordsState = 'compose'; ui.wordsResult = null; }
   renderSheet();
+  if (name === 'trial') beginTrial(false);
+  if (name === 'recap') loadRecap();
+  if (name === 'story') loadStory(ui.sheet.charId);
+}
+
+function stopTrialPaint() {
+  if (ui.trial && ui.trial.clock) clearInterval(ui.trial.clock);
+  if (ui.trialPaint) {
+    ui.trialPaint.destroy();
+    ui.trialPaint = null;
+  }
 }
 
 function closeSheet() {
-  if (ui.strike && ui.strike.raf) cancelAnimationFrame(ui.strike.raf);
+  stopTrialPaint();
   ui.sheet = null;
-  ui.strike = null;
+  ui.trial = null;
   document.getElementById('sheet').innerHTML = '';
 }
 
@@ -330,7 +371,11 @@ function renderSheet() {
   const s = screen();
   const c = characterById(ui.sheet.charId) || CAST[0];
   if (ui.sheet.name === 'detail') return sheetDetail(s, c);
-  if (ui.sheet.name === 'strike') return sheetStrike(s, c);
+  if (ui.sheet.name === 'trial') return sheetTrial(s, c);
+  if (ui.sheet.name === 'crowd') return sheetCrowd();
+  if (ui.sheet.name === 'recap') return sheetRecap(s);
+  if (ui.sheet.name === 'quiz') return sheetQuiz();
+  if (ui.sheet.name === 'story') return sheetStory(c);
   if (ui.sheet.name === 'train') return sheetTrain(s, c);
   if (ui.sheet.name === 'decide') return sheetDecide(s, c);
   if (ui.sheet.name === 'revive') return sheetRevive(s, c);
@@ -351,72 +396,104 @@ function sheetDetail(s, c) {
     (relic ? '<p class="banner" data-relic-art>' + esc(RELIC_NOTE) + ' This token still trades. In the game it has no votes, rewards or pot.</p>' : '') +
     '<p class="meta">Hold any amount for 24h. Selling to zero resets the 24h clock.</p>' +
     '<div class="row">' +
-    (relic ? '' : '<button class="btn solid" type="button" data-act="open" data-sheet="strike" data-char="' + c.id + '">Strike</button>') +
+    (relic ? '' : '<button class="btn solid" type="button" data-act="open" data-sheet="trial" data-char="' + c.id + '">Trial</button>') +
     (relic ? '' : '<button class="btn" type="button" data-act="open" data-sheet="train" data-char="' + c.id + '">Train</button>') +
     '<button class="btn" type="button" data-act="open" data-sheet="verify">Verify</button></div>');
 }
 
-function sheetStrike(s, c) {
-  const step = (ui.strike && ui.strike.step) || 'ready';
-  let body = '<p>One tap. Eligible handlers\' strikes count for K and U. Practice still counts as showing up.</p>';
-  if (step === 'ready') {
-    body += '<button class="btn solid" type="button" data-act="strike-start" data-char="' + c.id + '">Start</button>';
-  } else if (step === 'count') {
-    body += '<p class="beat" data-count>3</p>';
-  } else if (step === 'play' || step === 'result') {
-    body += '<div class="strike-track"><i class="perfect"></i><i class="marker" id="marker"></i></div>' +
-      '<button class="tapzone" type="button" data-act="tap">TAP</button>' +
-      '<p data-strike-readout></p>';
-  }
-  if (s.phase === 'P4') body += '<p class="footnote">Act before the Reaper. Actions after the hidden snapshot may not count.</p>';
-  sheetWrap('Strike · ' + c.name, body);
-  if (step === 'play') startMarker();
-}
-
-function startMarker() {
-  const marker = document.getElementById('marker');
-  const started = performance.now();
-  ui.strike.started = started;
-  const loop = (t) => {
-    if (!ui.strike || ui.strike.step !== 'play') return;
-    const elapsed = t - started;
-    const x = markerAt({ phase: ui.strike.session.phase, speed: ui.strike.session.speed, elapsedSec: elapsed / 1000 });
-    if (marker) marker.style.left = (x * 100) + '%';
-    if (elapsed >= 10000) return finishStrike(false, 10000);
-    ui.strike.raf = requestAnimationFrame(loop);
-  };
-  ui.strike.raf = requestAnimationFrame(loop);
-}
-
-async function finishStrike(tapped, elapsed) {
-  if (!ui.strike || ui.strike.step === 'result') return;
-  ui.strike.step = 'result';
-  if (ui.strike.raf) cancelAnimationFrame(ui.strike.raf);
-  const session = ui.strike.session;
-  const s = screen();
-  const signedAt = Date.now();
-  const message = ['bard', 's0', 'strike', String(s.chapter), ui.sheet.charId, session.nonce, String(signedAt), '-'].join('|');
-  const result = await post('/api/season/action', {
-    kind: 'strike',
-    wallet: ui.wallet || 'demo',
-    charId: ui.sheet.charId,
-    chapter: s.chapter,
-    nonce: session.nonce,
-    signedAt,
-    signature: 'demo',
-    message,
-    clientElapsedMs: Math.round(elapsed),
-    tapped
-  });
-  const power = result.strike ? result.strike.power : null;
-  const readout = document.querySelector('[data-strike-readout]');
-  if (!readout) return;
-  if (!result.ok) {
-    readout.textContent = 'Not saved (' + (result.reason || 'error') + '). Sign to submit. The attempt expires with the nonce.';
+function sheetTrial(s, c) {
+  const t = ui.trial;
+  if (!t) {
+    sheetWrap('Daily Trial · ' + c.name, '<p data-trial-status>Dealing the hand…</p>');
     return;
   }
-  if (result.strike && result.strike.noTap) readout.textContent = 'No tap. It still counts as showing up (0 power).';
-  else readout.textContent = '+' + power + ' power' + (power === 20 ? ' · PERFECT' : '') + (s.voided ? ' · Chapter voided: no score effect.' : '') + ' · Demo signature submitted with the tap.';
+  const icon = intentIcon((t.intents || [])[t.turn] || 'attack');
+  const left = Math.max(0, 60 - Math.floor((Date.now() - t.startedAt) / 1000));
+  const cards = (t.hand || []).map((card, index) =>
+    '<button class="choice" type="button" data-act="trial-play" data-card="' + index + '"' + (t.step === 'play' ? '' : ' disabled') + '>' +
+    card.emoji + ' ' + esc(card.name) + '<br><span class="meta">' + card.cost + ' energy · ' + card.power + ' power</span></button>'
+  ).join('');
+  let result = '';
+  if (t.result) {
+    const accuracy = Math.round((t.result.accuracy || 0) * 100);
+    result = '<p data-trial-accuracy>' + accuracy + '%' + (t.result.counted ? ' · counted' : ' · practice') + '</p>' +
+      '<pre class="log" data-trial-grid>' + esc(t.result.grid || t.result.reason || '') + '</pre>' +
+      (t.result.counted || t.result.alreadyCounted
+        ? '<button class="btn" type="button" data-act="trial-practice">Practice again</button>'
+        : '');
+  }
+  sheetWrap('Daily Trial · ' + c.name,
+    bustSvg(c, 64, 'alive') +
+    '<div class="trial-stage" id="trial-stage" data-trial-engine="dom">' +
+    '<p data-trial-boss>' + esc(t.boss || 'The Margin') + ' ' + icon + '</p>' +
+    '<p class="trial-meta" data-trial-status>Turn ' + (t.turn + 1) + ' / 8 · energy ' + t.energy + ' · ' + t.moves.length + ' / 30 moves · ' + left + 's</p>' +
+    '</div>' +
+    '<div class="trial-hand">' + cards + '</div>' +
+    (t.step === 'play' ? '<div class="row"><button class="btn" type="button" data-act="trial-end">End turn</button>' +
+      '<button class="btn solid" type="button" data-act="trial-finish">Finish</button></div>' : '') +
+    result +
+    '<p class="footnote">Card upgrades are a stretch goal. They would change Trial power only, not Train. There is no raid boss.</p>' +
+    (s.phase === 'P4' ? '<p class="footnote">Act before the Reaper. A day outside the window is not in K.</p>' : ''));
+  if (t.step === 'play') {
+    const host = document.getElementById('trial-stage');
+    const hpLeft = t.bossHp;
+    const token = (t.paintToken || 0) + 1;
+    t.paintToken = token;
+    paintTrial(host, { boss: t.boss, intentIcon: icon, hand: t.hand, hpLeft, bossHp: t.bossHp }).then((paint) => {
+      if (!ui.trial || ui.trial.paintToken !== token) { paint.destroy(); return; }
+      ui.trialPaint = paint;
+    });
+    if (!t.clock) {
+      t.clock = setInterval(() => {
+        if (!ui.trial || ui.trial.step !== 'play') return;
+        if (Date.now() - ui.trial.startedAt >= 60000) finishTrial();
+        else {
+          const status = document.querySelector('[data-trial-status]');
+          if (status) {
+            const remain = Math.max(0, 60 - Math.floor((Date.now() - ui.trial.startedAt) / 1000));
+            status.textContent = 'Turn ' + (ui.trial.turn + 1) + ' / 8 · energy ' + ui.trial.energy + ' · ' + ui.trial.moves.length + ' / 30 moves · ' + remain + 's';
+          }
+        }
+      }, 500);
+    }
+  }
+}
+
+function sheetCrowd() {
+  sheetWrap('Crowd vote',
+    '<p>One tap this chapter. It changes the narration only. It does not change the score. +1 legacy point.</p>' +
+    '<button class="choice" type="button" data-act="crowd" data-option="mercy">The margin asked for mercy.</button>' +
+    '<button class="choice" type="button" data-act="crowd" data-option="ink">The ink was already sure.</button>' +
+    '<button class="choice" type="button" data-act="crowd" data-option="page">Turn it and do not look back.</button>' +
+    '<p data-crowd-note></p>');
+}
+
+function sheetRecap(s) {
+  sheetWrap('Nightly recap', '<p data-recap>Loading chapter ' + s.chapter + '…</p>');
+}
+
+function sheetQuiz() {
+  if (ui.quizResult) {
+    const story = ui.quizResult.story || {};
+    sheetWrap('Your character',
+      '<p data-quiz-result>' + esc(ui.quizResult.character.name) + '</p>' +
+      '<p class="voice">' + esc(story.voice || ui.quizResult.character.hook) + '</p>' +
+      '<p>' + esc(story.hook || '') + '</p>');
+    return;
+  }
+  const q = QUIZ[ui.quizAnswers.length];
+  if (!q) {
+    sheetWrap('Quiz', '<p>Sending four answers…</p>');
+    return;
+  }
+  const options = q.options.map((label, index) =>
+    '<button class="choice" type="button" data-act="quiz-pick" data-i="' + index + '">' + esc(label) + '</button>'
+  ).join('');
+  sheetWrap('Quiz · ' + (ui.quizAnswers.length + 1) + ' / 4', '<p>' + esc(q.prompt) + '</p>' + options);
+}
+
+function sheetStory(c) {
+  sheetWrap(c.name, '<p data-story>Opening the storybook…</p>');
 }
 
 function sheetTrain(s, c) {
@@ -592,13 +669,16 @@ document.body.addEventListener('click', async (event) => {
   }
   if (act === 'wallet') { await connectWallet(node.dataset.which); return; }
   if (act === 'choice') { ui.decideChoice = node.dataset.id; renderSheet(); return; }
-  if (act === 'strike-start') { await beginStrike(); return; }
-  if (act === 'tap') {
-    if (!ui.strike || ui.strike.step !== 'play') return;
-    const elapsed = performance.now() - ui.strike.started;
-    await finishStrike(true, elapsed);
-    return;
-  }
+  if (act === 'trial-play') { playTrialCard(node.dataset.card); return; }
+  if (act === 'trial-end') { endTrialTurn(); return; }
+  if (act === 'trial-finish') { await finishTrial(); return; }
+  if (act === 'trial-practice') { await beginTrial(true); return; }
+  if (act === 'letter') { await sendLetter(node.dataset.choice); return; }
+  if (act === 'crowd') { await sendCrowd(node.dataset.option); return; }
+  if (act === 'push-on') { await enablePush(); return; }
+  if (act === 'quiz-pick') { await pickQuiz(Number(node.dataset.i)); return; }
+  if (act === 'chest-odds') { await showOdds(); return; }
+  if (act === 'legacy-check') { await showLegacy(); return; }
   if (act === 'train-hold') {
     ui.train.holdUntil = Date.now() + 120000;
     ui.train.state = 'slot-held';
@@ -628,23 +708,156 @@ document.body.addEventListener('input', (event) => {
   if (event.target.id === 'train-amount') ui.train.amount = Number(event.target.value);
 });
 
-async function beginStrike() {
-  ui.strike = { step: 'count' };
-  renderSheet();
-  for (const n of [3, 2, 1]) {
-    const el = document.querySelector('[data-count]');
-    if (el) el.textContent = String(n);
-    await new Promise((r) => setTimeout(r, 350));
-  }
-  const s = screen();
-  const session = await post('/api/season/strike-session', {
+async function beginTrial(practice) {
+  stopTrialPaint();
+  const now = Date.now();
+  const res = await post('/api/season/trial/start', {
     wallet: ui.wallet || 'demo',
-    charId: ui.sheet.charId,
-    chapter: s.chapter
+    practice: !!practice,
+    now
   });
-  if (!session.ok) { toast(session.reason || 'Strike session failed'); return; }
-  ui.strike = { step: 'play', session };
+  if (!res.ok) { toast(res.reason || 'Trial failed'); return; }
+  ui.trial = {
+    ...res,
+    moves: [],
+    turn: 0,
+    energy: 3,
+    startedAt: now,
+    step: 'play',
+    clock: null,
+    paintToken: 0
+  };
   renderSheet();
+}
+
+function playTrialCard(index) {
+  const t = ui.trial;
+  if (!t || t.step !== 'play') return;
+  if (Date.now() - t.startedAt >= 60000) { finishTrial(); return; }
+  if (t.moves.length >= 30 || t.turn >= 8) { finishTrial(); return; }
+  const card = t.hand[Number(index)];
+  if (!card) return;
+  if (card.cost > t.energy) { toast('Not enough energy. End the turn.'); return; }
+  t.moves.push({ type: 'play', card: Number(index) });
+  t.energy -= card.cost;
+  renderSheet();
+}
+
+function endTrialTurn() {
+  const t = ui.trial;
+  if (!t || t.step !== 'play') return;
+  t.moves.push({ type: 'end' });
+  t.turn += 1;
+  t.energy = 3;
+  if (t.turn >= 8 || t.moves.length >= 30) { finishTrial(); return; }
+  renderSheet();
+}
+
+async function finishTrial() {
+  const t = ui.trial;
+  if (!t || t.step === 'result' || t.step === 'sending') return;
+  t.step = 'sending';
+  if (t.clock) { clearInterval(t.clock); t.clock = null; }
+  const result = await post('/api/season/trial/finish', {
+    wallet: ui.wallet || 'demo',
+    day: t.day,
+    seed: t.seed,
+    moves: t.moves,
+    elapsedMs: Date.now() - t.startedAt,
+    practice: !!t.practice,
+    now: Date.now()
+  });
+  t.step = 'result';
+  t.result = result.ok ? result : { ...result, grid: result.reason || 'rejected', accuracy: 0 };
+  renderSheet();
+  toast(result.ok ? (result.counted ? 'Counted for today.' : 'Practice. Not counted.') : (result.reason || 'Trial rejected'));
+}
+
+async function sendLetter(choice) {
+  const result = await post('/api/season/letter', { wallet: ui.wallet || 'demo', choice, now: Date.now() });
+  if (!result.ok) {
+    ui.loopNote = result.reason === 'already' ? 'The letter is already open today.' : (result.reason || 'Letter failed');
+    renderMain();
+    return;
+  }
+  const chest = result.chest || {};
+  ui.loopNote = choice + ' · ' + (chest.rarity || '') + ' ' + (chest.item || '') + ' · cosmetic, not an NFT';
+  renderMain();
+}
+
+async function sendCrowd(option) {
+  const result = await post('/api/season/crowd-vote', {
+    wallet: ui.wallet || 'demo',
+    chapter: screen().chapter,
+    option,
+    now: Date.now()
+  });
+  const note = document.querySelector('[data-crowd-note]');
+  const line = result.ok
+    ? result.option.line + ' Narration only.'
+    : (result.reason === 'already' ? 'You already voted this chapter.' : (result.reason || 'Vote failed'));
+  if (note) note.textContent = line;
+  else toast(line);
+}
+
+async function loadRecap() {
+  const s = screen();
+  const result = await fetch('/api/season/recap?chapter=' + s.chapter + '&now=' + Date.now()).then((r) => r.json());
+  const el = document.querySelector('[data-recap]');
+  if (!el) return;
+  el.textContent = result.line || '';
+}
+
+async function loadStory(id) {
+  const result = await fetch('/api/season/story?id=' + encodeURIComponent(id || 'pip')).then((r) => r.json());
+  const el = document.querySelector('[data-story]');
+  if (!el || !result.story) return;
+  el.textContent = result.story.name + ' — ' + result.story.hook + ' ' + result.story.voice;
+}
+
+async function pickQuiz(index) {
+  ui.quizAnswers.push(index);
+  if (ui.quizAnswers.length < 4) { renderSheet(); return; }
+  ui.quizResult = await post('/api/season/quiz', { answers: ui.quizAnswers });
+  renderSheet();
+}
+
+async function showOdds() {
+  const result = await fetch('/api/season/chest/odds').then((r) => r.json());
+  const lines = (result.odds || []).map((row) => row.rarity + ' ' + Math.round(row.chance * 100) + '%').join(' · ');
+  toast(lines + ' · rare within 10 opens · not for sale');
+}
+
+async function showLegacy() {
+  const wallet = ui.wallet || 'demo';
+  await post('/api/season/turnstile', { wallet, token: 'dev' });
+  const result = await post('/api/season/legacy', { wallet, events: [{ id: 'shown', points: 0 }] });
+  toast(result.qualified
+    ? 'Counted ' + result.counted + ' / ' + result.cap + '. Cosmetic ' + result.cosmetic + '.'
+    : 'Not qualified yet. Counted 0. Cosmetic ' + result.cosmetic + '. Turnstile and one on-chain action are required.');
+}
+
+async function enablePush() {
+  if (!('Notification' in window) || !('serviceWorker' in navigator)) {
+    toast('This browser has no web push. The cap is still 3 a day.');
+    return;
+  }
+  const perm = await Notification.requestPermission();
+  if (perm !== 'granted') { toast('Notifications stay off.'); return; }
+  const vapid = await fetch('/api/season/push/vapid').then((r) => r.json());
+  let subscription = { endpoint: 'local-opt-in', keys: null };
+  if (vapid.publicKey) {
+    const reg = await navigator.serviceWorker.ready;
+    const key = Uint8Array.from(atob(vapid.publicKey.replace(/-/g, '+').replace(/_/g, '/')), (c) => c.charCodeAt(0));
+    const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key });
+    subscription = sub.toJSON();
+  }
+  await post('/api/season/push/subscribe', { wallet: ui.wallet || 'demo', subscription });
+  toast(vapid.publicKey ? 'Notifications on. Max 3 a day.' : 'Opt-in saved. Delivery is not configured. Cap is 3 a day.');
+}
+
+async function touchLoop(kind) {
+  await post('/api/season/touch', { wallet: ui.wallet || 'demo', kind, now: Date.now() });
 }
 
 async function signAction(kind, charId, extra) {
@@ -679,9 +892,11 @@ async function signAction(kind, charId, extra) {
   if (kind === 'cheer') {
     ui.cheer = { day: new Date().toISOString().slice(0, 10), charId };
     saveStore();
-    toast(result.ok ? 'Cheer signed. +1 streak · +100 tBard · +1 legacy point. The drip may still be unconfigured.' : (result.reason || 'Cheer failed'));
+    if (result.ok) await touchLoop('cheer');
+    toast(result.ok ? 'Cheer signed. Streak can advance. It does not count as active. The drip may still be unconfigured.' : (result.reason || 'Cheer failed'));
     return;
   }
+  if (result.ok && kind === 'decide') await touchLoop('vote');
   toast(result.ok ? 'Vote signed. Last vote before close counts. Not a transaction.' : (result.reason || 'Vote failed'));
 }
 
@@ -787,6 +1002,9 @@ async function boot() {
     ui.publicInfo = await fetch('/season0/devnet.public.json').then((r) => r.json());
   } catch { /* pools stay empty */ }
   renderMain();
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/play/sw.js', { scope: '/play/' }).catch(() => {});
+  }
   await loadEligibility();
   const sheet = params.get('sheet');
   if (sheet) openSheet(sheet, params.get('char') || 'pip');

@@ -3,7 +3,7 @@ import { defaultConfig } from './config.js';
 export function earlyBuyCopy(config) {
   const on = config ? config.legacy_early_buy_enabled !== false : defaultConfig().legacy_early_buy_enabled;
   if (on) {
-    return 'Season 0 play earns legacy points and the first buying window on the Season 1 cast. No tokens, and no promise of tokens.';
+    return 'Season 0 play earns legacy points and the first buying window on the Season 1 cast. Timing only. No discount. No tokens, and no promise of tokens.';
   }
   return 'Legacy points are recorded. The Season 1 early buying window is switched off.';
 }
@@ -37,4 +37,17 @@ export function chapterLegacy(input) {
     sources,
     capUsed: (Number(input.predictionPointsSoFar) || 0) + prediction
   };
+}
+
+/** Every source shares one season cap. Unqualified points stay cosmetic. */
+export function seasonLegacy({ events, turnstile, onChain, cap }) {
+  const limit = cap == null ? 50 : cap;
+  const list = events || [];
+  const total = list.reduce((sum, event) => sum + (Number(event.points) || 0), 0);
+  const qualified = !!(turnstile && onChain);
+  if (!qualified) {
+    return { qualified: false, counted: 0, cosmetic: total, cap: limit, total };
+  }
+  const counted = Math.min(limit, Math.max(0, total));
+  return { qualified: true, counted, cosmetic: total - counted, cap: limit, total };
 }
