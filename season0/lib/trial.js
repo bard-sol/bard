@@ -1,4 +1,4 @@
-import { SIM_ALLIES, cardsForAllies } from './allies.js';
+import { SIM_ALLIES, cardsForAllies, resolveDeckAllies } from './allies.js';
 import { sha256Hex } from './bytes.js';
 import { characterById } from './cast.js';
 import { defaultConfig, seasonStartMs } from './config.js';
@@ -172,7 +172,9 @@ function intentAt(boss, turn) {
 
 function attackPacket(state, intent) {
   const extra = (state.chapter - 1) + (state.variant === 'D3' ? 3 : 0) + state.attackBuff;
-  return Math.max(0, intent.n + extra - state.bossCut);
+  let each = intent.n + extra;
+  if (state.bossCutPct) each = Math.floor(each * (100 - state.bossCutPct) / 100);
+  return Math.max(0, each - state.bossCut);
 }
 
 function attackHits(state, intent) {
@@ -185,7 +187,7 @@ function intentView(state) {
   const intent = intentAt(state.boss, state.turn);
   if (intent.kind === 'attack') {
     const hits = attackHits(state, intent);
-    const each = Math.max(0, intent.n + (state.chapter - 1) + (state.variant === 'D3' ? 3 : 0) + state.attackBuff);
+    const each = attackPacket(state, intent);
     return { kind: 'attack', n: each, hits, icon: '⚔', label: hits > 1 ? '⚔ ' + each + '×' + hits : '⚔ ' + each };
   }
   if (intent.kind === 'guard') return { kind: 'guard', n: intent.n, icon: '🛡', label: '🛡 ' + intent.n };
@@ -253,6 +255,12 @@ function hurtPlayer(state, amount) {
   }
 }
 
+function attackBase(state, card) {
+  if (card.dealDuringFinisher && state.bossMax > 0 && state.bossHp * 100 <= state.bossMax * 30) return card.dealDuringFinisher;
+  if (card.dealIfStaggered && state.staggered) return card.dealIfStaggered;
+  return card.deal;
+}
+
 function attackDamage(state, card, base) {
   let dmg = scaledValue(base, state.stats[card.stat]);
   if (card.doubleIfOdd && state.turn % 2 === 1) dmg *= 2;
@@ -277,11 +285,12 @@ function playAttack(state, card) {
   let bonus = 0;
   if (state.combo > 0) {
     bonus = state.combo * state.comboBonus;
-    state.combo = 0;
+    if (!card.keepCombo) state.combo = 0;
   }
+  const base = attackBase(state, card);
   const hits = card.hits || 1;
   for (let i = 0; i < hits && !state.done; i++) {
-    strikeBoss(state, attackDamage(state, card, card.deal) + (i === 0 ? bonus : 0));
+    strikeBoss(state, attackDamage(state, card, base) + (i === 0 ? bonus : 0));
   }
   if (card.againBelowHalf && state.playerHp * 2 < TRIAL_LIMITS.playerHp && !state.done) {
     strikeBoss(state, attackDamage(state, card, card.deal));
@@ -296,11 +305,23 @@ function playCard(state, card, move) {
     if (state.lastCard && state.lastCard.id !== 'forged') playCard(state, state.lastCard, { keep: 0 });
     return;
   }
-  if (card.deal) playAttack(state, card);
+  if (card.type === 'attack') playAttack(state, card);
   if (card.block) gainBlock(state, scaledValue(card.block, state.stats[card.stat]));
+  if (card.keepBlock) {
+    let kept = scaledValue(card.keepBlock, state.stats[card.stat]);
+    if (state.blockHalved) kept = Math.floor(kept / 2);
+    state.blockKeep = Math.max(state.blockKeep || 0, kept);
+  }
+  if (card.fullBlockEnergy) state.fullBlockEnergy = (state.fullBlockEnergy || 0) + card.fullBlockEnergy;
+  if (card.stripGuard) state.bossGuard = Math.max(0, state.bossGuard - scaledValue(card.stripGuard, state.stats[card.stat]));
   if (card.lose && !card.deal) hurtPlayer(state, card.lose);
   if (card.next) state.nextAttack += scaledValue(card.next, state.stats[card.stat]);
-  if (card.draw) drawCards(state, card.draw);
+  if (card.draw) {
+    const drawn = drawCards(state, card.draw);
+    if (card.comboIfDrawnAttack && drawn.some((pulled) => pulled.type === 'attack')) {
+      state.combo = Math.min(5, state.combo + card.comboIfDrawnAttack);
+    }
+  }
   if (card.drawIfAttack && intentAt(state.boss, state.turn).kind === 'attack') drawCards(state, card.drawIfAttack);
   if (card.discardLeft && state.hand.length) state.discard.push(state.hand.shift());
   if (card.energy && !state.coinUsed) {
@@ -313,23 +334,33 @@ function playCard(state, card, move) {
     state.rallyBonus += scaledValue(card.rally, state.stats.CHA);
   }
   if (card.bossCut) state.bossCut += scaledValue(card.bossCut, state.stats[card.stat]);
+  if (card.bossCutPct) state.bossCutPct = scaledValue(card.bossCutPct, state.stats[card.stat]);
   if (card.keep) state.keep = Number.isInteger(move.keep) ? move.keep : 0;
   state.lastCard = card;
 }
 
 function bossAct(state) {
   const intent = intentAt(state.boss, state.turn);
-  if (state.staggered && (intent.kind === 'guard' || intent.kind === 'buff')) return;
+  if (state.staggered && (intent.kind === 'guard' || intent.kind === 'buff')) {
+    state.fullBlockEnergy = 0;
+    return;
+  }
   if (intent.kind === 'attack') {
     const each = attackPacket(state, intent);
     const hits = attackHits(state, intent);
     const incoming = each * hits;
     const absorbed = incoming > 0 && state.playerBlock >= incoming;
     for (let i = 0; i < hits && !state.done; i++) hurtPlayer(state, each);
-    if (absorbed && state.playerHp > 0) state.staggerNext = true;
+    if (absorbed && state.playerHp > 0) {
+      state.staggerNext = true;
+      if (state.fullBlockEnergy) state.energyNext = (state.energyNext || 0) + state.fullBlockEnergy;
+    }
     state.bossCut = 0;
+    state.bossCutPct = 0;
+    state.fullBlockEnergy = 0;
     return;
   }
+  state.fullBlockEnergy = 0;
   if (intent.kind === 'guard') {
     state.bossGuard += intent.n;
     return;
@@ -365,8 +396,11 @@ function endTurn(state) {
     return;
   }
   state.turn += 1;
-  state.playerBlock = 0;
-  state.energy = TRIAL_LIMITS.energy;
+  const keptBlock = state.blockKeep || 0;
+  state.blockKeep = 0;
+  state.playerBlock = keptBlock;
+  state.energy = TRIAL_LIMITS.energy + (state.energyNext || 0);
+  state.energyNext = 0;
   state.playedThisTurn = 0;
   state.attacksThisTurn = 0;
   state.skilledThisTurn = false;
@@ -385,6 +419,9 @@ function createState(seedHex, opts) {
   const ctx = opts || trialContext({ charId: 'twins', chapter: 1, now: seasonStartMs() });
   const boss = bossFor(ctx.chapter);
   const rng = rngFromSeed(seedHex);
+  const picked = Array.isArray(ctx.allies) && ctx.allies.length >= 2 && ctx.allyVotes == null
+    ? { allies: ctx.allies.slice(0, 2), autoPicked: !!ctx.autoPicked }
+    : resolveDeckAllies({ allies: ctx.allies, votes: ctx.allyVotes || [], previous: ctx.previousAllies });
   const state = {
     rng,
     boss,
@@ -398,9 +435,12 @@ function createState(seedHex, opts) {
     staggered: false,
     staggerNext: false,
     passive: PASSIVES[ctx.charId] || {},
-    allies: Array.isArray(ctx.allies) ? ctx.allies.slice(0, 2) : [],
+    allies: picked.allies,
+    autoPicked: picked.autoPicked,
     penalizedAllies: Array.isArray(ctx.penalizedAllies) ? ctx.penalizedAllies.slice() : [],
-    deck: shuffle(deckFor(ctx.charId, ctx.allies, ctx.penalizedAllies), rng),
+    deck: Array.isArray(ctx.fixedDeck) && ctx.fixedDeck.length
+      ? ctx.fixedDeck.map((card) => ({ ...card }))
+      : shuffle(deckFor(ctx.charId, picked.allies, ctx.penalizedAllies), rng),
     discard: [],
     hand: [],
     turn: 1,
@@ -421,6 +461,10 @@ function createState(seedHex, opts) {
     attackBuff: 0,
     hitBuff: 0,
     bossCut: 0,
+    bossCutPct: 0,
+    blockKeep: 0,
+    energyNext: 0,
+    fullBlockEnergy: 0,
     blockHalved: false,
     blockHalvedNext: false,
     playedThisTurn: 0,
@@ -433,7 +477,7 @@ function createState(seedHex, opts) {
     rows: [[]]
   };
   state.deckSize = state.deck.length;
-  state.bossHp = state.bossMax;
+  state.bossHp = Number.isFinite(ctx.openingBossHp) ? Math.max(0, Math.min(state.bossMax, ctx.openingBossHp)) : state.bossMax;
   drawCards(state, TRIAL_LIMITS.draw);
   tickHexOpen(state);
   return state;
@@ -455,8 +499,9 @@ function preview(state, card) {
   };
   let hp = state.bossHp;
   let first = true;
+  const base = attackBase(state, card);
   const hit = () => {
-    let raw = attackDamage(ghost, card, card.deal);
+    let raw = attackDamage(ghost, card, base);
     if (first && state.combo > 0) raw += state.combo * state.comboBonus;
     first = false;
     raw = finisherAmount(raw, hp, state.bossMax, state.bossGuard);
@@ -466,7 +511,7 @@ function preview(state, card) {
     return raw;
   };
   let total = hit();
-  if (card.hits === 2) total += hit();
+  for (let extra = 1; extra < (card.hits || 1); extra++) total += hit();
   if (card.againBelowHalf && state.playerHp * 2 < TRIAL_LIMITS.playerHp) total += hit();
   return total;
 }
@@ -484,6 +529,7 @@ function publicCard(state, card, index) {
     emoji: card.emoji,
     signature: !!card.signature,
     ally: !!card.ally,
+    keepCombo: !!card.keepCombo,
     art: card.art || null,
     setup: !!card.setup,
     playable,
@@ -512,6 +558,7 @@ function viewOf(state, ok, reason) {
     variant: state.variant,
     charId: state.charId,
     allies: state.allies,
+    autoPicked: !!state.autoPicked,
     deckSize: state.deckSize,
     bossHp: state.bossHp,
     bossMax: state.bossMax,
@@ -627,11 +674,11 @@ function horizonSpend(after) {
     .sort((a, b) => b.full - a.full);
   let energy = after.energy == null ? 3 : after.energy;
   let spend = 0;
-  let first = true;
+  let comboLeft = (after.combo || 0) > 0;
   for (const card of attacks) {
     if (card.cost > energy) continue;
-    spend += first ? card.full : card.rest;
-    first = false;
+    spend += comboLeft ? card.full : card.rest;
+    if (!card.keepCombo) comboLeft = false;
     energy -= card.cost;
   }
   if (after.staggered && after.intent && (after.intent.kind === 'guard' || after.intent.kind === 'buff')) {
@@ -821,6 +868,20 @@ async function summarizeBot(runs, opts, play) {
   };
 }
 
+/** Lookahead kill rate for one ally pair. Base HP stays at the locked config value. */
+export async function simulateAllyPair(runs, allies) {
+  const opts = trialBotOpts(defaultConfig().trial_base_hp, defaultConfig().trial_combo_bonus);
+  opts.allies = (allies || SIM_ALLIES).slice();
+  const lookahead = await summarizeBot(runs, opts, lookaheadMoves);
+  return {
+    allies: opts.allies,
+    runs: lookahead.runs,
+    median: lookahead.median,
+    killRate: lookahead.killRate,
+    kills: lookahead.kills
+  };
+}
+
 /** Greedy bot over `runs` seeds. Chapter 1, plain day, flat 50 stats (the Twins). */
 export async function simulateTrialMedian(runs, baseHp, comboBonus) {
   const opts = trialBotOpts(baseHp, comboBonus);
@@ -902,49 +963,15 @@ export async function tuneTrialV2(runs) {
   };
 }
 
-/** 12-card deck. Combo stays +4. HP starts at 105 and steps up by 5 while lookahead kills exceed 35% or the greedy median is still above 70. */
+/** Locked 12-card check for the auto-fill pair. Base HP is not changed. */
 export async function tuneAllyDeck(runs) {
-  let baseHp = 105;
-  const comboBonus = 4;
-  const steps = [];
-  let greedy;
-  let lookahead;
-  for (let step = 0; step < 8; step++) {
-    const opts = trialBotOpts(baseHp, comboBonus);
-    opts.allies = SIM_ALLIES.slice();
-    greedy = await summarizeBot(runs, opts, botMoves);
-    lookahead = await summarizeBot(runs, opts, lookaheadMoves);
-    const gap = lookahead.median - greedy.median;
-    const met = targetsMet(greedy, lookahead);
-    const row = {
-      baseHp,
-      comboBonus,
-      allies: SIM_ALLIES.slice(),
-      deck: 12,
-      greedyMedian: greedy.median,
-      greedyKills: greedy.killRate,
-      lookaheadMedian: lookahead.median,
-      lookaheadKills: lookahead.killRate,
-      gap,
-      met
-    };
-    steps.push(row);
-    if (typeof process !== 'undefined' && process.stderr) {
-      process.stderr.write('allies ' + JSON.stringify(row) + '\n');
-    }
-    if (met) break;
-    if (lookahead.killRate > 0.35 || greedy.median > 70) baseHp += 5;
-    else break;
-    if (baseHp > 160) break;
-  }
-  const last = steps[steps.length - 1];
+  const row = await simulateAllyPair(runs, SIM_ALLIES);
   return {
-    baseHp: last.baseHp,
-    comboBonus,
-    allies: SIM_ALLIES.slice(),
-    greedy,
-    lookahead,
-    met: last.met,
-    steps
+    baseHp: defaultConfig().trial_base_hp,
+    comboBonus: defaultConfig().trial_combo_bonus,
+    allies: row.allies,
+    lookaheadKills: row.killRate,
+    lookaheadMedian: row.median,
+    met: row.killRate >= 0.15 && row.killRate <= 0.35
   };
 }

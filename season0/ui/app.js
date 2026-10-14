@@ -475,7 +475,7 @@ function sheetTrial(s, c) {
     (t.step === 'play' && !view.done ? '<div class="row"><button class="btn" type="button" data-act="trial-end">End turn</button>' +
       '<button class="btn solid" type="button" data-act="trial-finish">Finish</button></div>' : '') +
     result +
-    '<p class="footnote">Combo ' + view.combo + '/' + '5 · each Skill adds 1, and the next Attack deals +' + view.comboBonus + ' × Combo. A full block Staggers the boss next turn. A hit that would drop the boss to 30% HP or below deals ×1.5, including that hit. Deck ' + (view.deckSize || 10) + '. Card upgrades stay off.</p>' +
+    '<p class="footnote">Combo ' + view.combo + '/' + '5 · each Skill adds 1, and the next Attack deals +' + view.comboBonus + ' × Combo. A full block Staggers the boss next turn. A hit that would drop the boss to 30% HP or below deals ×1.5, including that hit. Deck ' + (view.deckSize || 12) + (view.autoPicked ? ' · allies auto-picked' : '') + '. Card upgrades stay off.</p>' +
     (s.phase === 'P4' ? '<p class="footnote">Act before the Reaper. A day outside the window is not in K.</p>' : ''));
   if (t.step === 'play') {
     const host = document.getElementById('trial-stage');
@@ -515,27 +515,33 @@ function paintAllies(c) {
     return;
   }
   const picked = new Set(ui.allyPick || []);
+  const deck = new Set(body.deckAllies || []);
   const cards = (body.pool || []).map((ally) => {
     const on = picked.has(ally.entity_id) ? ' on' : '';
     const ghost = ally.ghost ? ' · ghost' : '';
+    const auto = body.autoPicked && deck.has(ally.entity_id) ? ' · auto-picked' : '';
+    const number = ally.number ? ' #' + ally.number : '';
     return '<button class="choice' + on + '" type="button" data-act="ally-toggle" data-id="' + esc(ally.entity_id) + '">' +
       '<img class="ally-face" src="' + esc(ally.art) + '" alt="" width="48" height="48">' +
-      '<strong>' + esc(ally.name) + ghost + '</strong>' +
-      '<span class="meta">' + esc(ally.card.text) + (ally.placeholder ? ' · placeholder' : '') + '</span></button>';
+      '<strong>' + esc(ally.name) + ghost + auto + '</strong>' +
+      '<span class="meta">' + esc(ally.card.text) + number + (ally.placeholder ? ' · placeholder' : '') + '</span></button>';
   }).join('');
   const proposer = body.proposer ? body.proposer.wallet : 'nobody';
-  const slate = (body.proposal || []).join(' and ') || 'none yet';
+  const proposal = (body.proposal || []).join(' and ') || 'none yet';
+  const filled = (body.deckAllies || []).join(' and ');
+  const fill = body.autoPicked ? 'auto-picked ' + filled : 'voted ' + filled;
   const veto = body.tally ? Math.round(body.tally.share * 100) + '% veto' : 'no tally';
+  const wallets = body.voteWallets || 0;
   sheetWrap('Allies · ' + c.name,
     '<p>Fans vote two margin figures into the deck. The proposer rotates by cluster-deduped contribution points. Holders can veto with a majority of the 2% capped weight. No fee and no payout.</p>' +
-    '<p class="meta" data-ally-status>Proposer ' + esc(proposer) + ' · proposal ' + esc(slate) + ' · ' + esc(veto) + (body.passed ? ' · in the deck' : '') + '</p>' +
+    '<p class="meta" data-ally-status>Proposer ' + esc(proposer) + ' · proposal ' + esc(proposal) + ' · ' + esc(veto) + ' · ' + wallets + '/5 wallets · ' + esc(fill) + '</p>' +
     cards +
     '<div class="row">' +
     '<button class="btn solid" type="button" data-act="ally-propose" data-char="' + esc(c.id) + '">Propose these two</button>' +
     '<button class="btn" type="button" data-act="ally-vote" data-char="' + esc(c.id) + '" data-veto="false">Allow</button>' +
     '<button class="btn" type="button" data-act="ally-vote" data-char="' + esc(c.id) + '" data-veto="true">Veto</button>' +
     '</div>' +
-    '<p class="footnote">The same ally cannot be picked two chapters running. If three characters field one ally, that card is −10% for all of them. Eliminated characters join as ghosts. Portraits are placeholders until Design\'s insets arrive.</p>');
+    '<p class="footnote">The same ally cannot be picked two chapters running. Fewer than 5 voting wallets, or no vote, and the two lowest-numbered allies that are not fatigued are auto-picked. If three characters field one ally, that card is −10% for all of them. Eliminated characters join as ghosts. Portraits are placeholders until Design\'s insets arrive.</p>');
 }
 
 function sheetAllies(s, c) {

@@ -1,7 +1,14 @@
 #!/usr/bin/env node
-/** 12-card ally deck. Combo stays +4. HP starts at 105 and rises by 5 while lookahead kills exceed 35% or the greedy median is still above 70. */
-import { tuneAllyDeck } from '../lib/trial.js';
+/** Auto-fill pair at the locked base HP. Does not retune HP. */
+import { simulateAllyPair } from '../lib/trial.js';
+import { defaultConfig } from '../lib/config.js';
 
 const runs = Number(process.argv[2] || 300);
-const tuned = await tuneAllyDeck(runs);
-process.stdout.write(JSON.stringify(tuned, null, 2) + '\n');
+const row = await simulateAllyPair(runs, ['hob', 'wren']);
+const inRange = row.killRate >= 0.15 && row.killRate <= 0.35;
+process.stdout.write(JSON.stringify({
+  baseHp: defaultConfig().trial_base_hp,
+  ...row,
+  inRange
+}, null, 2) + '\n');
+if (!inRange) process.exitCode = 2;

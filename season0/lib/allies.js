@@ -6,26 +6,28 @@ import { asEntity } from './entity.js';
 import { applyVoteCap } from './vote.js';
 
 const HOLD_MS = 24 * 3600 * 1000;
-const PENALTY_NUMBERS = ['deal', 'block', 'next', 'hex', 'rally', 'bossCut', 'bonusIfBlock'];
+const PENALTY_NUMBERS = ['deal', 'block', 'next', 'hex', 'rally', 'bossCut', 'bonusIfBlock', 'keepBlock', 'stripGuard', 'dealIfStaggered', 'dealDuringFinisher', 'bossCutPct'];
 
+/** Canonical S0 allies. Numbers are the auto-fill order. Card numbers are at stat 50. */
 const FIGURES = [
-  { entity_id: 'mouse', name: 'Margin Mouse', blurb: 'Lives in the white space and steals a page.', glyph: 'M', color: '#c9a46a', card: { cost: 0, type: 'skill', stat: 'CUN', draw: 1, setup: true, emoji: '🐭', text: 'Draw 1 card.' } },
-  { entity_id: 'moth', name: 'Ink Moth', blurb: 'Eats the wet ink before it dries.', glyph: 'I', color: '#7d6bff', card: { cost: 1, type: 'attack', stat: 'STR', deal: 5, emoji: '🦋', text: 'Deal 5.' } },
-  { entity_id: 'imp', name: 'Footnote Imp', blurb: 'Hides in the small print.', glyph: 'F', color: '#56b4e9', card: { cost: 1, type: 'block', stat: 'CHA', block: 5, emoji: '📎', text: 'Gain 5 block.' } },
-  { entity_id: 'scribe', name: 'Gutter Scribe', blurb: 'Writes the line you meant to write.', glyph: 'G', color: '#19b88a', card: { cost: 1, type: 'skill', stat: 'CUN', next: 4, emoji: '✒️', text: 'Next attack this turn deals +4.' } },
-  { entity_id: 'wisp', name: 'Ribbon Wisp', blurb: 'A bookmark that learned to flutter.', glyph: 'R', color: '#f0e442', card: { cost: 1, type: 'skill', stat: 'CHA', block: 4, emoji: '🎀', text: 'Gain 4 block.' } },
-  { entity_id: 'candle', name: 'Candle Moth', blurb: 'Burns a hole in the villain\'s margin.', glyph: 'C', color: '#e07a3d', card: { cost: 1, type: 'skill', stat: 'LCK', hex: 2, emoji: '🕯️', text: 'Boss takes 2 damage at each turn end.' } },
-  { entity_id: 'binder', name: 'Binding Imp', blurb: 'Closes the book on one good swing.', glyph: 'B', color: '#d55e00', card: { cost: 2, type: 'attack', stat: 'STR', deal: 8, emoji: '📚', text: 'Deal 8.' } },
-  { entity_id: 'sprite', name: 'Quill Sprite', blurb: 'A nib with opinions.', glyph: 'Q', color: '#f07a2e', card: { cost: 1, type: 'attack', stat: 'STR', deal: 4, emoji: '🪶', text: 'Deal 4.' } },
-  { entity_id: 'lantern', name: 'Lantern Boy', blurb: 'Keeps one card lit for the next page.', glyph: 'L', color: '#f2c14e', card: { cost: 0, type: 'skill', stat: 'LCK', keep: true, emoji: '🏮', text: 'Keep one card in hand for next turn.' } },
-  { entity_id: 'cat', name: 'Margin Cat', blurb: 'Knocks the inkwell toward the fight.', glyph: 'K', color: '#e8a0bf', card: { cost: 1, type: 'attack', stat: 'STR', deal: 6, emoji: '🐱', text: 'Deal 6.' } },
-  { entity_id: 'jacket', name: 'Dust Jacket', blurb: 'Wraps the reader before the blow lands.', glyph: 'D', color: '#8d99ae', card: { cost: 1, type: 'block', stat: 'CUN', block: 4, emoji: '📘', text: 'Gain 4 block.' } },
-  { entity_id: 'errata', name: 'Errata Imp', blurb: 'Crosses out a bit of the boss\'s swing.', glyph: 'E', color: '#009e73', card: { cost: 1, type: 'skill', stat: 'CUN', bossCut: 3, emoji: '✂️', text: 'Boss deals −3 damage this turn.' } }
+  { number: 1, entity_id: 'hob', name: 'Hob the Bookbinder', blurb: 'Stitches a torn page and leaves the thread for tomorrow.', glyph: 'H', color: '#c4a574', card: { cost: 1, type: 'block', stat: 'CHA', block: 6, keepBlock: 3, emoji: '🧵', text: 'Gain 6 block; keep 3 next turn.' } },
+  { number: 2, entity_id: 'wren', name: 'Sister Wren', blurb: 'Holds a lamp over the next line.', glyph: 'W', color: '#f2c14e', card: { cost: 1, type: 'skill', stat: 'CUN', draw: 1, emoji: '🕯️', text: '+1 Combo. Draw 1.' } },
+  { number: 3, entity_id: 'juniper', name: 'Juniper', blurb: 'Opens the lock the boss set on the margin.', glyph: 'J', color: '#19b88a', card: { cost: 0, type: 'skill', stat: 'CUN', stripGuard: 4, setup: true, emoji: '🔑', text: '+1 Combo. Boss loses 4 guard.' } },
+  { number: 4, entity_id: 'footnote', name: 'Sir Footnote', blurb: 'A small knight who hits harder once the boss stumbles.', glyph: 'F', color: '#56b4e9', card: { cost: 1, type: 'attack', stat: 'STR', deal: 5, dealIfStaggered: 6, emoji: '📌', text: 'Deal 5; deal 6 if boss Staggered.' } },
+  { number: 5, entity_id: 'index', name: 'Old Mother Index', blurb: 'Finds the next line and leaves it in hand.', glyph: 'O', color: '#8d6b4a', card: { cost: 1, type: 'skill', stat: 'CUN', draw: 1, emoji: '📖', text: 'Draw 1.' } },
+  { number: 6, entity_id: 'croak', name: 'Baron Croak', blurb: 'Leaps and leaves the combo where it was.', glyph: 'B', color: '#6aa84f', card: { cost: 2, type: 'attack', stat: 'STR', deal: 1, keepCombo: true, emoji: '🐸', text: 'Deal 1; Combo is not consumed.' } },
+  { number: 7, entity_id: 'mira', name: 'Mira the Cartographer', blurb: 'Marks the spot the next blow should land.', glyph: 'M', color: '#7d6bff', card: { cost: 1, type: 'skill', stat: 'CUN', next: 4, emoji: '🗺️', text: 'Next attack this turn deals +4.' } },
+  { number: 8, entity_id: 'brannoc', name: 'Brannoc the Ferryman', blurb: 'Takes the toll in block.', glyph: 'R', color: '#4a6fa5', card: { cost: 2, type: 'block', stat: 'CHA', block: 10, emoji: '⛴️', text: 'Gain 10 block.' } },
+  { number: 9, entity_id: 'lumen', name: 'Lumen the Moth Queen', blurb: 'The swarm lands as three separate bites.', glyph: 'L', color: '#e07a3d', card: { cost: 2, type: 'attack', stat: 'STR', deal: 2, hits: 3, emoji: '🦋', text: 'Deal 2 three times (Combo applies to first hit only).' } },
+  { number: 10, entity_id: 'grub', name: 'Grub', blurb: 'Raises a wall of moss and does not explain it.', glyph: 'G', color: '#7a8c4a', card: { cost: 1, type: 'block', stat: 'CHA', block: 12, emoji: '🌿', text: 'Gain 12 block.' } },
+  { number: 11, entity_id: 'tilde', name: 'Tilde', blurb: 'Softens the next blow before it is written.', glyph: 'T', color: '#009e73', card: { cost: 1, type: 'skill', stat: 'LCK', bossCutPct: 16, emoji: '〰️', text: 'Boss\'s next attack deals 16% less (floor).' } },
+  { number: 12, entity_id: 'corvin', name: 'Corvin', blurb: 'Arrives late, and harder once the ending has started.', glyph: 'C', color: '#d55e00', card: { cost: 0, type: 'attack', stat: 'STR', deal: 4, dealDuringFinisher: 6, emoji: '📦', text: 'Deal 4; deal 6 during Finisher.' } }
 ];
 
 function figureRecord(row) {
   const entity = asEntity({ entity_id: row.entity_id, entity_type: 'ally' });
   return {
+    number: row.number,
     entity_id: entity.entity_id,
     entity_type: entity.entity_type,
     ghost: false,
@@ -47,8 +49,40 @@ function figureRecord(row) {
 
 export const ALLY_POOL = FIGURES.map(figureRecord);
 
-/** The two allies the 12-card bot sim puts in the Twins' deck. */
-export const SIM_ALLIES = ['mouse', 'moth'];
+/** Numbers 1 and 2. The auto-fill pair, and the pair the bot sim treats as average. */
+export const SIM_ALLIES = ['hob', 'wren'];
+
+export const ALLY_QUORUM = 5;
+
+/**
+ * Last chapter's allies are fatigued, so they are skipped.
+ * The fill is the two lowest numbers still available. Ghosts are not numbered.
+ */
+export function autoAllies({ previous, pool } = {}) {
+  const tired = new Set(previous || []);
+  return (pool || ALLY_POOL)
+    .filter((row) => !row.ghost && Number.isFinite(row.number) && !tired.has(row.entity_id))
+    .sort((a, b) => a.number - b.number || String(a.entity_id).localeCompare(String(b.entity_id)))
+    .slice(0, 2)
+    .map((row) => row.entity_id);
+}
+
+/**
+ * A slate counts only when at least 5 wallets voted and it was not vetoed.
+ * Otherwise the deck is auto-filled. Passing allies with no vote list keeps
+ * that explicit pair, which is how the sim builds its deck.
+ */
+export function resolveDeckAllies({ allies, votes, previous, pool } = {}) {
+  const slate = Array.isArray(allies) ? allies.filter(Boolean).slice(0, 2) : [];
+  const wallets = new Set((votes || []).map((vote) => String(vote && vote.wallet || '')).filter(Boolean));
+  if (slate.length === 2 && votes == null) {
+    return { allies: slate, autoPicked: false, wallets: 0 };
+  }
+  if (slate.length === 2 && wallets.size >= ALLY_QUORUM) {
+    return { allies: slate, autoPicked: false, wallets: wallets.size };
+  }
+  return { allies: autoAllies({ previous, pool }), autoPicked: true, wallets: wallets.size };
+}
 
 export function ghostAlly(character) {
   const entity = asEntity({ entity_id: character.id, id: character.id, entity_type: 'character' });

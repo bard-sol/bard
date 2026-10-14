@@ -9,6 +9,7 @@ import {
   castAllyVote,
   lineupPayment,
   pickProposer,
+  resolveDeckAllies,
   sharedPenaltyIds,
   slateLegal,
   tallyVeto
@@ -254,8 +255,28 @@ function eliminatedOf(body) {
 
 function previousOf(charId, chapter, body) {
   if (body && Array.isArray(body.previousAllies)) return body.previousAllies;
-  const prior = loopMemory().allies.get(allyKey(charId, Number(chapter) - 1));
-  return prior && prior.passed ? prior.slate : [];
+  const ch = Number(chapter) || 1;
+  if (ch <= 1) return [];
+  return alliesFor(charId, ch - 1).allies;
+}
+
+function acceptedSlate(record) {
+  if (!record || !Array.isArray(record.slate) || record.slate.length !== 2) return [];
+  const tally = tallyVeto(record.roster || [], record.votes || []);
+  if (!tally.passed) return [];
+  return record.slate;
+}
+
+/** Voted slate only counts with 5 or more wallets. Otherwise the lowest unfatigued numbers fill the deck. */
+function alliesFor(charId, chapter) {
+  const ch = Number(chapter) || 1;
+  const previous = ch <= 1 ? [] : alliesFor(charId, ch - 1).allies;
+  const record = loopMemory().allies.get(allyKey(charId, ch));
+  return resolveDeckAllies({
+    allies: acceptedSlate(record),
+    votes: record && Array.isArray(record.votes) ? record.votes : [],
+    previous
+  });
 }
 
 function rosterOf(body, wallet) {
@@ -272,12 +293,11 @@ function rosterOf(body, wallet) {
 function chapterPicks(chapter) {
   const picks = [];
   for (const [key, row] of loopMemory().allies) {
-    if (!row || !row.slate) continue;
+    if (!row) continue;
     const parts = key.split('|');
     if (Number(parts[1]) !== Number(chapter)) continue;
-    const tally = tallyVeto(row.roster || [], row.votes || []);
-    if (!tally.passed) continue;
-    picks.push({ entity_id: parts[0], entity_type: 'character', allies: row.slate });
+    const allies = Array.isArray(row.fielded) ? row.fielded : alliesFor(parts[0], chapter).allies;
+    picks.push({ entity_id: parts[0], entity_type: 'character', allies });
   }
   return picks;
 }
@@ -288,18 +308,26 @@ function allyView(charId, chapter, body) {
   const record = loopMemory().allies.get(allyKey(charId, chapter)) || null;
   const roster = (record && record.roster) || rosterOf(body, record && record.wallet);
   const proposer = pickProposer({ wallets: roster, chapter, skip: record ? record.failed : [] });
+  const resolved = alliesFor(charId, chapter);
   const picks = chapterPicks(chapter);
+  if (!picks.some((row) => row.entity_id === charId)) {
+    picks.push({ entity_id: charId, entity_type: 'character', allies: resolved.allies });
+  }
   const penalized = sharedPenaltyIds(picks);
   const tally = record && record.slate ? tallyVeto(roster, record.votes) : null;
-  const passed = !!(record && record.slate && tally && tally.passed);
+  const passed = !!(record && record.slate && tally && tally.passed && resolved.wallets >= 5 && !resolved.autoPicked);
   return {
     ok: true,
     charId,
     chapter: Number(chapter),
     pool,
     proposer,
-    slate: record && record.passed ? record.slate : null,
+    slate: passed ? resolved.allies : null,
     proposal: record ? record.slate : null,
+    deckAllies: resolved.allies,
+    autoPicked: resolved.autoPicked,
+    voteWallets: resolved.wallets,
+    quorum: 5,
     failed: record ? record.failed : [],
     votes: record ? record.votes : [],
     tally,
@@ -376,12 +404,15 @@ function onAllyVote(body) {
 }
 
 function applyAllies(ctx, charId, chapter) {
-  const record = loopMemory().allies.get(allyKey(charId, chapter));
-  if (!record || !record.slate) return ctx;
-  const tally = tallyVeto(record.roster || [], record.votes || []);
-  if (!tally.passed) return ctx;
-  record.passed = true;
-  ctx.allies = record.slate.slice();
+  const resolved = alliesFor(charId, chapter);
+  ctx.allies = resolved.allies.slice();
+  ctx.autoPicked = resolved.autoPicked;
+  const memory = loopMemory();
+  const key = allyKey(charId, chapter);
+  const record = memory.allies.get(key) || { slate: null, votes: [], failed: [], passed: false };
+  record.fielded = resolved.allies.slice();
+  record.autoPicked = resolved.autoPicked;
+  memory.allies.set(key, record);
   ctx.penalizedAllies = sharedPenaltyIds(chapterPicks(chapter));
   return ctx;
 }
