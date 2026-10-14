@@ -2,6 +2,7 @@
  * Season 0 score sim, user settings §14. Does not modify game code.
  *
  * Run: node season0/sims/score-s14.mjs
+ * Participation variance: S14_BETA=1 node season0/sims/score-s14.mjs
  *
  * Moves are the share of qualifying verified clusters that play, times the
  * money edge. Unverified wallets and Readers cast nothing. Every House starts
@@ -277,6 +278,22 @@ function tickProbation(house) {
   }
 }
 
+function beta43(seed, a, b, c) {
+  let shape4 = 0;
+  let shape3 = 0;
+  for (let i = 0; i < 4; i++) shape4 += -Math.log(Math.max(1e-12, rand(seed, a, b, c, 10 + i)));
+  for (let i = 0; i < 3; i++) shape3 += -Math.log(Math.max(1e-12, rand(seed, a, b, c, 20 + i)));
+  const total = shape4 + shape3;
+  return total > 0 ? shape4 / total : 0.5;
+}
+
+function sizeSlack(size, mid) {
+  if (!(mid > 0) || !(size > 0)) return 0;
+  const ratio = size / mid;
+  if (ratio <= 1) return 0;
+  return -0.05 * clamp(Math.log(ratio) / Math.log(2), 0, 1);
+}
+
 function participationOf(groups, rateActiveOnly) {
   let den = 0;
   let num = 0;
@@ -492,6 +509,23 @@ function runSeason(seed, pristine, opts) {
       talliesThisChapter += 1;
       crown = next;
     };
+    const chapterRate = {};
+    if (opts.participation === 'beta') {
+      const sizes = {};
+      const sizeList = [];
+      for (const id of living) {
+        sizes[id] = clustersOf(houses[id], m, chapter).length;
+        sizeList.push(sizes[id]);
+      }
+      const midSize = median(sizeList);
+      for (const id of living) {
+        const draw = beta43(seed, chapter * 17, INDEX[id], 410);
+        const groups = clustersOf(houses[id], m, chapter);
+        const nProb = groups.filter((group) => group.probation > 0).length;
+        const weight = groups.length > 0 ? (groups.length - 0.5 * nProb) / groups.length : 0;
+        chapterRate[id] = clamp(draw + sizeSlack(sizes[id], midSize), 0, 1) * weight;
+      }
+    }
 
     for (let day = 0; day < 3; day++) {
       const armor = {};
@@ -506,8 +540,8 @@ function runSeason(seed, pristine, opts) {
         armor[id] = built.armor;
         chapterFresh[id] += built.added + rally;
         const groups = clustersOf(house, m, chapter);
-        const rate = participationOf(groups, false);
-        const active = participationOf(groups, true);
+        const rate = opts.participation === 'beta' ? chapterRate[id] : participationOf(groups, false);
+        const active = opts.participation === 'beta' ? chapterRate[id] : participationOf(groups, true);
         activeGap = Math.max(activeGap, Math.abs(rate - active));
         partByHouse[id].push(opts.rateActiveOnly ? active : rate);
         const nFull = groups.filter((group) => group.probation <= 0).length;
@@ -644,7 +678,7 @@ function runSeason(seed, pristine, opts) {
   }
   const a2 = !!(champion && ch2Bottom && ch2Bottom.includes(champion));
   const a4 = !!(revivedId && finalists.includes(revivedId));
-  const a5 = !!(crownChanged[6] || crownChanged[7]);
+  const a5 = opts.a5Ch7 ? !!crownChanged[7] : !!(crownChanged[6] || crownChanged[7]);
   const firstGhost = ghosts[0] || null;
   const a6 = !!(firstGhost && firstGhost.died < 7 && firstGhost.verifiedN > 0 && firstGhost.ghostActive / firstGhost.verifiedN >= 0.6);
   const ch1Part = {};
@@ -702,12 +736,13 @@ function blank() {
 
 function fold(acc, row) {
   acc.n += 1;
-  const parts = IDS.map((id) => row.ch1Part[id]).filter((value) => value != null);
-  const mid = median(parts);
-  const leaderPart = row.ch1Part[row.stakeLeader];
-  const floorPart = row.ch1Part[row.stakeFloor];
-  const engaged = floorPart != null && floorPart >= mid - 1e-12;
-  const idle = leaderPart != null && leaderPart < mid - 1e-12;
+  const ranked = IDS.filter((id) => row.ch1Part[id] != null)
+    .sort((a, b) => row.ch1Part[a] - row.ch1Part[b] || INDEX[a] - INDEX[b]);
+  const cut = Math.floor(ranked.length / 2);
+  const bottomHalf = new Set(ranked.slice(0, cut));
+  const topHalf = new Set(ranked.slice(ranked.length - cut));
+  const engaged = !!(row.stakeFloor && topHalf.has(row.stakeFloor));
+  const idle = !!(row.stakeLeader && bottomHalf.has(row.stakeLeader));
   if (row.stakeLeader && row.champion === row.stakeLeader) acc.leaderWins += 1;
   if (row.stakeFloor && row.champion === row.stakeFloor) acc.lowestWins += 1;
   if (engaged) {
@@ -843,7 +878,67 @@ function task(label, opts) {
   return { label, opts: { seedStart: 1, seedEnd: SEASONS, ...opts } };
 }
 
+async function runEdgeGrid(edges, beta) {
+  const tasks = [];
+  for (const edge of edges) {
+    for (const twistMode of ['none', 'deck']) {
+      const opts = { edge, twistMode, rally: true, surge: true };
+      if (beta) {
+        opts.participation = 'beta';
+        opts.a5Ch7 = true;
+      }
+      tasks.push(task('edge:' + edge + ':' + twistMode, opts));
+    }
+  }
+  const ran = await runTasks(tasks.map((item) => item.opts));
+  const byLabel = {};
+  tasks.forEach((item, index) => {
+    byLabel[item.label] = view(ran[index]);
+  });
+  return byLabel;
+}
+
+async function runBeta() {
+  const started = Date.now();
+  const byLabel = await runEdgeGrid([0.2, 0.25, 0.3], true);
+  const cleanTop = byLabel['edge:0.25:none'].goals.leaderTop3;
+  const deckTop = byLabel['edge:0.25:deck'].goals.leaderTop3;
+  const ran35 = cleanTop < 0.6 || deckTop < 0.6;
+  if (ran35) Object.assign(byLabel, await runEdgeGrid([0.35], true));
+  const report = {
+    ruleSet: 's14-beta',
+    seasons: SEASONS,
+    seconds: Math.round((Date.now() - started) / 1000),
+    raise_loyalty_pays_default: false,
+    rate_active_only_default: false,
+    participation: 'Each chapter a House draws Beta(4, 3), mean 4/7. A House larger than the median qualifying-cluster count loses slack of 5 points times log2(size/median), capped at 5 points. Smaller Houses are unchanged. Probation clusters still contribute half.',
+    a5: 'The Crown changes hands inside chapter 7 only. Band 15–35%. Other annotations stay on 20–85%.',
+    conditionals: 'Top half and bottom half are the floor(n/2) highest and lowest chapter-1 participation rates. Ties break by House index.',
+    ran35BecauseTop3Under60: ran35,
+    cells: byLabel
+  };
+  mkdirSync(new URL('./results/', import.meta.url), { recursive: true });
+  writeFileSync(new URL('./results/score-s14-beta.json', import.meta.url), JSON.stringify(report));
+  for (const edge of ran35 ? [0.2, 0.25, 0.3, 0.35] : [0.2, 0.25, 0.3]) {
+    for (const twistMode of ['none', 'deck']) {
+      const cell = byLabel['edge:' + edge + ':' + twistMode];
+      const g = cell.goals;
+      const k = cell.conditionals;
+      const a = cell.annotations;
+      const line = [g.leaderWins, g.leaderTop3, g.lowestChampion].map((value) => (100 * value).toFixed(1)).join('/');
+      console.log('edge', edge, twistMode, line, g.pass ? 'PASS' : '');
+      console.log('  engaged', k.engagedN, k.engagedChampion, 'idle', k.idleN, k.idleLeaderChampion);
+      console.log('  A', Object.entries(a).map(([key, value]) => key + '=' + (100 * value).toFixed(1)).join(' '));
+    }
+  }
+  console.log('seconds', report.seconds);
+}
+
 async function main() {
+  if (process.env.S14_BETA === '1') {
+    await runBeta();
+    return;
+  }
   const started = Date.now();
   const tasks = [];
   for (const edge of [0.2, 0.25, 0.3]) {
