@@ -1,5 +1,5 @@
 /* Season 0 PWA. Scope is /play/ only. The landing page is outside this worker. */
-const CACHE = 'bard-s0-loop-v1';
+const CACHE = 'bard-s0-loop-v2';
 const SHELL = [
   '/play/',
   '/play/index.html',
@@ -8,7 +8,7 @@ const SHELL = [
   '/season.css',
   '/season0/ui/app.js',
   '/season0/ui/trial-view.js',
-  '/transparentbardsmile.png'
+  '/play/assets/avatars/bard.webp'
 ];
 
 self.addEventListener('install', (event) => {
@@ -45,7 +45,7 @@ self.addEventListener('push', (event) => {
   } catch { /* keep the default line */ }
   event.waitUntil(self.registration.showNotification(payload.title, {
     body: payload.body,
-    icon: '/transparentbardsmile.png',
+    icon: '/play/assets/avatars/bard.webp',
     tag: payload.tag || 'bard-s0'
   }));
 });

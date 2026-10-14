@@ -1,3 +1,5 @@
+import { bardAvatarSrc, bardNightMood } from './bard.js';
+
 const params = new URLSearchParams(location.search);
 const fromPath = location.pathname.match(/\/play\/night\/(\d+)/) || location.pathname.match(/\/night\/(\d+)/);
 const chapter = params.get('chapter') || (fromPath && fromPath[1]) || '1';
@@ -22,9 +24,13 @@ const beats = voided ? [
 let index = 0;
 const beat = document.getElementById('beat');
 const note = document.getElementById('note');
+const face = document.getElementById('bard');
 document.getElementById('back').href = '/play/?phase=P7&chapter=' + chapter + (voided ? '&void=' + voided : '');
 
 function show() {
+  const mood = bardNightMood(index, !!voided);
+  face.src = bardAvatarSrc(mood);
+  face.dataset.bardMood = mood;
   beat.textContent = beats[index];
   note.textContent = (index + 1) + ' / ' + beats.length + ' · tap or wait · chapter ' + chapter;
 }

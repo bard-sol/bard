@@ -23,7 +23,8 @@ a{color:var(--info)}
 .headline{margin:8px 0;font-size:var(--fs-sm);color:var(--text-2)}
 .footnote{margin:0 0 8px;color:var(--muted);font-size:var(--fs-xs)}
 .bardstrip{display:flex;gap:12px;align-items:center;background:var(--surface);border-radius:var(--r-md);padding:10px;margin:12px 0}
-.bardstrip img{width:48px;height:48px;object-fit:contain}
+.bardstrip img{width:48px;height:48px;object-fit:contain;border-radius:8px}
+.stage img{width:96px;height:96px;object-fit:contain;border-radius:12px}
 .voice{font-family:var(--font-voice);font-style:italic;margin:0}
 .banner{border:1px solid var(--line-strong);border-radius:var(--r-md);padding:12px;margin:8px 0;background:var(--surface)}
 .banner.danger{border-color:var(--danger)}

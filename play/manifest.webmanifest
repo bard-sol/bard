@@ -9,15 +9,15 @@
   "theme_color": "#100e0c",
   "icons": [
     {
-      "src": "/transparentbardsmile.png",
-      "sizes": "192x192",
-      "type": "image/png",
+      "src": "/play/assets/avatars/bard.webp",
+      "sizes": "256x256",
+      "type": "image/webp",
       "purpose": "any"
     },
     {
-      "src": "/BardSmile.jpg",
+      "src": "/play/assets/portraits/bard.webp",
       "sizes": "512x512",
-      "type": "image/jpeg",
+      "type": "image/webp",
       "purpose": "any"
     }
   ]

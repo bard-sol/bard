@@ -6,6 +6,7 @@ import { earlyBuyCopy } from '../lib/legacy.js';
 import { replayTrial } from '../lib/trial.js';
 import { QUIZ } from '../lib/quiz.js';
 import { paintTrial } from './trial-view.js';
+import { bardAvatarSrc, bardMood } from './bard.js';
 import { heroSrc } from './portraits.js';
 import {
   ELIGIBILITY_NOTE,
@@ -155,7 +156,7 @@ function renderHeader(s) {
   }).join('');
   document.getElementById('top').innerHTML =
     '<div class="head-row">' +
-    '<img class="mark" src="/transparentbardsmile.png" alt="">' +
+    '<img class="mark" src="/play/assets/avatars/bard.webp" alt="">' +
     '<span class="kicker">Bard · S0 · Ch ' + esc(s.chapter) + '/7</span>' +
     '<span class="badge">DEVNET</span>' +
     (s.chapterNight ? '<a class="live" href="/play/night/' + s.chapter + '">LIVE</a>' : '') +
@@ -229,7 +230,7 @@ function renderArena(s) {
   const backed = characterById(ui.backed) || CAST[3];
   return renderBanners(s) +
     '<p class="row"><span class="chip">' + pot + '</span><span class="chip">Contributor pool · tBard only</span></p>' +
-    '<div class="bardstrip"><img src="/play/assets/avatars/bard.webp" alt="Bard"><p class="voice">' + esc(s.chapterText ? s.chapterText.bard : '') + '</p></div>' +
+    '<div class="bardstrip"><img src="' + bardAvatarSrc(bardMood(s)) + '" alt="Bard" data-bard-mood="' + bardMood(s) + '"><p class="voice">' + esc(s.chapterText ? s.chapterText.bard : '') + '</p></div>' +
     renderCastStrip(s) +
     '<article class="hero-card"><img src="' + heroSrc(backed.id, 'alive') + '" alt="' + esc(backed.name) + '">' +
     '<div><p class="kicker">Your character</p><h2>' + esc(backed.name) + '</h2><p class="meta">' + esc(backed.archetype) + '</p>' +
