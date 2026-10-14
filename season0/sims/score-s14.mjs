@@ -3,6 +3,7 @@
  *
  * Run: node season0/sims/score-s14.mjs
  * Participation variance: S14_BETA=1 node season0/sims/score-s14.mjs
+ * Option B variants: S14_B=1 node season0/sims/score-s14.mjs
  *
  * Moves are the share of qualifying verified clusters that play, times the
  * money edge. Unverified wallets and Readers cast nothing. Every House starts
@@ -375,9 +376,9 @@ function applyWave(wave, armor, twist, living, crown, grossHeal, grossHit, effec
   }
 }
 
-function healthNow(living, grossHeal, effectiveHit) {
+function healthNow(living, grossHeal, effectiveHit, base) {
   const health = {};
-  for (const id of living) health[id] = 100 + grossHeal[id] - effectiveHit[id];
+  for (const id of living) health[id] = (base && base[id] != null ? base[id] : 100) + grossHeal[id] - effectiveHit[id];
   return health;
 }
 
@@ -444,6 +445,8 @@ function runSeason(seed, pristine, opts) {
   let crown = null;
   const carryQuality = {};
   for (const id of IDS) carryQuality[id] = 0;
+  const carryBonus = {};
+  const a3Gap = opts.a3Gap != null ? opts.a3Gap : 0.005;
   const ghosts = [];
   const pending = [];
   let a1 = false;
@@ -497,7 +500,13 @@ function runSeason(seed, pristine, opts) {
     const effectiveHit = emptyMap(living);
     let shortlist = [];
     let dayScores = emptyMap(living);
-    for (const id of living) dayScores[id] = 100;
+    const healthBase = {};
+    for (const id of living) {
+      const bonus = opts.carryHealth ? Math.min(0.08, carryBonus[id] || 0) : 0;
+      healthBase[id] = 100 * (1 + bonus);
+      dayScores[id] = healthBase[id];
+    }
+    const chapterHealth = () => healthNow(living, grossHeal, effectiveHit, opts.carryHealth ? healthBase : null);
     let talliesThisChapter = 0;
     let crownAtTally = null;
     let changed = false;
@@ -591,11 +600,11 @@ function runSeason(seed, pristine, opts) {
       const land = (piece) => applyWave(piece, armor, twist, living, crown, grossHeal, grossHit, effectiveHit, chapter, piece.underdog);
       if (twist === 10) {
         land(wave(0.5, dayScores, chapter * 1000 + day * 10 + 1));
-        dayScores = healthNow(living, grossHeal, effectiveHit);
+        dayScores = chapterHealth();
         noteCrown(orderByHealth(living, dayScores, seed, chapter * 1000 + day * 10 + 2, true)[0]);
         land(wave(0.5, dayScores, chapter * 1000 + day * 10 + 3));
       } else land(wave(1, dayScores, chapter * 1000 + day * 10 + 1));
-      dayScores = healthNow(living, grossHeal, effectiveHit);
+      dayScores = chapterHealth();
       if (day === 1) {
         shortlist = orderByHealth(living, dayScores, seed, chapter * 1000 + day * 10 + 4, false).slice(0, Math.min(2, living.length));
       }
@@ -603,7 +612,7 @@ function runSeason(seed, pristine, opts) {
     }
 
     crownChanged[chapter] = changed;
-    const snapshot = healthNow(living, grossHeal, effectiveHit);
+    const snapshot = chapterHealth();
     if (chapter === 2) {
       const ranked = orderByHealth(living, snapshot, seed, 8250, false);
       ch2Bottom = ranked.slice(0, Math.floor(ranked.length / 2));
@@ -612,7 +621,7 @@ function runSeason(seed, pristine, opts) {
     for (let i = 0; i < scored.length; i++) {
       for (let j = i + 1; j < scored.length; j++) {
         const top = Math.max(snapshot[scored[i]], snapshot[scored[j]]);
-        if (top > 0 && Math.abs(snapshot[scored[i]] - snapshot[scored[j]]) / top <= 0.005) a3 = true;
+        if (top > 0 && Math.abs(snapshot[scored[i]] - snapshot[scored[j]]) / top <= a3Gap) a3 = true;
       }
     }
     const ordered = orderByHealth(living, snapshot, seed, 7200 + chapter, false);
@@ -664,6 +673,12 @@ function runSeason(seed, pristine, opts) {
     }
     if (chapter === 6 && stayed[0]) ch6Stay = stayed[0];
     if (chapter === 7 && stayed[0]) ch7Stay = stayed[0];
+    if (opts.carryHealth) {
+      for (const id of living) {
+        const moneyEdge = Math.max(0, moneyMultiplier(openedLock[id], midLock, edge) - 1);
+        carryBonus[id] = Math.min(0.08, (carryBonus[id] || 0) + 0.02 * moneyEdge);
+      }
+    }
     for (const id of living) tickProbation(houses[id]);
     crown = living.length ? orderByHealth(living, snapshot, seed, chapter * 1000 + 25, true)[0] : null;
   }
@@ -934,7 +949,115 @@ async function runBeta() {
   console.log('seconds', report.seconds);
 }
 
+function bCell(edge, twistMode, extra) {
+  return {
+    participation: 'beta',
+    a5Ch7: true,
+    a3Gap: 0.003,
+    rally: true,
+    surge: true,
+    edge,
+    twistMode,
+    ...extra
+  };
+}
+
+async function runOptionB() {
+  const started = Date.now();
+  const tasks = [];
+  const add = (label, opts) => tasks.push(task(label, opts));
+  for (const twistMode of ['none', 'deck']) {
+    add('base:0.25:' + twistMode, bCell(0.25, twistMode));
+    add('b1:0.25:' + twistMode, bCell(0.25, twistMode, { carryHealth: true }));
+  }
+  for (const edge of [0.45, 0.6, 0.8]) {
+    for (const twistMode of ['none', 'deck']) add('b2:' + edge + ':' + twistMode, bCell(edge, twistMode));
+  }
+  const farmOf = [
+    { prefix: 'b1:0.25', edge: 0.25, carryHealth: true },
+    { prefix: 'b2:0.45', edge: 0.45 },
+    { prefix: 'b2:0.6', edge: 0.6 },
+    { prefix: 'b2:0.8', edge: 0.8 }
+  ];
+  for (const config of farmOf) {
+    for (const bots of [25, 50]) {
+      for (const catchRate of [0, 0.5, 0.8]) {
+        for (const twistMode of ['none', 'deck']) {
+          add(config.prefix + ':farm:' + bots + ':' + catchRate + ':' + twistMode, bCell(config.edge, twistMode, {
+            carryHealth: !!config.carryHealth,
+            bots,
+            catch: catchRate
+          }));
+        }
+      }
+    }
+  }
+  console.log('tasks', tasks.length, 'seasons', SEASONS);
+  const ran = await runTasks(tasks.map((item) => item.opts));
+  const byLabel = {};
+  tasks.forEach((item, index) => {
+    byLabel[item.label] = view(ran[index]);
+  });
+  const pack = (label) => {
+    const cell = byLabel[label];
+    const farms = {};
+    const prefix = label.split(':').slice(0, 2).join(':');
+    if (prefix !== 'base:0.25') {
+      for (const bots of [25, 50]) {
+        farms[bots] = {};
+        for (const catchRate of [0, 0.5, 0.8]) {
+          const farm = byLabel[prefix + ':farm:' + bots + ':' + catchRate + ':' + label.split(':').pop()];
+          farms[bots][catchRate] = farm ? farm.targetWin : null;
+        }
+      }
+    }
+    return {
+      goals: cell.goals,
+      conditionals: cell.conditionals,
+      annotations: cell.annotations,
+      farms
+    };
+  };
+  const labels = ['base:0.25:none', 'base:0.25:deck', 'b1:0.25:none', 'b1:0.25:deck', 'b2:0.45:none', 'b2:0.45:deck', 'b2:0.6:none', 'b2:0.6:deck', 'b2:0.8:none', 'b2:0.8:deck'];
+  const cells = {};
+  for (const label of labels) cells[label] = pack(label);
+  const report = {
+    ruleSet: 's14-b',
+    seasons: SEASONS,
+    seconds: Math.round((Date.now() - started) / 1000),
+    raise_loyalty_pays_default: false,
+    participation: 'Beta(4, 3) each chapter, plus the size slack from the participation-variance run. Defaults are unchanged: equal chapter-start Health and a +25% money edge.',
+    a3: 'Two living Houses within 0.3% of the higher Health at a chapter snapshot. The published §14 run stays at 0.5%.',
+    a5: 'The Crown changes hands inside chapter 7 only. Band 15–35%. Other annotations stay on 20–85%.',
+    b1: 'At the +25% edge, a House that survives a chapter adds 2% times its money edge (the multiplier excess) to next chapter\'s Health, capped at +8% of the 100-point base. A House at 3× median lock gains 0.5 points per chapter.',
+    b2: 'Money edge +45%, +60% and +80% at 3× median, sqrt curve, no carry-over.',
+    cells
+  };
+  mkdirSync(new URL('./results/', import.meta.url), { recursive: true });
+  writeFileSync(new URL('./results/score-s14-b.json', import.meta.url), JSON.stringify(report));
+  for (const label of labels) {
+    const cell = cells[label];
+    const g = cell.goals;
+    const k = cell.conditionals;
+    const line = [g.leaderWins, g.leaderTop3, g.lowestChampion].map((value) => (100 * value).toFixed(1)).join('/');
+    console.log(label, line, g.pass ? 'PASS' : '');
+    console.log('  engaged', k.engagedN, (100 * k.engagedChampion).toFixed(1), 'idle', k.idleN, (100 * k.idleLeaderChampion).toFixed(1));
+    console.log('  A', Object.entries(cell.annotations).map(([key, value]) => key + '=' + (100 * value).toFixed(1)).join(' '));
+    if (cell.farms[25]) {
+      for (const bots of [25, 50]) {
+        const row = [0, 0.5, 0.8].map((catchRate) => catchRate + ':' + (100 * cell.farms[bots][catchRate]).toFixed(1)).join(' ');
+        console.log('  farm', bots, row);
+      }
+    }
+  }
+  console.log('seconds', report.seconds);
+}
+
 async function main() {
+  if (process.env.S14_B === '1') {
+    await runOptionB();
+    return;
+  }
   if (process.env.S14_BETA === '1') {
     await runBeta();
     return;
