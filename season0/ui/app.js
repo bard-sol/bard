@@ -254,6 +254,7 @@ function renderPlay(s) {
     '<button class="btn solid" type="button" data-act="open" data-sheet="trial" data-loop="trial">Trial</button>' +
     '</section>';
   const extras = '<div class="row">' +
+    '<button class="btn" type="button" data-act="open" data-sheet="allies">Allies</button>' +
     '<button class="btn" type="button" data-act="open" data-sheet="crowd">Crowd vote</button>' +
     '<button class="btn" type="button" data-act="open" data-sheet="recap">Recap</button>' +
     '<button class="btn" type="button" data-act="push-on">Notifications</button>' +
@@ -397,6 +398,7 @@ function renderSheet() {
   if (ui.sheet.name === 'detail') return sheetDetail(s, c);
   if (ui.sheet.name === 'trial') return sheetTrial(s, c);
   if (ui.sheet.name === 'crowd') return sheetCrowd();
+  if (ui.sheet.name === 'allies') return sheetAllies(s, c);
   if (ui.sheet.name === 'recap') return sheetRecap(s);
   if (ui.sheet.name === 'quiz') return sheetQuiz();
   if (ui.sheet.name === 'story') return sheetStory(c);
@@ -441,9 +443,9 @@ function sheetTrial(s, c) {
   const left = Math.max(0, 60 - Math.floor((Date.now() - t.startedAt) / 1000));
   const art = view.art || '/play/assets/props/boss-wolf.webp';
   const cards = (view.hand || []).map((card) =>
-    '<button class="tcard' + (card.signature ? ' sig' : '') + '" type="button" data-act="trial-play" data-card="' + card.index + '"' + (t.step === 'play' && !view.done ? '' : ' disabled') + '>' +
+    '<button class="tcard' + (card.signature ? ' sig' : '') + (card.ally ? ' ally' : '') + '" type="button" data-act="trial-play" data-card="' + card.index + '"' + (t.step === 'play' && !view.done ? '' : ' disabled') + '>' +
     '<i class="cost">' + card.cost + '</i>' +
-    '<span class="art"><img src="' + heroSrc(c.id, 'alive') + '" alt=""></span>' +
+    '<span class="art"><img src="' + esc(card.art || heroSrc(c.id, 'alive')) + '" alt=""></span>' +
     '<span class="ban">' + esc(card.name) + '</span>' +
     '<span class="tx">' + esc(card.text) + '</span>' +
     '<span class="ty">' + esc(card.type) + ' · ' + esc(card.stat) + '</span></button>'
@@ -473,7 +475,7 @@ function sheetTrial(s, c) {
     (t.step === 'play' && !view.done ? '<div class="row"><button class="btn" type="button" data-act="trial-end">End turn</button>' +
       '<button class="btn solid" type="button" data-act="trial-finish">Finish</button></div>' : '') +
     result +
-    '<p class="footnote">Combo ' + view.combo + '/' + '5 · each Skill adds 1, and the next Attack deals +' + view.comboBonus + ' × Combo. A full block Staggers the boss next turn. A hit that would drop the boss to 30% HP or below deals ×1.5, including that hit. Card upgrades stay off.</p>' +
+    '<p class="footnote">Combo ' + view.combo + '/' + '5 · each Skill adds 1, and the next Attack deals +' + view.comboBonus + ' × Combo. A full block Staggers the boss next turn. A hit that would drop the boss to 30% HP or below deals ×1.5, including that hit. Deck ' + (view.deckSize || 10) + '. Card upgrades stay off.</p>' +
     (s.phase === 'P4' ? '<p class="footnote">Act before the Reaper. A day outside the window is not in K.</p>' : ''));
   if (t.step === 'play') {
     const host = document.getElementById('trial-stage');
@@ -504,6 +506,77 @@ function sheetTrial(s, c) {
       }, 500);
     }
   }
+}
+
+function paintAllies(c) {
+  const body = ui.allyBody;
+  if (!body || !body.ok) {
+    sheetWrap('Allies · ' + c.name, '<p>The margin did not answer.</p>');
+    return;
+  }
+  const picked = new Set(ui.allyPick || []);
+  const cards = (body.pool || []).map((ally) => {
+    const on = picked.has(ally.entity_id) ? ' on' : '';
+    const ghost = ally.ghost ? ' · ghost' : '';
+    return '<button class="choice' + on + '" type="button" data-act="ally-toggle" data-id="' + esc(ally.entity_id) + '">' +
+      '<img class="ally-face" src="' + esc(ally.art) + '" alt="" width="48" height="48">' +
+      '<strong>' + esc(ally.name) + ghost + '</strong>' +
+      '<span class="meta">' + esc(ally.card.text) + (ally.placeholder ? ' · placeholder' : '') + '</span></button>';
+  }).join('');
+  const proposer = body.proposer ? body.proposer.wallet : 'nobody';
+  const slate = (body.proposal || []).join(' and ') || 'none yet';
+  const veto = body.tally ? Math.round(body.tally.share * 100) + '% veto' : 'no tally';
+  sheetWrap('Allies · ' + c.name,
+    '<p>Fans vote two margin figures into the deck. The proposer rotates by cluster-deduped contribution points. Holders can veto with a majority of the 2% capped weight. No fee and no payout.</p>' +
+    '<p class="meta" data-ally-status>Proposer ' + esc(proposer) + ' · proposal ' + esc(slate) + ' · ' + esc(veto) + (body.passed ? ' · in the deck' : '') + '</p>' +
+    cards +
+    '<div class="row">' +
+    '<button class="btn solid" type="button" data-act="ally-propose" data-char="' + esc(c.id) + '">Propose these two</button>' +
+    '<button class="btn" type="button" data-act="ally-vote" data-char="' + esc(c.id) + '" data-veto="false">Allow</button>' +
+    '<button class="btn" type="button" data-act="ally-vote" data-char="' + esc(c.id) + '" data-veto="true">Veto</button>' +
+    '</div>' +
+    '<p class="footnote">The same ally cannot be picked two chapters running. If three characters field one ally, that card is −10% for all of them. Eliminated characters join as ghosts. Portraits are placeholders until Design\'s insets arrive.</p>');
+}
+
+function sheetAllies(s, c) {
+  sheetWrap('Allies · ' + c.name, '<p data-ally-status>Reading the margin…</p>');
+  const eliminated = s.marked && (s.phase === 'P6' || s.phase === 'P8') ? s.marked : '';
+  fetch('/api/season/allies?charId=' + encodeURIComponent(c.id) + '&chapter=' + s.chapter + '&eliminated=' + encodeURIComponent(eliminated))
+    .then((res) => res.json())
+    .then((body) => {
+      if (!ui.sheet || ui.sheet.name !== 'allies') return;
+      ui.allyBody = body;
+      paintAllies(c);
+    })
+    .catch(() => toast('Allies failed'));
+}
+
+async function sendAllyPropose(charId) {
+  const slate = ui.allyPick || [];
+  const s = screen();
+  const result = await post('/api/season/allies/propose', {
+    wallet: ui.wallet || 'demo',
+    charId,
+    chapter: s.chapter,
+    slate,
+    now: Date.now()
+  });
+  toast(result.ok ? 'Proposal signed. No fee.' : (result.reason || 'Proposal failed'));
+  if (ui.sheet && ui.sheet.name === 'allies') sheetAllies(s, characterById(charId) || CAST[0]);
+}
+
+async function sendAllyVote(charId, veto) {
+  const s = screen();
+  const result = await post('/api/season/allies/vote', {
+    wallet: ui.wallet || 'demo',
+    charId,
+    chapter: s.chapter,
+    veto: veto === 'true' || veto === true,
+    weight: 10,
+    now: Date.now()
+  });
+  toast(result.ok ? (result.passed ? 'Slate stands.' : 'Vetoed.') : (result.reason || 'Vote failed'));
+  if (ui.sheet && ui.sheet.name === 'allies') sheetAllies(s, characterById(charId) || CAST[0]);
 }
 
 function sheetCrowd() {
@@ -722,6 +795,15 @@ document.body.addEventListener('click', async (event) => {
   if (act === 'trial-practice') { await beginTrial(true); return; }
   if (act === 'letter') { await sendLetter(node.dataset.choice); return; }
   if (act === 'crowd') { await sendCrowd(node.dataset.option); return; }
+  if (act === 'ally-toggle') {
+    const id = node.dataset.id;
+    const slate = ui.allyPick || [];
+    ui.allyPick = slate.includes(id) ? slate.filter((item) => item !== id) : slate.concat(id).slice(-2);
+    if (ui.allyBody) paintAllies(characterById((ui.sheet && ui.sheet.charId) || ui.backed) || CAST[0]);
+    return;
+  }
+  if (act === 'ally-propose') { await sendAllyPropose(node.dataset.char); return; }
+  if (act === 'ally-vote') { await sendAllyVote(node.dataset.char, node.dataset.veto); return; }
   if (act === 'push-on') { await enablePush(); return; }
   if (act === 'quiz-pick') { await pickQuiz(Number(node.dataset.i)); return; }
   if (act === 'chest-odds') { await showOdds(); return; }

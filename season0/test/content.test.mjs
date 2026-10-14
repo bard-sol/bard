@@ -24,10 +24,10 @@ test('trial numbers are integers and boss HP follows the chapter curve', () => {
   assert.equal(scaledValue(22, 80), 25);
   assert.equal(damagePercent(45, 120), 37);
   assert.equal(damagePercent(200, 110), 100);
-  assert.equal(bossMaxHp(1, 'D1'), 105);
-  assert.equal(bossMaxHp(1, 'D2'), 105);
-  assert.equal(bossMaxHp(1, 'D3'), 94);
-  assert.equal(bossMaxHp(7, 'D1'), 155);
+  assert.equal(bossMaxHp(1, 'D1'), 120);
+  assert.equal(bossMaxHp(1, 'D2'), 120);
+  assert.equal(bossMaxHp(1, 'D3'), 108);
+  assert.equal(bossMaxHp(7, 'D1'), 177);
   assert.equal(finisherAmount(20, 40, 80, 0), 30);
   assert.equal(finisherAmount(10, 40, 80, 0), 10);
   assert.equal(finisherAmount(16, 40, 80, 0), 24);
@@ -158,9 +158,9 @@ test('momentum is guarded and a full season still names one champion', async () 
 test('greedy trial bot stays inside the tuned band', async () => {
   const report = await simulateTrialMedian(300);
   assert.equal(report.runs, 300);
-  assert.equal(report.currentBaseHp, 105);
+  assert.equal(report.currentBaseHp, 120);
   assert.equal(report.comboBonus, 4);
-  assert.equal(report.bossHp, 105);
+  assert.equal(report.bossHp, 120);
   assert.ok(report.median >= 55 && report.median <= 70);
   const seed = await trialSeed('s0', 'sim-0000');
   const opts = trialContext({ charId: 'twins', chapter: 1, now: Date.parse('2026-10-16T10:00:00.000Z') });

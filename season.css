@@ -102,6 +102,8 @@ pre.log{white-space:pre-wrap;background:var(--surface-2);padding:12px;border-rad
 .tcard .ban{display:block;margin-top:6px;font-family:var(--font-voice);font-weight:700}
 .tcard .tx,.tcard .ty{display:block;font-size:11px;color:var(--muted)}
 .tcard.sig{border-color:#56b4e9}
+.tcard.ally{border-color:#c9a46a}
+.choice .ally-face{display:block;width:48px;height:48px;border-radius:8px;object-fit:cover;margin-bottom:6px;background:#1a1622}
 .boss-card{margin-bottom:8px}
 .boss-art{position:relative;height:180px;border-radius:16px 16px 0 0;overflow:hidden;background:#120f1d}
 .boss-art img{width:100%;height:100%;object-fit:cover;object-position:50% 30%}

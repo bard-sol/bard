@@ -3,6 +3,16 @@ import { openChest, publishedOdds, chestSeed } from '../lib/chest.js';
 import { contributionPoints, contributorPool, impactReadout } from '../lib/contribution.js';
 import { simulateSeason } from '../lib/survival.js';
 import { buildRecap, castCrowdVote, CROWD_OPTIONS } from '../lib/recap.js';
+import {
+  SIM_ALLIES,
+  allyPool,
+  castAllyVote,
+  lineupPayment,
+  pickProposer,
+  sharedPenaltyIds,
+  slateLegal,
+  tallyVeto
+} from '../lib/allies.js';
 import { allowPush } from '../lib/notify.js';
 import { advanceStreak, utcDay } from '../lib/morale.js';
 import { seasonLegacy } from '../lib/legacy.js';
@@ -51,6 +61,9 @@ export async function handleLoop(path, request, env, body) {
   if (path === '/api/season/chest/open' && request.method === 'POST') return onChest(body);
   if (path === '/api/season/crowd-vote' && request.method === 'POST') return onCrowd(body);
   if (path === '/api/season/crowd-vote' && request.method === 'GET') return json({ ok: true, options: CROWD_OPTIONS, narrationOnly: true });
+  if (path === '/api/season/allies' && request.method === 'GET') return onAllies(url);
+  if (path === '/api/season/allies/propose' && request.method === 'POST') return onAllyPropose(body);
+  if (path === '/api/season/allies/vote' && request.method === 'POST') return onAllyVote(body);
   if (path === '/api/season/recap' && request.method === 'GET') return onRecap(url);
   if (path === '/api/season/push/vapid' && request.method === 'GET') {
     const key = env && env.BARD_VAPID_PUBLIC;
@@ -81,6 +94,7 @@ async function onTrialStart(body) {
     train: body.train,
     inDanger: body.inDanger
   });
+  applyAllies(ctx, body.charId, body.chapter);
   const seed = await trialSeed('s0', day);
   const view = replayTrial(seed, [], ctx);
   const countedKey = wallet + '|' + day;
@@ -120,6 +134,7 @@ async function onTrialFinish(body) {
     train: body.train,
     inDanger: body.inDanger
   });
+  applyAllies(ctx, body.charId, body.chapter);
   const replay = replayTrial(seed, body.moves || [], ctx);
   if (!replay.ok) return json(replay);
   const key = wallet + '|' + day;
@@ -226,6 +241,149 @@ function onCrowd(body) {
   const streak = touch(wallet, Number(body.now) || Date.now());
   memory.streaks.get(wallet).legacyCrowd = (memory.streaks.get(wallet).legacyCrowd || 0) + 1;
   return json({ ok: true, ...vote, streak });
+}
+
+function allyKey(charId, chapter) {
+  return String(charId || '') + '|' + String(chapter);
+}
+
+function eliminatedOf(body) {
+  const raw = body && (body.eliminated || body.ghosts) || [];
+  return Array.isArray(raw) ? raw : String(raw).split(',').filter(Boolean);
+}
+
+function previousOf(charId, chapter, body) {
+  if (body && Array.isArray(body.previousAllies)) return body.previousAllies;
+  const prior = loopMemory().allies.get(allyKey(charId, Number(chapter) - 1));
+  return prior && prior.passed ? prior.slate : [];
+}
+
+function rosterOf(body, wallet) {
+  if (body && Array.isArray(body.roster) && body.roster.length) return body.roster;
+  const lead = wallet || 'demo';
+  return [
+    { wallet: lead, cp: 12, held: true, cluster: lead },
+    { wallet: 'margin-fan', cp: 5, held: true, cluster: 'margin-fan' },
+    { wallet: 'ink-fan', cp: 4, held: true, cluster: 'ink-fan' },
+    { wallet: lead + '-desk', cp: 9, held: true, cluster: lead }
+  ];
+}
+
+function chapterPicks(chapter) {
+  const picks = [];
+  for (const [key, row] of loopMemory().allies) {
+    if (!row || !row.slate) continue;
+    const parts = key.split('|');
+    if (Number(parts[1]) !== Number(chapter)) continue;
+    const tally = tallyVeto(row.roster || [], row.votes || []);
+    if (!tally.passed) continue;
+    picks.push({ entity_id: parts[0], entity_type: 'character', allies: row.slate });
+  }
+  return picks;
+}
+
+function allyView(charId, chapter, body) {
+  const eliminated = eliminatedOf(body);
+  const pool = allyPool({ eliminated });
+  const record = loopMemory().allies.get(allyKey(charId, chapter)) || null;
+  const roster = (record && record.roster) || rosterOf(body, record && record.wallet);
+  const proposer = pickProposer({ wallets: roster, chapter, skip: record ? record.failed : [] });
+  const picks = chapterPicks(chapter);
+  const penalized = sharedPenaltyIds(picks);
+  const tally = record && record.slate ? tallyVeto(roster, record.votes) : null;
+  const passed = !!(record && record.slate && tally && tally.passed);
+  return {
+    ok: true,
+    charId,
+    chapter: Number(chapter),
+    pool,
+    proposer,
+    slate: record && record.passed ? record.slate : null,
+    proposal: record ? record.slate : null,
+    failed: record ? record.failed : [],
+    votes: record ? record.votes : [],
+    tally,
+    passed,
+    penalized,
+    previousAllies: previousOf(charId, chapter, body),
+    payout: false,
+    fee: false,
+    cosmetic: true,
+    cap: 0.02,
+    simAllies: SIM_ALLIES
+  };
+}
+
+function onAllies(url) {
+  const charId = url.searchParams.get('charId') || 'pip';
+  const chapter = Number(url.searchParams.get('chapter') || 1);
+  const eliminated = (url.searchParams.get('eliminated') || '').split(',').filter(Boolean);
+  return json(allyView(charId, chapter, { eliminated }));
+}
+
+function onAllyPropose(body) {
+  const paid = lineupPayment(body);
+  if (!paid.ok) return json(paid);
+  const wallet = walletOf(body);
+  if (!wallet || !body.charId || body.chapter == null) return bad('missing_fields');
+  const chapter = Number(body.chapter);
+  const pool = allyPool({ eliminated: eliminatedOf(body) });
+  const legal = slateLegal({ slate: body.slate, previous: previousOf(body.charId, chapter, body), pool });
+  if (!legal.ok) return json(legal);
+  const memory = loopMemory();
+  const key = allyKey(body.charId, chapter);
+  const record = memory.allies.get(key) || { slate: null, votes: [], failed: [], passed: false, wallet };
+  if (record.passed) return json({ ok: false, reason: 'already' });
+  const roster = rosterOf(body, wallet);
+  const proposer = pickProposer({ wallets: roster, chapter, skip: record.failed });
+  if (!proposer) return json({ ok: false, reason: 'no_proposer' });
+  if (proposer.wallet !== wallet) return json({ ok: false, reason: 'not_proposer', proposer: proposer.wallet });
+  if (record.slate) return json({ ok: false, reason: 'already' });
+  record.slate = legal.slate;
+  record.votes = [];
+  record.passed = false;
+  record.wallet = wallet;
+  record.proposer = proposer.wallet;
+  record.roster = roster;
+  memory.allies.set(key, record);
+  return json({ ok: true, ...paid, proposer, slate: legal.slate, tally: tallyVeto(roster, []), passed: false });
+}
+
+function onAllyVote(body) {
+  const paid = lineupPayment(body);
+  if (!paid.ok) return json(paid);
+  const wallet = walletOf(body);
+  if (!wallet || !body.charId || body.chapter == null) return bad('missing_fields');
+  const chapter = Number(body.chapter);
+  const key = allyKey(body.charId, chapter);
+  const record = loopMemory().allies.get(key);
+  if (!record || !record.slate) return json({ ok: false, reason: 'no_proposal' });
+  const vote = castAllyVote({ already: record.votes.some((row) => row.wallet === wallet), veto: body.veto });
+  if (!vote.ok) return json(vote);
+  record.votes.push({ wallet, veto: vote.veto, weight: Number(body.weight) || 1 });
+  const roster = record.roster || rosterOf(body, record.wallet);
+  const tally = tallyVeto(roster, record.votes);
+  if (!tally.passed) {
+    record.failed.push(record.proposer);
+    record.slate = null;
+    record.votes = [];
+    record.passed = false;
+  } else {
+    record.passed = true;
+  }
+  const streak = touch(wallet, Number(body.now) || Date.now());
+  return json({ ok: true, ...vote, tally, passed: record.passed, slate: record.slate, streak });
+}
+
+function applyAllies(ctx, charId, chapter) {
+  const record = loopMemory().allies.get(allyKey(charId, chapter));
+  if (!record || !record.slate) return ctx;
+  const tally = tallyVeto(record.roster || [], record.votes || []);
+  if (!tally.passed) return ctx;
+  record.passed = true;
+  ctx.allies = record.slate.slice();
+  ctx.penalizedAllies = sharedPenaltyIds(chapterPicks(chapter));
+  return ctx;
 }
 
 function onRecap(url) {

@@ -8,6 +8,7 @@ const memory = {
   streaks: new Map(),
   letters: new Map(),
   crowd: new Map(),
+  allies: new Map(),
   chests: new Map(),
   pushSent: new Map(),
   pushSubs: new Map(),
@@ -23,6 +24,7 @@ export function resetMemory() {
   memory.streaks.clear();
   memory.letters.clear();
   memory.crowd.clear();
+  memory.allies.clear();
   memory.chests.clear();
   memory.pushSent.clear();
   memory.pushSubs.clear();

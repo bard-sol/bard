@@ -1,3 +1,4 @@
+import { SIM_ALLIES, cardsForAllies } from './allies.js';
 import { sha256Hex } from './bytes.js';
 import { characterById } from './cast.js';
 import { defaultConfig, seasonStartMs } from './config.js';
@@ -155,9 +156,10 @@ function shuffle(list, rng) {
   return arr;
 }
 
-function deckFor(charId) {
+function deckFor(charId, allies, penalized) {
   const signatures = SIGNATURES[charId] || SIGNATURES.pip;
-  return GENERICS.concat(signatures).map((card) => ({ ...card }));
+  const extra = cardsForAllies(allies, { penalized });
+  return GENERICS.concat(signatures, extra).map((card) => ({ ...card }));
 }
 
 function bossFor(chapter) {
@@ -396,7 +398,9 @@ function createState(seedHex, opts) {
     staggered: false,
     staggerNext: false,
     passive: PASSIVES[ctx.charId] || {},
-    deck: shuffle(deckFor(ctx.charId), rng),
+    allies: Array.isArray(ctx.allies) ? ctx.allies.slice(0, 2) : [],
+    penalizedAllies: Array.isArray(ctx.penalizedAllies) ? ctx.penalizedAllies.slice() : [],
+    deck: shuffle(deckFor(ctx.charId, ctx.allies, ctx.penalizedAllies), rng),
     discard: [],
     hand: [],
     turn: 1,
@@ -428,6 +432,7 @@ function createState(seedHex, opts) {
     keep: null,
     rows: [[]]
   };
+  state.deckSize = state.deck.length;
   state.bossHp = state.bossMax;
   drawCards(state, TRIAL_LIMITS.draw);
   tickHexOpen(state);
@@ -478,6 +483,8 @@ function publicCard(state, card, index) {
     text: card.text,
     emoji: card.emoji,
     signature: !!card.signature,
+    ally: !!card.ally,
+    art: card.art || null,
     setup: !!card.setup,
     playable,
     preview: preview(state, card),
@@ -504,6 +511,8 @@ function viewOf(state, ok, reason) {
     chapter: state.chapter,
     variant: state.variant,
     charId: state.charId,
+    allies: state.allies,
+    deckSize: state.deckSize,
     bossHp: state.bossHp,
     bossMax: state.bossMax,
     bossGuard: state.bossGuard,
@@ -886,6 +895,53 @@ export async function tuneTrialV2(runs) {
   return {
     baseHp: last.baseHp,
     comboBonus: last.comboBonus,
+    greedy,
+    lookahead,
+    met: last.met,
+    steps
+  };
+}
+
+/** 12-card deck. Combo stays +4. HP starts at 105 and steps up by 5 while lookahead kills exceed 35% or the greedy median is still above 70. */
+export async function tuneAllyDeck(runs) {
+  let baseHp = 105;
+  const comboBonus = 4;
+  const steps = [];
+  let greedy;
+  let lookahead;
+  for (let step = 0; step < 8; step++) {
+    const opts = trialBotOpts(baseHp, comboBonus);
+    opts.allies = SIM_ALLIES.slice();
+    greedy = await summarizeBot(runs, opts, botMoves);
+    lookahead = await summarizeBot(runs, opts, lookaheadMoves);
+    const gap = lookahead.median - greedy.median;
+    const met = targetsMet(greedy, lookahead);
+    const row = {
+      baseHp,
+      comboBonus,
+      allies: SIM_ALLIES.slice(),
+      deck: 12,
+      greedyMedian: greedy.median,
+      greedyKills: greedy.killRate,
+      lookaheadMedian: lookahead.median,
+      lookaheadKills: lookahead.killRate,
+      gap,
+      met
+    };
+    steps.push(row);
+    if (typeof process !== 'undefined' && process.stderr) {
+      process.stderr.write('allies ' + JSON.stringify(row) + '\n');
+    }
+    if (met) break;
+    if (lookahead.killRate > 0.35 || greedy.median > 70) baseHp += 5;
+    else break;
+    if (baseHp > 160) break;
+  }
+  const last = steps[steps.length - 1];
+  return {
+    baseHp: last.baseHp,
+    comboBonus,
+    allies: SIM_ALLIES.slice(),
     greedy,
     lookahead,
     met: last.met,

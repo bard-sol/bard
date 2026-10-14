@@ -69,7 +69,7 @@ export function defaultConfig() {
     trial_moves: 30,
     trial_seconds: 60,
     trial_energy: 3,
-    trial_base_hp: 105,
+    trial_base_hp: 120,
     trial_combo_bonus: 4,
     trial_finisher_pct: 30,
     push_per_day: 3,
