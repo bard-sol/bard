@@ -1,5 +1,7 @@
-import { trialSeed, utcDateKey, encounterFromSeed, replayTrial, trialTimeOk, accuraciesInWindow, meanAccuracy, cardUpgradeOffer } from '../lib/trial.js';
-import { openChest, publishedOdds } from '../lib/chest.js';
+import { trialSeed, utcDateKey, replayTrial, trialTimeOk, trialContext, accuraciesInWindow, meanAccuracy, cardUpgradeOffer, simulateTrialMedian } from '../lib/trial.js';
+import { openChest, publishedOdds, chestSeed } from '../lib/chest.js';
+import { contributionPoints, contributorPool, impactReadout } from '../lib/contribution.js';
+import { simulateSeason } from '../lib/survival.js';
 import { buildRecap, castCrowdVote, CROWD_OPTIONS } from '../lib/recap.js';
 import { allowPush } from '../lib/notify.js';
 import { advanceStreak, utcDay } from '../lib/morale.js';
@@ -37,6 +39,10 @@ export async function handleLoop(path, request, env, body) {
   if (path === '/api/season/trial/start' && request.method === 'POST') return onTrialStart(body);
   if (path === '/api/season/trial/finish' && request.method === 'POST') return onTrialFinish(body);
   if (path === '/api/season/trial/k' && request.method === 'POST') return onTrialK(body);
+  if (path === '/api/season/trial/sim' && request.method === 'GET') return onTrialSim(url);
+  if (path === '/api/season/impact' && request.method === 'POST') return onImpact(body);
+  if (path === '/api/season/contrib-pool' && request.method === 'POST') return onPool(body);
+  if (path === '/api/season/survival' && request.method === 'GET') return onSurvival();
   if (path === '/api/season/letter' && request.method === 'POST') return onLetter(body);
   if (path === '/api/season/touch' && request.method === 'POST') return onTouch(body);
   if (path === '/api/season/chest/odds' && request.method === 'GET') {
@@ -68,22 +74,34 @@ async function onTrialStart(body) {
   if (!wallet) return bad('missing_wallet');
   const now = Number(body.now) || Date.now();
   const day = body.day || utcDateKey(now);
+  const ctx = trialContext({
+    charId: body.charId,
+    chapter: body.chapter,
+    now,
+    train: body.train,
+    inDanger: body.inDanger
+  });
   const seed = await trialSeed('s0', day);
-  const encounter = encounterFromSeed(seed);
+  const view = replayTrial(seed, [], ctx);
   const countedKey = wallet + '|' + day;
   const already = loopMemory().trials.has(countedKey);
   return json({
     ok: true,
     seed,
     day,
+    context: ctx,
     practice: !!body.practice || already,
     alreadyCounted: already,
     startedAt: now,
-    boss: encounter.boss,
-    bossHp: encounter.bossHp,
-    hand: encounter.hand,
-    intents: encounter.intents,
-    intent: encounter.intents[0]
+    boss: view.boss,
+    bossHp: view.bossMax,
+    art: view.art,
+    variant: view.variant,
+    chapter: view.chapter,
+    hand: view.hand,
+    intent: view.intent,
+    playerHp: view.playerHp,
+    passive: view.passive
   });
 }
 
@@ -95,7 +113,14 @@ async function onTrialFinish(body) {
   const seed = await trialSeed('s0', day);
   if (body.seed && body.seed !== seed) return bad('seed_mismatch');
   if (!trialTimeOk(body.elapsedMs)) return bad('time_cap');
-  const replay = replayTrial(seed, body.moves || []);
+  const ctx = trialContext({
+    charId: body.charId,
+    chapter: body.chapter,
+    now,
+    train: body.train,
+    inDanger: body.inDanger
+  });
+  const replay = replayTrial(seed, body.moves || [], ctx);
   if (!replay.ok) return json(replay);
   const key = wallet + '|' + day;
   const memory = loopMemory();
@@ -109,7 +134,10 @@ async function onTrialFinish(body) {
   return json({
     ok: true,
     accuracy: replay.accuracy,
-    damage: replay.damage,
+    damagePercent: replay.damagePercent,
+    damage: replay.dealt,
+    ended: replay.ended,
+    timeCapped: Number(body.elapsedMs) > 60000,
     grid: replay.grid,
     counted,
     practice: practice || !counted,
@@ -124,7 +152,7 @@ function onTrialK(body) {
   return json({ ok: true, days: values, k: meanAccuracy(values) });
 }
 
-function onLetter(body) {
+async function onLetter(body) {
   const wallet = walletOf(body);
   if (!wallet) return bad('missing_wallet');
   if (!LETTERS.includes(body.choice)) return bad('bad_choice');
@@ -135,8 +163,12 @@ function onLetter(body) {
   if (memory.letters.has(key)) return json({ ok: false, reason: 'already', streak: memory.streaks.get(wallet) || null });
   memory.letters.set(key, body.choice);
   const streak = touch(wallet, now);
-  const chest = rollChest(wallet);
-  return json({ ok: true, choice: body.choice, streak, chest, activeForScore: false });
+  const chest = await rollChest(wallet, now, streak);
+  let bonus = null;
+  if (streak.advanced && (streak.streak === 7 || streak.streak === 14)) {
+    bonus = await rollChest(wallet, now, streak);
+  }
+  return json({ ok: true, choice: body.choice, streak, chest, bonus, activeForScore: false });
 }
 
 function onTouch(body) {
@@ -147,32 +179,39 @@ function onTouch(body) {
   return json({ ok: true, kind: body.kind, streak, repairPurchasable: false, activeForScore: false });
 }
 
-function rollChest(wallet) {
+async function rollChest(wallet, now, streak) {
   const memory = loopMemory();
-  const state = memory.chests.get(wallet) || { sinceRare: 0, items: [] };
-  const opened = openChest({
-    rng: Math.random,
+  const state = memory.chests.get(wallet) || { sinceRare: 0, items: [], owned: [] };
+  const day = utcDateKey(now);
+  const seedHex = await chestSeed(wallet, day + ':' + state.owned.length);
+  const opened = await openChest({
+    seedHex,
     sinceRare: state.sinceRare,
+    owned: state.owned,
+    streak: streak && streak.streak,
+    dayOfSeason: dayOfSeason(now),
     pay: null
   });
   if (!opened.ok) return opened;
   state.sinceRare = opened.sinceRare;
-  state.items.push({ item: opened.item, rarity: opened.rarity, transferable: false, nft: false });
+  state.owned.push(opened.id);
+  state.items.push({ item: opened.item, id: opened.id, rarity: opened.rarity, transferable: false, nft: false });
   memory.chests.set(wallet, state);
   return opened;
 }
 
-function onChest(body) {
+function dayOfSeason(now) {
+  const start = Date.parse('2026-10-16T00:00:00.000Z');
+  return Math.floor((Number(now) - start) / 86400000) + 1;
+}
+
+async function onChest(body) {
   const wallet = walletOf(body);
   if (!wallet) return bad('missing_wallet');
   if (body.pay != null || body.price != null || body.buy) return json({ ok: false, reason: 'chests_are_free' });
-  const memory = loopMemory();
-  const state = memory.chests.get(wallet) || { sinceRare: 0, items: [] };
-  const opened = openChest({ rng: Math.random, sinceRare: state.sinceRare, pay: body.pay });
+  const now = Number(body.now) || Date.now();
+  const opened = await rollChest(wallet, now, null);
   if (!opened.ok) return json(opened);
-  state.sinceRare = opened.sinceRare;
-  state.items.push({ item: opened.item, rarity: opened.rarity, transferable: false, nft: false });
-  memory.chests.set(wallet, state);
   return json({ ok: true, ...opened, odds: publishedOdds() });
 }
 
@@ -254,6 +293,26 @@ function onLegacy(body) {
       onChain: wallet ? memory.onchain.has(wallet) : false
     })
   });
+}
+
+async function onTrialSim(url) {
+  const runs = Math.min(400, Math.max(20, Number(url.searchParams.get('runs') || 300)));
+  const report = await simulateTrialMedian(runs);
+  return json({ ok: true, ...report });
+}
+
+function onImpact(body) {
+  const wallet = body.walletRow || { wallet: walletOf(body), trialAccuracy: body.trialAccuracy, decided: body.decided, captain: body.captain, trained: body.trained, champion: body.champion, clutch: body.clutch, balance: body.balance };
+  return json({ ok: true, ...impactReadout(wallet, body.peers || [wallet]), points: contributionPoints(wallet) });
+}
+
+function onPool(body) {
+  return json(contributorPool(body));
+}
+
+async function onSurvival() {
+  const report = await simulateSeason('s0-survival');
+  return json({ ok: true, ...report });
 }
 
 function onQuiz(body) {

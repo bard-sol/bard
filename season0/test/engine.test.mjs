@@ -65,7 +65,9 @@ test('elimination score weights and margin', () => {
   const a = scores.find((s) => s.id === 'a');
   const b = scores.find((s) => s.id === 'b');
   assert.ok(a.S > b.S);
-  assert.equal(a.M, 1);
+  assert.ok(a.M > b.M);
+  assert.ok(a.M < 1);
+  assert.equal(a.mom, 0);
   assert.ok(a.S <= 1);
   const m = margin(a.S, b.S);
   assert.ok(m > 0);

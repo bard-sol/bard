@@ -388,7 +388,7 @@ export async function handleApi(request, env) {
     if (path === '/api/season/snapshot' && request.method === 'POST') return onSnapshot(await readBody(request));
     if (path === '/api/season/publish' && request.method === 'POST') return onPublish(env, await readBody(request));
     if (path === '/api/season/faucet' && request.method === 'POST') return onFaucet(env);
-    if (path.startsWith('/api/season/trial') || path.startsWith('/api/season/letter') || path.startsWith('/api/season/touch') || path.startsWith('/api/season/chest') || path.startsWith('/api/season/crowd') || path.startsWith('/api/season/recap') || path.startsWith('/api/season/push') || path.startsWith('/api/season/turnstile') || path.startsWith('/api/season/legacy') || path.startsWith('/api/season/quiz') || path.startsWith('/api/season/story') || path.startsWith('/api/season/card-upgrade') || path.startsWith('/api/season/raid')) {
+    if (path.startsWith('/api/season/trial') || path.startsWith('/api/season/letter') || path.startsWith('/api/season/touch') || path.startsWith('/api/season/chest') || path.startsWith('/api/season/crowd') || path.startsWith('/api/season/recap') || path.startsWith('/api/season/push') || path.startsWith('/api/season/turnstile') || path.startsWith('/api/season/legacy') || path.startsWith('/api/season/quiz') || path.startsWith('/api/season/story') || path.startsWith('/api/season/card-upgrade') || path.startsWith('/api/season/raid') || path.startsWith('/api/season/impact') || path.startsWith('/api/season/contrib-pool') || path.startsWith('/api/season/survival')) {
       return handleLoop(path, request, env, request.method === 'GET' ? {} : await readBody(request));
     }
     if (path === '/api/season/revival-target' && request.method === 'GET') {

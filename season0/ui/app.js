@@ -3,9 +3,10 @@ import { CHAPTERS } from '../lib/chapters.js';
 import { graphemeLength } from '../lib/filter.js';
 import { defaultConfig } from '../lib/config.js';
 import { earlyBuyCopy } from '../lib/legacy.js';
-import { intentIcon } from '../lib/trial.js';
+import { replayTrial } from '../lib/trial.js';
 import { QUIZ } from '../lib/quiz.js';
 import { paintTrial } from './trial-view.js';
+import { heroSrc } from './portraits.js';
 import {
   ELIGIBILITY_NOTE,
   PREDICT_NOTE,
@@ -46,7 +47,9 @@ const ui = {
   eligibility: null,
   toast: '',
   walletKind: store.walletKind || null,
-  wrongNetwork: params.get('wrong-network')
+  wrongNetwork: params.get('wrong-network'),
+  backed: store.backed || 'pip',
+  chest: null
 };
 
 function loadStore() {
@@ -61,7 +64,8 @@ function saveStore() {
     pick: ui.pick,
     cheer: ui.cheer,
     revivalPaid: ui.revivalPaid,
-    train: store.train || {}
+    train: store.train || {},
+    backed: ui.backed
   }));
 }
 
@@ -196,8 +200,9 @@ function renderCards(s) {
     const scoreNote = s.voided ? 'Not final: chapter voided' : row.S.toFixed(3);
     const relic = row.id === s.relicId;
     const relicChapter = params.get('relicChapter') || '2';
+    const art = relic ? 'relic' : (s.danger.includes(row.id) ? 'danger' : 'alive');
     return '<button class="' + cardClass(row, s) + '" type="button" data-act="open" data-sheet="detail" data-char="' + c.id + '">' +
-      bustSvg(c, 64, relic ? 'relic' : 'alive') +
+      bustSvg(c, 64, art) +
       '<span><span class="scoreline"><span>' + esc(c.name) + ' <span class="meta">' + esc(c.archetype) + '</span></span>' +
       '<b class="num">#' + row.rank + ' ' + scoreNote + '</b></span>' +
       '<span class="stats">' + statBars(c, row.trained) + '</span>' +
@@ -208,13 +213,29 @@ function renderCards(s) {
   }).join('');
 }
 
+function renderCastStrip(s) {
+  return '<div class="pagecast"><p class="kicker">The page</p><div class="faces">' + CAST.map((c) => {
+    const relic = c.id === s.relicId;
+    const danger = s.danger.includes(c.id);
+    const state = relic ? 'relic' : danger ? 'danger' : 'alive';
+    const mine = c.id === ui.backed ? ' mine' : '';
+    return '<button class="face' + mine + (danger ? ' danger' : '') + (relic ? ' dead' : '') + '" type="button" data-act="back" data-char="' + c.id + '">' +
+      bustSvg(c, 40, state) + '<span>' + esc(c.name.split(' ')[0]) + '</span></button>';
+  }).join('') + '</div></div>';
+}
+
 function renderArena(s) {
   const pot = 'Test pot · no payout in Season 0';
+  const backed = characterById(ui.backed) || CAST[3];
   return renderBanners(s) +
-    '<p class="row"><span class="chip">' + pot + '</span><span class="chip">Burned · includes revival</span></p>' +
-    '<div class="bardstrip"><img src="/BardSmile.jpg" alt="Bard"><p class="voice">' + esc(s.chapterText ? s.chapterText.bard : '') + '</p></div>' +
+    '<p class="row"><span class="chip">' + pot + '</span><span class="chip">Contributor pool · tBard only</span></p>' +
+    '<div class="bardstrip"><img src="/play/assets/avatars/bard.webp" alt="Bard"><p class="voice">' + esc(s.chapterText ? s.chapterText.bard : '') + '</p></div>' +
+    renderCastStrip(s) +
+    '<article class="hero-card"><img src="' + heroSrc(backed.id, 'alive') + '" alt="' + esc(backed.name) + '">' +
+    '<div><p class="kicker">Your character</p><h2>' + esc(backed.name) + '</h2><p class="meta">' + esc(backed.archetype) + '</p>' +
+    '<button class="btn solid" type="button" data-act="open" data-sheet="trial" data-char="' + backed.id + '">Play today\'s Trial</button></div></article>' +
     '<div class="cards">' + renderCards(s) + '</div>' +
-    '<p class="formula">Survival score S = 0.40·M + 0.25·U + 0.15·B + 0.15·P + 0.05·K · Formula v1 · <button class="btn" type="button" data-act="open" data-sheet="verify">Verify</button></p>';
+    '<p class="formula">Survival score S = 0.30·M + 0.30·U + 0.15·B + 0.15·P + 0.10·K · <button class="btn" type="button" data-act="open" data-sheet="verify">Verify</button></p>';
 }
 
 function renderPlay(s) {
@@ -226,7 +247,7 @@ function renderPlay(s) {
     '<button class="btn" type="button" data-act="letter" data-choice="comfort">Comfort</button>' +
     '<button class="btn" type="button" data-act="letter" data-choice="spar">Spar</button>' +
     '</div>' +
-    (ui.loopNote ? '<p data-loop-note>' + esc(ui.loopNote) + '</p>' : '') +
+    (ui.chest ? '<div class="chest-moment"><img src="/play/assets/props/chest.webp" alt="Daily chest"><p data-loop-note>' + esc(ui.loopNote) + '</p><p class="meta">Common 70% · Rare 25% · Epic 5%. A rare is guaranteed within 10 days. Yours, not an NFT.</p></div>' : (ui.loopNote ? '<p data-loop-note>' + esc(ui.loopNote) + '</p>' : '')) +
     '</section>';
   const trial = '<section data-loop="trial"><h2 class="kicker">Daily Trial</h2>' +
     '<p>One counted run per UTC day. Same boss for everyone. Practice does not count. K is the average of those days, and a missed day is 0.</p>' +
@@ -293,6 +314,9 @@ function renderSquad(s) {
 function renderMe(s) {
   const early = '<p>' + esc(earlyBuyCopy(s.config)) + '</p>' +
     '<p>Every source shares a cap of 50 for Season 1 early-buy rights. Points above the cap are cosmetic. They count only after a Turnstile check and one finalized on-chain action.</p>' +
+    '<p>Contributor rewards are tBard only, unlocked in a straight line over 14 days after the finale. Season 0 has no mainnet payout.</p>' +
+    '<p data-impact>' + esc(ui.impact || '') + '</p>' +
+    '<button class="btn" type="button" data-act="impact">Your impact</button>' +
     '<button class="btn" type="button" data-act="legacy-check">Legacy standing</button>';
   const elig = ui.eligibility
     ? '<p data-elig="' + (ui.eligibility.eligible ? 'yes' : 'no') + '">' +
@@ -334,7 +358,7 @@ function renderMain() {
 
 function openSheet(name, charId) {
   stopTrialPaint();
-  ui.sheet = { name, charId: charId || (ui.sheet && ui.sheet.charId) || 'pip' };
+  ui.sheet = { name, charId: charId || (name === 'trial' ? ui.backed : (ui.sheet && ui.sheet.charId)) || 'pip' };
   if (name === 'trial') ui.trial = null;
   if (name === 'quiz') { ui.quizAnswers = []; ui.quizResult = null; }
   if (name === 'words') { ui.wordsState = 'compose'; ui.wordsResult = null; }
@@ -401,45 +425,67 @@ function sheetDetail(s, c) {
     '<button class="btn" type="button" data-act="open" data-sheet="verify">Verify</button></div>');
 }
 
+function trialView() {
+  const t = ui.trial;
+  if (!t || !t.seed || !t.context) return null;
+  return replayTrial(t.seed, t.moves || [], t.context);
+}
+
 function sheetTrial(s, c) {
   const t = ui.trial;
-  if (!t) {
+  if (!t || !t.seed) {
     sheetWrap('Daily Trial · ' + c.name, '<p data-trial-status>Dealing the hand…</p>');
     return;
   }
-  const icon = intentIcon((t.intents || [])[t.turn] || 'attack');
+  const view = trialView();
   const left = Math.max(0, 60 - Math.floor((Date.now() - t.startedAt) / 1000));
-  const cards = (t.hand || []).map((card, index) =>
-    '<button class="choice" type="button" data-act="trial-play" data-card="' + index + '"' + (t.step === 'play' ? '' : ' disabled') + '>' +
-    card.emoji + ' ' + esc(card.name) + '<br><span class="meta">' + card.cost + ' energy · ' + card.power + ' power</span></button>'
+  const art = view.art || '/play/assets/props/boss-wolf.webp';
+  const cards = (view.hand || []).map((card) =>
+    '<button class="tcard' + (card.signature ? ' sig' : '') + '" type="button" data-act="trial-play" data-card="' + card.index + '"' + (t.step === 'play' && !view.done ? '' : ' disabled') + '>' +
+    '<i class="cost">' + card.cost + '</i>' +
+    '<span class="art"><img src="' + heroSrc(c.id, 'alive') + '" alt=""></span>' +
+    '<span class="ban">' + esc(card.name) + '</span>' +
+    '<span class="tx">' + esc(card.text) + '</span>' +
+    '<span class="ty">' + esc(card.type) + ' · ' + esc(card.stat) + '</span></button>'
   ).join('');
   let result = '';
   if (t.result) {
-    const accuracy = Math.round((t.result.accuracy || 0) * 100);
+    const accuracy = Math.round((t.result.damagePercent != null ? t.result.damagePercent : (t.result.accuracy || 0) * 100));
     result = '<p data-trial-accuracy>' + accuracy + '%' + (t.result.counted ? ' · counted' : ' · practice') + '</p>' +
       '<pre class="log" data-trial-grid>' + esc(t.result.grid || t.result.reason || '') + '</pre>' +
       (t.result.counted || t.result.alreadyCounted
         ? '<button class="btn" type="button" data-act="trial-practice">Practice again</button>'
         : '');
   }
+  const width = view.bossMax ? Math.round(100 * view.bossHp / view.bossMax) : 0;
   sheetWrap('Daily Trial · ' + c.name,
-    bustSvg(c, 64, 'alive') +
-    '<div class="trial-stage" id="trial-stage" data-trial-engine="dom">' +
-    '<p data-trial-boss>' + esc(t.boss || 'The Margin') + ' ' + icon + '</p>' +
-    '<p class="trial-meta" data-trial-status>Turn ' + (t.turn + 1) + ' / 8 · energy ' + t.energy + ' · ' + t.moves.length + ' / 30 moves · ' + left + 's</p>' +
-    '</div>' +
+    '<div class="boss-card"><div class="boss-art">' +
+    (view.art ? '<img src="' + esc(art) + '" alt="' + esc(view.boss) + '">' : '') +
+    '<span class="var">' + esc(view.variant) + '</span>' +
+    '<span class="intent">' + esc(view.intent ? view.intent.label : 'Done') + '</span>' +
+    '</div><p class="bn">' + esc(view.blurb || '') + '</p>' +
+    '<div class="hp"><i style="width:' + width + '%"></i></div>' +
+    '<p data-trial-boss>' + esc(view.boss) + '</p>' +
+    '<p class="trial-meta" data-trial-status>Turn ' + view.turn + ' / 8 · ' + view.energy + ' energy · ' + view.moves + ' / 30 moves · ' + left + 's · dealt ' + view.damagePercent + '%</p>' +
+    '<div id="trial-stage" data-trial-engine="dom" hidden></div></div>' +
+    '<div class="me-row">' + bustSvg(c, 46, 'alive') + '<div><strong>' + esc(c.name) + '</strong><span class="hpme"> ' + view.playerHp + '/' + view.playerMax + '</span><br><span class="meta">Block ' + view.playerBlock + ' · ' + esc(view.passive || '') + (view.underdog ? ' · underdog +' + view.underdog : '') + '</span></div></div>' +
     '<div class="trial-hand">' + cards + '</div>' +
-    (t.step === 'play' ? '<div class="row"><button class="btn" type="button" data-act="trial-end">End turn</button>' +
+    (t.step === 'play' && !view.done ? '<div class="row"><button class="btn" type="button" data-act="trial-end">End turn</button>' +
       '<button class="btn solid" type="button" data-act="trial-finish">Finish</button></div>' : '') +
     result +
     '<p class="footnote">Card upgrades are a stretch goal. They would change Trial power only, not Train. There is no raid boss.</p>' +
     (s.phase === 'P4' ? '<p class="footnote">Act before the Reaper. A day outside the window is not in K.</p>' : ''));
   if (t.step === 'play') {
     const host = document.getElementById('trial-stage');
-    const hpLeft = t.bossHp;
     const token = (t.paintToken || 0) + 1;
     t.paintToken = token;
-    paintTrial(host, { boss: t.boss, intentIcon: icon, hand: t.hand, hpLeft, bossHp: t.bossHp }).then((paint) => {
+    paintTrial(host, {
+      boss: view.boss,
+      intentIcon: view.intent ? view.intent.icon : '•',
+      hand: view.hand,
+      hpLeft: view.bossHp,
+      bossHp: view.bossMax
+    }).then((paint) => {
       if (!ui.trial || ui.trial.paintToken !== token) { paint.destroy(); return; }
       ui.trialPaint = paint;
     });
@@ -449,9 +495,10 @@ function sheetTrial(s, c) {
         if (Date.now() - ui.trial.startedAt >= 60000) finishTrial();
         else {
           const status = document.querySelector('[data-trial-status]');
-          if (status) {
+          const live = trialView();
+          if (status && live) {
             const remain = Math.max(0, 60 - Math.floor((Date.now() - ui.trial.startedAt) / 1000));
-            status.textContent = 'Turn ' + (ui.trial.turn + 1) + ' / 8 · energy ' + ui.trial.energy + ' · ' + ui.trial.moves.length + ' / 30 moves · ' + remain + 's';
+            status.textContent = 'Turn ' + live.turn + ' / 8 · ' + live.energy + ' energy · ' + live.moves + ' / 30 moves · ' + remain + 's · dealt ' + live.damagePercent + '%';
           }
         }
       }, 500);
@@ -693,6 +740,13 @@ document.body.addEventListener('click', async (event) => {
   if (act === 'words-submit') { await submitWords(node.dataset.char); return; }
   if (act === 'faucet' || act === 'faucet-first') { await faucet(); return; }
   if (act === 'cosmetic') { toast('Tie goes to the first listed option. Recorded locally for ' + node.dataset.id + '.'); }
+  if (act === 'back') {
+    ui.backed = node.dataset.char;
+    saveStore();
+    renderMain();
+    return;
+  }
+  if (act === 'impact') { await showImpact(); return; }
 });
 
 document.body.addEventListener('input', (event) => {
@@ -711,17 +765,25 @@ document.body.addEventListener('input', (event) => {
 async function beginTrial(practice) {
   stopTrialPaint();
   const now = Date.now();
+  const s = screen();
+  const charId = (ui.sheet && ui.sheet.charId) || ui.backed;
+  ui.backed = charId;
+  saveStore();
   const res = await post('/api/season/trial/start', {
     wallet: ui.wallet || 'demo',
+    charId,
+    chapter: s.chapter,
+    inDanger: s.danger.includes(charId),
     practice: !!practice,
     now
   });
   if (!res.ok) { toast(res.reason || 'Trial failed'); return; }
   ui.trial = {
-    ...res,
+    seed: res.seed,
+    day: res.day,
+    context: res.context,
+    practice: res.practice,
     moves: [],
-    turn: 0,
-    energy: 3,
     startedAt: now,
     step: 'play',
     clock: null,
@@ -732,24 +794,30 @@ async function beginTrial(practice) {
 
 function playTrialCard(index) {
   const t = ui.trial;
-  if (!t || t.step !== 'play') return;
+  const view = trialView();
+  if (!t || t.step !== 'play' || !view || view.done) return;
   if (Date.now() - t.startedAt >= 60000) { finishTrial(); return; }
-  if (t.moves.length >= 30 || t.turn >= 8) { finishTrial(); return; }
-  const card = t.hand[Number(index)];
+  const card = view.hand.find((item) => item.index === Number(index));
   if (!card) return;
-  if (card.cost > t.energy) { toast('Not enough energy. End the turn.'); return; }
+  if (card.cost > view.energy) { toast('Not enough energy. End the turn.'); return; }
   t.moves.push({ type: 'play', card: Number(index) });
-  t.energy -= card.cost;
+  const next = trialView();
+  if (!next.ok) {
+    t.moves.pop();
+    toast(next.reason || 'That card cannot be played.');
+    return;
+  }
+  if (next.done) { finishTrial(); return; }
   renderSheet();
 }
 
 function endTrialTurn() {
   const t = ui.trial;
-  if (!t || t.step !== 'play') return;
+  const view = trialView();
+  if (!t || t.step !== 'play' || !view || view.done) return;
   t.moves.push({ type: 'end' });
-  t.turn += 1;
-  t.energy = 3;
-  if (t.turn >= 8 || t.moves.length >= 30) { finishTrial(); return; }
+  const next = trialView();
+  if (next.done || next.moves >= 30) { finishTrial(); return; }
   renderSheet();
 }
 
@@ -758,31 +826,50 @@ async function finishTrial() {
   if (!t || t.step === 'result' || t.step === 'sending') return;
   t.step = 'sending';
   if (t.clock) { clearInterval(t.clock); t.clock = null; }
+  const ctx = t.context || {};
   const result = await post('/api/season/trial/finish', {
     wallet: ui.wallet || 'demo',
     day: t.day,
     seed: t.seed,
+    charId: ctx.charId,
+    chapter: ctx.chapter,
+    inDanger: ctx.inDanger,
+    train: ctx.train,
     moves: t.moves,
     elapsedMs: Date.now() - t.startedAt,
     practice: !!t.practice,
     now: Date.now()
   });
   t.step = 'result';
-  t.result = result.ok ? result : { ...result, grid: result.reason || 'rejected', accuracy: 0 };
+  t.result = result.ok ? result : { ...result, grid: result.reason || 'rejected', accuracy: 0, damagePercent: 0 };
+  if (result.ok) ui.lastAccuracy = result.accuracy;
   renderSheet();
-  toast(result.ok ? (result.counted ? 'Counted for today.' : 'Practice. Not counted.') : (result.reason || 'Trial rejected'));
+  toast(result.ok ? (result.counted ? 'Counted for today. ' + result.damagePercent + '%.' : 'Practice. Not counted.') : (result.reason || 'Trial rejected'));
 }
 
 async function sendLetter(choice) {
   const result = await post('/api/season/letter', { wallet: ui.wallet || 'demo', choice, now: Date.now() });
   if (!result.ok) {
+    ui.chest = null;
     ui.loopNote = result.reason === 'already' ? 'The letter is already open today.' : (result.reason || 'Letter failed');
     renderMain();
     return;
   }
   const chest = result.chest || {};
+  ui.chest = chest;
   ui.loopNote = choice + ' · ' + (chest.rarity || 'chest') + ' · ' + (chest.item || '') + ' · cosmetic, not an NFT';
   renderMain();
+}
+
+async function showImpact() {
+  const mine = { wallet: ui.wallet || 'demo', trialAccuracy: ui.lastAccuracy || 0, balance: 1000000 };
+  const result = await post('/api/season/impact', {
+    walletRow: mine,
+    peers: [mine, { wallet: 'other', trialAccuracy: 0.5, balance: 1 }]
+  });
+  ui.impact = 'Contribution ' + result.cp + ' · your share ' + Math.round((result.share || 0) * 100) + '%. Holdings do not change it. The pool pays tBard, unlocked over 14 days.';
+  if (ui.tab === 'me') renderMain();
+  else toast(ui.impact);
 }
 
 async function sendCrowd(option) {

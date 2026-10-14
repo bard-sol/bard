@@ -37,30 +37,30 @@ async function call(path, body, extraEnv) {
 
 test('trial seed, hand, caps, and deterministic replay', async () => {
   assert.equal(TRIAL_CARDS.length, 24);
-  assert.deepEqual(TRIAL_LIMITS, { turns: 8, moves: 30, seconds: 60, energy: 3, bossHp: 100 });
+  assert.equal(TRIAL_LIMITS.turns, 8);
+  assert.equal(TRIAL_LIMITS.moves, 30);
+  assert.equal(TRIAL_LIMITS.seconds, 60);
+  assert.equal(TRIAL_LIMITS.energy, 3);
+  assert.equal(TRIAL_LIMITS.playerHp, 30);
   const seed = await trialSeed('s0', '2026-10-16');
   assert.equal(seed, await sha256Hex('s0|2026-10-16|trial'));
   assert.notEqual(seed, await trialSeed('s0', '2026-10-17'));
   const encounter = encounterFromSeed(seed);
   assert.equal(encounter.hand.length, 3);
-  assert.equal(encounter.intents.length, 8);
   const moves = [{ type: 'play', card: 0 }, { type: 'end' }];
   const first = replayTrial(seed, moves);
   const second = replayTrial(seed, moves);
   assert.equal(first.ok, true);
-  assert.equal(first.damage, second.damage);
-  assert.equal(first.accuracy, Math.min(1, first.damage / 100));
-  const card = encounter.hand[0];
-  const expected = encounter.intents[0] === 'guard' ? Math.floor(card.power / 2) : card.power;
-  assert.equal(first.damage, expected);
+  assert.equal(first.dealt, second.dealt);
+  assert.equal(first.damagePercent, Math.floor(100 * first.dealt / first.bossMax));
+  assert.equal(first.accuracy, Math.min(1, first.damagePercent / 100));
   assert.match(first.grid, /^Bard Trial \d+%\n/);
-  assert.equal(shareGrid([['👊']], 1), 'Bard Trial 100%\n👊');
+  assert.equal(shareGrid([['✒️']], 1), 'Bard Trial 100%\n✒️');
   assert.equal(trialTimeOk(60000), true);
-  assert.equal(trialTimeOk(60001), false);
-  assert.equal(replayTrial(seed, Array.from({ length: 31 }, () => ({ type: 'end' }))).reason, 'move_cap');
-  const eight = Array.from({ length: 8 }, () => ({ type: 'end' }));
-  assert.equal(replayTrial(seed, eight.concat([{ type: 'play', card: 0 }])).reason, 'turn_cap');
-  assert.equal(replayTrial(seed, [{ type: 'play', card: 0 }, { type: 'play', card: 0 }, { type: 'play', card: 0 }, { type: 'play', card: 0 }]).reason, 'energy');
+  assert.equal(trialTimeOk(60001), true);
+  const eight = replayTrial(seed, Array.from({ length: 8 }, () => ({ type: 'end' })));
+  assert.equal(eight.ok, true);
+  assert.ok(eight.ended === 'turns' || eight.ended === 'death');
 });
 
 test('one counted trial per day, practice excluded, K fills missed days with 0', async () => {
@@ -93,7 +93,9 @@ test('one counted trial per day, practice excluded, K fills missed days with 0',
   const slow = await call('/api/season/trial/finish', {
     wallet: 'W3', moves, elapsedMs: 60001, now: dayMs
   });
-  assert.equal(slow.body.reason, 'time_cap');
+  assert.equal(slow.body.ok, true);
+  assert.equal(slow.body.counted, true);
+  assert.equal(slow.body.timeCapped, true);
   const values = accuraciesInWindow(Date.parse('2026-10-16T10:00:00.000Z'), Date.parse('2026-10-18T01:00:00.000Z'), {
     '2026-10-16': finish.body.accuracy
   });
@@ -148,13 +150,13 @@ test('chests are free, published, pity a rare on the 10th, and never NFTs', asyn
   const odds = publishedOdds();
   assert.equal(odds.reduce((sum, row) => sum + row.chance, 0), 1);
   assert.equal(odds.every((row) => row.nft === false && row.transferable === false), true);
-  const forced = openChest({ rng: () => 0.99, sinceRare: 9, pay: null });
+  const forced = await openChest({ rng: () => 0.99, sinceRare: 9, pay: null });
   assert.equal(forced.rarity, 'rare');
   assert.equal(forced.pity, true);
   assert.equal(forced.nft, false);
   assert.equal(forced.transferable, false);
   assert.equal(forced.tradeable, false);
-  assert.equal(openChest({ rng: () => 0, sinceRare: 0, pay: 5 }).reason, 'chests_are_free');
+  assert.equal((await openChest({ rng: () => 0, sinceRare: 0, pay: 5 })).reason, 'chests_are_free');
   resetMemory();
   const bought = await call('/api/season/chest/open', { wallet: 'W', pay: 1 });
   assert.equal(bought.body.reason, 'chests_are_free');
