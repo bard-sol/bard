@@ -54,8 +54,8 @@ test('twelve numbered allies and the shared penalty', () => {
   assert.equal(ally('wren').text, '+1 Combo. Reveal boss\'s next two intents.');
   assert.equal(ally('wren').draw, undefined);
   assert.equal(ally('corvin').dealDuringFinisher, 9);
-  assert.equal(ally('tilde').bossCutPct, 20);
-  assert.equal(ally('tilde').text, 'Boss\'s next attack deals 20% less (floor).');
+  assert.equal(ally('tilde').bossCutPct, 15);
+  assert.equal(ally('tilde').text, 'Boss\'s next attack deals 15% less (floor).');
   assert.equal(ally('grub').cost, 2);
   assert.equal(ally('grub').block, 8);
   assert.equal(ally('grub').combo, undefined);
@@ -64,13 +64,15 @@ test('twelve numbered allies and the shared penalty', () => {
   assert.equal(ally('croak').keepComboHalf, true);
   assert.equal(ally('juniper').stripGuard, 6);
   assert.equal(ally('juniper').comboOnce, true);
-  assert.equal(ally('brannoc').block, 7);
+  assert.equal(ally('brannoc').block, 6);
   assert.equal(ally('brannoc').fullBlockDraw, 1);
   assert.equal(ally('footnote').deal, 3);
   assert.equal(ally('footnote').dealIfStaggered, 7);
   assert.equal(ally('lumen').deal, 2);
   assert.equal(ally('lumen').hits, 3);
-  assert.equal(ally('index').comboOnce, true);
+  assert.equal(ally('index').noCombo, undefined);
+  assert.equal(ally('index').comboIfDrawnAttack, undefined);
+  assert.equal(ally('index').text, 'Draw 1.');
   assert.equal(ally('corvin').deal, 3);
   assert.equal(ally('corvin').dealDuringFinisher, 9);
   assert.equal(TRIAL_CARDS.find((card) => card.id === 'footnote').name, 'Gloss');
@@ -144,14 +146,18 @@ test('ally cards do what the content doc says', () => {
   assert.equal(footnote.dealt, 12);
 
   const index = play([jab, ally('grub'), ally('grub'), ally('index')], [{ type: 'play', card: 0 }]);
-  assert.equal(index.combo, 2);
+  assert.equal(index.combo, 1);
+  assert.equal(index.hand.length, 3);
   const indexBlock = play([ally('grub'), ally('grub'), ally('grub'), ally('index')], [{ type: 'play', card: 0 }]);
   assert.equal(indexBlock.combo, 1);
-  const indexTwice = play(
-    [jab, ally('grub'), ally('index'), ally('index')],
-    [{ type: 'play', card: 0 }, { type: 'play', card: 0 }]
+  const forged = TRIAL_CARDS.find((card) => card.id === 'forged');
+  const copied = play(
+    [forged, ally('juniper')],
+    [{ type: 'play', card: 0 }, { type: 'play', card: 0 }],
+    { variant: 'D2' }
   );
-  assert.equal(indexTwice.combo, 2);
+  assert.equal(copied.combo, 3);
+  assert.equal(copied.bossGuard, 0);
 
   const croak = play(
     [ally('croak'), ally('wren'), ally('juniper')],
@@ -161,7 +167,7 @@ test('ally cards do what the content doc says', () => {
   assert.equal(croak.dealt, 12);
 
   const mira = play([jab, ally('mira')], [{ type: 'play', card: 0 }, { type: 'play', card: 0 }]);
-  assert.equal(mira.dealt, 15);
+  assert.equal(mira.dealt, 14);
 
   const brannoc = play(
     [ally('grub'), ally('grub'), ally('grub'), ally('grub'), ally('brannoc')],
@@ -181,9 +187,9 @@ test('ally cards do what the content doc says', () => {
   assert.equal(grub.combo, 0);
 
   const tilde = play([ally('tilde')], [{ type: 'play', card: 0 }]);
-  assert.equal(tilde.intent.n, 4);
+  assert.equal(tilde.intent.n, 5);
   const tildeHit = play([ally('tilde')], [{ type: 'play', card: 0 }, { type: 'end' }]);
-  assert.equal(tildeHit.playerHp, 26);
+  assert.equal(tildeHit.playerHp, 25);
   const tildeFades = play(
     [ally('grub'), ally('grub'), ally('grub'), ally('tilde')],
     [{ type: 'play', card: 0 }, { type: 'end' }, { type: 'end' }]

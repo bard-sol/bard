@@ -196,8 +196,10 @@ test('the signature buffs match the content pass', () => {
   assert.equal(hex.dealt, 7);
   const hexPlain = play('wick', [card('hex')], [{ type: 'play', card: 0 }, { type: 'end' }]);
   assert.equal(hexPlain.dealt, 4);
+  assert.equal(card('rally').rally, 2);
+  assert.equal(card('bite').againDeal, 5);
   const bite = play('thorn', [card('bite')], [{ type: 'play', card: 0 }], { openingBossHp: 34 });
-  assert.equal(bite.dealt, 24);
+  assert.equal(bite.dealt, 19);
   const pounce = play('thorn', [card('pounce')], [{ type: 'play', card: 0 }]);
   assert.equal(pounce.dealt, 5);
   assert.equal(pounce.combo, 1);

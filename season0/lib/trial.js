@@ -66,11 +66,11 @@ const SIGNATURES = {
     { id: 'foresight', name: 'Foresight', cost: 0, type: 'skill', stat: 'CUN', draw: 2, discardLeft: true, setup: true, emoji: '👁️', text: 'Draw 2. Discard 1 (leftmost).', signature: true }
   ],
   vey: [
-    { id: 'rally', name: 'Rally the Banner', cost: 1, type: 'skill', stat: 'CHA', rally: 3, emoji: '🚩', text: 'Your attacks deal +3 for the rest of the run.', signature: true },
+    { id: 'rally', name: 'Rally the Banner', cost: 1, type: 'skill', stat: 'CHA', rally: 2, emoji: '🚩', text: 'Your attacks deal +2 for the rest of the run.', signature: true },
     { id: 'wall', name: 'Shield Wall', cost: 2, type: 'block', stat: 'CHA', block: 12, emoji: '🛡️', text: 'Gain 12 block.', signature: true }
   ],
   thorn: [
-    { id: 'bite', name: 'Feral Bite', cost: 1, type: 'attack', stat: 'STR', deal: 8, againBelowHalf: true, againInFinisher: true, emoji: '🐺', text: 'Deal 8. Deal 8 again if below half HP or the boss is in Finisher.', signature: true },
+    { id: 'bite', name: 'Feral Bite', cost: 1, type: 'attack', stat: 'STR', deal: 8, againDeal: 5, againBelowHalf: true, againInFinisher: true, emoji: '🐺', text: 'Deal 8. Deal 5 again if below half HP or the boss is in Finisher.', signature: true },
     { id: 'pounce', name: 'Pounce', cost: 0, type: 'attack', stat: 'STR', deal: 5, comboAfter: 1, firstOnly: true, emoji: '🐾', text: 'Deal 5. +1 Combo. Only as the first card in a turn.', signature: true }
   ],
   twins: [
@@ -322,30 +322,33 @@ function playAttack(state, card) {
     (card.againBelowHalf && state.playerHp * 2 < TRIAL_LIMITS.playerHp) ||
     (card.againInFinisher && bossInFinisher(state.bossHp, state.bossMax))
   );
-  if (repeat) strikeBoss(state, attackDamage(state, card, card.deal));
+  if (repeat) strikeBoss(state, attackDamage(state, card, card.againDeal || card.deal));
   if (card.comboAfter) state.combo = Math.min(5, state.combo + card.comboAfter);
   if (card.halveGuard) state.bossGuard = Math.floor(state.bossGuard / 2);
   if (card.lose) hurtPlayer(state, card.lose);
 }
 
-function comboThisPlay(state, card) {
+function comboThisPlay(state, card, move) {
   if (!card.comboOnce) return true;
   const id = card.id;
   if (!id) return true;
-  if (state.comboOnce && state.comboOnce[id]) return false;
   if (!state.comboOnce) state.comboOnce = {};
-  state.comboOnce[id] = true;
+  const used = state.comboOnce[id] || 0;
+  // A normal play grants the combo once. Forged Signature may grant it a second time.
+  const limit = move && move.fromCopy ? 2 : 1;
+  if (used >= limit) return false;
+  state.comboOnce[id] = used + 1;
   return true;
 }
 
 function playCard(state, card, move) {
   if (card.once && state.coinUsed) return;
-  const grantCombo = comboThisPlay(state, card);
-  if (card.type === 'skill' && grantCombo) state.combo = Math.min(5, state.combo + 1);
+  const grantCombo = comboThisPlay(state, card, move);
+  if (card.type === 'skill' && grantCombo && !card.noCombo) state.combo = Math.min(5, state.combo + 1);
   if (card.comboIfLate && state.playedThisTurn >= 3) state.combo = Math.min(5, state.combo + card.comboIfLate);
   if (card.combo && grantCombo) state.combo = Math.min(5, state.combo + card.combo);
   if (card.copy) {
-    if (state.lastCard && state.lastCard.id !== 'forged') playCard(state, state.lastCard, { keep: 0 });
+    if (state.lastCard && state.lastCard.id !== 'forged') playCard(state, state.lastCard, { keep: 0, fromCopy: true });
     return;
   }
   if (card.type === 'attack') playAttack(state, card);
@@ -568,8 +571,8 @@ function preview(state, card) {
   let hp = state.bossHp;
   let first = true;
   const base = attackBase(state, card);
-  const hit = () => {
-    let raw = attackDamage(ghost, card, base);
+  const hit = (useBase) => {
+    let raw = attackDamage(ghost, card, useBase);
     if (first && state.combo > 0) raw += state.combo * (state.comboBonus + (card.perCombo || 0));
     first = false;
     raw = finisherAmount(raw, hp, state.bossMax, state.bossGuard);
@@ -578,9 +581,11 @@ function preview(state, card) {
     hp = Math.max(0, hp - (raw - soaked));
     return raw;
   };
-  let total = hit();
-  for (let extra = 1; extra < (card.hits || 1); extra++) total += hit();
-  if ((card.againBelowHalf && state.playerHp * 2 < TRIAL_LIMITS.playerHp) || (card.againInFinisher && bossInFinisher(hp, state.bossMax))) total += hit();
+  let total = hit(base);
+  for (let extra = 1; extra < (card.hits || 1); extra++) total += hit(base);
+  if ((card.againBelowHalf && state.playerHp * 2 < TRIAL_LIMITS.playerHp) || (card.againInFinisher && bossInFinisher(hp, state.bossMax))) {
+    total += hit(card.againDeal || card.deal);
+  }
   return total;
 }
 
