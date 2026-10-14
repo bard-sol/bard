@@ -54,15 +54,15 @@ const SIGNATURES = {
     { id: 'redline', name: 'Redline', cost: 2, type: 'attack', stat: 'CUN', deal: 8, halveGuard: true, emoji: '✂️', text: 'Deal 8. Boss guard this turn is halved.', signature: true }
   ],
   marrow: [
-    { id: 'ovation', name: 'Standing Ovation', cost: 2, type: 'attack', stat: 'CHA', deal: 8, perCombo: 2, emoji: '👏', text: 'Deal 8. +2 more per Combo spent.', signature: true },
+    { id: 'ovation', name: 'Standing Ovation', cost: 2, type: 'attack', stat: 'CHA', deal: 8, perCombo: 3, emoji: '👏', text: 'Deal 8. +3 more per Combo spent.', signature: true },
     { id: 'darling', name: 'Darling of Court', cost: 2, type: 'block', stat: 'CHA', block: 10, draw: 1, combo: 1, emoji: '👑', text: 'Gain 10 block. Draw 1. +1 Combo.', signature: true }
   ],
   pip: [
-    { id: 'heads', name: 'Heads I Win', cost: 1, type: 'attack', stat: 'LCK', deal: 7, doubleIfOdd: true, tripleInFinisher: true, emoji: '🪙', text: 'Deal 7. Double on odd turns. Triple during Finisher.', signature: true },
+    { id: 'heads', name: 'Heads I Win', cost: 1, type: 'attack', stat: 'LCK', deal: 9, doubleIfOdd: true, tripleInFinisher: true, emoji: '🪙', text: 'Deal 9. Double on odd turns. Triple during Finisher.', signature: true },
     { id: 'coin', name: 'Lucky Coin', cost: 0, type: 'skill', stat: 'LCK', energy: 1, comboIfLate: 2, once: true, setup: true, emoji: '✨', text: 'Gain 1 energy. +2 Combo if it\'s your 3rd+ card. Once per turn.', signature: true }
   ],
   wick: [
-    { id: 'hex', name: 'Candle Hex', cost: 1, type: 'skill', stat: 'LCK', hex: 4, emoji: '🕯️', text: 'Boss takes 4 each turn end (stacks). Finisher: x1.5, floored.', signature: true },
+    { id: 'hex', name: 'Candle Hex', cost: 1, type: 'skill', stat: 'LCK', hex: 3, hexFinisher: 6, emoji: '🕯️', text: 'Boss takes 3 each turn end (stacks). Finisher: 6 per stack.', signature: true },
     { id: 'foresight', name: 'Foresight', cost: 0, type: 'skill', stat: 'CUN', draw: 2, discardLeft: true, setup: true, emoji: '👁️', text: 'Draw 2. Discard 1 (leftmost).', signature: true }
   ],
   vey: [
@@ -298,10 +298,11 @@ function strikeBoss(state, raw) {
   dealToBoss(state, finisherAmount(raw, state.bossHp, state.bossMax, state.bossGuard));
 }
 
-function hexTick(state, amount) {
-  let n = Math.max(0, Math.floor(amount));
-  if (n > 0 && bossInFinisher(state.bossHp, state.bossMax)) n = Math.floor(n * 3 / 2);
-  if (n > 0) dealToBoss(state, n);
+function hexEndTick(state) {
+  if (!state.hex || state.done) return;
+  let n = state.hex;
+  if (state.hexFinisher && bossInFinisher(state.bossHp, state.bossMax)) n = state.hexStacks * state.hexFinisher;
+  if (n > 0) dealToBoss(state, Math.floor(n));
 }
 
 function playAttack(state, card) {
@@ -360,7 +361,11 @@ function playCard(state, card, move) {
     state.energy += card.energy;
     state.coinUsed = true;
   }
-  if (card.hex) state.hex += scaledValue(card.hex, state.stats[card.stat]);
+  if (card.hex) {
+    state.hex += scaledValue(card.hex, state.stats[card.stat]);
+    state.hexStacks += 1;
+    if (card.hexFinisher) state.hexFinisher = card.hexFinisher;
+  }
   if (card.rally && state.rallyStacks < 2) {
     state.rallyStacks += 1;
     state.rallyBonus += scaledValue(card.rally, state.stats.CHA);
@@ -416,7 +421,7 @@ function bossAct(state) {
 }
 
 function endTurn(state) {
-  if (state.hex && !state.done) hexTick(state, state.hex);
+  hexEndTick(state);
   if (!state.done) bossAct(state);
   if (state.keep != null && state.hand.length) {
     const index = Math.max(0, Math.min(state.hand.length - 1, state.keep));
@@ -502,6 +507,8 @@ function createState(seedHex, opts) {
     rallyStacks: 0,
     rallyBonus: 0,
     hex: 0,
+    hexStacks: 0,
+    hexFinisher: 0,
     attackBuff: 0,
     hitBuff: 0,
     bossCut: 0,
@@ -532,7 +539,7 @@ function createState(seedHex, opts) {
 }
 
 function tickHexOpen(state) {
-  if (state.passive.hexOpen && state.hex > 0 && !state.done) hexTick(state, 1);
+  if (state.passive.hexOpen && state.hex > 0 && !state.done) dealToBoss(state, 1);
 }
 
 function preview(state, card) {
