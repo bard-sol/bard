@@ -161,9 +161,14 @@ test('the signature buffs match the content pass', () => {
   const at = (charId) => trialContext({ charId, chapter: 1, now: Date.parse('2026-10-16T10:00:00.000Z') });
   const play = (charId, cards, moves, extra) => replayTrial('cd'.repeat(32), moves, { ...at(charId), fixedDeck: cards, ...extra });
   const shield = card('shield');
-  const fan = play('marrow', [card('fan')], [{ type: 'play', card: 0 }]);
-  assert.equal(fan.combo, 1);
-  assert.equal(fan.intent.n, 1);
+  const mark = card('bookmark');
+  const jab = card('jab');
+  const ovation = play('marrow', [card('ovation')], [{ type: 'play', card: 0 }]);
+  assert.equal(ovation.dealt, 11);
+  assert.equal(ovation.combo, 0);
+  const cheered = play('marrow', [card('ovation'), mark, mark], [{ type: 'play', card: 0 }, { type: 'play', card: 0 }, { type: 'play', card: 0 }]);
+  assert.equal(cheered.combo, 0);
+  assert.equal(cheered.dealt, 29);
   const darling = play('marrow', [card('darling')], [{ type: 'play', card: 0 }]);
   assert.equal(darling.combo, 1);
   assert.equal(darling.playerBlock, 12);
@@ -173,16 +178,24 @@ test('the signature buffs match the content pass', () => {
   const headsEven = play('pip', [card('heads'), shield, shield, shield, shield, shield], [{ type: 'end' }, { type: 'play', card: 2 }]);
   assert.equal(headsEven.turn, 2);
   assert.equal(headsEven.dealt, 6);
-  assert.equal(headsEven.combo, 1);
+  assert.equal(headsEven.combo, 0);
+  const headsFinish = play('pip', [card('heads')], [{ type: 'play', card: 0 }], { openingBossHp: 34 });
+  assert.equal(headsFinish.dealt, 19);
   const coin = play('pip', [card('coin'), card('coin')], [{ type: 'play', card: 0 }, { type: 'play', card: 0 }]);
   assert.equal(coin.combo, 1);
   assert.equal(coin.energy, 4);
+  const coinSecond = play('pip', [card('coin'), shield], [{ type: 'play', card: 0 }, { type: 'play', card: 0 }]);
+  assert.equal(coinSecond.combo, 1);
+  const coinLate = play('pip', [card('coin'), jab, jab], [{ type: 'play', card: 0 }, { type: 'play', card: 0 }, { type: 'play', card: 0 }]);
+  assert.equal(coinLate.combo, 3);
+  assert.equal(coinLate.energy, 2);
   const hex = play('wick', [card('hex')], [{ type: 'play', card: 0 }, { type: 'end' }], { openingBossHp: 34 });
-  assert.equal(hex.dealt, 8);
+  assert.equal(hex.dealt, 5);
   const bite = play('thorn', [card('bite')], [{ type: 'play', card: 0 }], { openingBossHp: 34 });
-  assert.equal(bite.dealt, 20);
+  assert.equal(bite.dealt, 24);
   const pounce = play('thorn', [card('pounce')], [{ type: 'play', card: 0 }]);
   assert.equal(pounce.dealt, 5);
+  assert.equal(pounce.combo, 1);
 });
 
 test('greedy trial bot stays inside the tuned band', async () => {

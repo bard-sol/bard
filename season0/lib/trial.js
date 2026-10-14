@@ -54,15 +54,15 @@ const SIGNATURES = {
     { id: 'redline', name: 'Redline', cost: 2, type: 'attack', stat: 'CUN', deal: 8, halveGuard: true, emoji: '✂️', text: 'Deal 8. Boss guard this turn is halved.', signature: true }
   ],
   marrow: [
-    { id: 'fan', name: 'Fan Flourish', cost: 1, type: 'skill', stat: 'CHA', bossCut: 5, emoji: '🪭', text: '+1 Combo. Boss deals −5 damage this turn.', signature: true },
+    { id: 'ovation', name: 'Standing Ovation', cost: 2, type: 'attack', stat: 'CHA', deal: 10, perCombo: 5, emoji: '👏', text: 'Deal 10. +5 more per Combo spent.', signature: true },
     { id: 'darling', name: 'Darling of Court', cost: 2, type: 'block', stat: 'CHA', block: 10, draw: 1, combo: 1, emoji: '👑', text: 'Gain 10 block. Draw 1. +1 Combo.', signature: true }
   ],
   pip: [
-    { id: 'heads', name: 'Heads I Win', cost: 1, type: 'attack', stat: 'LCK', deal: 6, doubleIfOdd: true, comboIfEven: 1, emoji: '🪙', text: 'Deal 6. Double on odd turns. Even turns: +1 Combo.', signature: true },
-    { id: 'coin', name: 'Lucky Coin', cost: 0, type: 'skill', stat: 'LCK', energy: 1, once: true, setup: true, emoji: '✨', text: 'Gain 1 energy. +1 Combo. Once per turn.', signature: true }
+    { id: 'heads', name: 'Heads I Win', cost: 1, type: 'attack', stat: 'LCK', deal: 6, doubleIfOdd: true, doubleInFinisher: true, emoji: '🪙', text: 'Deal 6. Double on odd turns or during Finisher.', signature: true },
+    { id: 'coin', name: 'Lucky Coin', cost: 0, type: 'skill', stat: 'LCK', energy: 1, comboIfLate: 2, once: true, setup: true, emoji: '✨', text: 'Gain 1 energy. +2 Combo if it\'s your 3rd+ card. Once per turn.', signature: true }
   ],
   wick: [
-    { id: 'hex', name: 'Candle Hex', cost: 1, type: 'skill', stat: 'LCK', hex: 3, emoji: '🕯️', text: 'Boss takes 3 each turn end (stacks). Doubled during Finisher.', signature: true },
+    { id: 'hex', name: 'Candle Hex', cost: 1, type: 'skill', stat: 'LCK', hex: 3, emoji: '🕯️', text: 'Boss takes 3 each turn end (stacks). Finisher: x1.5, floored.', signature: true },
     { id: 'foresight', name: 'Foresight', cost: 0, type: 'skill', stat: 'CUN', draw: 2, discardLeft: true, setup: true, emoji: '👁️', text: 'Draw 2. Discard 1 (leftmost).', signature: true }
   ],
   vey: [
@@ -70,8 +70,8 @@ const SIGNATURES = {
     { id: 'wall', name: 'Shield Wall', cost: 2, type: 'block', stat: 'CHA', block: 12, emoji: '🛡️', text: 'Gain 12 block.', signature: true }
   ],
   thorn: [
-    { id: 'bite', name: 'Feral Bite', cost: 1, type: 'attack', stat: 'STR', deal: 7, againBelowHalf: true, againInFinisher: true, emoji: '🐺', text: 'Deal 7. Deal 7 again if below half HP or the boss is in Finisher.', signature: true },
-    { id: 'pounce', name: 'Pounce', cost: 0, type: 'attack', stat: 'STR', deal: 5, firstOnly: true, emoji: '🐾', text: 'Deal 5. Only as the first card in a turn.', signature: true }
+    { id: 'bite', name: 'Feral Bite', cost: 1, type: 'attack', stat: 'STR', deal: 8, againBelowHalf: true, againInFinisher: true, emoji: '🐺', text: 'Deal 8. Deal 8 again if below half HP or the boss is in Finisher.', signature: true },
+    { id: 'pounce', name: 'Pounce', cost: 0, type: 'attack', stat: 'STR', deal: 5, comboAfter: 1, firstOnly: true, emoji: '🐾', text: 'Deal 5. +1 Combo. Only as the first card in a turn.', signature: true }
   ],
   twins: [
     { id: 'spark', name: 'Twin Spark', cost: 1, type: 'attack', stat: 'STR', deal: 4, hits: 2, emoji: '✴️', text: 'Deal 4 twice.', signature: true },
@@ -274,7 +274,7 @@ function attackBase(state, card) {
 
 function attackDamage(state, card, base) {
   let dmg = scaledValue(base, state.stats[card.stat]);
-  if (card.doubleIfOdd && state.turn % 2 === 1) dmg *= 2;
+  if ((card.doubleIfOdd && state.turn % 2 === 1) || (card.doubleInFinisher && bossInFinisher(state.bossHp, state.bossMax))) dmg *= 2;
   if (card.doubleIfStaggered && state.staggered) dmg *= 2;
   if (card.bonusIfBlock && state.playerBlock > 0) dmg += scaledValue(card.bonusIfBlock, state.stats[card.stat]);
   dmg += state.nextAttack;
@@ -299,7 +299,7 @@ function strikeBoss(state, raw) {
 
 function hexTick(state, amount) {
   let n = Math.max(0, Math.floor(amount));
-  if (n > 0 && bossInFinisher(state.bossHp, state.bossMax)) n *= 2;
+  if (n > 0 && bossInFinisher(state.bossHp, state.bossMax)) n = Math.floor(n * 3 / 2);
   if (n > 0) dealToBoss(state, n);
 }
 
@@ -307,6 +307,7 @@ function playAttack(state, card) {
   let bonus = 0;
   if (state.combo > 0) {
     bonus = state.combo * state.comboBonus;
+    if (card.perCombo) bonus += state.combo * card.perCombo;
     if (card.keepComboHalf) state.combo = Math.floor(state.combo / 2);
     else if (!card.keepCombo) state.combo = 0;
   }
@@ -320,7 +321,7 @@ function playAttack(state, card) {
     (card.againInFinisher && bossInFinisher(state.bossHp, state.bossMax))
   );
   if (repeat) strikeBoss(state, attackDamage(state, card, card.deal));
-  if (card.comboIfEven && state.turn % 2 === 0) state.combo = Math.min(5, state.combo + card.comboIfEven);
+  if (card.comboAfter) state.combo = Math.min(5, state.combo + card.comboAfter);
   if (card.halveGuard) state.bossGuard = Math.floor(state.bossGuard / 2);
   if (card.lose) hurtPlayer(state, card.lose);
 }
@@ -328,6 +329,7 @@ function playAttack(state, card) {
 function playCard(state, card, move) {
   if (card.once && state.coinUsed) return;
   if (card.type === 'skill') state.combo = Math.min(5, state.combo + 1);
+  if (card.comboIfLate && state.playedThisTurn >= 3) state.combo = Math.min(5, state.combo + card.comboIfLate);
   if (card.combo) state.combo = Math.min(5, state.combo + card.combo);
   if (card.copy) {
     if (state.lastCard && state.lastCard.id !== 'forged') playCard(state, state.lastCard, { keep: 0 });
@@ -547,7 +549,7 @@ function preview(state, card) {
   const base = attackBase(state, card);
   const hit = () => {
     let raw = attackDamage(ghost, card, base);
-    if (first && state.combo > 0) raw += state.combo * state.comboBonus;
+    if (first && state.combo > 0) raw += state.combo * (state.comboBonus + (card.perCombo || 0));
     first = false;
     raw = finisherAmount(raw, hp, state.bossMax, state.bossGuard);
     if (state.staggered && raw > 0) raw = Math.floor(raw * 3 / 2);
