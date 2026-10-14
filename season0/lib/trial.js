@@ -54,15 +54,15 @@ const SIGNATURES = {
     { id: 'redline', name: 'Redline', cost: 2, type: 'attack', stat: 'CUN', deal: 8, halveGuard: true, emoji: '✂️', text: 'Deal 8. Boss guard this turn is halved.', signature: true }
   ],
   marrow: [
-    { id: 'fan', name: 'Fan Flourish', cost: 1, type: 'skill', stat: 'CHA', bossCut: 5, emoji: '🪭', text: 'Boss deals −5 damage this turn.', signature: true },
-    { id: 'darling', name: 'Darling of Court', cost: 2, type: 'block', stat: 'CHA', block: 10, draw: 1, emoji: '👑', text: 'Gain 10 block. Draw 1.', signature: true }
+    { id: 'fan', name: 'Fan Flourish', cost: 1, type: 'skill', stat: 'CHA', bossCut: 5, emoji: '🪭', text: '+1 Combo. Boss deals −5 damage this turn.', signature: true },
+    { id: 'darling', name: 'Darling of Court', cost: 2, type: 'block', stat: 'CHA', block: 10, draw: 1, combo: 1, emoji: '👑', text: 'Gain 10 block. Draw 1. +1 Combo.', signature: true }
   ],
   pip: [
-    { id: 'heads', name: 'Heads I Win', cost: 1, type: 'attack', stat: 'LCK', deal: 5, doubleIfOdd: true, emoji: '🪙', text: 'Deal 5. If turn number is odd, deal double.', signature: true },
-    { id: 'coin', name: 'Lucky Coin', cost: 0, type: 'skill', stat: 'LCK', energy: 1, once: true, setup: true, emoji: '✨', text: 'Gain 1 energy. Once per turn.', signature: true }
+    { id: 'heads', name: 'Heads I Win', cost: 1, type: 'attack', stat: 'LCK', deal: 6, doubleIfOdd: true, comboIfEven: 1, emoji: '🪙', text: 'Deal 6. Double on odd turns. Even turns: +1 Combo.', signature: true },
+    { id: 'coin', name: 'Lucky Coin', cost: 0, type: 'skill', stat: 'LCK', energy: 1, once: true, setup: true, emoji: '✨', text: 'Gain 1 energy. +1 Combo. Once per turn.', signature: true }
   ],
   wick: [
-    { id: 'hex', name: 'Candle Hex', cost: 1, type: 'skill', stat: 'LCK', hex: 3, emoji: '🕯️', text: 'Boss takes 3 damage at each turn end.', signature: true },
+    { id: 'hex', name: 'Candle Hex', cost: 1, type: 'skill', stat: 'LCK', hex: 3, emoji: '🕯️', text: 'Boss takes 3 each turn end (stacks). Doubled during Finisher.', signature: true },
     { id: 'foresight', name: 'Foresight', cost: 0, type: 'skill', stat: 'CUN', draw: 2, discardLeft: true, setup: true, emoji: '👁️', text: 'Draw 2. Discard 1 (leftmost).', signature: true }
   ],
   vey: [
@@ -70,8 +70,8 @@ const SIGNATURES = {
     { id: 'wall', name: 'Shield Wall', cost: 2, type: 'block', stat: 'CHA', block: 12, emoji: '🛡️', text: 'Gain 12 block.', signature: true }
   ],
   thorn: [
-    { id: 'bite', name: 'Feral Bite', cost: 1, type: 'attack', stat: 'STR', deal: 7, againBelowHalf: true, emoji: '🐺', text: 'Deal 7. Deal 7 again if below half HP.', signature: true },
-    { id: 'pounce', name: 'Pounce', cost: 0, type: 'attack', stat: 'STR', deal: 4, firstOnly: true, emoji: '🐾', text: 'Deal 4. Only as the first card in a turn.', signature: true }
+    { id: 'bite', name: 'Feral Bite', cost: 1, type: 'attack', stat: 'STR', deal: 7, againBelowHalf: true, againInFinisher: true, emoji: '🐺', text: 'Deal 7. Deal 7 again if below half HP or the boss is in Finisher.', signature: true },
+    { id: 'pounce', name: 'Pounce', cost: 0, type: 'attack', stat: 'STR', deal: 5, firstOnly: true, emoji: '🐾', text: 'Deal 5. Only as the first card in a turn.', signature: true }
   ],
   twins: [
     { id: 'spark', name: 'Twin Spark', cost: 1, type: 'attack', stat: 'STR', deal: 4, hits: 2, emoji: '✴️', text: 'Deal 4 twice.', signature: true },
@@ -289,8 +289,18 @@ function attackDamage(state, card, base) {
   return dmg;
 }
 
+function bossInFinisher(hp, max) {
+  return max > 0 && hp * 100 <= max * 30;
+}
+
 function strikeBoss(state, raw) {
   dealToBoss(state, finisherAmount(raw, state.bossHp, state.bossMax, state.bossGuard));
+}
+
+function hexTick(state, amount) {
+  let n = Math.max(0, Math.floor(amount));
+  if (n > 0 && bossInFinisher(state.bossHp, state.bossMax)) n *= 2;
+  if (n > 0) dealToBoss(state, n);
 }
 
 function playAttack(state, card) {
@@ -305,14 +315,18 @@ function playAttack(state, card) {
   for (let i = 0; i < hits && !state.done; i++) {
     strikeBoss(state, attackDamage(state, card, base) + (i === 0 ? bonus : 0));
   }
-  if (card.againBelowHalf && state.playerHp * 2 < TRIAL_LIMITS.playerHp && !state.done) {
-    strikeBoss(state, attackDamage(state, card, card.deal));
-  }
+  const repeat = !state.done && (
+    (card.againBelowHalf && state.playerHp * 2 < TRIAL_LIMITS.playerHp) ||
+    (card.againInFinisher && bossInFinisher(state.bossHp, state.bossMax))
+  );
+  if (repeat) strikeBoss(state, attackDamage(state, card, card.deal));
+  if (card.comboIfEven && state.turn % 2 === 0) state.combo = Math.min(5, state.combo + card.comboIfEven);
   if (card.halveGuard) state.bossGuard = Math.floor(state.bossGuard / 2);
   if (card.lose) hurtPlayer(state, card.lose);
 }
 
 function playCard(state, card, move) {
+  if (card.once && state.coinUsed) return;
   if (card.type === 'skill') state.combo = Math.min(5, state.combo + 1);
   if (card.combo) state.combo = Math.min(5, state.combo + card.combo);
   if (card.copy) {
@@ -399,7 +413,7 @@ function bossAct(state) {
 }
 
 function endTurn(state) {
-  if (state.hex && !state.done) dealToBoss(state, state.hex);
+  if (state.hex && !state.done) hexTick(state, state.hex);
   if (!state.done) bossAct(state);
   if (state.keep != null && state.hand.length) {
     const index = Math.max(0, Math.min(state.hand.length - 1, state.keep));
@@ -515,7 +529,7 @@ function createState(seedHex, opts) {
 }
 
 function tickHexOpen(state) {
-  if (state.passive.hexOpen && state.hex > 0 && !state.done) dealToBoss(state, 1);
+  if (state.passive.hexOpen && state.hex > 0 && !state.done) hexTick(state, 1);
 }
 
 function preview(state, card) {
@@ -543,7 +557,7 @@ function preview(state, card) {
   };
   let total = hit();
   for (let extra = 1; extra < (card.hits || 1); extra++) total += hit();
-  if (card.againBelowHalf && state.playerHp * 2 < TRIAL_LIMITS.playerHp) total += hit();
+  if ((card.againBelowHalf && state.playerHp * 2 < TRIAL_LIMITS.playerHp) || (card.againInFinisher && bossInFinisher(hp, state.bossMax))) total += hit();
   return total;
 }
 

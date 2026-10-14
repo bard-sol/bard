@@ -7,6 +7,7 @@ import {
   lookaheadMoves,
   replayTrial,
   scaledValue,
+  TRIAL_CARDS,
   simulateTrialMedian,
   trialContext,
   trialSeed
@@ -24,10 +25,10 @@ test('trial numbers are integers and boss HP follows the chapter curve', () => {
   assert.equal(scaledValue(22, 80), 25);
   assert.equal(damagePercent(45, 120), 37);
   assert.equal(damagePercent(200, 110), 100);
-  assert.equal(bossMaxHp(1, 'D1'), 120);
-  assert.equal(bossMaxHp(1, 'D2'), 120);
-  assert.equal(bossMaxHp(1, 'D3'), 108);
-  assert.equal(bossMaxHp(7, 'D1'), 177);
+  assert.equal(bossMaxHp(1, 'D1'), 115);
+  assert.equal(bossMaxHp(1, 'D2'), 115);
+  assert.equal(bossMaxHp(1, 'D3'), 103);
+  assert.equal(bossMaxHp(7, 'D1'), 170);
   assert.equal(finisherAmount(20, 40, 80, 0), 30);
   assert.equal(finisherAmount(10, 40, 80, 0), 10);
   assert.equal(finisherAmount(16, 40, 80, 0), 24);
@@ -155,12 +156,41 @@ test('momentum is guarded and a full season still names one champion', async () 
   console.log('SURVIVAL ' + JSON.stringify({ chapter1, champions: many.champions, flagged: many.flagged }));
 });
 
+test('the signature buffs match the content pass', () => {
+  const card = (id) => TRIAL_CARDS.find((row) => row.id === id);
+  const at = (charId) => trialContext({ charId, chapter: 1, now: Date.parse('2026-10-16T10:00:00.000Z') });
+  const play = (charId, cards, moves, extra) => replayTrial('cd'.repeat(32), moves, { ...at(charId), fixedDeck: cards, ...extra });
+  const shield = card('shield');
+  const fan = play('marrow', [card('fan')], [{ type: 'play', card: 0 }]);
+  assert.equal(fan.combo, 1);
+  assert.equal(fan.intent.n, 1);
+  const darling = play('marrow', [card('darling')], [{ type: 'play', card: 0 }]);
+  assert.equal(darling.combo, 1);
+  assert.equal(darling.playerBlock, 12);
+  const headsOdd = play('pip', [card('heads')], [{ type: 'play', card: 0 }]);
+  assert.equal(headsOdd.dealt, 13);
+  assert.equal(headsOdd.combo, 0);
+  const headsEven = play('pip', [card('heads'), shield, shield, shield, shield, shield], [{ type: 'end' }, { type: 'play', card: 2 }]);
+  assert.equal(headsEven.turn, 2);
+  assert.equal(headsEven.dealt, 6);
+  assert.equal(headsEven.combo, 1);
+  const coin = play('pip', [card('coin'), card('coin')], [{ type: 'play', card: 0 }, { type: 'play', card: 0 }]);
+  assert.equal(coin.combo, 1);
+  assert.equal(coin.energy, 4);
+  const hex = play('wick', [card('hex')], [{ type: 'play', card: 0 }, { type: 'end' }], { openingBossHp: 34 });
+  assert.equal(hex.dealt, 8);
+  const bite = play('thorn', [card('bite')], [{ type: 'play', card: 0 }], { openingBossHp: 34 });
+  assert.equal(bite.dealt, 20);
+  const pounce = play('thorn', [card('pounce')], [{ type: 'play', card: 0 }]);
+  assert.equal(pounce.dealt, 5);
+});
+
 test('greedy trial bot stays inside the tuned band', async () => {
   const report = await simulateTrialMedian(300);
   assert.equal(report.runs, 300);
-  assert.equal(report.currentBaseHp, 120);
+  assert.equal(report.currentBaseHp, 115);
   assert.equal(report.comboBonus, 4);
-  assert.equal(report.bossHp, 120);
+  assert.equal(report.bossHp, 115);
   assert.ok(report.median >= 55 && report.median <= 70);
   const seed = await trialSeed('s0', 'sim-0000');
   const opts = trialContext({ charId: 'twins', chapter: 1, now: Date.parse('2026-10-16T10:00:00.000Z') });

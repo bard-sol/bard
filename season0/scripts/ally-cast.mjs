@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-/** Hob + Wren on every character. Locked HP 120 and Combo +4. 300 seeds each. */
+/** Hob + Wren on every character. Locked base HP and Combo +4. 300 seeds each. */
 import { Worker, isMainThread, parentPort, workerData } from 'node:worker_threads';
 import { fileURLToPath } from 'node:url';
 import { availableParallelism } from 'node:os';
@@ -41,6 +41,7 @@ if (!isMainThread) {
   });
 } else {
   const { CAST } = await import('../lib/cast.js');
+  const { defaultConfig } = await import('../lib/config.js');
   const runs = Math.max(1, Number(process.argv[2] || 300));
   const width = Math.max(1, Math.min(availableParallelism(), 4, CAST.length));
   const rows = [];
@@ -69,7 +70,7 @@ if (!isMainThread) {
   rows.sort((a, b) => CAST.findIndex((row) => row.id === a.charId) - CAST.findIndex((row) => row.id === b.charId));
   process.stdout.write(JSON.stringify({
     runs,
-    baseHp: 120,
+    baseHp: defaultConfig().trial_base_hp,
     comboBonus: 4,
     allies: ['hob', 'wren'],
     rows

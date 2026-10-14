@@ -179,7 +179,7 @@ test('ally cards do what the content doc says', () => {
   assert.equal(tildeHolds.turn, 3);
   assert.equal(tildeHolds.intent.n, 7);
 
-  const finisher = play([ally('corvin')], [{ type: 'play', card: 0 }], { openingBossHp: 36 });
+  const finisher = play([ally('corvin')], [{ type: 'play', card: 0 }], { openingBossHp: 34 });
   assert.equal(finisher.dealt, 16);
   const early = play([ally('corvin')], [{ type: 'play', card: 0 }], { openingBossHp: 100 });
   assert.equal(early.dealt, 5);
