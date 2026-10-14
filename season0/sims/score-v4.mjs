@@ -5,6 +5,7 @@
  * One cell: ONLY=both CLAMP=0 CROWN=1.5 CONTROL=1 SEASONS=1000 node season0/sims/score-v4.mjs
  * Clamp sweep: SWEEP=1 node season0/sims/score-v4.mjs
  * Stake-tilt sweep: KSWEEP=1 node season0/sims/score-v4.mjs
+ *   K_FROM K_TO K_STEP select the grid. VARIANTS=stake keeps the +10% Duel.
  *
  * raise_loyalty_pays stays false and does not change Health.
  */
@@ -1352,14 +1353,24 @@ function roundK(value) {
   return Math.round(value * 100) / 100;
 }
 
+function sweepKs() {
+  const from = Number(process.env.K_FROM ?? 0);
+  const to = Number(process.env.K_TO ?? 0.4);
+  const step = Number(process.env.K_STEP ?? 0.05);
+  const ks = [];
+  for (let k = from; k <= to + step * 0.001; k += step) ks.push(roundK(k));
+  return ks;
+}
+
 async function runKSweep() {
   const started = Date.now();
-  const ks = [];
-  for (let step = 0; step <= 8; step++) ks.push(roundK(step / 20));
-  const variants = [
+  const ks = sweepKs();
+  const catalog = [
     { name: 'stake', duelBonus: 0.10, label: 'Stake tilt only. Duel bonus stays at most +10%.' },
     { name: 'stake-duel20', duelBonus: 0.20, label: 'Stake tilt, and the Duel participation bonus doubled to at most +20%.' }
   ];
+  const wanted = process.env.VARIANTS ? process.env.VARIANTS.split(',') : null;
+  const variants = wanted ? catalog.filter((variant) => wanted.includes(variant.name)) : catalog;
   const cells = [];
   for (const variant of variants) {
     for (const k of ks) {
@@ -1425,6 +1436,8 @@ async function runKSweep() {
         k: cell.k,
         clean: cell.clean.goals,
         deck: cell.deck.goals,
+        cleanAnnotations: cell.clean.annotations,
+        deckAnnotations: cell.deck.annotations,
         passBoth: cell.clean.goals.pass && cell.deck.goals.pass
       }))
     }))
