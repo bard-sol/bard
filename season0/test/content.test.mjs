@@ -3,8 +3,9 @@ import assert from 'node:assert/strict';
 import {
   bossMaxHp,
   damagePercent,
-  finisherDamage,
+  finisherAmount,
   lookaheadMoves,
+  replayTrial,
   scaledValue,
   simulateTrialMedian,
   trialContext,
@@ -23,17 +24,55 @@ test('trial numbers are integers and boss HP follows the chapter curve', () => {
   assert.equal(scaledValue(22, 80), 25);
   assert.equal(damagePercent(45, 120), 37);
   assert.equal(damagePercent(200, 110), 100);
-  assert.equal(bossMaxHp(1, 'D1'), 80);
-  assert.equal(bossMaxHp(1, 'D2'), 80);
-  assert.equal(bossMaxHp(1, 'D3'), 72);
-  assert.equal(bossMaxHp(7, 'D1'), 118);
-  assert.equal(finisherDamage(10, 20, 80, 25), 15);
-  assert.equal(finisherDamage(7, 20, 80, 25), 10);
-  assert.equal(finisherDamage(10, 21, 80, 25), 10);
-  assert.equal(finisherDamage(10, 24, 80, 30), 15);
+  assert.equal(bossMaxHp(1, 'D1'), 105);
+  assert.equal(bossMaxHp(1, 'D2'), 105);
+  assert.equal(bossMaxHp(1, 'D3'), 94);
+  assert.equal(bossMaxHp(7, 'D1'), 155);
+  assert.equal(finisherAmount(20, 40, 80, 0), 30);
+  assert.equal(finisherAmount(10, 40, 80, 0), 10);
+  assert.equal(finisherAmount(16, 40, 80, 0), 24);
+  assert.equal(finisherAmount(4, 28, 80, 0), 6);
   const ctx = trialContext({ charId: 'pip', chapter: 1, now: Date.parse('2026-10-17T12:00:00.000Z') });
   assert.equal(ctx.variant, 'D2');
   assert.equal(ctx.stats.LCK, 80);
+});
+
+test('combo, stagger, and the crossing Finisher are integers', async () => {
+  const opts = trialContext({ charId: 'twins', chapter: 1, now: Date.parse('2026-10-16T10:00:00.000Z') });
+  opts.comboBonus = 3;
+  let comboChecked = false;
+  let staggerChecked = false;
+  for (let i = 0; i < 40 && (!comboChecked || !staggerChecked); i++) {
+    const seed = await trialSeed('s0', 'rule-' + i);
+    const open = replayTrial(seed, [], opts);
+    if (!comboChecked) {
+      const skill = open.hand.find((card) => card.type === 'skill');
+      if (skill) {
+        const after = replayTrial(seed, [{ type: 'play', card: skill.index }], opts);
+        assert.equal(after.combo, 1);
+        const attack = after.hand.find((card) => card.type === 'attack' && card.cost <= after.energy);
+        if (attack) {
+          const moves = [{ type: 'play', card: skill.index }, { type: 'play', card: attack.index }];
+          const spent = replayTrial(seed, moves, opts);
+          const plain = replayTrial(seed, moves, { ...opts, comboBonus: 0 });
+          assert.equal(spent.combo, 0);
+          assert.ok(spent.dealt > plain.dealt);
+        }
+        comboChecked = true;
+      }
+    }
+    if (!staggerChecked) {
+      const shield = open.hand.find((card) => card.id === 'shield');
+      if (shield) {
+        const blocked = replayTrial(seed, [{ type: 'play', card: shield.index }, { type: 'end' }], opts);
+        assert.equal(blocked.staggered, true);
+        assert.equal(blocked.playerHp, 30);
+        staggerChecked = true;
+      }
+    }
+  }
+  assert.equal(comboChecked, true);
+  assert.equal(staggerChecked, true);
 });
 
 test('chest rolls are seeded, unique, and never NFTs', async () => {
@@ -116,14 +155,13 @@ test('momentum is guarded and a full season still names one champion', async () 
   console.log('SURVIVAL ' + JSON.stringify({ chapter1, champions: many.champions, flagged: many.flagged }));
 });
 
-test('trial bot median is reported and the HP base stays unlocked', async () => {
+test('greedy trial bot stays inside the tuned band', async () => {
   const report = await simulateTrialMedian(300);
   assert.equal(report.runs, 300);
-  assert.equal(report.currentBaseHp, 80);
-  assert.equal(report.finisherPct, 30);
-  assert.equal(report.tooStrong, false);
+  assert.equal(report.currentBaseHp, 105);
+  assert.equal(report.comboBonus, 4);
+  assert.equal(report.bossHp, 105);
   assert.ok(report.median >= 55 && report.median <= 70);
-  assert.ok(report.killRate <= 0.35);
   const seed = await trialSeed('s0', 'sim-0000');
   const opts = trialContext({ charId: 'twins', chapter: 1, now: Date.parse('2026-10-16T10:00:00.000Z') });
   const first = lookaheadMoves(seed, opts);

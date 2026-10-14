@@ -1,7 +1,7 @@
 #!/usr/bin/env node
-/** Finisher tune. Lookahead is a width-20 beam over one full turn. */
-import { tuneFinisher } from '../lib/trial.js';
+/** Trial v2 tune. Combo bonus first, then boss HP by steps of 5. */
+import { tuneTrialV2 } from '../lib/trial.js';
 
 const runs = Number(process.argv[2] || 300);
-const tuned = await tuneFinisher(runs);
+const tuned = await tuneTrialV2(runs);
 process.stdout.write(JSON.stringify(tuned, null, 2) + '\n');

@@ -214,16 +214,21 @@ function gainBlock(state, amount) {
   state.playerBlock += n;
 }
 
-/** Attack damage is floor(amount * 3 / 2) while the boss is at or below the Finisher line. */
-export function finisherDamage(amount, bossHp, bossMax, pct) {
-  const dmg = Math.max(0, Math.floor(amount));
-  const line = pct == null ? defaultConfig().trial_finisher_pct : Number(pct);
-  if (bossMax > 0 && bossHp * 100 <= bossMax * line) return Math.floor(dmg * 3 / 2);
-  return dmg;
+/**
+ * Finisher: if this raw hit would leave the boss at or below 30% of max HP,
+ * the whole hit deals floor(raw * 3 / 2), including the hit that crosses the line.
+ */
+export function finisherAmount(raw, bossHp, bossMax, guard) {
+  const amount = Math.max(0, Math.floor(raw));
+  const soaked = Math.min(Math.max(0, Math.floor(guard) || 0), amount);
+  const projected = bossHp - (amount - soaked);
+  if (amount > 0 && bossMax > 0 && projected * 100 <= bossMax * 30) return Math.floor(amount * 3 / 2);
+  return amount;
 }
 
 function dealToBoss(state, amount) {
   let dmg = Math.max(0, Math.floor(amount));
+  if (state.staggered && dmg > 0) dmg = Math.floor(dmg * 3 / 2);
   const blocked = Math.min(state.bossGuard, dmg);
   state.bossGuard -= blocked;
   dmg -= blocked;
@@ -262,13 +267,20 @@ function attackDamage(state, card, base) {
   return dmg;
 }
 
-function strikeBoss(state, amount) {
-  dealToBoss(state, finisherDamage(amount, state.bossHp, state.bossMax, state.finisherPct));
+function strikeBoss(state, raw) {
+  dealToBoss(state, finisherAmount(raw, state.bossHp, state.bossMax, state.bossGuard));
 }
 
 function playAttack(state, card) {
+  let bonus = 0;
+  if (state.combo > 0) {
+    bonus = state.combo * state.comboBonus;
+    state.combo = 0;
+  }
   const hits = card.hits || 1;
-  for (let i = 0; i < hits && !state.done; i++) strikeBoss(state, attackDamage(state, card, card.deal));
+  for (let i = 0; i < hits && !state.done; i++) {
+    strikeBoss(state, attackDamage(state, card, card.deal) + (i === 0 ? bonus : 0));
+  }
   if (card.againBelowHalf && state.playerHp * 2 < TRIAL_LIMITS.playerHp && !state.done) {
     strikeBoss(state, attackDamage(state, card, card.deal));
   }
@@ -277,6 +289,7 @@ function playAttack(state, card) {
 }
 
 function playCard(state, card, move) {
+  if (card.type === 'skill') state.combo = Math.min(5, state.combo + 1);
   if (card.copy) {
     if (state.lastCard && state.lastCard.id !== 'forged') playCard(state, state.lastCard, { keep: 0 });
     return;
@@ -304,10 +317,14 @@ function playCard(state, card, move) {
 
 function bossAct(state) {
   const intent = intentAt(state.boss, state.turn);
+  if (state.staggered && (intent.kind === 'guard' || intent.kind === 'buff')) return;
   if (intent.kind === 'attack') {
     const each = attackPacket(state, intent);
     const hits = attackHits(state, intent);
+    const incoming = each * hits;
+    const absorbed = incoming > 0 && state.playerBlock >= incoming;
     for (let i = 0; i < hits && !state.done; i++) hurtPlayer(state, each);
+    if (absorbed && state.playerHp > 0) state.staggerNext = true;
     state.bossCut = 0;
     return;
   }
@@ -356,6 +373,8 @@ function endTurn(state) {
   state.lastCard = null;
   state.blockHalved = !!state.blockHalvedNext;
   state.blockHalvedNext = false;
+  state.staggered = !!state.staggerNext;
+  state.staggerNext = false;
   drawCards(state, TRIAL_LIMITS.draw);
   tickHexOpen(state);
 }
@@ -372,7 +391,10 @@ function createState(seedHex, opts) {
     stats: ctx.stats,
     charId: ctx.charId,
     inDanger: !!ctx.inDanger,
-    finisherPct: ctx.finisherPct == null ? defaultConfig().trial_finisher_pct : Number(ctx.finisherPct),
+    comboBonus: ctx.comboBonus == null ? defaultConfig().trial_combo_bonus : Number(ctx.comboBonus),
+    combo: 0,
+    staggered: false,
+    staggerNext: false,
     passive: PASSIVES[ctx.charId] || {},
     deck: shuffle(deckFor(ctx.charId), rng),
     discard: [],
@@ -427,10 +449,16 @@ function preview(state, card) {
     attacksThisTurn: state.attacksThisTurn
   };
   let hp = state.bossHp;
+  let first = true;
   const hit = () => {
-    const dealt = finisherDamage(attackDamage(ghost, card, card.deal), hp, state.bossMax, state.finisherPct);
-    hp = Math.max(0, hp - dealt);
-    return dealt;
+    let raw = attackDamage(ghost, card, card.deal);
+    if (first && state.combo > 0) raw += state.combo * state.comboBonus;
+    first = false;
+    raw = finisherAmount(raw, hp, state.bossMax, state.bossGuard);
+    if (state.staggered && raw > 0) raw = Math.floor(raw * 3 / 2);
+    const soaked = Math.min(state.bossGuard, raw);
+    hp = Math.max(0, hp - (raw - soaked));
+    return raw;
   };
   let total = hit();
   if (card.hits === 2) total += hit();
@@ -486,7 +514,9 @@ function viewOf(state, ok, reason) {
     hand: state.hand.map((card, index) => publicCard(state, card, index)),
     passive: state.passive.text || '',
     underdog: state.inDanger ? 2 : 0,
-    finisherPct: state.finisherPct,
+    combo: state.combo,
+    comboBonus: state.comboBonus,
+    staggered: !!state.staggered,
     grid: shareGrid(state.rows, percent / 100)
   };
 }
@@ -575,17 +605,56 @@ function candidateMoves(view) {
   return moves;
 }
 
+function horizonSpend(after) {
+  if (!after || after.done) return 0;
+  const comboExtra = (after.combo || 0) * (after.comboBonus || 0);
+  const attacks = (after.hand || [])
+    .filter((card) => card.preview > 0 && card.playable !== false)
+    .map((card) => ({
+      cost: card.cost || 0,
+      full: card.preview,
+      rest: Math.max(0, card.preview - comboExtra)
+    }))
+    .sort((a, b) => b.full - a.full);
+  let energy = after.energy == null ? 3 : after.energy;
+  let spend = 0;
+  let first = true;
+  for (const card of attacks) {
+    if (card.cost > energy) continue;
+    spend += first ? card.full : card.rest;
+    first = false;
+    energy -= card.cost;
+  }
+  if (after.staggered && after.intent && (after.intent.kind === 'guard' || after.intent.kind === 'buff')) {
+    spend += after.intent.n || 0;
+  }
+  return spend;
+}
+
 function lineScore(root, after) {
   if (!after || !after.ok) return -1e9;
   const gained = after.dealt - root.dealt;
   if (after.bossHp <= 0 || after.ended === 'boss') return 100000 + after.playerHp + gained;
   if (after.playerHp <= 0 || after.ended === 'death') return gained - 10000;
-  const threat = (after.hand || []).reduce((sum, card) => sum + Math.max(0, card.preview || 0), 0);
-  return gained * 100 + threat + after.playerHp * 2 + after.playerBlock;
+  return (gained + horizonSpend(after)) * 100 + after.playerHp * 2 + after.playerBlock;
+}
+
+function setupScore(after) {
+  if (!after || !after.ok) return -1e9;
+  const incoming = after.intent && after.intent.kind === 'attack' ? after.intent.n * (after.intent.hits || 1) : 0;
+  const armed = incoming > 0 && after.playerBlock >= incoming ? 1 : 0;
+  return (after.combo || 0) * 10 + armed * 40 + (after.staggered ? 25 : 0) + after.playerBlock;
+}
+
+function endsPlayed(extra) {
+  let count = 0;
+  for (const move of extra) if (move && move.type === 'end') count += 1;
+  return count;
 }
 
 /**
- * Beam search of width 20 over the rest of this turn, including the end-turn resolution.
+ * Beam of width 20. It finishes the current turn and plays the next one,
+ * so Combo carried across the turn and a Stagger set up now are both scored.
  * Returns the first move of the best line.
  */
 export function chooseLookaheadPlay(seedHex, moves, opts) {
@@ -593,25 +662,43 @@ export function chooseLookaheadPlay(seedHex, moves, opts) {
   if (!root.ok || root.done) return null;
   let beam = [{ extra: [] }];
   const finished = [];
-  for (let depth = 0; depth < 10 && beam.length; depth++) {
+  for (let depth = 0; depth < 16 && beam.length; depth++) {
     const ongoing = [];
     for (const node of beam) {
       const view = replayTrial(seedHex, moves.concat(node.extra), opts);
       if (!view.ok || view.done) {
-        finished.push({ extra: node.extra, score: lineScore(root, view) });
+        if (node.extra.length) finished.push({ extra: node.extra, score: lineScore(root, view) });
         continue;
       }
       for (const move of candidateMoves(view)) {
         const extra = node.extra.concat([move]);
         const after = replayTrial(seedHex, moves.concat(extra), opts);
         if (!after.ok) continue;
-        const closed = move.type === 'end' || !!after.done;
-        if (closed) finished.push({ extra, score: lineScore(root, after) });
-        else ongoing.push({ extra, score: lineScore(root, after) });
+        const closed = !!after.done || endsPlayed(extra) >= 2;
+        const scored = { extra, score: lineScore(root, after), setup: setupScore(after) };
+        if (closed) finished.push(scored);
+        else ongoing.push(scored);
       }
     }
-    ongoing.sort((a, b) => b.score - a.score);
-    beam = ongoing.slice(0, 20);
+    const byScore = ongoing.slice().sort((a, b) => b.score - a.score || b.setup - a.setup);
+    const bySetup = ongoing.slice().sort((a, b) => b.setup - a.setup || b.score - a.score);
+    const kept = [];
+    const seen = new Set();
+    const take = (list, limit) => {
+      for (const item of list) {
+        if (kept.length >= limit) return;
+        const key = JSON.stringify(item.extra);
+        if (seen.has(key)) continue;
+        seen.add(key);
+        kept.push(item);
+      }
+    };
+    // Damage lines fill most of the beam. Reserved slots keep Combo and full-block
+    // lines alive until the next turn, where Stagger and the combo bonus are scored.
+    take(byScore, 12);
+    take(bySetup, 20);
+    take(byScore, 20);
+    beam = kept;
   }
   if (!finished.length) return { type: 'end' };
   finished.sort((a, b) => b.score - a.score || a.extra.length - b.extra.length);
@@ -688,13 +775,18 @@ export function cardUpgradeOffer() {
   };
 }
 
-function trialBotOpts(baseHp, finisherPct) {
+function trialBotOpts(baseHp, comboBonus) {
   const base = baseHp == null ? defaultConfig().trial_base_hp : Number(baseHp);
-  const pct = finisherPct == null ? defaultConfig().trial_finisher_pct : Number(finisherPct);
+  const bonus = comboBonus == null ? defaultConfig().trial_combo_bonus : Number(comboBonus);
   const opts = trialContext({ charId: 'twins', chapter: 1, now: seasonStartMs(), inDanger: false });
   opts.baseHp = base;
-  opts.finisherPct = pct;
+  opts.comboBonus = bonus;
   return opts;
+}
+
+function targetsMet(greedy, lookahead) {
+  const gap = lookahead.median - greedy.median;
+  return greedy.median >= 55 && greedy.median <= 70 && gap >= 15 && lookahead.killRate >= 0.2 && lookahead.killRate <= 0.35;
 }
 
 async function summarizeBot(runs, opts, play) {
@@ -721,8 +813,8 @@ async function summarizeBot(runs, opts, play) {
 }
 
 /** Greedy bot over `runs` seeds. Chapter 1, plain day, flat 50 stats (the Twins). */
-export async function simulateTrialMedian(runs, baseHp, finisherPct) {
-  const opts = trialBotOpts(baseHp, finisherPct);
+export async function simulateTrialMedian(runs, baseHp, comboBonus) {
+  const opts = trialBotOpts(baseHp, comboBonus);
   const summary = await summarizeBot(runs, opts, botMoves);
   return {
     ...summary,
@@ -731,45 +823,72 @@ export async function simulateTrialMedian(runs, baseHp, finisherPct) {
     variant: 'D1',
     stats: 50,
     currentBaseHp: opts.baseHp,
-    finisherPct: opts.finisherPct,
-    bossHp: bossMaxHp(1, 'D1', opts.baseHp),
-    tooStrong: summary.median > 70 || summary.killRate > 0.35
+    comboBonus: opts.comboBonus,
+    bossHp: bossMaxHp(1, 'D1', opts.baseHp)
   };
 }
 
-export async function simulateLookahead(runs, baseHp, finisherPct) {
-  const opts = trialBotOpts(baseHp, finisherPct);
+export async function simulateLookahead(runs, baseHp, comboBonus) {
+  const opts = trialBotOpts(baseHp, comboBonus);
   const summary = await summarizeBot(runs, opts, lookaheadMoves);
-  return { ...summary, currentBaseHp: opts.baseHp, finisherPct: opts.finisherPct };
+  return { ...summary, currentBaseHp: opts.baseHp, comboBonus: opts.comboBonus };
 }
 
 /**
- * HP starts at 80 and the Finisher line at 25%.
- * Lookahead kills under 20% raise the line to 30%.
- * Lookahead kills over 35% add 5 HP. Both bots are recorded on every step.
+ * Start at Combo +3 and HP 80. If the targets miss, raise Combo to +4, then move HP by 5.
+ * Too many lookahead kills or a greedy median above 70 raises HP. Too few kills, a short
+ * gap, or a greedy median below 55 lowers it.
  */
-export async function tuneFinisher(runs) {
+export async function tuneTrialV2(runs) {
   let baseHp = 80;
-  let finisherPct = 25;
-  let raised = false;
+  let comboBonus = 3;
+  let comboRaised = false;
   const steps = [];
   let greedy;
   let lookahead;
-  for (let step = 0; step < 8; step++) {
-    const opts = trialBotOpts(baseHp, finisherPct);
+  const seen = new Set();
+  for (let step = 0; step < 12; step++) {
+    const key = comboBonus + ':' + baseHp;
+    if (seen.has(key)) break;
+    seen.add(key);
+    const opts = trialBotOpts(baseHp, comboBonus);
     greedy = await summarizeBot(runs, opts, botMoves);
     lookahead = await summarizeBot(runs, opts, lookaheadMoves);
-    steps.push({ baseHp, finisherPct, greedy, lookahead });
-    if (lookahead.killRate < 0.2 && !raised) {
-      finisherPct = 30;
-      raised = true;
+    const gap = lookahead.median - greedy.median;
+    const met = targetsMet(greedy, lookahead);
+    const row = {
+      baseHp,
+      comboBonus,
+      greedyMedian: greedy.median,
+      greedyKills: greedy.killRate,
+      lookaheadMedian: lookahead.median,
+      lookaheadKills: lookahead.killRate,
+      gap,
+      met
+    };
+    steps.push(row);
+    if (typeof process !== 'undefined' && process.stderr) {
+      process.stderr.write('trial-v2 ' + JSON.stringify(row) + '\n');
+    }
+    if (met) break;
+    if (!comboRaised) {
+      comboBonus = 4;
+      comboRaised = true;
       continue;
     }
-    if (lookahead.killRate > 0.35) {
-      baseHp += 5;
-      continue;
-    }
-    break;
+    const tooStrong = lookahead.killRate > 0.35 || greedy.median > 70;
+    const tooWeak = lookahead.killRate < 0.2 || greedy.median < 55;
+    if (tooStrong) baseHp += 5;
+    else if (tooWeak || gap < 15) baseHp -= 5;
+    if (baseHp < 40 || baseHp > 160) break;
   }
-  return { baseHp, finisherPct, greedy, lookahead, steps };
+  const last = steps[steps.length - 1];
+  return {
+    baseHp: last.baseHp,
+    comboBonus: last.comboBonus,
+    greedy,
+    lookahead,
+    met: last.met,
+    steps
+  };
 }
