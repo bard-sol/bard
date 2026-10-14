@@ -58,7 +58,7 @@ test('twelve numbered allies and the shared penalty', () => {
   assert.equal(ally('tilde').text, 'Boss\'s next attack deals 20% less (floor).');
   assert.equal(ally('grub').cost, 2);
   assert.equal(ally('grub').combo, 1);
-  assert.equal(ally('croak').deal, 7);
+  assert.equal(ally('croak').deal, 5);
   assert.equal(ally('croak').keepComboHalf, true);
   assert.equal(ally('juniper').stripGuard, 6);
   assert.equal(ally('brannoc').block, 9);
@@ -140,7 +140,7 @@ test('ally cards do what the content doc says', () => {
     [{ type: 'play', card: 0 }, { type: 'play', card: 0 }, { type: 'play', card: 0 }]
   );
   assert.equal(croak.combo, 1);
-  assert.equal(croak.dealt, 16);
+  assert.equal(croak.dealt, 14);
 
   const mira = play([jab, ally('mira')], [{ type: 'play', card: 0 }, { type: 'play', card: 0 }]);
   assert.equal(mira.dealt, 15);
@@ -159,7 +159,7 @@ test('ally cards do what the content doc says', () => {
   assert.equal(lumen.dealt, 10);
 
   const grub = play([ally('grub')], [{ type: 'play', card: 0 }]);
-  assert.equal(grub.playerBlock, 12);
+  assert.equal(grub.playerBlock, 9);
   assert.equal(grub.combo, 1);
 
   const tilde = play([ally('tilde')], [{ type: 'play', card: 0 }]);
