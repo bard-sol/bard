@@ -328,11 +328,22 @@ function playAttack(state, card) {
   if (card.lose) hurtPlayer(state, card.lose);
 }
 
+function comboThisPlay(state, card) {
+  if (!card.comboOnce) return true;
+  const id = card.id;
+  if (!id) return true;
+  if (state.comboOnce && state.comboOnce[id]) return false;
+  if (!state.comboOnce) state.comboOnce = {};
+  state.comboOnce[id] = true;
+  return true;
+}
+
 function playCard(state, card, move) {
   if (card.once && state.coinUsed) return;
-  if (card.type === 'skill') state.combo = Math.min(5, state.combo + 1);
+  const grantCombo = comboThisPlay(state, card);
+  if (card.type === 'skill' && grantCombo) state.combo = Math.min(5, state.combo + 1);
   if (card.comboIfLate && state.playedThisTurn >= 3) state.combo = Math.min(5, state.combo + card.comboIfLate);
-  if (card.combo) state.combo = Math.min(5, state.combo + card.combo);
+  if (card.combo && grantCombo) state.combo = Math.min(5, state.combo + card.combo);
   if (card.copy) {
     if (state.lastCard && state.lastCard.id !== 'forged') playCard(state, state.lastCard, { keep: 0 });
     return;
@@ -351,7 +362,7 @@ function playCard(state, card, move) {
   if (card.next) state.nextAttack += scaledValue(card.next, state.stats[card.stat]);
   if (card.draw) {
     const drawn = drawCards(state, card.draw);
-    if (card.comboIfDrawnAttack && drawn.some((pulled) => pulled.type === 'attack')) {
+    if (grantCombo && card.comboIfDrawnAttack && drawn.some((pulled) => pulled.type === 'attack')) {
       state.combo = Math.min(5, state.combo + card.comboIfDrawnAttack);
     }
   }
@@ -448,6 +459,7 @@ function endTurn(state) {
   state.energyNext = 0;
   state.playedThisTurn = 0;
   state.attacksThisTurn = 0;
+  state.comboOnce = {};
   state.skilledThisTurn = false;
   state.blockedThisTurn = false;
   state.coinUsed = false;
@@ -524,6 +536,7 @@ function createState(seedHex, opts) {
     blockHalvedNext: false,
     playedThisTurn: 0,
     attacksThisTurn: 0,
+    comboOnce: {},
     skilledThisTurn: false,
     blockedThisTurn: false,
     coinUsed: false,
