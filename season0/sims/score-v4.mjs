@@ -1,12 +1,11 @@
 /**
- * Season 0 score sim, rule set v2 (delta §10). Does not modify game code.
+ * Season 0 score sim, rule set v3. Does not modify game code.
  *
  * Run: node season0/sims/score-v4.mjs
- * Optional: SEASONS=1000 LN=25 node season0/sims/score-v4.mjs
- * Sweep: ONLY=clean LN=25 node season0/sims/score-v4.mjs
+ * Sweep: ONLY=clean CLAMP=30 B=20 SEASONS=1000 node season0/sims/score-v4.mjs
  *
- * raise_loyalty_pays stays false. The same seasons are also scored with the
- * flag true. The flag does not change Health.
+ * The attached delta ends at §10.8. The v3 rules below are the ones in the
+ * task. raise_loyalty_pays stays false and does not change Health.
  */
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 
@@ -25,20 +24,24 @@ const IDS = HOUSES.map((row) => row[0]);
 const NAME = Object.fromEntries(HOUSES);
 const INDEX = Object.fromEntries(IDS.map((id, index) => [id, index]));
 
-const LN = Number(process.env.LN || 25);
+const CLAMP = Number(process.env.CLAMP || 30);
+const B = Number(process.env.B || 30);
 const DUEL = loadDuelRates();
 
 const ASSUMPTIONS = [
   'House faces are the eight cast ids, mapped as in brief-v4-fit: Pit/Grenna, Scriptorium/Silas, Gilt/Marrow, Tidewrack/Pip, Candle/Wick, Standard/Vey, Torn Margin/Thorn, Fold/Ash & Ember.',
-  'Stake curve (§10): base = max(10, 100 + ' + LN + '·ln(TWL / median TWL)). Median is over living Houses. This run uses ln coefficient ' + LN + '.',
-  'People share is the spread (§10): move_value is set so std(move_value × net) = (w/(1−w)) · std(base). w is 0.30 in ch1–5, 0.40 in ch6, 0.50 in ch7. Twists 6 and 7 still move w by 10 points. std is the population standard deviation (divide by n).',
-  'Anti-pile-on (§10): on each Tally, incoming hit weight above 2× the living-House mean counts at half. The amount up to 2× counts in full. Twist hit multipliers apply first. Armor and the Crown multiplier apply to the softened weight. Twist 10 softens each half on its own.',
+  'Stake base is frozen at chapter open: clamp(100 + 25·ln(TWL / median TWL), 100 − ' + CLAMP + ', 100 + ' + CLAMP + '). This run uses clamp ±' + CLAMP + '. The ln slope stays 25. Tallies do not recompute base.',
+  'The std people-share rule is dropped. Health = base + net. Net is accumulated move weight for the chapter.',
+  'Every living House has the same daily budget B = ' + B + '. Cast weight = B × participation × duel multiplier × the Twist 6/7 budget factor. Participation = capped raw weight / full-attendance weight at 3 moves. Shop, Fortune, and Twist 11\'s fourth move change that rate. Headcount does not.',
+  'The Duel adds at most +10% to the multiplier. Quality is bonus points earned yesterday divided by 2 per duelist, capped at 1. A kill still adds nothing beyond the damage bars.',
+  'Twists 6 and 7 scale the budget by the old people-share odds ratio: (w′/(1−w′)) / (w/(1−w)), with w′ = w ± 0.10.',
+  'Anti-pile-on: incoming hit weight above the cap counts at half. The amount under the cap counts in full. The cap is 2× the living-House mean in chapters 1–5 and 1.5× in chapters 6–7. Twist hit multipliers apply first. Armor and the Crown apply to the softened weight. Twist 10 softens each half on its own.',
   'Revival is once per season, total (§10.7). A later pour can still fill a bar for A1. From ch5 there is no revival, and the death penalty is charged immediately. Ch6 and ch7 eliminations are the podium and pay nothing.',
   'Oath ×1.5 multiplies the pot stake share only. It does not multiply TWL or Health.',
   'Unverified weight is §9, which replaces §3: min(1, stake / m), one weight per cluster. m is the median verified stake in living Houses, frozen at chapter open.',
   'Unverified clusters are collapsed at generation: one weight from the combined stake, not one weight per sybil.',
   'Population is the same invention as the v4 run. House size is lognormal (σ 0.50). A typical house has about 42 verified stakers (median stake 100, σ 0.65), 28 unverified (median stake 35, σ 0.85, 18% of them a 3–8 wallet cluster), and 36 free Readers.',
-  '35% of verified stakers take the Oath. 35% play the Duel at lookahead skill, 65% greedy, and 80% of stakers attempt it. Bonus moves arrive the next morning, including across the chapter boundary, at the thresholds of the chapter in which the Duel was played.',
+  '35% of verified stakers take the Oath. 35% play the Duel at lookahead skill, 65% greedy, and 80% of stakers attempt it. The Duel multiplier is earned the day it is played and applied the next morning, including across the chapter boundary, at that chapter\'s thresholds.',
   'Shop extras: 22% of stakers buy one, 6% buy two. Weight equals a normal move. Readers do not shop.',
   'Fortune is one draw a morning, equal thirds: +1 move, Spyglass, or Doodle/fragment. The +1 weighs the same as that wallet\'s move. Spyglass retargets 10% of hit weight onto the current lowest rival (invented). Twist 9 sets that to 0. Doodles and fragments add 0.',
   'Heal split, invented and unchanged: verified 62% of layer weight heals, unverified 48%, Readers 82%, ±8 points. The rest hits. Ghosts only hit.',
@@ -50,7 +53,7 @@ const ASSUMPTIONS = [
   'raise_loyalty_pays stays false (§10.8). Pot Loyalty is then raw heal weight. The true-flag comparison still stacks day-3 shortlist heals at 1.5× and a surviving raiser at 2× or 4×. Health does not use either flag.',
   'Inside a finishing House the pot is 70% stake-time (Oath ×1.5) and 30% Loyalty, verified humans only, then capped at 2% per wallet with the surplus shared by the uncapped wallets.',
   'Re-pledge, invented and unchanged: 18% of a dead House\'s verified and 10% of its unverified move to a random living House at the next chapter open, after the penalty, with time restarted and the Oath cleared. 25% of its Readers follow. This is not Armor.',
-  'Ghost retention, invented and unchanged: 72% of verified wallets who did not re-pledge keep hitting, verified only. A6\'s denominator is that House\'s verified wallets at the snapshot, before re-pledge, and the bar is 60%.',
+  'Ghost retention, invented and unchanged: 72% of verified wallets who did not re-pledge keep hitting, verified only. Their hit weight is B × (ghosts / verified at death) × 0.5 × (1 + 1/3), so a large dead House does not out-hit a small one. A6\'s denominator is that House\'s verified wallets at the snapshot, before re-pledge, and the bar is 60%.',
   'TWL uses chapter-open locks at weight 1. Fresh locks weigh the fraction of the chapter still ahead (day 1: 5/6, day 2: 1/2, day 3: 1/6). Move weight uses chapter-open stake, frozen with m.',
   'Even-count medians are the mean of the two central values. A Health tie breaks to the lower TWL, then the lower cast id.',
   'The Twist deck deals 7 distinct Twists per season. The forced-Twist study turns one Twist on for every chapter.',
@@ -64,17 +67,18 @@ const ASSUMPTIONS = [
 ];
 
 const AMBIGUITIES = [
-  'Anti-pile-on says hits above 2× the mean count at half. This sim halves only the excess above 2× and leaves the rest at full weight. Halving the whole pile would be a different rule.',
-  'A5\'s line says "in one turn." This sim sums, across the chapter, effective hits and heals on each morning\'s Crown (the Crown those moves actually landed on). A chapter fires when that sum of hits is greater than that sum of heals.',
-  '§10.7 says the snapshot window always opens after the day-3 Tally, and also sets Twist 8 to +56h through +66h. The day-3 Tally is +59h, so the first three hours of that window are before the Tally. This sim includes day-3 moves only when the drawn hour is at least 59.',
-  'The Duel engine still scales D3 to 0.9 and still gives D2 a starting guard of 10. Fitted HP is the D1/D2 maximum. D3 is about 90% of that. Neither was removed from the engine.',
-  'm is a stake balance, while §9\'s numerator is stake_tw24h. Full-day locks use the stake balance as the 24h weight.',
-  'Whether unverified stakes pay the death penalty is not stated. This sim charges them 40%. Oath 25% is verified-only.',
-  'The 2% pot cap does not say where the surplus goes. It is shared by the uncapped verified wallets in that House.',
-  'Readers drawing Fortune\'s +1 move still have weight 0.5, and the Reader cap still applies.',
-  'Twist 10 has no numeric effect in the delta. This sim retargets the afternoon half after a midday Tally, and softens each half on its own.',
-  'Twist 11 does not give Readers a fourth move.',
-  'The Crown on the first morning of the season has no previous Tally, so that morning has no Crown.'
+  'The attached s0-house-delta ends at §10.8. It does not contain §11 or §11.6. The v3 bullets in the task are applied. The earlier open readings stay locked as the rules below, rather than being re-guessed.',
+  'Anti-pile-on halves only the excess above the cap. Chapters 1–5 use 2× the mean. Chapters 6–7 use 1.5×.',
+  'A5 stays the chapter sum of effective hits and heals on each morning\'s Crown. The annotation line says "one turn."',
+  'Twist 8 is still drawn from +56h to +66h. The day-3 Tally is +59h, so day-3 moves count only when the drawn hour is at least 59. §10.7 also says the window always opens after that Tally.',
+  'The Duel HP fit is unchanged. D3 stays on the engine\'s 0.9 scale. D2 still starts with 10 guard.',
+  'm is the stake balance. Full-day locks use that balance as the 24h weight.',
+  'Unverified stakes pay the 40% death penalty. Oath 25% is verified only.',
+  'The 2% pot surplus is shared by the uncapped verified wallets.',
+  'A Reader\'s Fortune +1 weighs 0.5 and sits inside the Reader cap.',
+  'Twist 10 retargets the afternoon half after the midday Tally. Each half is softened alone.',
+  'Twist 11 gives stakers a fourth move, which raises participation against a 3-move denominator. Readers stay at one move.',
+  'The first morning has no Crown.'
 ];
 
 function loadDuelRates() {
@@ -214,6 +218,12 @@ function peopleShare(chapter, twist) {
   return w;
 }
 
+function peopleBudgetMul(chapter, twist) {
+  const base = chapter <= 5 ? 0.3 : chapter === 6 ? 0.4 : 0.5;
+  const w = clamp(peopleShare(chapter, twist), 0.05, 0.95);
+  return (w / (1 - w)) / (base / (1 - base));
+}
+
 function duelBonusCount(n, reach, kill, seed, tag) {
   if (n <= 0) return 0;
   const plus2 = sampleCount(n, kill, seed, tag, 1, 1);
@@ -296,8 +306,8 @@ function bases(houses, living) {
   const base = {};
   for (const id of living) {
     const stake = twl[id];
-    if (!(mid > 0) || !(stake > 0)) base[id] = 10;
-    else base[id] = Math.max(10, 100 + LN * Math.log(stake / mid));
+    if (!(mid > 0) || !(stake > 0)) base[id] = 100 - CLAMP;
+    else base[id] = clamp(100 + 25 * Math.log(stake / mid), 100 - CLAMP, 100 + CLAMP);
   }
   return { twl, base };
 }
@@ -378,29 +388,22 @@ function stdev(values) {
   return Math.sqrt(acc / n);
 }
 
-function healthOf(living, base, net, w) {
+function healthOf(living, base, net) {
   const baseValues = living.map((id) => base[id]);
   const netValues = living.map((id) => net[id]);
   const stdBase = stdev(baseValues);
-  const stdNet = stdev(netValues);
-  const moveValue = stdNet > 0 ? ((w / (1 - w)) * stdBase) / stdNet : 0;
+  const stdPeople = stdev(netValues);
   const health = {};
-  const people = [];
-  for (const id of living) {
-    const share = moveValue * net[id];
-    health[id] = base[id] + share;
-    people.push(share);
-  }
-  const stdPeople = stdev(people);
+  for (const id of living) health[id] = base[id] + net[id];
   const sumBase = baseValues.reduce((sum, value) => sum + value, 0);
+  const sumAbs = netValues.reduce((sum, value) => sum + Math.abs(value), 0);
   return {
     health,
-    moveValue,
     sumBase,
     stdBase,
     stdPeople,
     realized: stdPeople + stdBase > 0 ? stdPeople / (stdPeople + stdBase) : 0,
-    w
+    mass: sumBase + sumAbs > 0 ? sumAbs / (sumBase + sumAbs) : 0
   };
 }
 
@@ -457,8 +460,8 @@ function runSeason(seed, pristine, opts) {
   let owed = false;
   let revivalUsed = false;
   let crown = null;
-  let carryBonus = {};
-  for (const id of IDS) carryBonus[id] = { verified: 0, unverified: 0 };
+  let carryQuality = {};
+  for (const id of IDS) carryQuality[id] = 0;
   const ghosts = [];
   const pending = [];
   const people = [];
@@ -484,6 +487,8 @@ function runSeason(seed, pristine, opts) {
   let sybilExtra = 0;
   let sybilN = 0;
   let tallies = 0;
+  let partSum = 0;
+  let partN = 0;
   let baseFloor = 0;
   let baseSamples = 0;
   let deathN = 0;
@@ -518,6 +523,7 @@ function runSeason(seed, pristine, opts) {
       for (const wallet of houses[id].unverified) wallet.twl = 1;
     }
     const opened = bases(houses, living);
+    const chapterBase = opened.base;
     if (chapter === 1) {
       const ranked = living.slice().sort((a, b) => opened.twl[b] - opened.twl[a] || INDEX[a] - INDEX[b]);
       stakeLeader = ranked[0];
@@ -535,7 +541,7 @@ function runSeason(seed, pristine, opts) {
     const grossHit = emptyMap(living);
     const effectiveHit = emptyMap(living);
     let shortlist = [];
-    let dayScores = { ...opened.base };
+    let dayScores = { ...chapterBase };
     let dayTwl = opened.twl;
     const raiseFrac = clamp(0.1 + 0.16 * rand(seed, chapter, 30, 0, 0), 0, 0.6);
     let chapterHeal = emptyMap(living);
@@ -554,14 +560,14 @@ function runSeason(seed, pristine, opts) {
     for (let day = 0; day < 3; day++) {
       const played = day < days;
       if (!played) {
-        carryBonus = {};
-        for (const id of living) carryBonus[id] = { verified: 0, unverified: 0 };
+        carryQuality = {};
+        for (const id of living) carryQuality[id] = 0;
         continue;
       }
       const armor = {};
-      const verifiedLayer = {};
-      const readerLayer = {};
-      const unverifiedLayer = {};
+      const castOf = {};
+      const healShareOf = {};
+      const verifiedHealShare = {};
       for (const id of living) {
         const house = houses[id];
         const built = armorDay(house, seed, chapter, day, twist);
@@ -573,35 +579,52 @@ function runSeason(seed, pristine, opts) {
         const shop = sampleCount(house.verified.length, 0.22, seed, chapter * 10 + day, INDEX[id], 41)
           + 2 * sampleCount(house.verified.length, 0.06, seed, chapter * 10 + day, INDEX[id], 42);
         const fortune = sampleCount(house.verified.length, 1 / 3, seed, chapter * 10 + day, INDEX[id], 43);
-        const bonus = carryBonus[id].verified;
-        verifiedLayer[id] = house.verified.length * moves + shop + fortune + bonus;
+        const vRaw = house.verified.length * moves + shop + fortune;
+        const vPossible = house.verified.length * 3;
         const u = unverifiedWeight(house, m);
         const per = house.unverified.length ? u.weight / house.unverified.length : 0;
         const uFortune = house.unverified.length ? sampleCount(house.unverified.length, 1 / 3, seed, chapter * 10 + day, INDEX[id], 44) : 0;
         const uShop = sampleCount(house.unverified.length, 0.22, seed, chapter * 10 + day, INDEX[id], 45)
           + 2 * sampleCount(house.unverified.length, 0.06, seed, chapter * 10 + day, INDEX[id], 46);
-        unverifiedLayer[id] = u.weight * moves + per * uShop + per * uFortune + carryBonus[id].unverified;
+        let uRaw = u.weight * moves + per * uShop + per * uFortune;
+        const uPossible = u.weight * 3;
         sybilExtra += Math.max(0, u.sybil - u.weight);
         sybilN += 1;
         const rFortune = sampleCount(house.readers, 1 / 3, seed, chapter * 10 + day, INDEX[id], 47);
-        readerLayer[id] = house.readers * 0.5 + rFortune * 0.5;
-        const capU = 0.5 * verifiedLayer[id];
-        const capR = 0.25 * verifiedLayer[id];
-        if (unverifiedLayer[id] > capU) {
-          unverifiedLayer[id] = capU;
+        let rRaw = house.readers * 0.5 + rFortune * 0.5;
+        const rPossible = house.readers * 0.5;
+        const capU = 0.5 * vRaw;
+        const capR = 0.25 * vRaw;
+        if (uRaw > capU) {
+          uRaw = capU;
           unverifiedCap += 1;
         }
-        if (readerLayer[id] > capR) {
-          readerLayer[id] = capR;
+        if (rRaw > capR) {
+          rRaw = capR;
           readerCap += 1;
         }
         tallies += 1;
         const drawN = house.verified.length + house.unverified.length + house.readers;
         if (firstOpen == null || chapter <= firstOpen) doodles += drawN;
         else fragments += drawN;
+        const possible = vPossible + uPossible + rPossible;
+        const raw = vRaw + uRaw + rRaw;
+        const participation = possible > 0 ? raw / possible : 0;
+        partSum += participation;
+        partN += 1;
+        const duelMult = 1 + 0.10 * (carryQuality[id] || 0);
+        castOf[id] = B * participation * duelMult * peopleBudgetMul(chapter, twist);
+        const vFrac = clamp(0.62 + (rand(seed, chapter, day, INDEX[id], 51) - 0.5) * 0.16, 0.05, 0.95);
+        const uFrac = clamp(0.48 + (rand(seed, chapter, day, INDEX[id], 52) - 0.5) * 0.16, 0.05, 0.95);
+        const rFrac = clamp(0.82 + (rand(seed, chapter, day, INDEX[id], 53) - 0.5) * 0.16, 0.05, 0.95);
+        const healRaw = vRaw * vFrac + uRaw * uFrac + rRaw * rFrac;
+        const hitRaw = vRaw * (1 - vFrac) + uRaw * (1 - uFrac) + rRaw * (1 - rFrac);
+        const mix = healRaw + hitRaw;
+        healShareOf[id] = mix > 0 ? healRaw / mix : 0;
+        verifiedHealShare[id] = mix > 0 ? (vRaw * vFrac) / mix : 0;
       }
-      carryBonus = {};
-      for (const id of living) carryBonus[id] = { verified: 0, unverified: 0 };
+      carryQuality = {};
+      for (const id of living) carryQuality[id] = 0;
       for (const id of living) {
         const house = houses[id];
         let lookN = 0;
@@ -611,13 +634,15 @@ function runSeason(seed, pristine, opts) {
           else if (wallet.duel === 'greedy') greedyN += 1;
         }
         const bars = duelBars(chapter, twist);
-        carryBonus[id].verified = duelBonusCount(lookN, bars.lookReach, bars.lookPlus2, seed, chapter * 20 + day * 3 + INDEX[id])
-          + duelBonusCount(greedyN, bars.greedyReach, bars.greedyPlus2, seed, chapter * 20 + day * 3 + INDEX[id] + 80);
-        const per = house.unverified.length ? unverifiedWeight(house, m).weight / house.unverified.length : 0;
         const attempts = Math.round(house.unverified.length * 0.8);
         const blendedReach = 0.35 * bars.lookReach + 0.65 * bars.greedyReach;
         const blendedPlus2 = 0.35 * bars.lookPlus2 + 0.65 * bars.greedyPlus2;
-        carryBonus[id].unverified = per * duelBonusCount(attempts, blendedReach, blendedPlus2, seed, chapter * 20 + day * 3 + INDEX[id] + 90);
+        const tag = chapter * 20 + day * 3 + INDEX[id];
+        const earned = duelBonusCount(lookN, bars.lookReach, bars.lookPlus2, seed, tag)
+          + duelBonusCount(greedyN, bars.greedyReach, bars.greedyPlus2, seed, tag + 80)
+          + duelBonusCount(attempts, blendedReach, blendedPlus2, seed, tag + 90);
+        const duelists = lookN + greedyN + attempts;
+        carryQuality[id] = duelists > 0 ? clamp(earned / (2 * duelists), 0, 1) : 0;
       }
 
       const wave = (frac, scores) => {
@@ -625,25 +650,21 @@ function runSeason(seed, pristine, opts) {
         const heals = emptyMap(living);
         const peek = twist === 9 ? 0 : 0.1;
         for (const id of living) {
-          const house = houses[id];
-          const vFrac = clamp(0.62 + (rand(seed, chapter, day, INDEX[id], 51) - 0.5) * 0.16, 0.05, 0.95);
-          const uFrac = clamp(0.48 + (rand(seed, chapter, day, INDEX[id], 52) - 0.5) * 0.16, 0.05, 0.95);
-          const rFrac = clamp(0.82 + (rand(seed, chapter, day, INDEX[id], 53) - 0.5) * 0.16, 0.05, 0.95);
-          const vHit = verifiedLayer[id] * (1 - vFrac) * frac;
-          const uHit = unverifiedLayer[id] * (1 - uFrac) * frac;
-          const rHit = readerLayer[id] * (1 - rFrac) * frac;
-          heals[id] += (verifiedLayer[id] * vFrac + unverifiedLayer[id] * uFrac + readerLayer[id] * rFrac) * frac;
-          if (day === 2 && shortlist.includes(id)) chapterShort[id] += verifiedLayer[id] * vFrac * frac;
-          chapterHeal[id] += verifiedLayer[id] * vFrac * frac;
+          const heal = castOf[id] * healShareOf[id] * frac;
+          const hit = castOf[id] * (1 - healShareOf[id]) * frac;
+          heals[id] += heal;
+          if (day === 2 && shortlist.includes(id)) chapterShort[id] += castOf[id] * verifiedHealShare[id] * frac;
+          chapterHeal[id] += castOf[id] * verifiedHealShare[id] * frac;
           const pileTarget = chapterPile && chapterPile.attacker === id ? chapterPile.target : null;
           if (pileTarget && living.includes(pileTarget) && pileTarget !== id) {
-            incoming[pileTarget] += vHit + uHit + rHit;
+            incoming[pileTarget] += hit;
           } else {
-            pour(incoming, vHit + uHit + rHit, id, living, scores, dayTwl, crown, peek);
+            pour(incoming, hit, id, living, scores, dayTwl, crown, peek);
           }
         }
         for (const ghost of ghosts) {
-          const hits = ghost.ghostActive * 0.5 * (1 + 1 / 3) * frac;
+          const rate = ghost.verifiedN > 0 ? ghost.ghostActive / ghost.verifiedN : 0;
+          const hits = B * rate * 0.5 * (1 + 1 / 3) * peopleBudgetMul(chapter, twist) * frac;
           pour(incoming, hits, null, living, scores, dayTwl, crown, peek);
         }
         return { incoming, heals };
@@ -651,20 +672,20 @@ function runSeason(seed, pristine, opts) {
 
       if (played) {
         const land = (piece) => {
-          const landed = applyWave(piece, armor, twist, living, crown, grossHeal, grossHit, effectiveHit);
+          const landed = applyWave(piece, armor, twist, living, crown, grossHeal, grossHit, effectiveHit, chapter);
           crownWound += landed.crownHit;
           crownMend += landed.crownHeal;
         };
         if (twist === 10) {
           land(wave(0.5, dayScores));
-          const mid = tally(living, houses, grossHeal, grossHit, effectiveHit, peopleShare(chapter, twist));
+          const mid = tally(living, houses, grossHeal, effectiveHit, chapterBase);
           dayScores = mid.health;
           dayTwl = mid.twl;
           land(wave(0.5, dayScores));
         } else {
           land(wave(1, dayScores));
         }
-        const tallied = tally(living, houses, grossHeal, grossHit, effectiveHit, peopleShare(chapter, twist));
+        const tallied = tally(living, houses, grossHeal, effectiveHit, chapterBase);
         dayScores = tallied.health;
         dayTwl = tallied.twl;
         if (day === 1) {
@@ -674,19 +695,20 @@ function runSeason(seed, pristine, opts) {
       }
     }
 
-    const snapshot = tally(living, houses, grossHeal, grossHit, effectiveHit, peopleShare(chapter, twist));
+    const snapshot = tally(living, houses, grossHeal, effectiveHit, chapterBase);
     for (const id of living) {
       baseSamples += 1;
-      if (snapshot.base[id] <= 10 + 1e-9) baseFloor += 1;
+      const rail = Math.min(Math.abs(snapshot.base[id] - (100 - CLAMP)), Math.abs(snapshot.base[id] - (100 + CLAMP)));
+      if (rail <= 1e-6) baseFloor += 1;
     }
     people.push({
       chapter,
       twist,
-      w: snapshot.w,
+      w: peopleShare(chapter, twist),
       realized: snapshot.realized,
+      mass: snapshot.mass,
       stdBase: snapshot.stdBase,
       stdPeople: snapshot.stdPeople,
-      moveValue: snapshot.moveValue,
       sumBase: snapshot.sumBase,
       crownWounded: crownWound > crownMend
     });
@@ -838,6 +860,7 @@ function runSeason(seed, pristine, opts) {
     whaleCut,
     armorMean: armorN ? armorSum / armorN : 0,
     baseFloor: baseSamples ? baseFloor / baseSamples : 0,
+    meanParticipation: partN ? partSum / partN : 0,
     deathN,
     deathLowest,
     deathSecond,
@@ -863,17 +886,18 @@ function applyPenalty(house) {
   for (const wallet of house.unverified) wallet.stake *= 0.6;
 }
 
-function tally(living, houses, grossHeal, grossHit, effectiveHit, w) {
-  const { twl, base } = bases(houses, living);
+function tally(living, houses, grossHeal, effectiveHit, baseFrozen) {
+  const twl = {};
+  for (const id of living) twl[id] = houseTWL(houses[id]);
   const net = {};
   for (const id of living) net[id] = grossHeal[id] - effectiveHit[id];
-  const scored = healthOf(living, base, net, w);
-  return { ...scored, twl, base };
+  const scored = healthOf(living, baseFrozen, net);
+  return { ...scored, twl, base: baseFrozen };
 }
 
-function softenHits(incoming, living) {
+function softenHits(incoming, living, chapter) {
   const meanHit = living.reduce((sum, id) => sum + (incoming[id] || 0), 0) / living.length;
-  const cap = 2 * meanHit;
+  const cap = (chapter >= 6 ? 1.5 : 2) * meanHit;
   const out = {};
   for (const id of living) {
     const hit = incoming[id] || 0;
@@ -882,12 +906,12 @@ function softenHits(incoming, living) {
   return out;
 }
 
-function applyWave(wave, armor, twist, living, crown, grossHeal, grossHit, effectiveHit) {
+function applyWave(wave, armor, twist, living, crown, grossHeal, grossHit, effectiveHit, chapter) {
   const healMul = twist === 2 ? 1.25 : 1;
   const hitMul = twist === 1 ? 1.25 : 1;
   const scaled = {};
   for (const id of living) scaled[id] = (wave.incoming[id] || 0) * hitMul;
-  const soft = softenHits(scaled, living);
+  const soft = softenHits(scaled, living, chapter);
   let crownHit = 0;
   let crownHeal = 0;
   for (const id of living) {
@@ -956,8 +980,8 @@ function summarizePeople(rows) {
       n: list.length,
       w: mean(list.map((point) => point.w)),
       realized: mean(list.map((point) => point.realized)),
-      stdRatio: mean(list.map((point) => point.stdBase > 0 ? point.stdPeople / point.stdBase : 0)),
-      within5pp: rate(list.map((point) => Math.abs(point.realized - point.w) <= 0.05))
+      mass: mean(list.map((point) => point.mass)),
+      stdRatio: mean(list.map((point) => point.stdBase > 0 ? point.stdPeople / point.stdBase : 0))
     };
   }
   return out;
@@ -1162,22 +1186,25 @@ function main() {
   if (process.env.ONLY === 'clean' || process.env.ONLY === 'deck' || process.env.ONLY === 'both') {
     const worlds = [];
     for (let i = 0; i < SEASONS; i++) worlds.push(buildWorld(i + 1));
-    const out = { ln: LN, seasons: SEASONS };
+    const out = { seasons: SEASONS };
     if (process.env.ONLY !== 'deck') {
       const clean = worlds.map((world, index) => runSeason(index + 1, world, { twistMode: 'none' }));
       const deaths = deathTable(clean);
       const people = summarizePeople(clean);
       out.clean = goalLine(deaths);
       out.baseFloor = mean(clean.map((season) => season.baseFloor));
+      out.participation = mean(clean.map((season) => season.meanParticipation));
       out.people = Object.fromEntries(Object.entries(people).map(([chapter, row]) => [chapter, {
-        w: row.w,
-        realized: row.realized
+        realized: Number(row.realized.toFixed(4)),
+        mass: Number(row.mass.toFixed(4))
       }]));
     }
     if (process.env.ONLY !== 'clean') {
       const deck = worlds.map((world, index) => runSeason(index + 1, world, { twistMode: 'deck' }));
       out.deck = goalLine(deathTable(deck));
     }
+    out.clamp = CLAMP;
+    out.B = B;
     console.log(JSON.stringify(out));
     return;
   }
@@ -1200,8 +1227,9 @@ function main() {
   console.log('pile', Math.round((Date.now() - started) / 1000) + 's');
 
   const report = {
-    ruleSet: 'v2',
-    lnCoefficient: LN,
+    ruleSet: 'v3',
+    clamp: CLAMP,
+    budgetB: B,
     seasons: SEASONS,
     seconds: Math.round((Date.now() - started) / 1000),
     raise_loyalty_pays_default: false,
@@ -1209,14 +1237,11 @@ function main() {
       clean: goalLine(deathTable(clean)),
       twistDeck: goalLine(deathTable(deck))
     },
-    lnSweep: {
-      landed: LN,
-      range: [15, 40],
-      cleanLeaderWins: { 15: 0.919, 20: 0.92, 25: 0.92, 30: 0.918, 35: 0.92, 40: 0.917 },
-      cleanLeaderTop3: 1,
-      cleanLowestChampion: 0,
-      baseFloor: 0,
-      note: 'Inside 15–40 the floor of 10 never binds, and move_value scales with std(base), so the coefficient does not move the champion checks. A few seasons differ by floating point. 25 is the specified coefficient.'
+    tune: {
+      clamp: CLAMP,
+      B,
+      clampRange: [15, 50],
+      note: 'No pair in the sweep passes. Leader-champion stays about 84–92% and the lowest-stake House stays at 0%. Clamp ±30 is the stated value. B is 30, the same width as that clamp, because raising B into the thousands does not reach the bars. At clamp 0 the leader still wins 84%, so the lock is the lower-TWL tie-break plus hits on the lowest Health, not the size of the stake gap.'
     },
     duelRates: DUEL,
     peopleClean: summarizePeople(clean),
@@ -1235,7 +1260,8 @@ function main() {
       armorWhaleCutShare: mean(deck.map((season) => season.tallies ? season.whaleCut / season.tallies : 0)),
       meanArmor: mean(deck.map((season) => season.armorMean)),
       sybilWeightAvoided: mean(deck.map((season) => season.sybil)),
-      baseFloorShare: mean(deck.map((season) => season.baseFloor))
+      baseFloorShare: mean(deck.map((season) => season.baseFloor)),
+      meanParticipation: mean(deck.map((season) => season.meanParticipation))
     },
     assumptions: ASSUMPTIONS,
     ambiguities: AMBIGUITIES
@@ -1250,13 +1276,13 @@ function pct(value) {
 }
 
 function printReport(report) {
-  console.log('\nln coefficient', report.lnCoefficient);
+  console.log('\nclamp', report.clamp, 'B', report.budgetB);
   console.log('goals clean', JSON.stringify(report.goals.clean));
   console.log('goals deck', JSON.stringify(report.goals.twistDeck));
-  console.log('\nPeople share, no Twist (std(moves) / (std(moves) + std(base)))');
+  console.log('\nPeople share, no Twist (std(net) / (std(net) + std(base)))');
   for (let chapter = 1; chapter <= 7; chapter++) {
     const row = report.peopleClean[chapter];
-    console.log('ch' + chapter, 'w', pct(row.w), 'realized', pct(row.realized), 'std ratio', row.stdRatio.toFixed(3), 'within 5pp', pct(row.within5pp));
+    console.log('ch' + chapter, 'spread', pct(row.realized), 'mass', pct(row.mass), 'std ratio', row.stdRatio.toFixed(3));
   }
   console.log('\nDeaths, twist deck');
   for (const id of IDS) {
