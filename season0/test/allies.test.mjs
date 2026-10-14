@@ -31,7 +31,21 @@ test('twelve numbered allies and the shared penalty', () => {
   assert.equal(ALLY_POOL.length, 12);
   assert.deepEqual(ALLY_POOL.map((row) => row.number), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
   assert.deepEqual(SIM_ALLIES, ['hob', 'wren']);
-  assert.equal(ALLY_POOL.every((row) => row.entity_type === 'ally' && row.placeholder), true);
+  assert.equal(ALLY_POOL.every((row) => row.entity_type === 'ally' && !row.placeholder && row.art.endsWith('.webp')), true);
+  assert.deepEqual(ALLY_POOL.map((row) => row.name), [
+    'Hob the Bookbinder',
+    'Sister Wren',
+    'Juniper the fox',
+    'Sir Footnote',
+    'Old Mother Index',
+    'Baron Croak',
+    'Mira the Cartographer',
+    'Brannoc the Ferryman',
+    'Lumen, the Moth Queen',
+    'Grub the troll',
+    'Tilde the hedge-witch',
+    'Corvin the raven'
+  ]);
   assert.equal(ally('hob').text, 'Gain 6 block; keep 3 next turn.');
   assert.equal(ally('wren').text, '+1 Combo. Draw 1.');
   assert.equal(ally('corvin').dealDuringFinisher, 6);

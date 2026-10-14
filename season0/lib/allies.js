@@ -12,16 +12,16 @@ const PENALTY_NUMBERS = ['deal', 'block', 'next', 'hex', 'rally', 'bossCut', 'bo
 const FIGURES = [
   { number: 1, entity_id: 'hob', name: 'Hob the Bookbinder', blurb: 'Stitches a torn page and leaves the thread for tomorrow.', glyph: 'H', color: '#c4a574', card: { cost: 1, type: 'block', stat: 'CHA', block: 6, keepBlock: 3, emoji: '🧵', text: 'Gain 6 block; keep 3 next turn.' } },
   { number: 2, entity_id: 'wren', name: 'Sister Wren', blurb: 'Holds a lamp over the next line.', glyph: 'W', color: '#f2c14e', card: { cost: 1, type: 'skill', stat: 'CUN', draw: 1, emoji: '🕯️', text: '+1 Combo. Draw 1.' } },
-  { number: 3, entity_id: 'juniper', name: 'Juniper', blurb: 'Opens the lock the boss set on the margin.', glyph: 'J', color: '#19b88a', card: { cost: 0, type: 'skill', stat: 'CUN', stripGuard: 4, setup: true, emoji: '🔑', text: '+1 Combo. Boss loses 4 guard.' } },
+  { number: 3, entity_id: 'juniper', name: 'Juniper the fox', blurb: 'Opens the lock the boss set on the margin.', glyph: 'J', color: '#19b88a', card: { cost: 0, type: 'skill', stat: 'CUN', stripGuard: 4, setup: true, emoji: '🔑', text: '+1 Combo. Boss loses 4 guard.' } },
   { number: 4, entity_id: 'footnote', name: 'Sir Footnote', blurb: 'A small knight who hits harder once the boss stumbles.', glyph: 'F', color: '#56b4e9', card: { cost: 1, type: 'attack', stat: 'STR', deal: 5, dealIfStaggered: 6, emoji: '📌', text: 'Deal 5; deal 6 if boss Staggered.' } },
   { number: 5, entity_id: 'index', name: 'Old Mother Index', blurb: 'Finds the next line and leaves it in hand.', glyph: 'O', color: '#8d6b4a', card: { cost: 1, type: 'skill', stat: 'CUN', draw: 1, emoji: '📖', text: 'Draw 1.' } },
   { number: 6, entity_id: 'croak', name: 'Baron Croak', blurb: 'Leaps and leaves the combo where it was.', glyph: 'B', color: '#6aa84f', card: { cost: 2, type: 'attack', stat: 'STR', deal: 1, keepCombo: true, emoji: '🐸', text: 'Deal 1; Combo is not consumed.' } },
   { number: 7, entity_id: 'mira', name: 'Mira the Cartographer', blurb: 'Marks the spot the next blow should land.', glyph: 'M', color: '#7d6bff', card: { cost: 1, type: 'skill', stat: 'CUN', next: 4, emoji: '🗺️', text: 'Next attack this turn deals +4.' } },
   { number: 8, entity_id: 'brannoc', name: 'Brannoc the Ferryman', blurb: 'Takes the toll in block.', glyph: 'R', color: '#4a6fa5', card: { cost: 2, type: 'block', stat: 'CHA', block: 10, emoji: '⛴️', text: 'Gain 10 block.' } },
-  { number: 9, entity_id: 'lumen', name: 'Lumen the Moth Queen', blurb: 'The swarm lands as three separate bites.', glyph: 'L', color: '#e07a3d', card: { cost: 2, type: 'attack', stat: 'STR', deal: 2, hits: 3, emoji: '🦋', text: 'Deal 2 three times (Combo applies to first hit only).' } },
-  { number: 10, entity_id: 'grub', name: 'Grub', blurb: 'Raises a wall of moss and does not explain it.', glyph: 'G', color: '#7a8c4a', card: { cost: 1, type: 'block', stat: 'CHA', block: 12, emoji: '🌿', text: 'Gain 12 block.' } },
-  { number: 11, entity_id: 'tilde', name: 'Tilde', blurb: 'Softens the next blow before it is written.', glyph: 'T', color: '#009e73', card: { cost: 1, type: 'skill', stat: 'LCK', bossCutPct: 16, emoji: '〰️', text: 'Boss\'s next attack deals 16% less (floor).' } },
-  { number: 12, entity_id: 'corvin', name: 'Corvin', blurb: 'Arrives late, and harder once the ending has started.', glyph: 'C', color: '#d55e00', card: { cost: 0, type: 'attack', stat: 'STR', deal: 4, dealDuringFinisher: 6, emoji: '📦', text: 'Deal 4; deal 6 during Finisher.' } }
+  { number: 9, entity_id: 'lumen', name: 'Lumen, the Moth Queen', blurb: 'The swarm lands as three separate bites.', glyph: 'L', color: '#e07a3d', card: { cost: 2, type: 'attack', stat: 'STR', deal: 2, hits: 3, emoji: '🦋', text: 'Deal 2 three times (Combo applies to first hit only).' } },
+  { number: 10, entity_id: 'grub', name: 'Grub the troll', blurb: 'Raises a wall of moss and does not explain it.', glyph: 'G', color: '#7a8c4a', card: { cost: 1, type: 'block', stat: 'CHA', block: 12, emoji: '🌿', text: 'Gain 12 block.' } },
+  { number: 11, entity_id: 'tilde', name: 'Tilde the hedge-witch', blurb: 'Softens the next blow before it is written.', glyph: 'T', color: '#009e73', card: { cost: 1, type: 'skill', stat: 'LCK', bossCutPct: 16, emoji: '〰️', text: 'Boss\'s next attack deals 16% less (floor).' } },
+  { number: 12, entity_id: 'corvin', name: 'Corvin the raven', blurb: 'Arrives late, and harder once the ending has started.', glyph: 'C', color: '#d55e00', card: { cost: 0, type: 'attack', stat: 'STR', deal: 4, dealDuringFinisher: 6, emoji: '📦', text: 'Deal 4; deal 6 during Finisher.' } }
 ];
 
 function figureRecord(row) {
@@ -33,15 +33,15 @@ function figureRecord(row) {
     ghost: false,
     name: row.name,
     blurb: row.blurb,
-    art: '/play/assets/allies/' + row.entity_id + '.svg',
-    placeholder: true,
+    art: '/play/assets/allies/' + row.entity_id + '.webp',
+    placeholder: false,
     card: {
       id: 'ally-' + row.entity_id,
       name: row.name,
       ally: true,
       entity_id: entity.entity_id,
       entity_type: entity.entity_type,
-      art: '/play/assets/allies/' + row.entity_id + '.svg',
+      art: '/play/assets/allies/' + row.entity_id + '.webp',
       ...row.card
     }
   };

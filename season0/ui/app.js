@@ -541,7 +541,7 @@ function paintAllies(c) {
     '<button class="btn" type="button" data-act="ally-vote" data-char="' + esc(c.id) + '" data-veto="false">Allow</button>' +
     '<button class="btn" type="button" data-act="ally-vote" data-char="' + esc(c.id) + '" data-veto="true">Veto</button>' +
     '</div>' +
-    '<p class="footnote">The same ally cannot be picked two chapters running. Fewer than 5 voting wallets, or no vote, and the two lowest-numbered allies that are not fatigued are auto-picked. If three characters field one ally, that card is −10% for all of them. Eliminated characters join as ghosts. Portraits are placeholders until Design\'s insets arrive.</p>');
+    '<p class="footnote">The same ally cannot be picked two chapters running. Fewer than 5 voting wallets, or no vote, and the two lowest-numbered allies that are not fatigued are auto-picked. If three characters field one ally, that card is −10% for all of them. Eliminated characters join as ghosts.</p>');
 }
 
 function sheetAllies(s, c) {

@@ -1,7 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="Wren placeholder">
-  <rect width="128" height="128" fill="#1a1622"/>
-  <circle cx="64" cy="50" r="30" fill="#f2c14e"/>
-  <text x="64" y="58" text-anchor="middle" font-family="Georgia, serif" font-size="28" fill="#1a1622">W</text>
-  <text x="64" y="108" text-anchor="middle" font-family="Georgia, serif" font-size="11" fill="#e8dcc8">Wren</text>
-  <text x="64" y="122" text-anchor="middle" font-family="Georgia, serif" font-size="8" fill="#8d99ae">placeholder</text>
-</svg>
