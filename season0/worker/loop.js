@@ -3,6 +3,7 @@ import { openChest, publishedOdds, chestSeed } from '../lib/chest.js';
 import { contributionPoints, contributorPool, impactReadout } from '../lib/contribution.js';
 import { simulateSeason } from '../lib/survival.js';
 import { buildRecap, castCrowdVote, CROWD_OPTIONS } from '../lib/recap.js';
+import { revealView } from '../lib/annotations.js';
 import {
   SIM_ALLIES,
   allyPool,
@@ -65,7 +66,8 @@ export async function handleLoop(path, request, env, body) {
   if (path === '/api/season/allies' && request.method === 'GET') return onAllies(url);
   if (path === '/api/season/allies/propose' && request.method === 'POST') return onAllyPropose(body);
   if (path === '/api/season/allies/vote' && request.method === 'POST') return onAllyVote(body);
-  if (path === '/api/season/recap' && request.method === 'GET') return onRecap(url);
+  if (path === '/api/season/recap' && request.method === 'GET') return onRecap(env, url);
+  if (path === '/api/season/annotations' && request.method === 'GET') return onAnnotations(env, url);
   if (path === '/api/season/push/vapid' && request.method === 'GET') {
     const key = env && env.BARD_VAPID_PUBLIC;
     return json({ ok: !!key, publicKey: key || null, capPerDay: 3, reason: key ? undefined : 'push_not_configured' });
@@ -417,7 +419,42 @@ function applyAllies(ctx, charId, chapter) {
   return ctx;
 }
 
-function onRecap(url) {
+async function annotationReveals(env) {
+  if (env && env.ANNOTATION_REVEALS) {
+    const parsed = JSON.parse(env.ANNOTATION_REVEALS);
+    return parsed.items || parsed;
+  }
+  if (!(env && env.SEASON_ALLOW_DEMO === '1')) return [];
+  try {
+    const { readFile } = await import('node:fs/promises');
+    const { dirname, join } = await import('node:path');
+    const { fileURLToPath } = await import('node:url');
+    const file = join(dirname(fileURLToPath(import.meta.url)), '../.secrets/annotations.json');
+    const parsed = JSON.parse(await readFile(file, 'utf8'));
+    return parsed.items || [];
+  } catch {
+    return [];
+  }
+}
+
+function openedIdsFrom(url) {
+  return (url.searchParams.get('open') || url.searchParams.get('ann') || '')
+    .split(',')
+    .map((id) => id.trim())
+    .filter(Boolean);
+}
+
+async function onAnnotations(env, url) {
+  const view = await revealView({
+    reveals: await annotationReveals(env),
+    openedIds: openedIdsFrom(url),
+    finale: url.searchParams.get('finale') === '1',
+    tx: url.searchParams.get('tx') || null
+  });
+  return json({ ok: true, ...view });
+}
+
+async function onRecap(env, url) {
   const chapter = Number(url.searchParams.get('chapter') || 1);
   const now = Number(url.searchParams.get('now') || Date.now());
   let line = url.searchParams.get('crowd') || '';
@@ -427,7 +464,18 @@ function onRecap(url) {
     const option = CROWD_OPTIONS.find((row) => row.id === optionId);
     if (option) line = option.line;
   }
-  return json({ ok: true, ...buildRecap({ chapter, nowMs: now, crowdLine: line || null }) });
+  const ids = openedIdsFrom(url);
+  let annotations = [];
+  if (ids.length && (env && (env.SEASON_ALLOW_DEMO === '1' || env.ANNOTATION_REVEALS))) {
+    const view = await revealView({
+      reveals: await annotationReveals(env),
+      openedIds: ids,
+      finale: false,
+      tx: url.searchParams.get('tx') || null
+    });
+    annotations = view.opened;
+  }
+  return json({ ok: true, ...buildRecap({ chapter, nowMs: now, crowdLine: line || null, annotations }) });
 }
 
 function onSubscribe(body) {

@@ -1,5 +1,5 @@
 /* Season 0 PWA. Scope is /play/ only. The landing page is outside this worker. */
-const CACHE = 'bard-s0-loop-v2';
+const CACHE = 'bard-s0-loop-v3';
 const SHELL = [
   '/play/',
   '/play/index.html',

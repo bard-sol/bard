@@ -1,4 +1,5 @@
 import { bardAvatarSrc, bardNightMood } from './bard.js';
+import { annotationCommit, canonicalAnnotationText, SEASON_SEALS } from '../lib/annotations.js';
 
 const params = new URLSearchParams(location.search);
 const fromPath = location.pathname.match(/\/play\/night\/(\d+)/) || location.pathname.match(/\/night\/(\d+)/);
@@ -25,7 +26,16 @@ let index = 0;
 const beat = document.getElementById('beat');
 const note = document.getElementById('note');
 const face = document.getElementById('bard');
+const openedBox = document.getElementById('opened');
 document.getElementById('back').href = '/play/?phase=P7&chapter=' + chapter + (voided ? '&void=' + voided : '');
+
+function esc(value) {
+  return String(value == null ? '' : value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
 
 function show() {
   const mood = bardNightMood(index, !!voided);
@@ -47,6 +57,36 @@ beat.addEventListener('click', () => {
   index = Math.min(beats.length - 1, index + 1);
   show();
 });
+async function loadOpened() {
+  const ann = params.get('ann') || '';
+  if (!ann || !openedBox) return;
+  const q = new URLSearchParams({ open: ann, chapter, tx: params.get('tx') || '' });
+  const view = await fetch('/api/season/annotations?' + q).then((r) => r.json());
+  const rows = view.opened || [];
+  if (!rows.length) return;
+  for (const row of rows) beats.splice(4, 0, row.text);
+  openedBox.innerHTML = rows.map((row) =>
+    '<section class="banner info" data-banner="annotation-' + esc(row.id) + '"><strong>Annotation ' + esc(row.id) + '</strong><p>' + esc(row.text) + '</p>' +
+    (row.href
+      ? '<a class="btn" href="' + esc(row.href) + '" data-seal-tx>Memo transaction</a>'
+      : '<span class="meta" data-seal-memo>' + esc(row.memo || view.memo || '') + '</span>') +
+    '<button class="btn" type="button" data-act="verify-seal" data-id="' + esc(row.id) + '">Verify hash</button></section>'
+  ).join('');
+  openedBox.querySelectorAll('[data-act="verify-seal"]').forEach((node) => {
+    node.addEventListener('click', async () => {
+      const row = rows.find((item) => item.id === node.dataset.id);
+      const seal = (SEASON_SEALS.seals || []).find((item) => item.id === node.dataset.id);
+      if (!row || !seal) return;
+      const hash = await annotationCommit(row.salt, canonicalAnnotationText('s0', row.id, row.text));
+      const ok = hash === seal.commit;
+      node.dataset.sealResult = ok ? 'match' : 'mismatch';
+      node.textContent = ok ? 'Hash matches' : 'Hash does not match';
+    });
+  });
+  show();
+}
+
+loadOpened().catch(() => {});
 show();
 setInterval(() => {
   if (index < beats.length - 1) {

@@ -4,6 +4,7 @@ import { chapterStartMs, formatDuration, phaseAt, reaperHeader } from '../lib/ph
 import { defaultConfig } from '../lib/config.js';
 import { margin, scoreCast, trainedBonus } from '../lib/score.js';
 import { revivalTarget } from '../lib/spend.js';
+import { CHAMPION_CARRY, DEVIATION_CLUE } from '../lib/annotations.js';
 import { VOID_COPY } from '../lib/voidchapter.js';
 
 const HOUR = 3600 * 1000;
@@ -239,6 +240,36 @@ export function headerCopy(screen) {
 
 export function bannerStack(screen) {
   const items = [];
+  for (const ann of screen.annotations || []) {
+    items.push({
+      id: 'annotation-' + ann.id,
+      tone: 'info',
+      title: 'Annotation ' + ann.id,
+      body: ann.text,
+      sealId: ann.id,
+      memo: ann.memo,
+      tx: ann.tx || null,
+      href: ann.href || null
+    });
+  }
+  if (screen.deviations && screen.deviations.length) {
+    const lines = screen.deviations.map((row) => (row.text ? row.id + ' — ' + row.text : row.id)).join(' ');
+    items.push({
+      id: 'deviations',
+      tone: 'info',
+      title: 'Deviations',
+      body: lines + ' Each grants ' + DEVIATION_CLUE.title + ' to everyone.',
+      clue: DEVIATION_CLUE.title
+    });
+  }
+  if (screen.phase === 'ended') {
+    items.push({
+      id: 'frontispiece',
+      tone: 'info',
+      title: 'Frontispiece frame',
+      body: 'Cosmetic only. The champion carries ' + CHAMPION_CARRY.cosmetic + ' and is not immune next season.'
+    });
+  }
   if (screen.voided) {
     const rerun = new Date(screen.t0 + screen.config.chapter_len_s * 1000);
     items.push({

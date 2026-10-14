@@ -20,6 +20,7 @@ import {
 } from './view.js';
 import { bustSvg } from './portraits.js';
 import { looksLikeMainnet, phantomBrowseUrl, solflareBrowseUrl, wrongNetworkHelp } from './wallet.js';
+import { canonicalAnnotationText, annotationCommit, SEASON_SEALS } from '../lib/annotations.js';
 
 const params = new URLSearchParams(location.search);
 const anchor = Date.now();
@@ -79,12 +80,17 @@ function nowMs() {
 function screen() {
   const q = new URLSearchParams(params);
   if (params.get('phase')) q.set('elapsed', String(Date.now() - anchor));
-  return screenState({
+  const s = screenState({
     config: ui.config,
     now: Date.now(),
     query: q,
     standingsRows: standings(store.train || {})
   });
+  if (ui.sealView && ui.sealView.ok) {
+    s.annotations = ui.sealView.opened || [];
+    s.deviations = ui.sealView.deviations || [];
+  }
+  return s;
 }
 
 function esc(value) {
@@ -175,10 +181,19 @@ function wrongNetworkBanner() {
   return '<p class="banner wrong" data-banner="wrong-network"><strong>' + esc(help.title) + '</strong> ' + esc(help.steps) + '</p>';
 }
 
+function sealLinks(b) {
+  if (!b.sealId) return '';
+  const tx = b.href
+    ? '<a class="btn" href="' + esc(b.href) + '" data-seal-tx>Memo transaction</a>'
+    : '<span class="meta" data-seal-memo>' + esc(b.memo || '') + '</span>';
+  return tx + '<button class="btn" type="button" data-act="verify-seal" data-id="' + esc(b.sealId) + '">Verify hash</button>';
+}
+
 function renderBanners(s) {
   const stack = bannerStack(s);
   const html = stack.visible.map((b) =>
     '<section class="banner ' + b.tone + '" data-banner="' + b.id + '"><strong>' + esc(b.title) + '</strong><p>' + esc(b.body) + '</p>' +
+    sealLinks(b) +
     (b.id === 'void' ? '<button class="btn" type="button" data-act="open" data-sheet="verify">See the record</button>' : '') +
     (b.id === 'revival' ? '<button class="btn solid" type="button" data-act="open" data-sheet="revive" data-char="' + esc(s.marked) + '">Burn tBard</button>' : '') +
     (b.id === 'night' ? '<a class="btn" href="/play/night/' + s.chapter + '">Watch</a>' : '') +
@@ -836,6 +851,7 @@ document.body.addEventListener('click', async (event) => {
     renderMain();
     return;
   }
+  if (act === 'verify-seal') { await verifySeal(node); return; }
   if (act === 'impact') { await showImpact(); return; }
 });
 
@@ -1170,6 +1186,40 @@ async function loadEligibility() {
   if (ui.tab === 'me') renderMain();
 }
 
+async function verifySeal(node) {
+  const id = node.dataset.id;
+  const opened = ((ui.sealView && ui.sealView.opened) || []).concat((ui.sealView && ui.sealView.deviations) || []);
+  const row = opened.find((item) => item.id === id);
+  const seal = (SEASON_SEALS.seals || []).find((item) => item.id === id);
+  if (!row || !seal) {
+    node.dataset.sealResult = 'missing';
+    node.textContent = 'Reveal is not stored';
+    toast('That seal has no public reveal yet.');
+    return;
+  }
+  const hash = await annotationCommit(row.salt, canonicalAnnotationText('s0', id, row.text));
+  const ok = hash === seal.commit;
+  node.dataset.sealResult = ok ? 'match' : 'mismatch';
+  node.textContent = ok ? 'Hash matches' : 'Hash does not match';
+  toast(ok ? 'Hash matches the seal.' : 'Hash does not match the seal.');
+}
+
+async function loadSealView() {
+  const open = params.get('ann') || '';
+  const finale = params.get('finale') === '1' || params.get('phase') === 'ended';
+  if (!open && !finale) return;
+  try {
+    const q = new URLSearchParams({
+      open,
+      finale: finale ? '1' : '0',
+      chapter: params.get('chapter') || '1'
+    });
+    ui.sealView = await fetch('/api/season/annotations?' + q).then((r) => r.json());
+  } catch {
+    ui.sealView = null;
+  }
+}
+
 async function boot() {
   try {
     const cfg = await fetch('/api/season/config').then((r) => r.json());
@@ -1178,6 +1228,7 @@ async function boot() {
   try {
     ui.publicInfo = await fetch('/season0/devnet.public.json').then((r) => r.json());
   } catch { /* pools stay empty */ }
+  await loadSealView();
   renderMain();
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('/play/sw.js', { scope: '/play/' }).catch(() => {});

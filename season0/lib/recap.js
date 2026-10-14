@@ -11,7 +11,7 @@ export function recapOpen(nowMs) {
   return date.getUTCHours() > 18 || (date.getUTCHours() === 18 && date.getUTCMinutes() >= 0);
 }
 
-export function buildRecap({ chapter, nowMs, crowdLine }) {
+export function buildRecap({ chapter, nowMs, crowdLine, annotations }) {
   const open = recapOpen(nowMs);
   return {
     chapter,
@@ -19,6 +19,7 @@ export function buildRecap({ chapter, nowMs, crowdLine }) {
     at: '22:00 GST',
     affectsScore: false,
     narrationOnly: true,
+    annotations: annotations || [],
     line: open
       ? 'Chapter ' + chapter + ' closes its evening. ' + (crowdLine || 'The crowd has not spoken yet.')
       : 'The recap opens at 22:00 GST.'
