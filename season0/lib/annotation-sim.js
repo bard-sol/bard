@@ -2,12 +2,12 @@ import { CAST } from './cast.js';
 import { chooseMarked, scoreCast } from './score.js';
 import { revivalTarget } from './spend.js';
 import { randomField } from './survival.js';
-import { evaluateAnnotations } from './annotations.js';
+import { buildChapterSnapshot, evaluateAnnotations } from './annotations.js';
 
 /**
  * Read-only season observer. Uses scoreCast and chooseMarked as they are.
- * Adds crowd actions the state file does not store yet: chapter train deltas,
- * revival pours, and relic-holder counts. It does not change elimination math.
+ * Writes the same chapter snapshot the state file stores, then runs the predicates
+ * on those records. It does not change elimination math.
  *
  * Revival is once per season, opened after a mark until one bar fills or the
  * last chapter (no revival) is reached. A successful pour keeps that hero and
@@ -71,18 +71,17 @@ export async function simulateAnnotationSeason(seed) {
   let pendingDouble = false;
 
   for (let chapter = 1; chapter <= 7 && living.length > 1; chapter++) {
-    const trainSpend = {};
+    const previousTrain = {};
+    for (const row of living.concat(fallen)) previousTrain[row.id] = Number(row.trainCredited) || 0;
     for (const row of living) {
       driftMarket(row, rng);
       driftHolders(row, rng);
       const spend = 80 + Math.floor(rng() * 1800);
-      trainSpend[row.id] = spend;
       row.trainCredited = (Number(row.trainCredited) || 0) + spend;
     }
     for (const row of fallen) {
       driftMarket(row, rng);
       driftHolders(row, rng);
-      trainSpend[row.id] = 0;
     }
 
     const doublePage = pendingDouble;
@@ -93,42 +92,54 @@ export async function simulateAnnotationSeason(seed) {
     const holders = {};
     for (const row of living.concat(fallen)) holders[row.id] = holderCount(row);
 
-    const snapshot = {
-      chapter,
-      scores: scored.map((row) => ({ id: row.id, S: row.S, U: row.U })),
-      alive: scored.map((row) => row.id),
-      marked: marked.map((row) => row.id),
-      doublePage,
-      trainSpend,
-      revivalBurn: 0,
-      holders
-    };
-    run.snapshots.push(snapshot);
-
     let savedId = null;
+    let revival = null;
+    let revivalTargetValue = 0;
+    let revivalPayments = [];
     if (!revivalUsed && chapter < 7 && marked.length && rng() < 0.55) {
       const heroId = marked[0].id;
       const hero = living.find((row) => row.id === heroId);
-      const target = revivalTarget(hero ? hero.trainCredited : 0);
+      revivalTargetValue = revivalTarget(hero ? hero.trainCredited : 0);
       const fraction = 0.2 + rng() * 0.95;
-      const paid = Math.floor(fraction * target);
-      const finalPct = target > 0 ? (paid / target) * 100 : 0;
-      for (let step = 1; step <= 8; step++) {
-        run.revivalTicks.push({ chapter, heroId, pct: finalPct * (step / 8) });
+      const paid = Math.floor(fraction * revivalTargetValue);
+      const step = Math.floor(paid / 8);
+      let left = paid;
+      revivalPayments = [];
+      for (let i = 0; i < 8; i++) {
+        const part = i === 7 ? left : step;
+        left -= part;
+        revivalPayments.push({ hero_id: heroId, paid: part });
       }
-      snapshot.revivalBurn = paid;
-      const success = paid >= target;
-      run.revivals.push({ afterChapter: chapter, heroId, success, burn: paid });
+      const success = paid >= revivalTargetValue;
+      revival = { hero_id: heroId, success };
       if (success) {
         revivalUsed = true;
         pendingDouble = true;
         savedId = heroId;
         if (hero) {
-          hero.trainCredited = (Number(hero.trainCredited) || 0) + Math.floor(target * 3);
+          hero.trainCredited = (Number(hero.trainCredited) || 0) + Math.floor(revivalTargetValue * 3);
           for (const wallet of hero.wallets || []) wallet.active = true;
         }
       }
     }
+
+    const trainCredited = {};
+    for (const row of living.concat(fallen)) trainCredited[row.id] = Number(row.trainCredited) || 0;
+    const snapshot = buildChapterSnapshot({
+      season: 's0',
+      chapter,
+      owed: doublePage,
+      scores: scored.map((row) => ({ id: row.id, S: row.S, U: row.U })),
+      marked: marked.map((row) => row.id),
+      previous_train_credited: previousTrain,
+      train_credited: trainCredited,
+      holders,
+      already_eliminated: fallen.map((row) => row.id),
+      revival,
+      revival_target: revivalTargetValue,
+      revival_payments: revivalPayments
+    });
+    run.snapshots.push(snapshot);
 
     const dead = new Set(snapshot.marked.filter((id) => id !== savedId));
     for (let i = living.length - 1; i >= 0; i--) {
@@ -140,6 +151,7 @@ export async function simulateAnnotationSeason(seed) {
 
   run.championId = living[0] ? living[0].id : null;
   run.finale = true;
+  if (run.snapshots.length) run.snapshots[run.snapshots.length - 1].champion_id = run.championId;
   const evaluation = evaluateAnnotations(run);
   return { seed, championId: run.championId, ...evaluation };
 }
@@ -194,7 +206,7 @@ export async function simulateAnnotationSeeds(count) {
     a3Variants: variantRate,
     averageFired: firedSum / total,
     flagged,
-    moduleA3: 'within 1% at any Reaper snapshot',
+    moduleA3: 'within 0.5% at any Reaper snapshot',
     moduleA4: 'first revived hero still alive after the next two-mark snapshot; no revival means no fire'
   };
 }

@@ -1,4 +1,5 @@
 import { sha256Hex } from './bytes.js';
+import { defaultConfig } from './config.js';
 import { SEASON_SEALS } from '../data/annotation-seals.js';
 
 export { SEASON_SEALS };
@@ -12,60 +13,80 @@ export { SEASON_SEALS };
 export const FIELD_MAP = [
   {
     handoff: 'S[h]',
-    state: 'scoreCast row .S',
-    note: 'Taken at the Reaper snapshot. Not stored under the name S.'
+    state: 'scores[].S',
+    note: 'Written on the chapter snapshot from scoreCast at the Reaper.'
   },
   {
     handoff: 'turnout[ch][h]',
-    state: 'scoreCast row .U',
-    note: 'Square-root turnout of eligible wallets. Recorded per snapshot. Not stored as turnout[ch][h].'
+    state: 'scores[].U',
+    note: 'Square-root turnout, stored on the same snapshot row as S.'
   },
   {
     handoff: 'train_spend[ch][h]',
-    state: 'missing',
-    note: 'Live field is cumulative trainCredited. Chapter spend is the delta between snapshots.'
+    state: 'train_spend[id]',
+    note: 'train_credited at this snapshot minus train_credited at the previous snapshot. Chapter 1 subtracts from 0. Same number as the sum of train_credits.credited for that hero and chapter.'
   },
   {
     handoff: 'revival_burn[ch]',
-    state: 'missing',
-    note: 'tBard burned toward revivalTarget during that chapter’s P8 window. 100% burn, including a failed bar.'
+    state: 'revival_burn',
+    note: 'tBard burned in that chapter’s revival window, including a bar that fails.'
   },
   {
     handoff: 'revival_bar_pct[h] ticks',
-    state: 'missing',
-    note: 'paid / revivalTarget * 100 during the P8 window. A1 reads ticks while chapter < 4.'
+    state: 'revival_bar_pct[]',
+    note: 'Each indexed revive burn appends {hero_id, paid, pct}. pct is cumulative paid / revival target * 100.'
   },
   {
     handoff: 'status[h]',
-    state: 'missing',
-    note: 'Derived. Alive if not eliminated. The owed double mark is take 2, not a status by itself.'
+    state: 'status[id]',
+    note: 'alive or eliminated after the chapter resolves. owed on the snapshot is the double-mark chapter and is not itself an elimination.'
   },
   {
     handoff: 'champion_id',
-    state: 'champion',
-    note: 'Last remaining id. simulateSeason returns champion, not champion_id.'
+    state: 'champion_id',
+    note: 'Set on the finale snapshot. Null until then.'
   },
   {
     handoff: 'chapter',
-    state: 'state.chapter',
+    state: 'chapter',
     note: 'Snapshot chapter number.'
   },
   {
     handoff: 'N_chapters',
     state: 'defaultConfig().chapters',
-    note: '7 in Season 0. Not stored as N_chapters.'
+    note: '7 in Season 0. Read from config, not from the snapshot.'
   },
   {
     handoff: 'A6 relic holders',
-    state: 'missing',
-    note: 'No pledged_wallets and no House in Season 0. S0 uses holders of the eliminated hero’s token: wallets with balance > 0.'
+    state: 'holders[id]',
+    note: 'Token accounts with balance > 0 for that hero’s mint, counted at the snapshot. Season 0 has no House pledged_wallets.'
   }
 ];
 
 export const ANNOTATION_IDS = ['A1', 'A2', 'A3', 'A4', 'A5', 'A6'];
 
-/** Module predicate for A3. The sim also reports 0.5% and final-snapshot-only. */
-export const A3_RATIO = 0.01;
+/** Locked module predicate. Gameplay set this to 0.5% on any Reaper snapshot. */
+export const A3_RATIO = defaultConfig().annotation_a3_ratio;
+
+export function a3Ratio(config) {
+  if (config && config.annotation_a3_ratio != null) return Number(config.annotation_a3_ratio);
+  return defaultConfig().annotation_a3_ratio;
+}
+
+/**
+ * Fields the devnet snapshot cannot fill from data that already exists.
+ * The columns are still in the schema. A null means the predicate stays quiet.
+ */
+export const DEVNET_UNRECORDED = [
+  {
+    field: 'holders',
+    reason: 'No hero mints are deployed. devnet.public.json has an empty pools map and a null tbard mint, so there is no token to scan. eligibility_snapshots only lists wallets the app checked. The holder count has to be written at the snapshot, and it cannot be rebuilt later from those rows.'
+  },
+  {
+    field: 'revival_bar_pct',
+    reason: 'The bar percentage is not stored on chain. Each confirmed revive burn can be written as a tick when it is indexed. A burn that was never indexed cannot be rebuilt as a series. One closing tick, filled divided by the target, is enough for A1 because the bar only rises.'
+  }
+];
 
 export const CHAMPION_CARRY = {
   immunity: false,
@@ -133,39 +154,138 @@ export function scoresWithin(scores, alive, ratio) {
   return false;
 }
 
-function markedIds(snapshot) {
-  return snapshot.marked || [];
+function snapshotScores(snapshot) {
+  return snapshot.scores || [];
 }
 
-function aliveIds(snapshot) {
-  if (snapshot.alive) return snapshot.alive;
-  return (snapshot.scores || []).map((row) => row.id);
+function heroStatus(snapshot, id) {
+  const table = snapshot.status || {};
+  return table[id] || null;
 }
 
 /**
- * First successful revival’s hero is still in the cast after the next snapshot.
- * That next snapshot is the two-mark chapter. No revival in the season → no fire.
+ * Chapter record stored in the state file and in chapter_hero_snapshot.
+ * train_spend is the trainCredited delta. Holders may be null when no mint was scanned.
+ */
+export function buildChapterSnapshot(input) {
+  const scores = (input.scores || []).map((row) => ({
+    id: row.id,
+    S: row.S,
+    U: row.U
+  }));
+  const marked = (input.marked || []).slice();
+  const revived = input.revival && input.revival.success ? input.revival.hero_id : null;
+  const previous = input.previous_train_credited || {};
+  const current = input.train_credited || {};
+  const holderIn = input.holders || {};
+  const already = new Set(input.already_eliminated || []);
+  const ids = new Set([
+    ...scores.map((row) => row.id),
+    ...Object.keys(current),
+    ...Object.keys(holderIn),
+    ...already,
+    ...marked
+  ]);
+  const train_spend = {};
+  const train_credited = {};
+  const holders = {};
+  const status = {};
+  for (const id of ids) {
+    const credited = Number(current[id]) || 0;
+    const before = Number(previous[id]) || 0;
+    train_credited[id] = credited;
+    train_spend[id] = already.has(id) ? 0 : Math.max(0, credited - before);
+    holders[id] = holderIn[id] == null ? null : Number(holderIn[id]);
+    if (already.has(id)) status[id] = 'eliminated';
+    else if (marked.includes(id) && id !== revived) status[id] = 'eliminated';
+    else status[id] = 'alive';
+  }
+  const target = Number(input.revival_target) || 0;
+  let paid = 0;
+  const ticks = [];
+  for (const payment of input.revival_payments || []) {
+    paid += Number(payment.paid) || 0;
+    const pct = target > 0 ? (paid / target) * 100 : 0;
+    ticks.push({
+      hero_id: payment.hero_id || (input.revival && input.revival.hero_id) || null,
+      paid,
+      pct
+    });
+  }
+  const revival = input.revival
+    ? { hero_id: input.revival.hero_id, success: !!input.revival.success }
+    : null;
+  return {
+    season: input.season || 's0',
+    chapter: input.chapter,
+    file_status: input.file_status || 'final',
+    owed: !!input.owed,
+    champion_id: input.champion_id || null,
+    scores,
+    train_spend,
+    train_credited,
+    holders,
+    status,
+    marked,
+    revival_burn: ticks.length ? paid : Number(input.revival_burn) || 0,
+    revival_bar_pct: ticks,
+    revival
+  };
+}
+
+/** Rows for the annotation migration. The JSON snapshot is the hashed state file. */
+export function chapterSnapshotRows(snapshot) {
+  const heroes = Object.keys(snapshot.status || {}).sort().map((id) => ({
+    season: snapshot.season,
+    chapter: snapshot.chapter,
+    char_id: id,
+    train_spend: snapshot.train_spend[id] == null ? 0 : snapshot.train_spend[id],
+    train_credited: snapshot.train_credited[id] == null ? 0 : snapshot.train_credited[id],
+    holders: snapshot.holders[id] == null ? null : snapshot.holders[id],
+    status: snapshot.status[id],
+    in_snapshot: (snapshot.scores || []).some((row) => row.id === id),
+    s: ((snapshot.scores || []).find((row) => row.id === id) || {}).S ?? null,
+    u: ((snapshot.scores || []).find((row) => row.id === id) || {}).U ?? null,
+    marked: (snapshot.marked || []).includes(id)
+  }));
+  return {
+    chapterState: {
+      season: snapshot.season,
+      chapter: snapshot.chapter,
+      owed: !!snapshot.owed,
+      champion_id: snapshot.champion_id || null,
+      revival_burn: Number(snapshot.revival_burn) || 0
+    },
+    heroes,
+    ticks: (snapshot.revival_bar_pct || []).map((tick) => ({
+      season: snapshot.season,
+      chapter: snapshot.chapter,
+      char_id: tick.hero_id,
+      paid: tick.paid,
+      pct: tick.pct
+    }))
+  };
+}
+
+/**
+ * First successful revival’s hero is still alive on the next snapshot.
+ * That snapshot is the owed two-mark chapter. No revival in the season → no fire.
  */
 export function a4Holds(run) {
-  const revival = (run.revivals || []).find((row) => row.success);
+  const snaps = run.snapshots || [];
+  const revival = snaps.find((row) => row.revival && row.revival.success);
   if (!revival) return null;
-  const next = (run.snapshots || []).find((row) => row.chapter === revival.afterChapter + 1);
+  const next = snaps.find((row) => row.chapter === revival.chapter + 1);
   if (!next) return null;
-  const gone = new Set(markedIds(next));
-  const still = aliveIds(next).filter((id) => !gone.has(id));
-  if (!still.includes(revival.heroId)) return null;
-  return { chapter: next.chapter, heroId: revival.heroId };
+  const heroId = revival.revival.hero_id;
+  if (heroStatus(next, heroId) !== 'alive') return null;
+  return { chapter: next.chapter, heroId };
 }
 
 function firstFall(run) {
-  const saved = new Set();
-  for (const row of run.revivals || []) {
-    if (row.success) saved.add(row.afterChapter + ':' + row.heroId);
-  }
   for (const snap of run.snapshots || []) {
-    for (const id of markedIds(snap)) {
-      if (saved.has(snap.chapter + ':' + id)) continue;
-      return { chapter: snap.chapter, heroId: id };
+    for (const id of snap.marked || []) {
+      if (heroStatus(snap, id) === 'eliminated') return { chapter: snap.chapter, heroId: id };
     }
   }
   return null;
@@ -173,49 +293,53 @@ function firstFall(run) {
 
 function holdersOf(snapshot, heroId) {
   const table = snapshot.holders || {};
-  const n = table[heroId];
+  if (!(heroId in table) || table[heroId] == null) return null;
+  const n = Number(table[heroId]);
   return Number.isFinite(n) ? n : null;
 }
 
 /**
- * Walk one season history in chapter order. First time a predicate is true, it fires.
- * A3 uses the 1% check at any Reaper snapshot.
- * Returns variants so the sim can report the other two A3 readings without a second pass.
+ * Walk recorded chapter snapshots in order. First time a predicate is true, it fires.
+ * A3 uses annotation_a3_ratio (0.5%) against scores on any snapshot.
+ * Variants stay available so a re-check can show the other two readings.
  */
 export function evaluateAnnotations(run) {
   const fired = {};
   const variants = { a3Within1pctAny: false, a3WithinHalfpctAny: false, a3Within1pctFinal: false };
-  const snaps = run.snapshots || [];
+  const snaps = (run.snapshots || []).slice().sort((a, b) => a.chapter - b.chapter);
+  const ratio = a3Ratio(run.config);
 
-  for (const tick of run.revivalTicks || []) {
-    if (fired.A1) break;
-    if (Number(tick.chapter) < 4 && Number(tick.pct) >= 50) {
-      fired.A1 = { chapter: tick.chapter };
+  for (const snap of snaps) {
+    if (fired.A1 || !(snap.chapter < 4)) continue;
+    for (const tick of snap.revival_bar_pct || []) {
+      if (Number(tick.pct) >= 50) {
+        fired.A1 = { chapter: snap.chapter };
+        break;
+      }
     }
   }
 
   snaps.forEach((snap, index) => {
-    const alive = aliveIds(snap);
-    const within1 = scoresWithin(snap.scores, alive, A3_RATIO);
+    const alive = snapshotScores(snap).map((row) => row.id);
+    const within1 = scoresWithin(snap.scores, alive, 0.01);
     const withinHalf = scoresWithin(snap.scores, alive, 0.005);
-    if (within1) {
-      variants.a3Within1pctAny = true;
-      if (!fired.A3) fired.A3 = { chapter: snap.chapter };
-    }
+    const withinModule = scoresWithin(snap.scores, alive, ratio);
+    if (within1) variants.a3Within1pctAny = true;
     if (withinHalf) variants.a3WithinHalfpctAny = true;
+    if (withinModule && !fired.A3) fired.A3 = { chapter: snap.chapter };
     if (index === snaps.length - 1 && within1) variants.a3Within1pctFinal = true;
   });
 
-  const held = a4Holds(run);
+  const held = a4Holds({ snapshots: snaps });
   if (held) fired.A4 = held;
 
   for (const snap of snaps) {
     if (fired.A5) break;
-    const train = Object.values(snap.trainSpend || {}).reduce((sum, n) => sum + (Number(n) || 0), 0);
-    if ((Number(snap.revivalBurn) || 0) > train) fired.A5 = { chapter: snap.chapter };
+    const train = Object.values(snap.train_spend || {}).reduce((sum, n) => sum + (Number(n) || 0), 0);
+    if ((Number(snap.revival_burn) || 0) > train) fired.A5 = { chapter: snap.chapter };
   }
 
-  const fall = firstFall(run);
+  const fall = firstFall({ snapshots: snaps });
   if (fall) {
     const next = snaps.find((row) => row.chapter === fall.chapter + 1);
     const before = snaps.find((row) => row.chapter === fall.chapter);
@@ -228,16 +352,19 @@ export function evaluateAnnotations(run) {
     }
   }
 
-  if (run.finale && run.championId) {
+  const finaleSnap = snaps.filter((row) => row.champion_id).pop();
+  const championId = run.championId || (finaleSnap && finaleSnap.champion_id) || null;
+  const finale = run.finale != null ? !!run.finale : !!championId;
+  if (finale && championId) {
     const opening = snaps.find((row) => row.chapter === 1) || snaps[0];
     const leader = opening ? turnoutLeader(opening.scores) : null;
-    if (leader && leader !== run.championId) {
+    if (leader && leader !== championId) {
       const last = snaps[snaps.length - 1];
       fired.A2 = { chapter: last ? last.chapter : null };
     }
   }
 
-  const deviations = run.finale ? ANNOTATION_IDS.filter((id) => !fired[id]) : [];
+  const deviations = finale ? ANNOTATION_IDS.filter((id) => !fired[id]) : [];
   return {
     fired,
     deviations,
@@ -245,6 +372,58 @@ export function evaluateAnnotations(run) {
     clue: deviations.length ? DEVIATION_CLUE : null,
     championCarry: CHAMPION_CARRY,
     affectsScore: false
+  };
+}
+
+/** Fire rates from recorded chapter snapshots, grouped by season id. */
+export function recheckRecords(bySeason) {
+  const names = Object.keys(bySeason || {}).filter((id) => (bySeason[id] || []).length).sort();
+  if (!names.length) {
+    return {
+      seasons: 0,
+      chapters: 0,
+      fireRate: null,
+      averageFired: null,
+      fired: {},
+      gaps: [],
+      unrecorded: DEVNET_UNRECORDED,
+      reason: 'no recorded chapters'
+    };
+  }
+  const hits = {};
+  for (const id of ANNOTATION_IDS) hits[id] = 0;
+  const fired = {};
+  const gaps = [];
+  let chapters = 0;
+  let firedSum = 0;
+  for (const name of names) {
+    const snapshots = bySeason[name].slice().sort((a, b) => a.chapter - b.chapter);
+    chapters += snapshots.length;
+    const championId = (snapshots.filter((row) => row.champion_id).pop() || {}).champion_id || null;
+    const result = evaluateAnnotations({
+      snapshots,
+      finale: !!championId,
+      championId
+    });
+    fired[name] = ANNOTATION_IDS.filter((id) => result.fired[id]);
+    firedSum += fired[name].length;
+    for (const id of fired[name]) hits[id] += 1;
+    for (const snap of snapshots) {
+      const missing = Object.values(snap.holders || {}).some((n) => n == null);
+      if (missing) gaps.push({ season: name, chapter: snap.chapter, field: 'holders' });
+    }
+  }
+  const fireRate = {};
+  for (const id of ANNOTATION_IDS) fireRate[id] = hits[id] / names.length;
+  return {
+    seasons: names.length,
+    chapters,
+    fireRate,
+    averageFired: firedSum / names.length,
+    fired,
+    gaps,
+    unrecorded: DEVNET_UNRECORDED,
+    moduleA3: a3Ratio()
   };
 }
 

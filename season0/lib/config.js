@@ -90,7 +90,8 @@ export function defaultConfig() {
     migration_quote_threshold_sol: 85,
     fee_bps: 200,
     state_storage: 'supabase+github',
-    irys_on_devnet: false
+    irys_on_devnet: false,
+    annotation_a3_ratio: 0.005
   };
 }
 

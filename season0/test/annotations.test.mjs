@@ -5,6 +5,7 @@ import { handleApi } from '../worker/handlers.js';
 import { sha256Hex } from '../lib/bytes.js';
 import { bannerStack } from '../ui/view.js';
 import { buildRecap } from '../lib/recap.js';
+import { defaultConfig } from '../lib/config.js';
 import {
   A3_RATIO,
   ANNOTATION_IDS,
@@ -12,10 +13,14 @@ import {
   DEVIATION_CLUE,
   FIELD_MAP,
   SEASON_SEALS,
+  a3Ratio,
   a4Holds,
   annotationCommit,
+  buildChapterSnapshot,
   canonicalAnnotationText,
+  chapterSnapshotRows,
   evaluateAnnotations,
+  recheckRecords,
   scoresWithin,
   sealMemo,
   turnoutLeader,
@@ -33,15 +38,24 @@ const PLACEHOLDER = {
 };
 
 function snap(chapter, scores, extra) {
+  const marked = (extra && extra.marked) || [];
+  const status = {};
+  for (const row of scores) status[row.id] = marked.includes(row.id) ? 'eliminated' : 'alive';
+  for (const id of Object.keys((extra && extra.holders) || {})) {
+    if (!status[id]) status[id] = 'eliminated';
+  }
   return {
     chapter,
     scores,
-    alive: scores.map((row) => row.id),
-    marked: [],
-    trainSpend: {},
-    revivalBurn: 0,
+    marked,
+    train_spend: {},
+    revival_burn: 0,
+    revival_bar_pct: [],
     holders: {},
-    ...extra
+    owed: false,
+    revival: null,
+    ...extra,
+    status: (extra && extra.status) || status
   };
 }
 
@@ -74,19 +88,26 @@ test('published seals are generic seal commits, not placeholder hashes or plaint
   assert.equal(sealMemo('s0', SEASON_SEALS.seals).startsWith('bard:v1:seal:s0:'), true);
   assert.equal(sealMemo('s0', SEASON_SEALS.seals).includes('annotation'), false);
   assert.match(readFileSync(new URL('../../.gitignore', import.meta.url), 'utf8'), /season0\/\.secrets\//);
-  assert.equal(FIELD_MAP.some((row) => row.handoff === 'A6 relic holders' && row.state === 'missing'), true);
+  assert.equal(FIELD_MAP.find((row) => row.handoff === 'A6 relic holders').state, 'holders[id]');
+  assert.equal(defaultConfig().annotation_a3_ratio, 0.005);
+  assert.equal(a3Ratio(), 0.005);
+  assert.equal(a3Ratio({ annotation_a3_ratio: 0.01 }), 0.01);
 });
 
-test('A1 fires on a pre-chapter-4 bar of 50 and ignores later ticks', () => {
+test('A1 reads revival_bar_pct on the snapshot and ignores a side channel', () => {
   const quiet = evaluateAnnotations({
-    revivalTicks: [{ chapter: 3, pct: 49 }, { chapter: 4, pct: 90 }],
-    snapshots: [snap(1, [{ id: 'pip', S: 0.2, U: 0.2 }])],
+    revivalTicks: [{ chapter: 1, pct: 90 }],
+    snapshots: [
+      snap(3, [{ id: 'pip', S: 0.2, U: 0.2 }], { revival_bar_pct: [{ hero_id: 'pip', pct: 49 }] }),
+      snap(4, [{ id: 'pip', S: 0.2, U: 0.2 }], { revival_bar_pct: [{ hero_id: 'pip', pct: 90 }] })
+    ],
     finale: false
   });
   assert.equal(quiet.fired.A1, undefined);
   const hit = evaluateAnnotations({
-    revivalTicks: [{ chapter: 3, pct: 50 }, { chapter: 3, pct: 80 }],
-    snapshots: [snap(3, [{ id: 'pip', S: 0.2, U: 0.2 }])],
+    snapshots: [snap(3, [{ id: 'pip', S: 0.2, U: 0.2 }], {
+      revival_bar_pct: [{ hero_id: 'pip', pct: 50 }, { hero_id: 'pip', pct: 80 }]
+    })],
     finale: false
   });
   assert.equal(hit.fired.A1.chapter, 3);
@@ -115,55 +136,68 @@ test('A2 uses chapter-1 turnout, breaks ties by lowest id, and waits for the fin
   assert.equal(same.fired.A2, undefined);
 });
 
-test('A3 module uses 1% at any snapshot and the other two readings stay separate', () => {
-  assert.equal(A3_RATIO, 0.01);
-  const close = snap(1, [{ id: 'a', S: 1, U: 0.1 }, { id: 'b', S: 1.009, U: 0.1 }]);
-  const far = snap(2, [{ id: 'a', S: 1, U: 0.1 }, { id: 'b', S: 1.02, U: 0.1 }]);
-  assert.equal(scoresWithin(close.scores, close.alive, 0.01), true);
-  assert.equal(scoresWithin(far.scores, far.alive, 0.01), false);
-  assert.equal(scoresWithin([{ id: 'a', S: 1 }, { id: 'b', S: 1.006 }], ['a', 'b'], 0.005), false);
-  const mid = evaluateAnnotations({ snapshots: [close, far], finale: false });
-  assert.equal(mid.fired.A3.chapter, 1);
-  assert.equal(mid.variants.a3Within1pctAny, true);
-  assert.equal(mid.variants.a3Within1pctFinal, false);
-  const onlyFinal = evaluateAnnotations({
-    snapshots: [far, snap(3, [{ id: 'a', S: 1, U: 0 }, { id: 'b', S: 1.008, U: 0 }])],
-    finale: false
-  });
-  assert.equal(onlyFinal.variants.a3Within1pctFinal, true);
-  assert.equal(onlyFinal.variants.a3WithinHalfpctAny, false);
+test('A3 module uses the locked 0.5% config on any snapshot', () => {
+  assert.equal(A3_RATIO, 0.005);
+  const withinHalf = snap(1, [{ id: 'a', S: 1, U: 0.1 }, { id: 'b', S: 1.004, U: 0.1 }]);
+  const onlyOnePct = snap(2, [{ id: 'a', S: 1, U: 0.1 }, { id: 'b', S: 1.008, U: 0.1 }]);
+  const far = snap(3, [{ id: 'a', S: 1, U: 0.1 }, { id: 'b', S: 1.02, U: 0.1 }]);
+  assert.equal(scoresWithin(withinHalf.scores, ['a', 'b'], 0.005), true);
+  assert.equal(scoresWithin(onlyOnePct.scores, ['a', 'b'], 0.005), false);
+  assert.equal(scoresWithin(onlyOnePct.scores, ['a', 'b'], 0.01), true);
+  const locked = evaluateAnnotations({ snapshots: [onlyOnePct, far], finale: false });
+  assert.equal(locked.fired.A3, undefined);
+  assert.equal(locked.variants.a3Within1pctAny, true);
+  const hit = evaluateAnnotations({ snapshots: [withinHalf], finale: false });
+  assert.equal(hit.fired.A3.chapter, 1);
+  assert.equal(hit.variants.a3WithinHalfpctAny, true);
+  const widened = evaluateAnnotations({ snapshots: [onlyOnePct], finale: false, config: { annotation_a3_ratio: 0.01 } });
+  assert.equal(widened.fired.A3.chapter, 2);
 });
 
 test('A4 fires only when the first revived hero survives the next snapshot', () => {
-  const base = {
-    snapshots: [
-      snap(2, [{ id: 'pip', S: 0.1, U: 0.1 }, { id: 'wick', S: 0.4, U: 0.2 }], { marked: ['pip'] }),
-      snap(3, [{ id: 'pip', S: 0.3, U: 0.2 }, { id: 'wick', S: 0.4, U: 0.2 }], { marked: ['wick'], doublePage: true })
-    ]
-  };
-  assert.equal(a4Holds({ ...base, revivals: [] }), null);
-  assert.equal(a4Holds({ ...base, revivals: [{ afterChapter: 2, heroId: 'pip', success: false }] }), null);
-  const lives = evaluateAnnotations({ ...base, revivals: [{ afterChapter: 2, heroId: 'pip', success: true }] });
+  const failed = snap(2, [{ id: 'pip', S: 0.1, U: 0.1 }, { id: 'wick', S: 0.4, U: 0.2 }], {
+    marked: ['pip'],
+    revival: { hero_id: 'pip', success: false },
+    status: { pip: 'eliminated', wick: 'alive' }
+  });
+  const saved = snap(2, [{ id: 'pip', S: 0.1, U: 0.1 }, { id: 'wick', S: 0.4, U: 0.2 }], {
+    marked: ['pip'],
+    revival: { hero_id: 'pip', success: true },
+    status: { pip: 'alive', wick: 'alive' }
+  });
+  const owed = snap(3, [{ id: 'pip', S: 0.3, U: 0.2 }, { id: 'wick', S: 0.4, U: 0.2 }], {
+    owed: true,
+    marked: ['wick'],
+    status: { pip: 'alive', wick: 'eliminated' }
+  });
+  assert.equal(a4Holds({ snapshots: [snap(2, [{ id: 'pip', S: 0.1, U: 0.1 }])] }), null);
+  assert.equal(a4Holds({ snapshots: [failed, owed] }), null);
+  const lives = evaluateAnnotations({ snapshots: [saved, owed], finale: false });
   assert.equal(lives.fired.A4.heroId, 'pip');
   assert.equal(lives.fired.A4.chapter, 3);
+  assert.equal(owed.owed, true);
   const falls = evaluateAnnotations({
     snapshots: [
-      base.snapshots[0],
-      snap(3, [{ id: 'pip', S: 0.1, U: 0.1 }, { id: 'wick', S: 0.4, U: 0.2 }], { marked: ['pip', 'grenna'], doublePage: true })
+      saved,
+      snap(3, [{ id: 'pip', S: 0.1, U: 0.1 }, { id: 'wick', S: 0.4, U: 0.2 }], {
+        owed: true,
+        marked: ['pip'],
+        status: { pip: 'eliminated', wick: 'alive' }
+      })
     ],
-    revivals: [{ afterChapter: 2, heroId: 'pip', success: true }]
+    finale: false
   });
   assert.equal(falls.fired.A4, undefined);
 });
 
 test('A5 compares chapter burn with chapter train, and A6 uses relic holders', () => {
   const burn = evaluateAnnotations({
-    snapshots: [snap(2, [{ id: 'pip', S: 0.2, U: 0.2 }], { trainSpend: { pip: 10, wick: 5 }, revivalBurn: 16 })],
+    snapshots: [snap(2, [{ id: 'pip', S: 0.2, U: 0.2 }], { train_spend: { pip: 10, wick: 5 }, revival_burn: 16 })],
     finale: false
   });
   assert.equal(burn.fired.A5.chapter, 2);
   const tied = evaluateAnnotations({
-    snapshots: [snap(2, [{ id: 'pip', S: 0.2, U: 0.2 }], { trainSpend: { pip: 10 }, revivalBurn: 10 })],
+    snapshots: [snap(2, [{ id: 'pip', S: 0.2, U: 0.2 }], { train_spend: { pip: 10 }, revival_burn: 10 })],
     finale: false
   });
   assert.equal(tied.fired.A5, undefined);
@@ -185,11 +219,15 @@ test('A5 compares chapter burn with chapter train, and A6 uses relic holders', (
   assert.equal(left.fired.A6, undefined);
   const saved = evaluateAnnotations({
     snapshots: [
-      snap(1, [{ id: 'pip', S: 0.1, U: 0.1 }], { marked: ['pip'], holders: { pip: 10 } }),
+      snap(1, [{ id: 'pip', S: 0.1, U: 0.1 }], {
+        marked: ['pip'],
+        holders: { pip: 10 },
+        revival: { hero_id: 'pip', success: true },
+        status: { pip: 'alive' }
+      }),
       snap(2, [{ id: 'pip', S: 0.2, U: 0.2 }, { id: 'grenna', S: 0.3, U: 0.2 }], { marked: ['grenna'], holders: { pip: 1, grenna: 10 } }),
       snap(3, [{ id: 'pip', S: 0.2, U: 0.2 }], { holders: { grenna: 10 } })
     ],
-    revivals: [{ afterChapter: 1, heroId: 'pip', success: true }],
     finale: false
   });
   assert.equal(saved.fired.A6.heroId, 'grenna');
@@ -197,8 +235,10 @@ test('A5 compares chapter burn with chapter train, and A6 uses relic holders', (
 
 test('finale deviations share one cosmetic clue and the champion has no immunity', () => {
   const done = evaluateAnnotations({
-    revivalTicks: [{ chapter: 1, pct: 50 }],
-    snapshots: [snap(1, [{ id: 'pip', S: 0.2, U: 0.4 }]), snap(7, [{ id: 'pip', S: 0.5, U: 0.4 }])],
+    snapshots: [
+      snap(1, [{ id: 'pip', S: 0.2, U: 0.4 }], { revival_bar_pct: [{ hero_id: 'pip', pct: 50 }] }),
+      snap(7, [{ id: 'pip', S: 0.5, U: 0.4 }], { champion_id: 'pip' })
+    ],
     championId: 'pip',
     finale: true
   });
@@ -255,9 +295,66 @@ test('the annotations route publishes hashes and withholds text until an open id
   }
 });
 
-test('a read-only season sim names a champion and keeps A3 on the 1% predicate', async () => {
+test('a read-only season sim names a champion and keeps A3 on the 0.5% predicate', async () => {
   const season = await simulateAnnotationSeason(4);
   assert.equal(typeof season.championId, 'string');
   assert.equal(season.affectsScore, false);
-  assert.equal(season.variants.a3Within1pctAny, !!season.fired.A3);
+  assert.equal(season.variants.a3WithinHalfpctAny, !!season.fired.A3);
+});
+
+test('the chapter snapshot records the predicate fields and the re-check reads them', () => {
+  const chapter = buildChapterSnapshot({
+    season: 's0',
+    chapter: 2,
+    owed: true,
+    scores: [{ id: 'pip', S: 0.4, U: 0.5 }, { id: 'wick', S: 0.2, U: 0.1 }],
+    marked: ['wick'],
+    previous_train_credited: { pip: 100, wick: 40 },
+    train_credited: { pip: 140, wick: 40 },
+    holders: { pip: 12, wick: null },
+    revival: { hero_id: 'wick', success: false },
+    revival_target: 5000,
+    revival_payments: [{ hero_id: 'wick', paid: 2500 }, { hero_id: 'wick', paid: 1000 }]
+  });
+  assert.equal(chapter.train_spend.pip, 40);
+  assert.equal(chapter.train_spend.wick, 0);
+  assert.equal(chapter.revival_burn, 3500);
+  assert.equal(chapter.revival_bar_pct[0].pct, 50);
+  assert.equal(chapter.revival_bar_pct[1].pct, 70);
+  assert.equal(chapter.status.pip, 'alive');
+  assert.equal(chapter.status.wick, 'eliminated');
+  assert.equal(chapter.owed, true);
+  assert.equal(chapter.holders.pip, 12);
+  assert.equal(chapter.holders.wick, null);
+  const rows = chapterSnapshotRows(chapter);
+  assert.equal(rows.chapterState.owed, true);
+  assert.equal(rows.chapterState.revival_burn, 3500);
+  assert.equal(rows.heroes.find((row) => row.char_id === 'pip').train_spend, 40);
+  assert.equal(rows.ticks.length, 2);
+  const opened = buildChapterSnapshot({
+    season: 's0',
+    chapter: 1,
+    scores: [{ id: 'pip', S: 0.2, U: 0.4 }],
+    train_credited: { pip: 10 },
+    holders: { pip: 8 },
+    revival: { hero_id: 'pip', success: false },
+    revival_target: 100,
+    revival_payments: [{ hero_id: 'pip', paid: 60 }]
+  });
+  const finale = buildChapterSnapshot({
+    season: 's0',
+    chapter: 7,
+    champion_id: 'wick',
+    scores: [{ id: 'wick', S: 0.5, U: 0.2 }],
+    holders: { wick: 4 },
+    train_credited: { wick: 10 }
+  });
+  const report = recheckRecords({ s0: [opened, finale] });
+  assert.equal(report.seasons, 1);
+  assert.equal(report.fired.s0.includes('A1'), true);
+  assert.equal(report.fired.s0.includes('A2'), true);
+  assert.equal(report.gaps.length, 0);
+  const empty = recheckRecords({});
+  assert.equal(empty.reason, 'no recorded chapters');
+  assert.equal(empty.fireRate, null);
 });
