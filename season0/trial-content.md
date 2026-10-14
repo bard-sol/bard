@@ -13,4 +13,4 @@ The Hob + Wren check is greedy median 50–70, a lookahead gap of at least 15, a
 Ally nerfs, with the rest of the ally cards unchanged:
 
 - Baron Croak, Royal Leap: Deal 5. Keep half your Combo (floor) instead of resetting.
-- Grub, Moss Wall: Block 9. +1 Combo.
+- Grub, Moss Wall: Block 8. +1 Combo.

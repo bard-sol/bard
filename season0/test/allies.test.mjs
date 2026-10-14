@@ -159,7 +159,7 @@ test('ally cards do what the content doc says', () => {
   assert.equal(lumen.dealt, 10);
 
   const grub = play([ally('grub')], [{ type: 'play', card: 0 }]);
-  assert.equal(grub.playerBlock, 9);
+  assert.equal(grub.playerBlock, 8);
   assert.equal(grub.combo, 1);
 
   const tilde = play([ally('tilde')], [{ type: 'play', card: 0 }]);
