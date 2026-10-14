@@ -3,6 +3,7 @@
  *
  * Run: node season0/sims/score-v4.mjs
  * One cell: ONLY=both CLAMP=0 CROWN=1.5 CONTROL=1 SEASONS=1000 node season0/sims/score-v4.mjs
+ * Clamp sweep: SWEEP=1 node season0/sims/score-v4.mjs
  *
  * raise_loyalty_pays stays false and does not change Health.
  */
@@ -1261,7 +1262,69 @@ function runTasks(tasks) {
   });
 }
 
+function barMargin(goals) {
+  return Math.min(0.35 - goals.leaderWins, goals.leaderTop3 - 0.6, goals.lowestChampion - 0.03);
+}
+
+async function runCells(cells) {
+  const tasks = [];
+  for (const cell of cells) {
+    tasks.push(cellOpts(cell, 'none'));
+    tasks.push(cellOpts(cell, 'deck'));
+  }
+  const chunks = await runTasks(tasks.map((opts) => ({ seedStart: 1, seedEnd: SEASONS, opts })));
+  return cells.map((cell, index) => ({
+    ...cell,
+    clean: summarizeCell(chunks[index * 2]),
+    deck: summarizeCell(chunks[index * 2 + 1])
+  }));
+}
+
+async function runClampSweep() {
+  const started = Date.now();
+  const clamps = (process.env.CLAMPS || '0,5,8,10,12,15,20,25').split(',').map((value) => Number(value));
+  const standard = await runCells(clamps.map((clamp) => ({ model: 'standard', clamp, crown: 1.5 })));
+  for (const cell of standard) {
+    console.log('standard', cell.clamp, 'clean', JSON.stringify(cell.clean.goals), 'deck', JSON.stringify(cell.deck.goals));
+  }
+  const passing = standard.filter((cell) => cell.clean.goals.pass && cell.deck.goals.pass);
+  const ranked = (passing.length ? passing : standard).slice().sort((a, b) => {
+    const left = Math.min(barMargin(a.clean.goals), barMargin(a.deck.goals));
+    const right = Math.min(barMargin(b.clean.goals), barMargin(b.deck.goals));
+    return right - left || a.clamp - b.clamp;
+  });
+  const best = ranked[0];
+  const control = (await runCells([{ model: 'control', clamp: best.clamp, crown: 1.5 }]))[0];
+  console.log('control', control.clamp, 'clean', JSON.stringify(control.clean.goals), 'deck', JSON.stringify(control.deck.goals));
+  const report = {
+    ruleSet: 'v4-clamp-sweep',
+    budgetB: B,
+    crown: 1.5,
+    seasons: SEASONS,
+    seconds: Math.round((Date.now() - started) / 1000),
+    raise_loyalty_pays_default: false,
+    clamps,
+    passingClamps: passing.map((cell) => cell.clamp),
+    bestClamp: best.clamp,
+    bestNote: passing.length
+      ? 'Best clamp is the passing value with the widest minimum margin across the three bars and both decks. A lower clamp wins a tie.'
+      : 'No clamp passes all three bars on both decks. Best is the closest on the minimum margin.',
+    standard,
+    control,
+    assumptions: ASSUMPTIONS,
+    ambiguities: AMBIGUITIES
+  };
+  mkdirSync(new URL('./results/', import.meta.url), { recursive: true });
+  const outName = process.env.SWEEP_OUT || './results/clamp-sweep.json';
+  writeFileSync(new URL(outName, import.meta.url), JSON.stringify(report));
+  console.log('passing', JSON.stringify(report.passingClamps), 'best', best.clamp, 'seconds', report.seconds);
+}
+
 async function main() {
+  if (process.env.SWEEP === '1') {
+    await runClampSweep();
+    return;
+  }
   const started = Date.now();
   if (process.env.ONLY === 'clean' || process.env.ONLY === 'deck' || process.env.ONLY === 'both') {
     const cell = { model: CONTROL ? 'control' : 'standard', clamp: CLAMP, crown: CROWN_MUL };
