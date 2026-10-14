@@ -54,15 +54,15 @@ const SIGNATURES = {
     { id: 'redline', name: 'Redline', cost: 2, type: 'attack', stat: 'CUN', deal: 8, halveGuard: true, emoji: '✂️', text: 'Deal 8. Boss guard this turn is halved.', signature: true }
   ],
   marrow: [
-    { id: 'ovation', name: 'Standing Ovation', cost: 2, type: 'attack', stat: 'CHA', deal: 10, perCombo: 5, emoji: '👏', text: 'Deal 10. +5 more per Combo spent.', signature: true },
+    { id: 'ovation', name: 'Standing Ovation', cost: 2, type: 'attack', stat: 'CHA', deal: 8, perCombo: 2, emoji: '👏', text: 'Deal 8. +2 more per Combo spent.', signature: true },
     { id: 'darling', name: 'Darling of Court', cost: 2, type: 'block', stat: 'CHA', block: 10, draw: 1, combo: 1, emoji: '👑', text: 'Gain 10 block. Draw 1. +1 Combo.', signature: true }
   ],
   pip: [
-    { id: 'heads', name: 'Heads I Win', cost: 1, type: 'attack', stat: 'LCK', deal: 6, doubleIfOdd: true, doubleInFinisher: true, emoji: '🪙', text: 'Deal 6. Double on odd turns or during Finisher.', signature: true },
+    { id: 'heads', name: 'Heads I Win', cost: 1, type: 'attack', stat: 'LCK', deal: 7, doubleIfOdd: true, tripleInFinisher: true, emoji: '🪙', text: 'Deal 7. Double on odd turns. Triple during Finisher.', signature: true },
     { id: 'coin', name: 'Lucky Coin', cost: 0, type: 'skill', stat: 'LCK', energy: 1, comboIfLate: 2, once: true, setup: true, emoji: '✨', text: 'Gain 1 energy. +2 Combo if it\'s your 3rd+ card. Once per turn.', signature: true }
   ],
   wick: [
-    { id: 'hex', name: 'Candle Hex', cost: 1, type: 'skill', stat: 'LCK', hex: 3, emoji: '🕯️', text: 'Boss takes 3 each turn end (stacks). Finisher: x1.5, floored.', signature: true },
+    { id: 'hex', name: 'Candle Hex', cost: 1, type: 'skill', stat: 'LCK', hex: 4, emoji: '🕯️', text: 'Boss takes 4 each turn end (stacks). Finisher: x1.5, floored.', signature: true },
     { id: 'foresight', name: 'Foresight', cost: 0, type: 'skill', stat: 'CUN', draw: 2, discardLeft: true, setup: true, emoji: '👁️', text: 'Draw 2. Discard 1 (leftmost).', signature: true }
   ],
   vey: [
@@ -274,7 +274,8 @@ function attackBase(state, card) {
 
 function attackDamage(state, card, base) {
   let dmg = scaledValue(base, state.stats[card.stat]);
-  if ((card.doubleIfOdd && state.turn % 2 === 1) || (card.doubleInFinisher && bossInFinisher(state.bossHp, state.bossMax))) dmg *= 2;
+  if (card.tripleInFinisher && bossInFinisher(state.bossHp, state.bossMax)) dmg *= 3;
+  else if (card.doubleIfOdd && state.turn % 2 === 1) dmg *= 2;
   if (card.doubleIfStaggered && state.staggered) dmg *= 2;
   if (card.bonusIfBlock && state.playerBlock > 0) dmg += scaledValue(card.bonusIfBlock, state.stats[card.stat]);
   dmg += state.nextAttack;
