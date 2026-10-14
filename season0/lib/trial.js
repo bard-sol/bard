@@ -183,16 +183,27 @@ function attackHits(state, intent) {
   return hits;
 }
 
-function intentView(state) {
-  const intent = intentAt(state.boss, state.turn);
+function intentView(state, turn) {
+  const at = turn || state.turn;
+  const intent = intentAt(state.boss, at);
+  const live = at === state.turn ? state : { ...state, bossCut: 0, bossCutPct: 0 };
   if (intent.kind === 'attack') {
-    const hits = attackHits(state, intent);
-    const each = attackPacket(state, intent);
-    return { kind: 'attack', n: each, hits, icon: '⚔', label: hits > 1 ? '⚔ ' + each + '×' + hits : '⚔ ' + each };
+    const hits = attackHits(live, intent);
+    const each = attackPacket(live, intent);
+    return { kind: 'attack', n: each, hits, turn: at, icon: '⚔', label: hits > 1 ? '⚔ ' + each + '×' + hits : '⚔ ' + each };
   }
-  if (intent.kind === 'guard') return { kind: 'guard', n: intent.n, icon: '🛡', label: '🛡 ' + intent.n };
-  if (intent.kind === 'buff') return { kind: 'buff', icon: '✦', label: intent.buff === 'heal' ? '✦ heal ' + intent.n : '✦ +' + intent.n + ' ' + intent.buff };
-  return { kind: 'debuff', icon: '☠', label: '☠ ' + intent.debuff };
+  if (intent.kind === 'guard') return { kind: 'guard', n: intent.n, turn: at, icon: '🛡', label: '🛡 ' + intent.n };
+  if (intent.kind === 'buff') return { kind: 'buff', turn: at, icon: '✦', label: intent.buff === 'heal' ? '✦ heal ' + intent.n : '✦ +' + intent.n + ' ' + intent.buff };
+  return { kind: 'debuff', turn: at, icon: '☠', label: '☠ ' + intent.debuff };
+}
+
+function revealedIntents(state) {
+  if (!state.revealUntil || state.done) return [];
+  const out = [];
+  const start = Math.max(state.turn + 1, state.revealFrom || 0);
+  const end = Math.min(TRIAL_LIMITS.turns, state.revealUntil);
+  for (let turn = start; turn <= end; turn++) out.push(intentView(state, turn));
+  return out;
 }
 
 function drawCards(state, count) {
@@ -264,6 +275,7 @@ function attackBase(state, card) {
 function attackDamage(state, card, base) {
   let dmg = scaledValue(base, state.stats[card.stat]);
   if (card.doubleIfOdd && state.turn % 2 === 1) dmg *= 2;
+  if (card.doubleIfStaggered && state.staggered) dmg *= 2;
   if (card.bonusIfBlock && state.playerBlock > 0) dmg += scaledValue(card.bonusIfBlock, state.stats[card.stat]);
   dmg += state.nextAttack;
   dmg += state.rallyBonus;
@@ -335,6 +347,10 @@ function playCard(state, card, move) {
   }
   if (card.bossCut) state.bossCut += scaledValue(card.bossCut, state.stats[card.stat]);
   if (card.bossCutPct) state.bossCutPct = scaledValue(card.bossCutPct, state.stats[card.stat]);
+  if (card.revealIntents) {
+    state.revealFrom = state.turn + 1;
+    state.revealUntil = state.turn + card.revealIntents;
+  }
   if (card.keep) state.keep = Number.isInteger(move.keep) ? move.keep : 0;
   state.lastCard = card;
 }
@@ -390,6 +406,7 @@ function endTurn(state) {
   state.keep = null;
   state.nextAttack = 0;
   state.bossCut = 0;
+  state.bossCutPct = 0;
   state.blockHalved = false;
   if (state.done || state.turn >= TRIAL_LIMITS.turns) {
     state.done = state.done || 'turns';
@@ -462,6 +479,8 @@ function createState(seedHex, opts) {
     hitBuff: 0,
     bossCut: 0,
     bossCutPct: 0,
+    revealFrom: 0,
+    revealUntil: 0,
     blockKeep: 0,
     energyNext: 0,
     fullBlockEnergy: 0,
@@ -567,6 +586,7 @@ function viewOf(state, ok, reason) {
     damagePercent: percent,
     accuracy: Math.min(1, percent / 100),
     intent: state.done ? null : intentView(state),
+    revealed: revealedIntents(state),
     hand: state.hand.map((card, index) => publicCard(state, card, index)),
     passive: state.passive.text || '',
     underdog: state.inDanger ? 2 : 0,
@@ -868,10 +888,15 @@ async function summarizeBot(runs, opts, play) {
   };
 }
 
-/** Lookahead kill rate for one ally pair. Base HP stays at the locked config value. */
-export async function simulateAllyPair(runs, allies) {
+function pairOpts(allies) {
   const opts = trialBotOpts(defaultConfig().trial_base_hp, defaultConfig().trial_combo_bonus);
   opts.allies = (allies || SIM_ALLIES).slice();
+  return opts;
+}
+
+/** Lookahead kill rate for one ally pair. Base HP stays at the locked config value. */
+export async function simulateAllyPair(runs, allies) {
+  const opts = pairOpts(allies);
   const lookahead = await summarizeBot(runs, opts, lookaheadMoves);
   return {
     allies: opts.allies,
@@ -879,6 +904,23 @@ export async function simulateAllyPair(runs, allies) {
     median: lookahead.median,
     killRate: lookahead.killRate,
     kills: lookahead.kills
+  };
+}
+
+/** Greedy and lookahead for one ally pair on the Twins. Base HP stays locked. */
+export async function simulateAllyPairBots(runs, allies) {
+  const opts = pairOpts(allies);
+  const greedy = await summarizeBot(runs, opts, botMoves);
+  const lookahead = await summarizeBot(runs, opts, lookaheadMoves);
+  return {
+    allies: opts.allies,
+    runs: lookahead.runs,
+    greedyMedian: greedy.median,
+    greedyKills: greedy.killRate,
+    median: lookahead.median,
+    killRate: lookahead.killRate,
+    kills: lookahead.kills,
+    gap: lookahead.median - greedy.median
   };
 }
 

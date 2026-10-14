@@ -110,6 +110,7 @@ pre.log{white-space:pre-wrap;background:var(--surface-2);padding:12px;border-rad
 .boss-art .var,.boss-art .intent{position:absolute;top:10px;z-index:1;font-size:12px;font-weight:800;padding:4px 8px;border-radius:99px;background:rgba(8,8,12,.8)}
 .boss-art .var{left:10px}
 .boss-art .intent{right:10px;color:#ffd7b0}
+.boss-art .revealed{position:absolute;left:10px;right:10px;bottom:10px;z-index:1;font-size:12px;font-weight:700;padding:4px 8px;border-radius:99px;background:rgba(8,8,12,.8);color:#f2c14e}
 .boss-card .hp{height:10px;border-radius:99px;background:#26222f;overflow:hidden;margin-top:8px}
 .boss-card .hp i{display:block;height:100%;background:linear-gradient(90deg,#b91c1c,#f87171)}
 .me-row{display:flex;gap:10px;align-items:center;margin:10px 0}

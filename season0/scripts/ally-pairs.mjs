@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-/** Lookahead kill rate for every ally pair. HP stays locked. Prints pairs outside 15–35%. */
+/** Every ally pair at locked HP. Prints lookahead kills and the greedy median. Flags kills outside 15–35%. */
 import { Worker, isMainThread, parentPort, workerData } from 'node:worker_threads';
 import { fileURLToPath } from 'node:url';
 import { availableParallelism } from 'node:os';
@@ -7,12 +7,12 @@ import { availableParallelism } from 'node:os';
 const script = fileURLToPath(import.meta.url);
 
 if (!isMainThread) {
-  const { simulateAllyPair } = await import('../lib/trial.js');
-  const row = await simulateAllyPair(workerData.runs, workerData.allies);
+  const { simulateAllyPairBots } = await import('../lib/trial.js');
+  const row = await simulateAllyPairBots(workerData.runs, workerData.allies);
   parentPort.postMessage(row);
 } else {
   const { ALLY_POOL } = await import('../lib/allies.js');
-  const runs = Number(process.argv[2] || 300);
+  const runs = Number(process.argv[2] || 100);
   const ids = ALLY_POOL.map((row) => row.entity_id);
   const pairs = [];
   for (let i = 0; i < ids.length; i++) {
@@ -31,12 +31,28 @@ if (!isMainThread) {
       });
       rows.push(row);
       const flagged = row.killRate < 0.15 || row.killRate > 0.35;
-      process.stderr.write((flagged ? 'FLAG ' : 'ok   ') + row.allies.join('+') + ' kills ' + row.killRate.toFixed(3) + ' median ' + row.median + '\n');
+      process.stderr.write(
+        (flagged ? 'FLAG ' : 'ok   ') +
+        row.allies.join('+') +
+        ' lookahead ' + row.killRate.toFixed(3) +
+        ' greedy ' + row.greedyMedian +
+        ' gap ' + row.gap + '\n'
+      );
     }
   }
   await Promise.all(Array.from({ length: width }, pump));
   rows.sort((a, b) => a.allies.join().localeCompare(b.allies.join()));
   const flagged = rows.filter((row) => row.killRate < 0.15 || row.killRate > 0.35);
-  process.stdout.write(JSON.stringify({ runs, pairs: rows.length, flagged }, null, 2) + '\n');
+  const autofill = rows.find((row) => row.allies.join('+') === 'hob+wren') || null;
+  process.stdout.write(JSON.stringify({
+    runs,
+    character: 'twins',
+    baseHp: 120,
+    comboBonus: 4,
+    pairs: rows.length,
+    autofill,
+    flagged,
+    rows
+  }, null, 2) + '\n');
   if (flagged.length) process.exitCode = 2;
 }

@@ -465,6 +465,7 @@ function sheetTrial(s, c) {
     (view.art ? '<img src="' + esc(art) + '" alt="' + esc(view.boss) + '">' : '') +
     '<span class="var">' + esc(view.variant) + '</span>' +
     '<span class="intent">' + esc(view.intent ? view.intent.label : 'Done') + '</span>' +
+    ((view.revealed || []).length ? '<span class="revealed">Next ' + esc(view.revealed.map((row) => row.label).join(' · ')) + '</span>' : '') +
     '</div><p class="bn">' + esc(view.blurb || '') + '</p>' +
     '<div class="hp"><i style="width:' + width + '%"></i></div>' +
     '<p data-trial-boss>' + esc(view.boss) + '</p>' +
@@ -524,7 +525,7 @@ function paintAllies(c) {
     return '<button class="choice' + on + '" type="button" data-act="ally-toggle" data-id="' + esc(ally.entity_id) + '">' +
       '<img class="ally-face" src="' + esc(ally.art) + '" alt="" width="48" height="48">' +
       '<strong>' + esc(ally.name) + ghost + auto + '</strong>' +
-      '<span class="meta">' + esc(ally.card.text) + number + (ally.placeholder ? ' · placeholder' : '') + '</span></button>';
+      '<span class="meta">' + esc(ally.card.name) + ' · ' + esc(ally.card.text) + number + (ally.placeholder ? ' · placeholder' : '') + '</span></button>';
   }).join('');
   const proposer = body.proposer ? body.proposer.wallet : 'nobody';
   const proposal = (body.proposal || []).join(' and ') || 'none yet';
