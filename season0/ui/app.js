@@ -473,7 +473,7 @@ function sheetTrial(s, c) {
     (t.step === 'play' && !view.done ? '<div class="row"><button class="btn" type="button" data-act="trial-end">End turn</button>' +
       '<button class="btn solid" type="button" data-act="trial-finish">Finish</button></div>' : '') +
     result +
-    '<p class="footnote">Card upgrades are a stretch goal. They would change Trial power only, not Train. There is no raid boss.</p>' +
+    '<p class="footnote">Finisher: attacks deal ×1.5, floored, once the boss is at or below ' + view.finisherPct + '% HP. Card upgrades stay off. There is no raid boss.</p>' +
     (s.phase === 'P4' ? '<p class="footnote">Act before the Reaper. A day outside the window is not in K.</p>' : ''));
   if (t.step === 'play') {
     const host = document.getElementById('trial-stage');

@@ -70,6 +70,7 @@ export function defaultConfig() {
     trial_seconds: 60,
     trial_energy: 3,
     trial_base_hp: 80,
+    trial_finisher_pct: 30,
     push_per_day: 3,
     chest_pity: 10,
     card_upgrades_enabled: false,

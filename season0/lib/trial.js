@@ -214,6 +214,14 @@ function gainBlock(state, amount) {
   state.playerBlock += n;
 }
 
+/** Attack damage is floor(amount * 3 / 2) while the boss is at or below the Finisher line. */
+export function finisherDamage(amount, bossHp, bossMax, pct) {
+  const dmg = Math.max(0, Math.floor(amount));
+  const line = pct == null ? defaultConfig().trial_finisher_pct : Number(pct);
+  if (bossMax > 0 && bossHp * 100 <= bossMax * line) return Math.floor(dmg * 3 / 2);
+  return dmg;
+}
+
 function dealToBoss(state, amount) {
   let dmg = Math.max(0, Math.floor(amount));
   const blocked = Math.min(state.bossGuard, dmg);
@@ -254,11 +262,15 @@ function attackDamage(state, card, base) {
   return dmg;
 }
 
+function strikeBoss(state, amount) {
+  dealToBoss(state, finisherDamage(amount, state.bossHp, state.bossMax, state.finisherPct));
+}
+
 function playAttack(state, card) {
   const hits = card.hits || 1;
-  for (let i = 0; i < hits && !state.done; i++) dealToBoss(state, attackDamage(state, card, card.deal));
+  for (let i = 0; i < hits && !state.done; i++) strikeBoss(state, attackDamage(state, card, card.deal));
   if (card.againBelowHalf && state.playerHp * 2 < TRIAL_LIMITS.playerHp && !state.done) {
-    dealToBoss(state, attackDamage(state, card, card.deal));
+    strikeBoss(state, attackDamage(state, card, card.deal));
   }
   if (card.halveGuard) state.bossGuard = Math.floor(state.bossGuard / 2);
   if (card.lose) hurtPlayer(state, card.lose);
@@ -360,6 +372,7 @@ function createState(seedHex, opts) {
     stats: ctx.stats,
     charId: ctx.charId,
     inDanger: !!ctx.inDanger,
+    finisherPct: ctx.finisherPct == null ? defaultConfig().trial_finisher_pct : Number(ctx.finisherPct),
     passive: PASSIVES[ctx.charId] || {},
     deck: shuffle(deckFor(ctx.charId), rng),
     discard: [],
@@ -413,9 +426,15 @@ function preview(state, card) {
     nextAttack: state.nextAttack,
     attacksThisTurn: state.attacksThisTurn
   };
-  let total = attackDamage(ghost, card, card.deal);
-  if (card.hits === 2) total += attackDamage(ghost, card, card.deal);
-  if (card.againBelowHalf && state.playerHp * 2 < TRIAL_LIMITS.playerHp) total += attackDamage(ghost, card, card.deal);
+  let hp = state.bossHp;
+  const hit = () => {
+    const dealt = finisherDamage(attackDamage(ghost, card, card.deal), hp, state.bossMax, state.finisherPct);
+    hp = Math.max(0, hp - dealt);
+    return dealt;
+  };
+  let total = hit();
+  if (card.hits === 2) total += hit();
+  if (card.againBelowHalf && state.playerHp * 2 < TRIAL_LIMITS.playerHp) total += hit();
   return total;
 }
 
@@ -467,6 +486,7 @@ function viewOf(state, ok, reason) {
     hand: state.hand.map((card, index) => publicCard(state, card, index)),
     passive: state.passive.text || '',
     underdog: state.inDanger ? 2 : 0,
+    finisherPct: state.finisherPct,
     grid: shareGrid(state.rows, percent / 100)
   };
 }
@@ -544,6 +564,72 @@ export function botMoves(seedHex, opts) {
   return moves;
 }
 
+function candidateMoves(view) {
+  const moves = [];
+  for (const card of view.hand || []) {
+    if (card.playable === false) continue;
+    if (card.cost > view.energy) continue;
+    moves.push({ type: 'play', card: card.index });
+  }
+  moves.push({ type: 'end' });
+  return moves;
+}
+
+function lineScore(root, after) {
+  if (!after || !after.ok) return -1e9;
+  const gained = after.dealt - root.dealt;
+  if (after.bossHp <= 0 || after.ended === 'boss') return 100000 + after.playerHp + gained;
+  if (after.playerHp <= 0 || after.ended === 'death') return gained - 10000;
+  const threat = (after.hand || []).reduce((sum, card) => sum + Math.max(0, card.preview || 0), 0);
+  return gained * 100 + threat + after.playerHp * 2 + after.playerBlock;
+}
+
+/**
+ * Beam search of width 20 over the rest of this turn, including the end-turn resolution.
+ * Returns the first move of the best line.
+ */
+export function chooseLookaheadPlay(seedHex, moves, opts) {
+  const root = replayTrial(seedHex, moves, opts);
+  if (!root.ok || root.done) return null;
+  let beam = [{ extra: [] }];
+  const finished = [];
+  for (let depth = 0; depth < 10 && beam.length; depth++) {
+    const ongoing = [];
+    for (const node of beam) {
+      const view = replayTrial(seedHex, moves.concat(node.extra), opts);
+      if (!view.ok || view.done) {
+        finished.push({ extra: node.extra, score: lineScore(root, view) });
+        continue;
+      }
+      for (const move of candidateMoves(view)) {
+        const extra = node.extra.concat([move]);
+        const after = replayTrial(seedHex, moves.concat(extra), opts);
+        if (!after.ok) continue;
+        const closed = move.type === 'end' || !!after.done;
+        if (closed) finished.push({ extra, score: lineScore(root, after) });
+        else ongoing.push({ extra, score: lineScore(root, after) });
+      }
+    }
+    ongoing.sort((a, b) => b.score - a.score);
+    beam = ongoing.slice(0, 20);
+  }
+  if (!finished.length) return { type: 'end' };
+  finished.sort((a, b) => b.score - a.score || a.extra.length - b.extra.length);
+  return finished[0].extra[0] || { type: 'end' };
+}
+
+export function lookaheadMoves(seedHex, opts) {
+  const moves = [];
+  for (let guard = 0; guard < 40; guard++) {
+    const next = chooseLookaheadPlay(seedHex, moves, opts);
+    if (!next) break;
+    moves.push(next);
+    const view = replayTrial(seedHex, moves, opts);
+    if (!view.ok || view.done || moves.length >= TRIAL_LIMITS.moves) break;
+  }
+  return moves;
+}
+
 export function encounterFromSeed(seedHex, opts) {
   const view = replayTrial(seedHex, [], opts);
   return {
@@ -602,52 +688,88 @@ export function cardUpgradeOffer() {
   };
 }
 
-/** Greedy bot over `runs` seeds. Chapter 1, plain day, flat 50 stats (the Twins). */
-export async function simulateTrialMedian(runs, baseHp) {
-  const count = Math.max(1, Number(runs) || 300);
+function trialBotOpts(baseHp, finisherPct) {
   const base = baseHp == null ? defaultConfig().trial_base_hp : Number(baseHp);
-  const now = seasonStartMs();
-  const opts = trialContext({ charId: 'twins', chapter: 1, now, inDanger: false });
+  const pct = finisherPct == null ? defaultConfig().trial_finisher_pct : Number(finisherPct);
+  const opts = trialContext({ charId: 'twins', chapter: 1, now: seasonStartMs(), inDanger: false });
   opts.baseHp = base;
+  opts.finisherPct = pct;
+  return opts;
+}
+
+async function summarizeBot(runs, opts, play) {
+  const count = Math.max(1, Number(runs) || 300);
   const percents = [];
   let kills = 0;
   for (let i = 0; i < count; i++) {
     const seed = await trialSeed('s0', 'sim-' + String(i).padStart(4, '0'));
-    const moves = botMoves(seed, opts);
+    const moves = play(seed, opts);
     const result = replayTrial(seed, moves, opts);
     percents.push(result.damagePercent);
     if (result.ended === 'boss') kills += 1;
   }
   percents.sort((a, b) => a - b);
-  const mid = count % 2 ? percents[(count - 1) / 2] : (percents[count / 2 - 1] + percents[count / 2]) / 2;
-  const killRate = kills / count;
+  const median = count % 2 ? percents[(count - 1) / 2] : (percents[count / 2 - 1] + percents[count / 2]) / 2;
   return {
     runs: count,
+    median,
+    killRate: kills / count,
+    kills,
+    min: percents[0],
+    max: percents[percents.length - 1]
+  };
+}
+
+/** Greedy bot over `runs` seeds. Chapter 1, plain day, flat 50 stats (the Twins). */
+export async function simulateTrialMedian(runs, baseHp, finisherPct) {
+  const opts = trialBotOpts(baseHp, finisherPct);
+  const summary = await summarizeBot(runs, opts, botMoves);
+  return {
+    ...summary,
     character: 'twins',
     chapter: 1,
     variant: 'D1',
     stats: 50,
-    median: mid,
-    killRate,
-    kills,
-    min: percents[0],
-    max: percents[percents.length - 1],
-    currentBaseHp: base,
-    bossHp: bossMaxHp(1, 'D1', base),
-    tooStrong: mid > 70 || killRate > 0.35
+    currentBaseHp: opts.baseHp,
+    finisherPct: opts.finisherPct,
+    bossHp: bossMaxHp(1, 'D1', opts.baseHp),
+    tooStrong: summary.median > 70 || summary.killRate > 0.35
   };
 }
 
-/** Start at 80. If the bot median is above 70% or kills are above 35%, add 5 and run again. */
-export async function tuneTrialBase(runs) {
+export async function simulateLookahead(runs, baseHp, finisherPct) {
+  const opts = trialBotOpts(baseHp, finisherPct);
+  const summary = await summarizeBot(runs, opts, lookaheadMoves);
+  return { ...summary, currentBaseHp: opts.baseHp, finisherPct: opts.finisherPct };
+}
+
+/**
+ * HP starts at 80 and the Finisher line at 25%.
+ * Lookahead kills under 20% raise the line to 30%.
+ * Lookahead kills over 35% add 5 HP. Both bots are recorded on every step.
+ */
+export async function tuneFinisher(runs) {
+  let baseHp = 80;
+  let finisherPct = 25;
+  let raised = false;
   const steps = [];
-  let base = 80;
-  let report;
+  let greedy;
+  let lookahead;
   for (let step = 0; step < 8; step++) {
-    report = await simulateTrialMedian(runs, base);
-    steps.push({ baseHp: base, median: report.median, killRate: report.killRate, kills: report.kills });
-    if (!report.tooStrong) break;
-    base += 5;
+    const opts = trialBotOpts(baseHp, finisherPct);
+    greedy = await summarizeBot(runs, opts, botMoves);
+    lookahead = await summarizeBot(runs, opts, lookaheadMoves);
+    steps.push({ baseHp, finisherPct, greedy, lookahead });
+    if (lookahead.killRate < 0.2 && !raised) {
+      finisherPct = 30;
+      raised = true;
+      continue;
+    }
+    if (lookahead.killRate > 0.35) {
+      baseHp += 5;
+      continue;
+    }
+    break;
   }
-  return { baseHp: base, report, steps };
+  return { baseHp, finisherPct, greedy, lookahead, steps };
 }

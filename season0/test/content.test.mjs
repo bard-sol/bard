@@ -3,9 +3,12 @@ import assert from 'node:assert/strict';
 import {
   bossMaxHp,
   damagePercent,
+  finisherDamage,
+  lookaheadMoves,
   scaledValue,
   simulateTrialMedian,
-  trialContext
+  trialContext,
+  trialSeed
 } from '../lib/trial.js';
 import { chestPool, chestSeed, openChest } from '../lib/chest.js';
 import { contributionPoints, contributorPool, impactReadout, unlockedAmount } from '../lib/contribution.js';
@@ -24,6 +27,10 @@ test('trial numbers are integers and boss HP follows the chapter curve', () => {
   assert.equal(bossMaxHp(1, 'D2'), 80);
   assert.equal(bossMaxHp(1, 'D3'), 72);
   assert.equal(bossMaxHp(7, 'D1'), 118);
+  assert.equal(finisherDamage(10, 20, 80, 25), 15);
+  assert.equal(finisherDamage(7, 20, 80, 25), 10);
+  assert.equal(finisherDamage(10, 21, 80, 25), 10);
+  assert.equal(finisherDamage(10, 24, 80, 30), 15);
   const ctx = trialContext({ charId: 'pip', chapter: 1, now: Date.parse('2026-10-17T12:00:00.000Z') });
   assert.equal(ctx.variant, 'D2');
   assert.equal(ctx.stats.LCK, 80);
@@ -113,8 +120,15 @@ test('trial bot median is reported and the HP base stays unlocked', async () => 
   const report = await simulateTrialMedian(300);
   assert.equal(report.runs, 300);
   assert.equal(report.currentBaseHp, 80);
+  assert.equal(report.finisherPct, 30);
   assert.equal(report.tooStrong, false);
-  assert.ok(report.median <= 70);
+  assert.ok(report.median >= 55 && report.median <= 70);
   assert.ok(report.killRate <= 0.35);
+  const seed = await trialSeed('s0', 'sim-0000');
+  const opts = trialContext({ charId: 'twins', chapter: 1, now: Date.parse('2026-10-16T10:00:00.000Z') });
+  const first = lookaheadMoves(seed, opts);
+  const second = lookaheadMoves(seed, opts);
+  assert.deepEqual(first, second);
+  assert.ok(first.length > 0);
   console.log('TRIAL_MEDIAN ' + JSON.stringify(report));
 });
