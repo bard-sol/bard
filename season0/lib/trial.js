@@ -41,7 +41,7 @@ const GENERICS = [
   { id: 'margin', name: 'Margin Note', cost: 1, type: 'skill', stat: 'CUN', next: 5, emoji: '📝', text: 'Next attack this turn deals +5.' },
   { id: 'bookmark', name: 'Bookmark', cost: 0, type: 'skill', stat: 'LCK', keep: true, emoji: '🔖', text: 'Keep one card in hand for next turn.' },
   { id: 'bold', name: 'Bold Stroke', cost: 3, type: 'attack', stat: 'STR', deal: 22, lose: 3, emoji: '🖋️', text: 'Deal 22. Lose 3 HP.' },
-  { id: 'footnote', name: 'Footnote', cost: 1, type: 'block', stat: 'CUN', block: 4, drawIfAttack: 1, emoji: '📎', text: 'Gain 4 block. If boss intends attack, draw 1.' }
+  { id: 'footnote', name: 'Gloss', cost: 1, type: 'block', stat: 'CUN', block: 4, drawIfAttack: 1, emoji: '📎', text: 'Gain 4 block. If boss intends attack, draw 1.' }
 ];
 
 const SIGNATURES = {
@@ -91,13 +91,13 @@ export const PASSIVES = {
 };
 
 const BOSSES = [
-  { chapter: 1, name: 'The Blot', blurb: 'A spreading ink stain that eats unfinished stories.', pattern: [{ kind: 'attack', n: 6 }, { kind: 'guard', n: 8 }, { kind: 'attack', n: 9 }] },
+  { chapter: 1, name: 'The First Stain', blurb: 'A spreading ink stain that eats unfinished stories.', pattern: [{ kind: 'attack', n: 6 }, { kind: 'guard', n: 8 }, { kind: 'attack', n: 9 }] },
   { chapter: 2, name: 'The Margin Wolf', blurb: 'Prowls the page edges, devouring footnotes.', art: '/play/assets/props/boss-wolf.webp', pattern: [{ kind: 'attack', n: 5 }, { kind: 'attack', n: 5 }, { kind: 'buff', buff: 'attack', n: 3 }, { kind: 'attack', n: 8 }] },
   { chapter: 3, name: 'Sir Errata', blurb: 'A knight made of corrections who unwrites your moves.', pattern: [{ kind: 'attack', n: 7 }, { kind: 'debuff', debuff: 'cost' }, { kind: 'guard', n: 10 }, { kind: 'attack', n: 10 }] },
   { chapter: 4, name: 'The Paper Hydra', blurb: 'Grows a head each time its page is torn.', pattern: [{ kind: 'attack', n: 4, hits: 2, growHits: true, maxHits: 4 }, { kind: 'attack', n: 4, hits: 2, growHits: true, maxHits: 4 }, { kind: 'buff', buff: 'hits', n: 1 }] },
   { chapter: 5, name: 'Madame Redaction', blurb: 'A censor who blacks out lines of text.', pattern: [{ kind: 'debuff', debuff: 'block' }, { kind: 'attack', n: 9 }, { kind: 'attack', n: 9 }, { kind: 'guard', n: 12 }] },
   { chapter: 6, name: 'The Unbinder', blurb: 'A moth that eats book spines.', pattern: [{ kind: 'attack', n: 6 }, { kind: 'debuff', debuff: 'discard' }, { kind: 'attack', n: 12 }] },
-  { chapter: 7, name: 'The Final Reader', blurb: 'The one who closes the book.', pattern: [{ kind: 'guard', n: 15 }, { kind: 'attack', n: 8 }, { kind: 'attack', n: 14 }, { kind: 'buff', buff: 'heal', n: 10 }] }
+  { chapter: 7, name: 'The Closing Hand', blurb: 'The one who closes the book.', pattern: [{ kind: 'guard', n: 15 }, { kind: 'attack', n: 8 }, { kind: 'attack', n: 14 }, { kind: 'buff', buff: 'heal', n: 10 }] }
 ];
 
 export const TRIAL_CARDS = GENERICS.concat(...Object.values(SIGNATURES));
@@ -297,7 +297,8 @@ function playAttack(state, card) {
   let bonus = 0;
   if (state.combo > 0) {
     bonus = state.combo * state.comboBonus;
-    if (!card.keepCombo) state.combo = 0;
+    if (card.keepComboHalf) state.combo = Math.floor(state.combo / 2);
+    else if (!card.keepCombo) state.combo = 0;
   }
   const base = attackBase(state, card);
   const hits = card.hits || 1;
@@ -313,6 +314,7 @@ function playAttack(state, card) {
 
 function playCard(state, card, move) {
   if (card.type === 'skill') state.combo = Math.min(5, state.combo + 1);
+  if (card.combo) state.combo = Math.min(5, state.combo + card.combo);
   if (card.copy) {
     if (state.lastCard && state.lastCard.id !== 'forged') playCard(state, state.lastCard, { keep: 0 });
     return;
@@ -325,6 +327,7 @@ function playCard(state, card, move) {
     state.blockKeep = Math.max(state.blockKeep || 0, kept);
   }
   if (card.fullBlockEnergy) state.fullBlockEnergy = (state.fullBlockEnergy || 0) + card.fullBlockEnergy;
+  if (card.fullBlockDraw) state.fullBlockDraw = (state.fullBlockDraw || 0) + card.fullBlockDraw;
   if (card.stripGuard) state.bossGuard = Math.max(0, state.bossGuard - scaledValue(card.stripGuard, state.stats[card.stat]));
   if (card.lose && !card.deal) hurtPlayer(state, card.lose);
   if (card.next) state.nextAttack += scaledValue(card.next, state.stats[card.stat]);
@@ -359,6 +362,7 @@ function bossAct(state) {
   const intent = intentAt(state.boss, state.turn);
   if (state.staggered && (intent.kind === 'guard' || intent.kind === 'buff')) {
     state.fullBlockEnergy = 0;
+    state.fullBlockDraw = 0;
     return;
   }
   if (intent.kind === 'attack') {
@@ -370,13 +374,16 @@ function bossAct(state) {
     if (absorbed && state.playerHp > 0) {
       state.staggerNext = true;
       if (state.fullBlockEnergy) state.energyNext = (state.energyNext || 0) + state.fullBlockEnergy;
+      if (state.fullBlockDraw) state.drawNext = (state.drawNext || 0) + state.fullBlockDraw;
     }
     state.bossCut = 0;
     state.bossCutPct = 0;
     state.fullBlockEnergy = 0;
+    state.fullBlockDraw = 0;
     return;
   }
   state.fullBlockEnergy = 0;
+  state.fullBlockDraw = 0;
   if (intent.kind === 'guard') {
     state.bossGuard += intent.n;
     return;
@@ -406,7 +413,6 @@ function endTurn(state) {
   state.keep = null;
   state.nextAttack = 0;
   state.bossCut = 0;
-  state.bossCutPct = 0;
   state.blockHalved = false;
   if (state.done || state.turn >= TRIAL_LIMITS.turns) {
     state.done = state.done || 'turns';
@@ -429,6 +435,10 @@ function endTurn(state) {
   state.staggered = !!state.staggerNext;
   state.staggerNext = false;
   drawCards(state, TRIAL_LIMITS.draw);
+  if (state.drawNext) {
+    drawCards(state, state.drawNext);
+    state.drawNext = 0;
+  }
   tickHexOpen(state);
 }
 
@@ -483,7 +493,9 @@ function createState(seedHex, opts) {
     revealUntil: 0,
     blockKeep: 0,
     energyNext: 0,
+    drawNext: 0,
     fullBlockEnergy: 0,
+    fullBlockDraw: 0,
     blockHalved: false,
     blockHalvedNext: false,
     playedThisTurn: 0,
@@ -549,6 +561,7 @@ function publicCard(state, card, index) {
     signature: !!card.signature,
     ally: !!card.ally,
     keepCombo: !!card.keepCombo,
+    keepComboHalf: !!card.keepComboHalf,
     art: card.art || null,
     setup: !!card.setup,
     playable,
@@ -689,7 +702,9 @@ function horizonSpend(after) {
     .map((card) => ({
       cost: card.cost || 0,
       full: card.preview,
-      rest: Math.max(0, card.preview - comboExtra)
+      rest: Math.max(0, card.preview - comboExtra),
+      keepCombo: card.keepCombo,
+      keepComboHalf: card.keepComboHalf
     }))
     .sort((a, b) => b.full - a.full);
   let energy = after.energy == null ? 3 : after.energy;
@@ -698,7 +713,9 @@ function horizonSpend(after) {
   for (const card of attacks) {
     if (card.cost > energy) continue;
     spend += comboLeft ? card.full : card.rest;
-    if (!card.keepCombo) comboLeft = false;
+    if (card.keepComboHalf) {
+      if ((after.combo || 0) < 2) comboLeft = false;
+    } else if (!card.keepCombo) comboLeft = false;
     energy -= card.cost;
   }
   if (after.staggered && after.intent && (after.intent.kind === 'guard' || after.intent.kind === 'buff')) {

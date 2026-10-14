@@ -54,9 +54,20 @@ test('twelve numbered allies and the shared penalty', () => {
   assert.equal(ally('wren').text, '+1 Combo. Reveal boss\'s next two intents.');
   assert.equal(ally('wren').draw, undefined);
   assert.equal(ally('corvin').dealDuringFinisher, 10);
-  assert.equal(ally('tilde').bossCutPct, 25);
+  assert.equal(ally('tilde').bossCutPct, 20);
+  assert.equal(ally('tilde').text, 'Boss\'s next attack deals 20% less (floor).');
   assert.equal(ally('grub').cost, 2);
-  assert.equal(ally('croak').deal, 8);
+  assert.equal(ally('grub').combo, 1);
+  assert.equal(ally('croak').deal, 7);
+  assert.equal(ally('croak').keepComboHalf, true);
+  assert.equal(ally('juniper').stripGuard, 6);
+  assert.equal(ally('brannoc').block, 9);
+  assert.equal(ally('brannoc').fullBlockDraw, 1);
+  assert.equal(ally('footnote').deal, 4);
+  assert.equal(ally('footnote').dealIfStaggered, 8);
+  assert.equal(ally('lumen').deal, 3);
+  assert.equal(ally('lumen').hits, 3);
+  assert.equal(TRIAL_CARDS.find((card) => card.id === 'footnote').name, 'Gloss');
   const pool = allyPool({ eliminated: ['thorn'] });
   assert.equal(pool.length, 13);
   assert.equal(pool.find((row) => row.entity_id === 'thorn').ghost, true);
@@ -75,8 +86,8 @@ test('twelve numbered allies and the shared penalty', () => {
   assert.equal(penalized.keepBlock, 2);
   assert.equal(penalized.sharedPenalty, true);
   const footnote = cardsForAllies(['footnote'], { penalized: ['footnote'] })[0];
-  assert.equal(footnote.deal, 4);
-  assert.equal(footnote.doubleIfStaggered, true);
+  assert.equal(footnote.deal, 3);
+  assert.equal(footnote.dealIfStaggered, 7);
 });
 
 test('auto-fill skips last chapter and needs five wallets', () => {
@@ -110,37 +121,46 @@ test('ally cards do what the content doc says', () => {
   assert.deepEqual(wren.revealed.map((row) => row.label), ['🛡 8', '⚔ 9']);
 
   const juniper = play([ally('juniper')], [{ type: 'play', card: 0 }], { variant: 'D2' });
-  assert.equal(juniper.bossGuard, 6);
+  assert.equal(juniper.bossGuard, 4);
   assert.equal(juniper.combo, 1);
 
   const footnote = play(
     [ally('footnote'), ally('hob'), ally('hob'), ally('hob')],
     [{ type: 'play', card: 0 }, { type: 'end' }, { type: 'play', card: 0 }]
   );
-  assert.equal(footnote.dealt, 16);
+  assert.equal(footnote.dealt, 13);
 
   const index = play([jab, ally('grub'), ally('grub'), ally('index')], [{ type: 'play', card: 0 }]);
   assert.equal(index.combo, 2);
   const indexBlock = play([ally('grub'), ally('grub'), ally('grub'), ally('index')], [{ type: 'play', card: 0 }]);
   assert.equal(indexBlock.combo, 1);
 
-  const croak = play([ally('croak'), ally('wren')], [{ type: 'play', card: 0 }, { type: 'play', card: 0 }]);
+  const croak = play(
+    [ally('croak'), ally('wren'), ally('juniper')],
+    [{ type: 'play', card: 0 }, { type: 'play', card: 0 }, { type: 'play', card: 0 }]
+  );
   assert.equal(croak.combo, 1);
-  assert.equal(croak.dealt, 13);
+  assert.equal(croak.dealt, 16);
 
   const mira = play([jab, ally('mira')], [{ type: 'play', card: 0 }, { type: 'play', card: 0 }]);
   assert.equal(mira.dealt, 15);
 
-  const brannoc = play([ally('brannoc')], [{ type: 'play', card: 0 }, { type: 'end' }]);
-  assert.equal(brannoc.energy, 4);
+  const brannoc = play(
+    [ally('grub'), ally('grub'), ally('grub'), ally('grub'), ally('brannoc')],
+    [{ type: 'play', card: 0 }, { type: 'end' }]
+  );
+  assert.equal(brannoc.energy, 3);
   assert.equal(brannoc.playerBlock, 0);
   assert.equal(brannoc.playerHp, 30);
+  assert.equal(brannoc.hand.length, 4);
+  assert.equal(brannoc.staggered, true);
 
   const lumen = play([ally('lumen')], [{ type: 'play', card: 0 }]);
   assert.equal(lumen.dealt, 10);
 
   const grub = play([ally('grub')], [{ type: 'play', card: 0 }]);
   assert.equal(grub.playerBlock, 12);
+  assert.equal(grub.combo, 1);
 
   const tilde = play([ally('tilde')], [{ type: 'play', card: 0 }]);
   assert.equal(tilde.intent.n, 4);
@@ -152,6 +172,12 @@ test('ally cards do what the content doc says', () => {
   );
   assert.equal(tildeFades.turn, 3);
   assert.equal(tildeFades.intent.n, 9);
+  const tildeHolds = play(
+    [ally('tilde'), ally('grub'), ally('grub'), ally('grub'), ally('grub'), ally('grub')],
+    [{ type: 'end' }, { type: 'play', card: 2 }, { type: 'end' }]
+  );
+  assert.equal(tildeHolds.turn, 3);
+  assert.equal(tildeHolds.intent.n, 7);
 
   const finisher = play([ally('corvin')], [{ type: 'play', card: 0 }], { openingBossHp: 36 });
   assert.equal(finisher.dealt, 16);
@@ -187,6 +213,8 @@ test('the proposer rotates by cluster-deduped CP and holders can veto', () => {
 
 test('every deck is 12 cards, and a short vote is auto-picked', async () => {
   const bare = replayTrial('ab'.repeat(32), [], open());
+  assert.equal(bare.boss, 'The First Stain');
+  assert.equal(replayTrial('ab'.repeat(32), [], { ...open(), chapter: 7 }).boss, 'The Closing Hand');
   assert.equal(bare.deckSize, 12);
   assert.equal(bare.autoPicked, true);
   assert.deepEqual(bare.allies, ['hob', 'wren']);
