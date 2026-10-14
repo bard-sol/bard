@@ -4,6 +4,7 @@
  * Run: node season0/sims/score-v4.mjs
  * One cell: ONLY=both CLAMP=0 CROWN=1.5 CONTROL=1 SEASONS=1000 node season0/sims/score-v4.mjs
  * Clamp sweep: SWEEP=1 node season0/sims/score-v4.mjs
+ * Stake-tilt sweep: KSWEEP=1 node season0/sims/score-v4.mjs
  *
  * raise_loyalty_pays stays false and does not change Health.
  */
@@ -469,6 +470,8 @@ function runSeason(seed, pristine, opts) {
   const clampWidth = opts.clamp != null ? opts.clamp : CLAMP;
   const crownBase = opts.crownMul != null ? opts.crownMul : CROWN_MUL;
   const control = opts.control != null ? opts.control : CONTROL;
+  const kStake = opts.k != null ? opts.k : 0;
+  const duelBonus = opts.duelBonus != null ? opts.duelBonus : 0.10;
   const houses = structuredClone(pristine);
   const twistDeck = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
     .map((id) => ({ id, roll: rand(seed, 400, id, 0, 0) }))
@@ -491,6 +494,8 @@ function runSeason(seed, pristine, opts) {
   let a3 = false;
   let a5 = false;
   let a4 = false;
+  let revivedId = null;
+  let ch2Bottom = null;
   let ch1Top = null;
   let firstOpen = null;
   let doodles = 0;
@@ -630,7 +635,7 @@ function runSeason(seed, pristine, opts) {
         const participation = possible > 0 ? raw / possible : 0;
         partSum += participation;
         partN += 1;
-        const duelMult = 1 + 0.10 * (carryQuality[id] || 0);
+        const duelMult = 1 + duelBonus * (carryQuality[id] || 0);
         castOf[id] = fullDay * participation * duelMult;
         const vFrac = clamp(0.62 + (rand(seed, chapter, day, INDEX[id], 51) - 0.5) * 0.16, 0.05, 0.95);
         const uFrac = clamp(0.48 + (rand(seed, chapter, day, INDEX[id], 52) - 0.5) * 0.16, 0.05, 0.95);
@@ -649,6 +654,15 @@ function runSeason(seed, pristine, opts) {
           castOf[id] = meanCast;
           healShareOf[id] = meanHeal;
           verifiedHealShare[id] = meanVerified;
+        }
+      }
+      if (kStake !== 0 && living.length) {
+        const twValues = living.map((id) => houseTWL(houses[id]));
+        const mid = median(twValues);
+        for (let i = 0; i < living.length; i++) {
+          const stake = twValues[i];
+          const s = !(mid > 0) || !(stake > 0) ? -1 : clamp(Math.log(stake / mid), -1, 1);
+          castOf[living[i]] *= 1 + kStake * s;
         }
       }
       carryQuality = {};
@@ -720,6 +734,10 @@ function runSeason(seed, pristine, opts) {
     }
 
     const snapshot = tally(living, houses, grossHeal, effectiveHit, chapterBase);
+    if (chapter === 2) {
+      const ranked = orderByHealth(living, snapshot.health, seed, 8250, false);
+      ch2Bottom = ranked.slice(0, Math.floor(ranked.length / 2));
+    }
     for (const id of living) {
       baseSamples += 1;
       const rail = Math.min(Math.abs(snapshot.base[id] - (100 - clampWidth)), Math.abs(snapshot.base[id] - (100 + clampWidth)));
@@ -772,6 +790,7 @@ function runSeason(seed, pristine, opts) {
           revived = true;
           revivalUsed = true;
           owed = true;
+          revivedId = id;
         }
       }
       const stakeLoss = penaltyOf(houses[id]);
@@ -849,7 +868,13 @@ function runSeason(seed, pristine, opts) {
   }
 
   const champion = living.length === 1 ? living[0] : living.slice().sort((a, b) => INDEX[a] - INDEX[b])[0];
-  const a2 = !!(ch1Top && champion && ch1Top !== champion);
+  let a2 = !!(ch1Top && champion && ch1Top !== champion);
+  if (opts.repickAnnotations) {
+    a2 = !!(champion && ch2Bottom && ch2Bottom.includes(champion));
+    const finalists = ch6Set && ch6Set.length === 3 ? ch6Set : (champion ? [champion] : []);
+    a4 = !!(revivedId && finalists.includes(revivedId));
+    a5 = people.some((point) => (point.chapter === 6 || point.chapter === 7) && point.crownChanged);
+  }
   if (a2) markOpen(7);
   const firstGhost = ghosts[0] || null;
   const a6ratio = firstGhost && firstGhost.died < 7 && firstGhost.active > 0 ? firstGhost.ghostActive / firstGhost.active : null;
@@ -1205,7 +1230,10 @@ function cellOpts(cell, twistMode) {
     twistMode,
     clamp: cell.clamp,
     crownMul: cell.crown,
-    control: cell.model === 'control'
+    control: cell.model === 'control',
+    k: cell.k || 0,
+    duelBonus: cell.duelBonus != null ? cell.duelBonus : 0.10,
+    repickAnnotations: !!cell.repickAnnotations
   };
 }
 
@@ -1320,7 +1348,104 @@ async function runClampSweep() {
   console.log('passing', JSON.stringify(report.passingClamps), 'best', best.clamp, 'seconds', report.seconds);
 }
 
+function roundK(value) {
+  return Math.round(value * 100) / 100;
+}
+
+async function runKSweep() {
+  const started = Date.now();
+  const ks = [];
+  for (let step = 0; step <= 8; step++) ks.push(roundK(step / 20));
+  const variants = [
+    { name: 'stake', duelBonus: 0.10, label: 'Stake tilt only. Duel bonus stays at most +10%.' },
+    { name: 'stake-duel20', duelBonus: 0.20, label: 'Stake tilt, and the Duel participation bonus doubled to at most +20%.' }
+  ];
+  const cells = [];
+  for (const variant of variants) {
+    for (const k of ks) {
+      cells.push({
+        model: 'standard',
+        clamp: 0,
+        crown: 1.5,
+        k,
+        duelBonus: variant.duelBonus,
+        variant: variant.name,
+        repickAnnotations: true
+      });
+    }
+  }
+  const ran = await runCells(cells);
+  for (const cell of ran) {
+    console.log(cell.variant, 'k', cell.k, 'clean', JSON.stringify(cell.clean.goals), 'deck', JSON.stringify(cell.deck.goals));
+  }
+  const pick = (name) => {
+    const rows = ran.filter((cell) => cell.variant === name);
+    const passing = rows.filter((cell) => cell.clean.goals.pass && cell.deck.goals.pass);
+    const smallest = passing.slice().sort((a, b) => a.k - b.k)[0] || null;
+    const closest = rows.slice().sort((a, b) => {
+      const left = Math.min(barMargin(a.clean.goals), barMargin(a.deck.goals));
+      const right = Math.min(barMargin(b.clean.goals), barMargin(b.deck.goals));
+      return right - left || a.k - b.k;
+    })[0];
+    const chosen = smallest || closest;
+    return {
+      passingK: passing.map((cell) => cell.k),
+      smallestK: smallest ? smallest.k : null,
+      reportedK: chosen.k,
+      reportedBecause: smallest ? 'smallest k that passes all three bars on both decks' : 'no k passes; closest on the minimum margin',
+      annotations: {
+        clean: chosen.clean.annotations,
+        deck: chosen.deck.annotations
+      }
+    };
+  };
+  const report = {
+    ruleSet: 'v4-stake-tilt',
+    model: 'standard',
+    clamp: 0,
+    crown: 1.5,
+    budgetB: B,
+    seasons: SEASONS,
+    seconds: Math.round((Date.now() - started) / 1000),
+    raise_loyalty_pays_default: false,
+    ks,
+    lever: 'Each morning, after fresh locks, s = clamp(ln(TWL_h / median living-House TWL), −1, +1). That House\'s cast, which is its heals and its hits, is multiplied by (1 + k·s). Ghost hits are not scaled. Mercy, Armor, the Crown, and the pile-on cap still apply to the scaled weight.',
+    annotationsRepicked: {
+      A2: 'The champion is among the floor(n/2) lowest-Health Houses at the chapter-2 Tally. Ties break by VRF. The median House is outside the bottom half when n is odd.',
+      A4: 'The season\'s revived House is alive at the start of chapter 6. Revival is still once per season, in chapters 1–4.',
+      A5: 'The Crown changes hands between two Tallies inside chapter 6 or inside chapter 7. The Crown carried in from the previous chapter does not count.',
+      A1: 'Unchanged.',
+      A3: 'Unchanged.',
+      A6: 'Unchanged. Verified ghosts at the first final death, bar 60%.'
+    },
+    variants: variants.map((variant) => ({
+      ...variant,
+      ...pick(variant.name),
+      rows: ran.filter((cell) => cell.variant === variant.name).map((cell) => ({
+        k: cell.k,
+        clean: cell.clean.goals,
+        deck: cell.deck.goals,
+        passBoth: cell.clean.goals.pass && cell.deck.goals.pass
+      }))
+    }))
+  };
+  mkdirSync(new URL('./results/', import.meta.url), { recursive: true });
+  const outName = process.env.KSWEEP_OUT || './results/k-sweep.json';
+  writeFileSync(new URL(outName, import.meta.url), JSON.stringify(report));
+  console.log(JSON.stringify(report.variants.map((variant) => ({
+    name: variant.name,
+    smallestK: variant.smallestK,
+    reportedK: variant.reportedK,
+    passingK: variant.passingK
+  }))));
+  console.log('seconds', report.seconds);
+}
+
 async function main() {
+  if (process.env.KSWEEP === '1') {
+    await runKSweep();
+    return;
+  }
   if (process.env.SWEEP === '1') {
     await runClampSweep();
     return;
