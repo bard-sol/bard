@@ -10,7 +10,7 @@ import {
 import { chestPool, chestSeed, openChest } from '../lib/chest.js';
 import { contributionPoints, contributorPool, impactReadout, unlockedAmount } from '../lib/contribution.js';
 import { marketTerm, momentumTerm } from '../lib/score.js';
-import { simulateSeason } from '../lib/survival.js';
+import { simulateSeason, simulateSurvivalSeeds } from '../lib/survival.js';
 import { defaultConfig } from '../lib/config.js';
 
 test('trial numbers are integers and boss HP follows the chapter curve', () => {
@@ -20,10 +20,10 @@ test('trial numbers are integers and boss HP follows the chapter curve', () => {
   assert.equal(scaledValue(22, 80), 25);
   assert.equal(damagePercent(45, 120), 37);
   assert.equal(damagePercent(200, 110), 100);
-  assert.equal(bossMaxHp(1, 'D1'), 110);
-  assert.equal(bossMaxHp(1, 'D2'), 110);
-  assert.equal(bossMaxHp(1, 'D3'), 99);
-  assert.equal(bossMaxHp(7, 'D1'), 162);
+  assert.equal(bossMaxHp(1, 'D1'), 80);
+  assert.equal(bossMaxHp(1, 'D2'), 80);
+  assert.equal(bossMaxHp(1, 'D3'), 72);
+  assert.equal(bossMaxHp(7, 'D1'), 118);
   const ctx = trialContext({ charId: 'pip', chapter: 1, now: Date.parse('2026-10-17T12:00:00.000Z') });
   assert.equal(ctx.variant, 'D2');
   assert.equal(ctx.stats.LCK, 80);
@@ -100,13 +100,21 @@ test('momentum is guarded and a full season still names one champion', async () 
   assert.equal(season.remaining.length, 1);
   assert.equal(season.champion, season.remaining[0]);
   assert.equal(new Set(season.chapters.map((row) => row.marked)).size, 7);
+  const many = await simulateSurvivalSeeds(500);
+  assert.equal(many.seeds, 500);
+  assert.equal(many.flagged.length, 0);
+  const chapter1 = many.chapters[0].marked;
+  const sum = Object.values(chapter1).reduce((total, share) => total + share, 0);
+  assert.ok(Math.abs(sum - 1) < 1e-9);
+  console.log('SURVIVAL ' + JSON.stringify({ chapter1, champions: many.champions, flagged: many.flagged }));
 });
 
 test('trial bot median is reported and the HP base stays unlocked', async () => {
   const report = await simulateTrialMedian(300);
   assert.equal(report.runs, 300);
-  assert.equal(report.locked, false);
-  assert.equal(report.currentBaseHp, 110);
-  assert.ok(report.median >= 0 && report.median <= 100);
+  assert.equal(report.currentBaseHp, 80);
+  assert.equal(report.tooStrong, false);
+  assert.ok(report.median <= 70);
+  assert.ok(report.killRate <= 0.35);
   console.log('TRIAL_MEDIAN ' + JSON.stringify(report));
 });

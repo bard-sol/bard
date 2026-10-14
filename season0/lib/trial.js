@@ -25,10 +25,11 @@ export function damagePercent(dealt, maxHp) {
   return Math.floor(100 * Math.min(hp, Math.max(0, Number(dealt) || 0)) / hp);
 }
 
-export function bossMaxHp(chapter, variant) {
+export function bossMaxHp(chapter, variant, base) {
   const ch = Math.max(1, Number(chapter) || 1);
+  const hp = base == null ? defaultConfig().trial_base_hp : Number(base);
   const scale = variant === 'D3' ? 9 : 10;
-  return Math.floor(110 * (100 + 8 * (ch - 1)) * scale / 1000);
+  return Math.floor(hp * (100 + 8 * (ch - 1)) * scale / 1000);
 }
 
 const GENERICS = [
@@ -367,7 +368,7 @@ function createState(seedHex, opts) {
     energy: TRIAL_LIMITS.energy,
     playerHp: TRIAL_LIMITS.playerHp,
     playerBlock: 0,
-    bossMax: bossMaxHp(ctx.chapter, ctx.variant),
+    bossMax: bossMaxHp(ctx.chapter, ctx.variant, ctx.baseHp),
     bossHp: 0,
     bossGuard: ctx.variant === 'D2' ? 10 : 0,
     dealt: 0,
@@ -602,10 +603,12 @@ export function cardUpgradeOffer() {
 }
 
 /** Greedy bot over `runs` seeds. Chapter 1, plain day, flat 50 stats (the Twins). */
-export async function simulateTrialMedian(runs) {
+export async function simulateTrialMedian(runs, baseHp) {
   const count = Math.max(1, Number(runs) || 300);
+  const base = baseHp == null ? defaultConfig().trial_base_hp : Number(baseHp);
   const now = seasonStartMs();
   const opts = trialContext({ charId: 'twins', chapter: 1, now, inDanger: false });
+  opts.baseHp = base;
   const percents = [];
   let kills = 0;
   for (let i = 0; i < count; i++) {
@@ -617,7 +620,7 @@ export async function simulateTrialMedian(runs) {
   }
   percents.sort((a, b) => a - b);
   const mid = count % 2 ? percents[(count - 1) / 2] : (percents[count / 2 - 1] + percents[count / 2]) / 2;
-  const proposedBase = Math.round(110 * mid / 70);
+  const killRate = kills / count;
   return {
     runs: count,
     character: 'twins',
@@ -625,15 +628,26 @@ export async function simulateTrialMedian(runs) {
     variant: 'D1',
     stats: 50,
     median: mid,
-    killRate: kills / count,
+    killRate,
     kills,
     min: percents[0],
     max: percents[percents.length - 1],
-    currentBaseHp: 110,
-    proposedBaseHp: proposedBase,
-    locked: false,
-    note: mid >= 65 && mid <= 75
-      ? 'Median sits in the 65–75% band. Leave the 110 base.'
-      : 'Proposed base HP ' + proposedBase + ' would center this bot near 70%. The live formula stays at 110.'
+    currentBaseHp: base,
+    bossHp: bossMaxHp(1, 'D1', base),
+    tooStrong: mid > 70 || killRate > 0.35
   };
+}
+
+/** Start at 80. If the bot median is above 70% or kills are above 35%, add 5 and run again. */
+export async function tuneTrialBase(runs) {
+  const steps = [];
+  let base = 80;
+  let report;
+  for (let step = 0; step < 8; step++) {
+    report = await simulateTrialMedian(runs, base);
+    steps.push({ baseHp: base, median: report.median, killRate: report.killRate, kills: report.kills });
+    if (!report.tooStrong) break;
+    base += 5;
+  }
+  return { baseHp: base, report, steps };
 }

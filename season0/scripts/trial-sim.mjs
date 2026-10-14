@@ -1,7 +1,7 @@
 #!/usr/bin/env node
-/** Greedy Trial bot. Prints the median damage%. Does not change boss HP. */
-import { simulateTrialMedian } from '../lib/trial.js';
+/** Greedy Trial bot. Starts at base HP 80 and adds 5 while the bot is too strong. */
+import { tuneTrialBase } from '../lib/trial.js';
 
 const runs = Number(process.argv[2] || 300);
-const report = await simulateTrialMedian(runs);
-process.stdout.write(JSON.stringify(report, null, 2) + '\n');
+const tuned = await tuneTrialBase(runs);
+process.stdout.write(JSON.stringify(tuned, null, 2) + '\n');

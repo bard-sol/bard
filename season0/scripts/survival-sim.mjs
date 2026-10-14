@@ -1,6 +1,7 @@
 #!/usr/bin/env node
-/** Replays one Season 0 elimination with the contribution weights. No network. */
-import { simulateSeason } from '../lib/survival.js';
+/** Randomized Season 0 fields. Prints who is marked in each chapter and who wins. */
+import { simulateSurvivalSeeds } from '../lib/survival.js';
 
-const report = await simulateSeason(process.argv[2] || 's0-survival');
+const seeds = Number(process.argv[2] || 500);
+const report = await simulateSurvivalSeeds(seeds);
 process.stdout.write(JSON.stringify(report, null, 2) + '\n');
