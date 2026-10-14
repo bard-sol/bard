@@ -8,6 +8,8 @@ import { chooseMarked, scoreCast } from './score.js';
 export function survivalField() {
   return CAST.map((character, index) => ({
     id: character.id,
+    entity_id: character.id,
+    entity_type: 'character',
     twap: 0.8 + index * 0.35,
     prevTwap: 0.75 + index * 0.3,
     supply: 1000000000,
@@ -52,6 +54,8 @@ export function randomField(rng) {
     }
     return {
       id: character.id,
+      entity_id: character.id,
+      entity_type: 'character',
       twap,
       prevTwap,
       supply: 1000000000,
@@ -81,6 +85,8 @@ export async function simulateSeason(randomness, field) {
     chapters.push({
       chapter,
       marked: dead.id,
+      entity_id: dead.entity_id,
+      entity_type: dead.entity_type,
       deadScore: dead.S,
       leader: best.id,
       leaderScore: best.S,

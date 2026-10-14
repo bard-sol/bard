@@ -1,5 +1,6 @@
 import { sha256Hex } from './bytes.js';
 import { defaultConfig } from './config.js';
+import { asEntity, entityTieId } from './entity.js';
 
 /**
  * Time-weighted price from on-chain swaps.
@@ -83,24 +84,25 @@ export function marketTerm({ mc, medianMc, mom }) {
 }
 
 /**
- * characters: {
- *   id, twap, supply, prevTwap, chapter, swaps, traders, graduated,
- *   trainCredited, encMod,
+ * entities: {
+ *   entity_id, entity_type ('character' when omitted), twap, supply, prevTwap,
+ *   chapter, swaps, traders, graduated, trainCredited, encMod,
  *   wallets: [{ balance, active, eligible }],
  *   dailyAccuracies or strikeAccuracies
  * }
+ * `id` is still accepted and copied through. The formula does not read the type.
  * M is the market-cap term with momentum guards. U and K stay in 0..1.
  * B and P are divided by the living maximum. Ties record raw TWAP.
  */
-export function scoreCast(characters, weights) {
+export function scoreCast(entities, weights) {
   const w = weights || defaultConfig().weights;
-  const drafted = (characters || []).map((c) => {
+  const drafted = (entities || []).map((c) => {
     const supply = c.supply || defaultConfig().supply;
     const mc = Number.isFinite(c.mc) ? Number(c.mc) : Math.max(0, Number(c.twap) || 0) * supply;
-    return { c, mc };
+    return { c, mc, entity: asEntity(c) };
   });
   const medianMc = median(drafted.map((row) => row.mc));
-  const rows = drafted.map(({ c, mc }) => {
+  const rows = drafted.map(({ c, mc, entity }) => {
     const eligible = (c.wallets || []).filter((x) => x.eligible && Number(x.balance) > 0);
     const U = turnout(eligible.map((x) => ({ balance: x.balance, active: !!x.active })));
     const B = Math.log10(1 + eligible.length);
@@ -118,7 +120,9 @@ export function scoreCast(characters, weights) {
     });
     const M = marketTerm({ mc, medianMc, mom });
     return {
-      id: c.id,
+      id: c.id != null ? c.id : entity.entity_id,
+      entity_id: entity.entity_id,
+      entity_type: entity.entity_type,
       M,
       U,
       B,
@@ -141,6 +145,8 @@ export function scoreCast(characters, weights) {
     const S = w.M * r.M + w.U * r.U + w.B * B + w.P * P + w.K * r.K;
     return {
       id: r.id,
+      entity_id: r.entity_id,
+      entity_type: r.entity_type,
       S,
       M: r.M,
       U: r.U,
@@ -170,15 +176,22 @@ export function marginLabel(score, deadScore) {
 }
 
 /**
- * Lowest S dies. Tie → lower M, then lower U, then lower sha256(r|id).
- * `take` is 2 after a successful revival.
+ * Lowest S dies. Tie → lower raw TWAP, then lower M, then lower U, then lower sha256(r|entity).
+ * Characters hash as sha256(r|entity_id), the same key as before. `take` is 2 after a revival.
  */
 export async function chooseMarked(scored, randomnessHex, take) {
   const n = Math.max(1, take || 1);
   const decorated = [];
   for (const row of scored || []) {
-    const tie = await sha256Hex(String(randomnessHex) + '|' + row.id);
-    decorated.push({ ...row, tie });
+    const entity = asEntity(row);
+    const tie = await sha256Hex(String(randomnessHex) + '|' + entityTieId(row));
+    decorated.push({
+      ...row,
+      entity_id: entity.entity_id,
+      entity_type: entity.entity_type,
+      id: row.id != null ? row.id : entity.entity_id,
+      tie
+    });
   }
   decorated.sort((a, b) => {
     if (a.S !== b.S) return a.S - b.S;
@@ -211,6 +224,8 @@ export function reaperSeedMaterial(season, chapter) {
   return 'bard|' + season + '|' + chapter + '|reaper';
 }
 
-export function encounterSeedMaterial(season, chapter, charId) {
-  return 'bard|' + season + '|' + chapter + '|' + charId + '|encounter';
+export function encounterSeedMaterial(season, chapter, entityId, entityType) {
+  const entity = asEntity({ entity_id: entityId, id: entityId, entity_type: entityType });
+  if (entity.entity_type === 'character') return 'bard|' + season + '|' + chapter + '|' + entity.entity_id + '|encounter';
+  return 'bard|' + season + '|' + chapter + '|' + entity.entity_type + '|' + entity.entity_id + '|encounter';
 }

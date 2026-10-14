@@ -37,6 +37,8 @@ export function standings(extraTrain) {
     const p = PROFILE[c.id];
     return {
       id: c.id,
+      entity_id: c.id,
+      entity_type: 'character',
       twap: p.twap,
       supply: 1e9,
       trainCredited: p.train + (Number(bonus[c.id]) || 0),

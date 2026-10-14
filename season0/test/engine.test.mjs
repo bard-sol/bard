@@ -15,6 +15,7 @@ import { assignSquad, rankSquads, removalAfterSnapshot, handlerRanks, cosmeticWi
 import { filterLastWords, reviewLastWords, resolveLastWords, graphemeLength } from '../lib/filter.js';
 import { earlyBuyCopy, chapterLegacy } from '../lib/legacy.js';
 import { publishPlan } from '../lib/statefile.js';
+import { contributorPool } from '../lib/contribution.js';
 import { applyCheer } from '../lib/morale.js';
 import { dbcConfigParams, CHARACTER_POOLS } from '../lib/dbc.js';
 import { transactionAllowed } from '../lib/allowlist.js';
@@ -79,11 +80,55 @@ test('tie goes to lower M then lower U then hash', async () => {
     { id: 'b', S: 0.5, M: 0.2, U: 0.4 }
   ], 'abc', 1);
   assert.equal(marked.length, 1);
+  assert.equal(marked[0].entity_type, 'character');
+  assert.equal(marked[0].entity_id, marked[0].id);
   const both = await chooseMarked([
     { id: 'high', S: 0.9, M: 0.1, U: 0.1 },
     { id: 'low', S: 0.2, M: 0.9, U: 0.9 }
   ], 'abc', 2);
   assert.deepEqual(both.map((x) => x.id), ['low', 'high']);
+});
+
+test('a club scores and pays on the same path as a character', async () => {
+  const supply = 1_000_000_000;
+  const stats = { twap: 2, supply, trainCredited: 25, encMod: 0, wallets: [{ balance: 10, eligible: true, active: true }], strikeAccuracies: [0.5] };
+  const [character, club] = scoreCast([
+    { id: 'pip', ...stats },
+    { entity_id: 'ink-well', entity_type: 'club', ...stats }
+  ]);
+  assert.equal(character.entity_type, 'character');
+  assert.equal(character.entity_id, 'pip');
+  assert.equal(character.id, 'pip');
+  assert.equal(club.entity_type, 'club');
+  assert.equal(club.entity_id, 'ink-well');
+  assert.equal(club.S, character.S);
+  const marked = await chooseMarked([character, club], 'draw', 1);
+  assert.equal(marked[0].entity_type === 'character' || marked[0].entity_type === 'club', true);
+  const pool = contributorPool({
+    mode: 'tbard',
+    daysSinceFinale: 14,
+    entities: [
+      { entity_id: 'ink-well', entity_type: 'club', alive: true, wallets: [{ wallet: 'a', trialAccuracy: 1 }] },
+      { id: 'pip', alive: false, wallets: [{ wallet: 'z', trialAccuracy: 1 }] }
+    ]
+  });
+  assert.equal(pool.payouts.length, 1);
+  assert.equal(pool.payouts[0].entity_id, 'ink-well');
+  assert.equal(pool.payouts[0].entity_type, 'club');
+  assert.equal(pool.payouts[0].charId, undefined);
+  const plan = await publishPlan({
+    season: 's0',
+    chapter: 2,
+    status: 'final',
+    characters: [{ id: 'pip', S: character.S }],
+    scores: [{ id: 'pip', S: character.S }]
+  });
+  const body = JSON.parse(plan.body);
+  assert.equal(body.scores[0].entity_id, 'pip');
+  assert.equal(body.scores[0].entity_type, 'character');
+  assert.equal(body.scores[0].id, 'pip');
+  assert.equal(body.entities[0].entity_type, 'character');
+  assert.equal(body.characters[0].entity_id, 'pip');
 });
 
 test('TWAP holds each swap price until the next', () => {

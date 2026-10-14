@@ -1,5 +1,7 @@
 /** Holdings do not multiply contribution. Season 0 pays tBard only. */
 
+import { CHARACTER, asEntity } from './entity.js';
+
 export const REWARD_UNLOCK_DAYS = 14;
 export const POOL_PER_CHAPTER = 2142857;
 export const CONTRIB_REWARD_MODE = 'tbard';
@@ -81,10 +83,11 @@ function cappedShares(rows, emit) {
 }
 
 /**
- * Top 10% of each surviving character (at least 3), share by CP^0.8,
- * 1% cap per wallet. Dead characters pay nothing. Unlock is linear over 14 days.
+ * Top 10% of each surviving entity (at least 3), share by CP^0.8,
+ * 1% cap per wallet. Dead entities pay nothing. Unlock is linear over 14 days.
+ * `entities` is the list. `characters` is the same list for callers that still say that.
  */
-export function contributorPool({ characters, bardTwap, rolled, mode, daysSinceFinale }) {
+export function contributorPool({ entities, characters, bardTwap, rolled, mode, daysSinceFinale }) {
   const gate = rewardMode(mode || CONTRIB_REWARD_MODE);
   if (!gate.ok) return gate;
   const pool = POOL_PER_CHAPTER + Math.max(0, Number(rolled) || 0);
@@ -96,19 +99,23 @@ export function contributorPool({ characters, bardTwap, rolled, mode, daysSinceF
   }
   const leftover = pool - emit;
   const payouts = [];
-  for (const character of characters || []) {
-    if (character.alive === false) continue;
-    const chosen = recipients(character.wallets || []);
+  for (const row of entities || characters || []) {
+    if (row.alive === false) continue;
+    const entity = asEntity(row);
+    const chosen = recipients(row.wallets || []);
     const amounts = cappedShares(chosen, emit);
-    chosen.forEach((row, index) => {
+    chosen.forEach((wallet, index) => {
       if (!amounts[index]) return;
-      payouts.push({
-        charId: character.id,
-        wallet: row.wallet,
-        cp: row.cp,
+      const payout = {
+        entity_id: entity.entity_id,
+        entity_type: entity.entity_type,
+        wallet: wallet.wallet,
+        cp: wallet.cp,
         amount: amounts[index],
         unlocked: unlockedAmount(amounts[index], daysSinceFinale)
-      });
+      };
+      if (entity.entity_type === CHARACTER) payout.charId = entity.entity_id;
+      payouts.push(payout);
     });
   }
   return {

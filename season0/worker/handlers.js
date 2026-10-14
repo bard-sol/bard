@@ -256,7 +256,7 @@ async function onResolve(body) {
 }
 
 async function onScore(body) {
-  const scores = scoreCast(body.characters || [], body.weights);
+  const scores = scoreCast(body.entities || body.characters || [], body.weights);
   return json({ ok: true, scores });
 }
 

@@ -1,6 +1,7 @@
 import { sha256Hex } from './bytes.js';
 import { stateMemo } from './spend.js';
 import { voidMemo } from './voidchapter.js';
+import { tagEntity } from './entity.js';
 
 /** Public mirror proposed for chapter state files. Not Arweave. */
 export const GITHUB_MIRROR_REPO = 'https://github.com/bard-sol/bard-chapters';
@@ -23,17 +24,31 @@ export async function hashState(state) {
   return sha256Hex(canonicalState(state));
 }
 
+const ENTITY_LISTS = ['scores', 'entities', 'characters', 'elimination', 'payouts'];
+
+/** Stamp entity_id and entity_type on the lists a chapter file scores. Character rows stay readable by id. */
+export function annotateState(state) {
+  if (!state || typeof state !== 'object' || Array.isArray(state)) return state;
+  const out = { ...state };
+  for (const key of ENTITY_LISTS) {
+    if (Array.isArray(out[key])) out[key] = out[key].map(tagEntity);
+  }
+  if (!Array.isArray(state.entities) && Array.isArray(out.characters)) out.entities = out.characters.map(tagEntity);
+  return out;
+}
+
 /**
  * Devnet proof is the memo hash. The file itself is mirrored to Supabase
  * Storage and a public GitHub path. Irys is not used on devnet.
  */
 export async function publishPlan(state) {
-  const hash = await hashState(state);
-  const season = state.season;
-  const chapter = state.chapter;
-  const status = state.status || 'final';
+  const body = annotateState(state);
+  const hash = await hashState(body);
+  const season = body.season;
+  const chapter = body.chapter;
+  const status = body.status || 'final';
   const memo = status === 'void'
-    ? voidMemo(season, chapter, state.void_reason, hash)
+    ? voidMemo(season, chapter, body.void_reason, hash)
     : stateMemo(season, chapter, hash);
   const file = 's0-chapter-' + chapter + (status === 'void' ? '-void' : '') + '.json';
   const plan = {
@@ -44,7 +59,7 @@ export async function publishPlan(state) {
     supabasePath: 'season-state/' + file,
     githubPath: 'season0/mirror/' + file,
     githubUrl: GITHUB_MIRROR_REPO + '/blob/main/' + file,
-    body: canonicalState(state)
+    body: canonicalState(body)
   };
   return Object.assign(plan, mirrorLinks(plan, null));
 }
