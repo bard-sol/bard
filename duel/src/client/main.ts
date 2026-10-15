@@ -205,6 +205,7 @@ function paint(): void {
   maybeTips();
   noteRivalBeat();
   markArmed();
+  if (ui.busy) holdControls();
 }
 
 function mountSheets(): void {
@@ -426,6 +427,16 @@ function offerPlayStepTip(): void {
   showToast(toastCopy('Play step is over', PLAY_STEP_OVER));
 }
 
+function holdControls(): void {
+  document.querySelector('.app')?.classList.add('busy');
+  for (const id of ['endturn', 'legend']) {
+    const el = document.getElementById(id);
+    if (!(el instanceof HTMLButtonElement)) continue;
+    el.disabled = true;
+    if (id === 'endturn') el.classList.add('wait');
+  }
+}
+
 async function act(action: GameAction): Promise<void> {
   const payload = ui.payload;
   if (!payload || ui.busy || !acting(payload)) return;
@@ -437,13 +448,14 @@ async function act(action: GameAction): Promise<void> {
   ui.busy = true;
   ui.preview = null;
   ui.legendArmed = false;
+  holdControls();
   try {
     const next = await sendAction(payload.matchId, action);
+    ui.busy = false;
     adopt(next);
   } catch (error) {
-    showToast({ title: 'That play is not legal', body: error instanceof Error ? error.message : 'Try a different action.' });
-  } finally {
     ui.busy = false;
+    showToast({ title: 'That play is not legal', body: error instanceof Error ? error.message : 'Try a different action.' });
   }
 }
 
@@ -462,7 +474,7 @@ function unitOf(uid: string): UnitView | null {
 }
 
 function beginDrag(event: PointerEvent): void {
-  if (ui.legendArmed) return;
+  if (ui.legendArmed || ui.busy) return;
   if (!ui.payload || !acting(ui.payload) || ui.payload.view.phase === 'mulligan') return;
   const raw = event.target instanceof Element ? event.target : null;
   if (raw?.closest('.cm-bub, .cm-skip, .skip-box, .confirm-box, .sheet-host, .dc-q, button, a')) return;
@@ -648,7 +660,7 @@ function tapPlays(): boolean {
 }
 
 function finishTap(target: Element | null): boolean {
-  if (!target || !ui.payload || !acting(ui.payload)) return false;
+  if (!target || !ui.payload || ui.busy || !acting(ui.payload)) return false;
   if (target.closest('.dc-q')) {
     const def = target.closest('[data-def]')?.getAttribute('data-def');
     if (!def) return false;
@@ -823,7 +835,7 @@ function onClick(event: MouseEvent): void {
     return;
   }
   if (target.closest('#legend')) {
-    if (ui.payload && !acting(ui.payload)) return;
+    if (ui.busy || (ui.payload && !acting(ui.payload))) return;
     const toast = ui.payload ? legendToast(ui.payload) : null;
     if (toast) {
       showToast(toast);
@@ -862,7 +874,7 @@ function onClick(event: MouseEvent): void {
 
 async function endTurn(): Promise<void> {
   const payload = ui.payload;
-  if (!payload || !acting(payload)) return;
+  if (!payload || ui.busy || !acting(payload)) return;
   if (payload.view.phase === 'mulligan') {
     const idx = Array.from(document.querySelectorAll('.handrow .dc.sel')).flatMap((card) => {
       const uid = card.getAttribute('data-uid');

@@ -15,6 +15,7 @@ html, body { overscroll-behavior: none; }
 .ovl, .page, .un, .dc, .slot, .handrow { touch-action: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
 .ovl svg, .cm-dim, .cm-ring, .cm-tap, .cm-drag, .cm-arrow { pointer-events: none !important; }
 .dc.armed, .un.armed { box-shadow: 0 0 0 3px var(--text-1); }
+.app.busy .handrow, .app.busy .row.you .un { pointer-events: none; }
 .ghost { position: fixed; z-index: 80; pointer-events: none; width: 120px; transform: translate(-40%, -30%); }
 .ghost .dc, .ghost .un { pointer-events: none; }
 .title-screen { min-height: 100%; display: grid; place-items: center; padding: 24px; }
