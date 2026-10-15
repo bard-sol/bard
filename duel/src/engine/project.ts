@@ -131,6 +131,7 @@ function noteFace(
       owner: trap.owner,
       faceDown: true,
       known: false,
+      defId: null,
       name: null,
       text: null,
       glyph: null,
@@ -143,6 +144,7 @@ function noteFace(
     owner: trap.owner,
     faceDown: false,
     known: true,
+    defId: trap.id,
     name: card.name,
     text: card.text,
     glyph: 'note',
@@ -260,6 +262,10 @@ function eventText(entry: LogProjection): string | null {
       return 'A unit changes page.';
     case 'ward':
       return 'Ward fades.';
+    case 'buff':
+      return entry.why === 'port_foxing' ? 'Port Foxing gives +1 attack.' : 'A Page rule fires.';
+    case 'trigger':
+      return entry.t === 'death' ? 'Last Word.' : 'Opening Line.';
     default:
       return null;
   }

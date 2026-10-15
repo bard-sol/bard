@@ -1,11 +1,19 @@
 import { practiceDeck } from '../catalog.js';
 import { deckError } from '../engine/adapter.js';
+import { tutorialDecks } from '../tutorial/script.js';
 import type { Deck, GameAction, Stance } from '../types.js';
 
+export interface ParsedCreate {
+  decks: [Deck, Deck];
+  stance: Stance;
+  tutorial?: boolean;
+}
+
 /** Shared by Express and the Worker so a request cannot mean two different actions. */
-export function parseCreate(body: unknown): { decks: [Deck, Deck]; stance: Stance } | null {
+export function parseCreate(body: unknown): ParsedCreate | null {
   if (!body || typeof body !== 'object') return null;
   const record = body as Record<string, unknown>;
+  if (record.tutorial === true) return { decks: tutorialDecks(), stance: 'patient', tutorial: true };
   const stance = parseStance(record.stance);
   const playerDeck = resolveDeck(record.playerDeck, record.playerDeckId);
   const opponentDeck = resolveDeck(record.opponentDeck, record.opponentDeckId);

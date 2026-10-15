@@ -26,19 +26,20 @@ Timers default to a 35s human turn and about 5s for the pilot. Override them wit
 
 ## Versions
 
-The live rules are the pin in `engine/active.mjs` (engine v1.1). Engine v1 stays in `engine/v1/` with its golden fixtures, and a stored v1 match replays on that engine. A data-only card-number pass is a new cards file plus the cards export in `active.mjs`: the engine reads cards from that pin. The server records, on every match setup:
+The live rules are the pin in `engine/active.mjs` (engine v1.3). Engine v1 and v1.1 stay in their folders with their golden fixtures, and a stored match replays on the engine named in its setup. The server records, on every match setup:
 
-| Field | v1.1 |
+| Field | v1.3 |
 |---|---|
-| `engineVersion` | `duel-engine-1.1.0` |
-| `cardsVersion` | `cards-proto-1.1` |
-| `aiVersion` | `pilot-1.1.0` |
-| `rulesVersion` | `rules-1.1.0` |
+| `engineVersion` | `duel-engine-1.3.0` |
+| `cardsVersion` | `cards-proto-1.3` |
+| `aiVersion` | `pilot-1.3.0` |
+| `rulesVersion` | `rules-1.3.0` |
 | `rules.secondInkTurns` | `1` |
+| `rules.secondVerse` | `1` |
 
-A Conquer scores 2 Verses, or 3 on The Spine. Fort Crease gives +1 attack to a character played there. `secondInkTurns: 1` is the second player's first-turn Ink. Their maximum Ink that turn is 2, not 1, and Spare Ink can take them to 3. Replay calls `replay(setup, actions)` with that same setup, so the flag is part of every replay.
+A Conquer scores 2 Verses, or 3 on The Spine. Fort Crease gives +1 attack to a character played there. `secondInkTurns: 1` is the second player's first-turn Ink. Their maximum Ink that turn is 2, not 1, and Spare Ink can take them to 3. `secondVerse: 1` means they also open the match on 1 Verse. Both flags are part of every replay's setup, and the verse track shows that 1 during the mulligan.
 
-`node engine/parity.mjs` replays the v1 golden fixtures on engine v1 and the v1.1 golden fixtures on the live pin, then checks purity plus redaction. `node engine/v1.1/parity.mjs` is Gameplay's own v1.1 check. CI runs both from `duel/` and fails on any mismatch.
+`node engine/parity.mjs` replays the v1, v1.1, and v1.3 golden fixtures on the matching engines. `node engine/v1.1/parity.mjs` and `node engine/v1.3/parity.mjs` are Gameplay's own checks. CI runs all three from `duel/` and fails on any mismatch.
 
 ## Adapter
 
@@ -53,7 +54,7 @@ interface EngineAdapter {
 }
 ```
 
-`apply` returns a new state. `view` is built from the engine's `clientView` and `clientLog`. The pilot is `makeSmart({ stance, slip: 300, salt: 99 })` and does not receive the match seed.
+`apply` returns a new state. `view` is built from the engine's `clientView` and `clientLog`. The live pilot is `makeSmart({ stance, slip: 250, salt: 99 })`. A stored v1 or v1.1 match replays with slip 300. The pilot does not receive the match seed.
 
 Actions are the engine's: `mulligan`, `play`, `champion`, `legend`, `fight`, `attack`, `move`, `end`.
 
@@ -69,7 +70,7 @@ Actions are the engine's: `mulligan`, `play`, `champion`, `legend`, `fight`, `at
 
 `POST /api/matches/:id/preview` resolves an attack on a copy of the state. A margin note shows as a strike, not as a card name.
 
-`POST /api/matches/:id/replay-verify` replays `setup` through the engine and derives pilot actions again from the pinned AI version. The response is `{ ok, actionCount, mismatches, engineVersion, cardsVersion, aiVersion, rulesVersion, secondInkTurns }` and does not include the seed or the decks.
+`POST /api/matches/:id/replay-verify` replays `setup` through the engine and derives pilot actions again from the pinned AI version. The response is `{ ok, actionCount, mismatches, engineVersion, cardsVersion, aiVersion, rulesVersion, secondInkTurns, secondVerse }` and does not include the seed or the decks.
 
 Matches sit in `MemoryMatchRepository` behind `MatchRepository`. The hosted test stores that same record in a Durable Object.
 

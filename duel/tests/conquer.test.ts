@@ -16,7 +16,7 @@ describe('conquer', () => {
       houseB: fold.house,
       deckB: fold.cards,
       seed: 11,
-      aiVersion: 'pilot-1.1.0',
+      aiVersion: 'pilot-1.3.0',
     }) as EngineState;
     state = apply(state, { type: 'mulligan', idx: [] });
     state = apply(state, { type: 'mulligan', idx: [] });
@@ -60,7 +60,7 @@ describe('conquer', () => {
       houseB: fold.house,
       deckB: fold.cards,
       seed: 11,
-      aiVersion: 'pilot-1.1.0',
+      aiVersion: 'pilot-1.3.0',
     }) as EngineState;
     state = apply(state, { type: 'mulligan', idx: [] });
     state = apply(state, { type: 'mulligan', idx: [] });
@@ -102,7 +102,7 @@ describe('conquer', () => {
       houseB: fold.house,
       deckB: fold.cards,
       seed: 11,
-      aiVersion: 'pilot-1.1.0',
+      aiVersion: 'pilot-1.3.0',
     }) as EngineState;
     state = apply(state, { type: 'mulligan', idx: [] });
     state = apply(state, { type: 'mulligan', idx: [] });

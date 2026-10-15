@@ -25,11 +25,15 @@ export function createApp(options: AppOptions = {}) {
     res.json({ ok: true, service: 'bard-duel' });
   });
 
+  app.post('/api/metrics', (_req, res) => {
+    res.status(204).end();
+  });
+
   app.post('/api/matches', async (req, res, next) => {
     try {
       const parsed = parseCreate(req.body);
       if (!parsed) return sendError(res, 400, 'bad_request');
-      const created = await service.create({ decks: parsed.decks, stance: parsed.stance });
+      const created = await service.create({ decks: parsed.decks, stance: parsed.stance, tutorial: parsed.tutorial });
       if (!created.ok) return sendError(res, 400, created.error);
       res.status(201).json(created.payload);
     } catch (error) {

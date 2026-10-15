@@ -182,6 +182,8 @@ export interface MarginaliaView {
   owner: PlayerId;
   faceDown: boolean;
   known: boolean;
+  /** Card id when the viewer knows the note. Sealed notes omit it. */
+  defId?: string | null;
   name: string | null;
   text: string | null;
   glyph: Glyph | null;
@@ -246,8 +248,12 @@ export interface ClientPayload {
   aiVersion: string;
   /** Second player's opening max Ink is 2 when this is 1. Public rule, not a secret. */
   secondInkTurns: number;
+  /** Verses the second player holds when the match opens. Public rule, not a secret. */
+  secondVerse: number;
   stance: Stance;
   status: 'playing' | 'complete';
+  /** Guided first match. The rival follows the bubble-guide script. */
+  tutorial: boolean;
 }
 
 export interface TradePreview {

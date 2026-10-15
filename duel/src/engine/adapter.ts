@@ -7,6 +7,15 @@ import {
 } from '../../engine/v1/engine.mjs';
 import { makeSmart as makeSmartV1, PILOT_VERSION as PILOT_V1 } from '../../engine/v1/pilots.mjs';
 import {
+  apply as applyV11,
+  ENGINE_VERSION as ENGINE_V11,
+  legalActions as legalV11,
+  replay as replayV11,
+  stateHash as hashV11,
+} from '../../engine/v1.1/engine.mjs';
+import { makeSmart as makeSmartV11, PILOT_VERSION as PILOT_V11 } from '../../engine/v1.1/pilots.mjs';
+import {
+  AI_SLIP,
   apply as engineApply,
   CARDS_VERSION,
   DEFAULT_RULES,
@@ -32,12 +41,14 @@ export class IllegalActionError extends Error {
   }
 }
 
-const PILOT_SLIP = 300;
+const PILOT_SLIP_V1 = 300;
 const PILOT_SALT = 99;
 
 /** Frozen stamps for engine v1. The v1 manifest reads the cards file with node:fs, so the worker must not import it. */
 const CARDS_V1 = 'cards-proto-1';
 const RULES_V1 = 'rules-1.0.0';
+const CARDS_V11 = 'cards-proto-1.1';
+const RULES_V11 = 'rules-1.1.0';
 
 interface RecordedBundle {
   engineVersion: string;
@@ -45,6 +56,8 @@ interface RecordedBundle {
   aiVersion: string;
   rulesVersion: string;
   secondInkTurns: number;
+  secondVerse: number;
+  slip: number;
   apply: typeof engineApply;
   legal: typeof engineLegal;
   replay: typeof engineReplay;
@@ -61,11 +74,29 @@ export function recordedBundle(engineVersion: string): RecordedBundle | null {
       aiVersion: PILOT_V1,
       rulesVersion: RULES_V1,
       secondInkTurns: 1,
+      secondVerse: 0,
+      slip: PILOT_SLIP_V1,
       apply: applyV1,
       legal: legalV1,
       replay: replayV1,
       hash: hashV1,
       pilot: makeSmartV1,
+    };
+  }
+  if (engineVersion === ENGINE_V11) {
+    return {
+      engineVersion: ENGINE_V11,
+      cardsVersion: CARDS_V11,
+      aiVersion: PILOT_V11,
+      rulesVersion: RULES_V11,
+      secondInkTurns: 1,
+      secondVerse: 0,
+      slip: PILOT_SLIP_V1,
+      apply: applyV11,
+      legal: legalV11,
+      replay: replayV11,
+      hash: hashV11,
+      pilot: makeSmartV11,
     };
   }
   if (engineVersion === ENGINE_VERSION) {
@@ -75,6 +106,8 @@ export function recordedBundle(engineVersion: string): RecordedBundle | null {
       aiVersion: PILOT_VERSION,
       rulesVersion: RULES_VERSION,
       secondInkTurns: DEFAULT_RULES.secondInkTurns,
+      secondVerse: DEFAULT_RULES.secondVerse,
+      slip: AI_SLIP,
       apply: engineApply,
       legal: engineLegal,
       replay: engineReplay,
@@ -123,7 +156,8 @@ export function createEngineAdapter(): EngineAdapter {
     pilot(state, stance) {
       const actor = actorOf(state);
       if (actor == null) throw new Error('pilot called with no actor');
-      const choose = bundleForState(state).pilot({ stance, slip: PILOT_SLIP, salt: PILOT_SALT });
+      const bundle = bundleForState(state);
+      const choose = bundle.pilot({ stance, slip: bundle.slip, salt: PILOT_SALT });
       return asAction(choose(state, actor));
     },
     replay(setup, actions) {

@@ -4,7 +4,7 @@ import type { EngineState, MatchSetup } from '../engine/state.js';
 export interface LogEntry {
   index: number;
   actor: PlayerId;
-  source: 'human' | 'pilot' | 'timeout';
+  source: 'human' | 'pilot' | 'timeout' | 'script';
   action: GameAction;
 }
 
@@ -23,6 +23,8 @@ export interface MatchRecord {
   thinking: boolean;
   deadline: number | null;
   createdAt: string;
+  /** Guided first match. The rival's moves are the bubble-guide script, not the pilot. */
+  tutorial?: boolean;
 }
 
 export interface MatchRepository {

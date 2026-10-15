@@ -1,0 +1,99 @@
+/* Bard — prototype UI v3 design tokens.  Source of truth for colour, type, space, radius, elevation, motion, breakpoints.
+   Rules baked in: lilac (--bard-smile) is ONLY Bard's smile and never used in UI; metallic gold (--gold-metal-*) is ONLY
+   revived units + season champion; the Gilt is flat matte #D4B25A; the Blot is glossy pure black. */
+@font-face { font-family: "Inter"; src: url("/fonts/Inter.ttf") format("truetype"); font-weight: 100 900; font-style: normal; font-display: swap; }
+@font-face { font-family: "Inter"; src: url("/fonts/Inter-Italic.ttf") format("truetype"); font-weight: 100 900; font-style: italic; font-display: swap; }
+@font-face { font-family: "Newsreader"; src: url("/fonts/Newsreader.ttf") format("truetype"); font-weight: 200 800; font-style: normal; font-display: swap; }
+@font-face { font-family: "Newsreader"; src: url("/fonts/Newsreader-Italic.ttf") format("truetype"); font-weight: 200 800; font-style: italic; font-display: swap; }
+
+:root {
+  /* ---- Surfaces: night ink (cool, slightly blue graphite). Never purple. ---- */
+  --ink-950: #0A0C10;   /* app background */
+  --ink-900: #0F1218;   /* board well */
+  --ink-850: #141821;   /* panels */
+  --ink-800: #1A1F2A;   /* raised panel / card text box */
+  --ink-700: #252B37;   /* hover, chips */
+  --ink-600: #343B49;   /* borders strong */
+  --line:      rgba(237,230,216,.08);   /* hairline */
+  --line-2:    rgba(237,230,216,.14);
+  --line-3:    rgba(237,230,216,.24);
+
+  /* ---- Paper (used sparingly: card art faces, linework ground, result sheet) ---- */
+  --paper:     #EFE7D6;
+  --paper-2:   #E4DAC4;
+  --paper-ink: #22201C;  /* text on paper */
+
+  /* ---- Text ---- */
+  --text-1: #F1EBDF;   /* primary (bone) */
+  --text-2: #B7B0A3;   /* secondary */
+  --text-3: #7F7A71;   /* tertiary / disabled */
+  --text-inv: #14161B;
+
+  /* ---- Functional ---- */
+  --cta:        #F1EBDF;  /* primary action = bone. (No gold, no lilac.) */
+  --cta-text:   #101216;
+  --focus:      #F1EBDF;
+  --atk:        #E9E3D6;  /* attack glyph */
+  --hp:         #E0483E;  /* health glyph / damage */
+  --dmg:        #FF5A4E;
+  --heal:       #6CC59A;
+  --buff:       #9FD2FF;  /* +stat tag (cool; stays far from lilac hue) */
+  --coin:       #C98A55;  /* copper match coin */
+  --coin-dim:   #4A3A2E;
+  --win:        #F1EBDF;
+  --loss:       #C9473F;
+  --danger:     #C9473F;
+
+  /* ---- Locked brand colours ---- */
+  --bard-smile: #B79CFF;   /* ONLY Bard's smile. Do not use anywhere else. */
+  --blot:       #000000;   /* glossy pure black, no grain */
+  --gilt-matte: #D4B25A;   /* the Gilt: flat matte, no gradient, no specular */
+  --gold-metal-1: #F6E3A1; --gold-metal-2: #C99A2E; --gold-metal-3: #8A6414; /* revived + champion ONLY */
+
+  /* ---- Houses (A / B) from s0-house-ui-plan.md. Candle A kept at canon #8E2F5E (user decision). ---- */
+  --h-pit-a: #D9481C;         --h-pit-b: #4A4E54;
+  --h-scriptorium-a: #1E7F72; --h-scriptorium-b: #23262E;
+  --h-gilt-a: #D4B25A;        --h-gilt-b: #F3ECDA;
+  --h-tidewrack-a: #6FB3DD;   --h-tidewrack-b: #C9A97E;
+  --h-candle-a: #8E2F5E;      --h-candle-b: #8B8580;   /* kept as canon; warmer #9A2B3E was proposed and declined */
+  --h-standard-a: #2B4F8C;    --h-standard-b: #A7A9A6;
+  --h-torn-a: #C8862A;        --h-torn-b: #5E6B34;
+  --h-fold-a: #E4DCC8;        --h-fold-b: #5B5D63;
+  --h-neutral-a: #8D877C;     --h-neutral-b: #2A2D33;
+
+  /* ---- Type ---- */
+  --font-ui: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-display: "Newsreader", Georgia, serif;
+  /* scale (px) — 1.2 minor-third on UI, display steps hand-tuned */
+  --fs-10: 10px; --fs-11: 11px; --fs-12: 12px; --fs-13: 13px; --fs-14: 14px; --fs-16: 16px;
+  --fs-18: 18px; --fs-20: 20px; --fs-24: 24px; --fs-32: 32px; --fs-40: 40px; --fs-56: 56px; --fs-72: 72px;
+  --lh-tight: 1.1; --lh-snug: 1.25; --lh-body: 1.4;
+  --tracking-caps: .08em;
+
+  /* ---- Space (4-pt) ---- */
+  --s-1: 4px; --s-2: 8px; --s-3: 12px; --s-4: 16px; --s-5: 20px; --s-6: 24px; --s-8: 32px; --s-10: 40px; --s-12: 48px; --s-16: 64px;
+
+  /* ---- Radii ---- */
+  --r-xs: 4px; --r-sm: 6px; --r-md: 10px; --r-lg: 14px; --r-xl: 20px; --r-pill: 999px;
+  --r-card: 10px;  /* card frame */
+
+  /* ---- Elevation ---- */
+  --e-0: none;
+  --e-1: 0 1px 0 rgba(255,255,255,.04) inset, 0 1px 2px rgba(0,0,0,.4);
+  --e-2: 0 1px 0 rgba(255,255,255,.05) inset, 0 6px 16px -6px rgba(0,0,0,.6), 0 2px 4px rgba(0,0,0,.35);
+  --e-3: 0 1px 0 rgba(255,255,255,.06) inset, 0 18px 40px -12px rgba(0,0,0,.75), 0 4px 10px rgba(0,0,0,.4);
+  --e-4: 0 30px 80px -20px rgba(0,0,0,.85), 0 8px 24px rgba(0,0,0,.5);
+
+  /* ---- Motion ---- */
+  --t-instant: 80ms; --t-fast: 140ms; --t-base: 220ms; --t-slow: 400ms; --t-drain: 400ms;
+  --ease-out: cubic-bezier(.2,.8,.2,1); --ease-in-out: cubic-bezier(.6,0,.3,1); --ease-back: cubic-bezier(.3,1.5,.5,1);
+  --hover-delay: 250ms;  /* desktop tooltip open delay */
+
+  /* ---- Layout ---- */
+  --topbar-h: 64px;
+  --panel-w: 260px;
+}
+/* Breakpoints (documented; CSS can't use vars in media queries):
+   mobile  ≤ 600px  (design target 390×844)
+   tablet  601–1199px (design target 1024×768 / 834×1194)
+   desktop ≥ 1200px (design target 1440×900; wide ≥ 1680 caps the board at 1600) */

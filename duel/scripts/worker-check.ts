@@ -130,10 +130,11 @@ async function main(): Promise<void> {
   let payload = (await created.json()) as ClientPayload;
   assertSafe(payload, 'create');
   if (payload.secondInkTurns !== 1) fail('secondInkTurns missing');
-  if (payload.engineVersion !== 'duel-engine-1.1.0') fail(`engine ${payload.engineVersion}`);
-  if (payload.cardsVersion !== 'cards-proto-1.1') fail(`cards ${payload.cardsVersion}`);
-  if (payload.aiVersion !== 'pilot-1.1.0') fail(`ai ${payload.aiVersion}`);
-  if (payload.rulesVersion !== 'rules-1.1.0') fail(`rules ${payload.rulesVersion}`);
+  if (payload.engineVersion !== 'duel-engine-1.3.0') fail(`engine ${payload.engineVersion}`);
+  if (payload.cardsVersion !== 'cards-proto-1.3') fail(`cards ${payload.cardsVersion}`);
+  if (payload.aiVersion !== 'pilot-1.3.0') fail(`ai ${payload.aiVersion}`);
+  if (payload.rulesVersion !== 'rules-1.3.0') fail(`rules ${payload.rulesVersion}`);
+  if (payload.secondVerse !== 1) fail(`secondVerse ${payload.secondVerse}`);
 
   const denied = await raw(`/api/matches/${payload.matchId}?player=1`, { headers: auth });
   if (denied.status !== 403) fail(`player=1 status ${denied.status}`);
@@ -188,13 +189,15 @@ async function main(): Promise<void> {
     aiVersion: string;
     rulesVersion: string;
     secondInkTurns: number;
+    secondVerse: number;
     seed?: unknown;
   };
   assertSafe(report, 'replay');
   if (!report.ok) fail(`replay mismatches ${report.mismatches.join(',')}`);
   if (report.secondInkTurns !== 1) fail('replay dropped secondInkTurns');
-  if (report.engineVersion !== 'duel-engine-1.1.0' || report.cardsVersion !== 'cards-proto-1.1') fail('replay versions');
-  if (report.aiVersion !== 'pilot-1.1.0' || report.rulesVersion !== 'rules-1.1.0') fail('replay ai/rules');
+  if (report.engineVersion !== 'duel-engine-1.3.0' || report.cardsVersion !== 'cards-proto-1.3') fail('replay versions');
+  if (report.aiVersion !== 'pilot-1.3.0' || report.rulesVersion !== 'rules-1.3.0') fail('replay ai/rules');
+  if (report.secondVerse !== 1) fail('replay dropped secondVerse');
   if ('seed' in report) fail('replay included a seed key');
   console.log(`worker check ok winner=${payload.view.winner} preview=${previewed}`);
 }

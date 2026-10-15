@@ -1,13 +1,15 @@
 // Parity / determinism check. Exit code 1 on any mismatch.
 // CI runs `node engine/parity.mjs` from the duel folder.
-// v1 fixtures replay on the v1 engine. v1.1 fixtures replay on the live pin.
+// Each golden set replays on the engine that produced it. The live pin is v1.3.
 import fs from 'node:fs';
 import * as v1 from './v1/engine.mjs';
+import * as v11 from './v1.1/engine.mjs';
 import * as live from './active.mjs';
 
 const SETS = [
   { label: 'golden-v1', engine: 'duel-engine-1.0.0', api: v1, file: new URL('./v1/fixtures/golden-v1.json', import.meta.url) },
-  { label: 'golden-v1.1', engine: 'duel-engine-1.1.0', api: live, file: live.FIXTURES },
+  { label: 'golden-v1.1', engine: 'duel-engine-1.1.0', api: v11, file: new URL('./v1.1/fixtures/golden-v1.1.json', import.meta.url) },
+  { label: 'golden-v1.3', engine: 'duel-engine-1.3.0', api: live, file: live.FIXTURES },
 ];
 
 let bad = 0;

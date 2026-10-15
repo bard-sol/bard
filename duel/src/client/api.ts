@@ -10,15 +10,15 @@ async function readJson<T>(response: Response): Promise<T> {
   return body;
 }
 
-export function createMatch(stance: Stance): Promise<ClientPayload> {
+export function createMatch(stance: Stance, tutorial = false): Promise<ClientPayload> {
   return fetch('/api/matches', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({
-      playerDeckId: 'candle',
-      opponentDeckId: 'fold',
-      stance,
-    }),
+    body: JSON.stringify(
+      tutorial
+        ? { tutorial: true, stance: 'patient' }
+        : { playerDeckId: 'candle', opponentDeckId: 'fold', stance },
+    ),
   }).then((response) => readJson<ClientPayload>(response));
 }
 

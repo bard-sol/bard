@@ -93,7 +93,7 @@ function drawBoard(root: Container, hits: Hit[], model: SceneModel, payload: Cli
   const view = payload.view;
   panel(root, { x: 8, y: 8, w: model.width - 16, h: model.height - 16 }, tokens.color.bg, 0, tokens.color.bg);
 
-  drawVerse(root, layout, model, view.verse, view.verseGoal);
+  drawVerse(root, layout, model, view);
   drawLegend(root, hits, layout.foeLegend, layout.foePower, layout.foeInk, view.foeLegend.name, view.foeLegend.house, view.foeLegend.powerName, view.foeLegend.powerCost, view.foePowerUsed, view.foeInk, view.foeMaxInk, view.foeHandCount, view.foeDeckCount, false, false, layout.mode);
   drawLegend(root, hits, layout.youLegend, layout.youPower, layout.ink, view.youLegend.name, view.youLegend.house, view.youLegend.powerName, view.youLegend.powerCost, view.youLegend.powerUsed, view.ink, view.maxInk, view.hand.length, view.yourDeckCount, true, powerEnabled(payload), layout.mode);
 
@@ -122,12 +122,21 @@ function drawBoard(root: Container, hits: Hit[], model: SceneModel, payload: Cli
   if (view.winner != null) drawResult(root, hits, model, payload);
 }
 
-function drawVerse(root: Container, layout: BoardLayout, model: SceneModel, verse: [number, number], goal: number) {
+function openingVerse(view: { phase: string; verse: [number, number] }): string | null {
+  if (view.phase !== 'mulligan') return null;
+  if (view.verse[0] > 0) return `You start on ${view.verse[0]} Verse`;
+  if (view.verse[1] > 0) return `Rival starts on ${view.verse[1]} Verse`;
+  return null;
+}
+
+function drawVerse(root: Container, layout: BoardLayout, model: SceneModel, view: { phase: string; verse: [number, number]; verseGoal: number }) {
   panel(root, layout.verse, tokens.color.rail, 14, tokens.color.line);
   const phone = layout.mode === 'phone';
-  if (!phone) label(root, 'VERSE', layout.verse.x + layout.verse.w / 2, layout.verse.y + 8, 12, tokens.color.gold, 0.5);
-  drawPipRow(root, layout, 0, verse[0], goal, model, phone);
-  drawPipRow(root, layout, 1, verse[1], goal, model, phone);
+  const opening = openingVerse(view);
+  if (!phone) label(root, opening ?? 'VERSE', layout.verse.x + layout.verse.w / 2, layout.verse.y + 8, 12, tokens.color.gold, 0.5);
+  else if (opening) label(root, opening, layout.verse.x + layout.verse.w / 2, layout.verse.y + 4, 11, tokens.color.gold, 0.5);
+  drawPipRow(root, layout, 0, view.verse[0], view.verseGoal, model, phone);
+  drawPipRow(root, layout, 1, view.verse[1], view.verseGoal, model, phone);
 }
 
 function drawPipRow(root: Container, layout: BoardLayout, player: 0 | 1, filled: number, goal: number, model: SceneModel, phone: boolean) {
@@ -305,7 +314,8 @@ function drawStatus(root: Container, layout: BoardLayout, payload: ClientPayload
   const phase = view.phase === 'game_over' ? 'Complete' : view.phase === 'mulligan' ? 'Mulligan' : view.phase === 'fight' ? 'Fight' : 'Main';
   const who = view.yourTurn ? 'Your turn' : 'Rival turn';
   const turnNo = Math.max(view.turn[0], view.turn[1], 1);
-  label(root, `${who} · ${phase} · ${turnNo}/${view.maxTurns} ${seconds}`, layout.status.x, layout.status.y, 13, tokens.color.parchment, 0);
+  const opening = openingVerse(view);
+  label(root, `${who} · ${phase} · ${turnNo}/${view.maxTurns}${opening ? ` · ${opening}` : ''} ${seconds}`, layout.status.x, layout.status.y, 13, tokens.color.parchment, 0);
   const latest = view.events[view.events.length - 1];
   if (latest && layout.mode === 'desktop') label(root, fit(latest.text, 52), layout.log.x, layout.log.y, 13, tokens.color.muted, 0);
   if (model.message && view.winner == null) {

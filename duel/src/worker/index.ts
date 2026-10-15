@@ -40,7 +40,7 @@ interface Env {
 }
 
 interface DuelStub {
-  create(input: { id: string; decks: [Deck, Deck]; stance: Stance }): Promise<WorkerResult<ClientPayload>>;
+  create(input: { id: string; decks: [Deck, Deck]; stance: Stance; tutorial?: boolean }): Promise<WorkerResult<ClientPayload>>;
   get(id: string): Promise<WorkerResult<ClientPayload>>;
   act(id: string, action: GameAction): Promise<WorkerResult<ClientPayload>>;
   preview(id: string, action: GameAction): Promise<WorkerResult<{ matchId: string; preview: TradePreview }>>;
@@ -86,7 +86,7 @@ export class DuelMatch extends DurableObject<Env> {
     });
   }
 
-  async create(input: { id: string; decks: [Deck, Deck]; stance: Stance }): Promise<WorkerResult<ClientPayload>> {
+  async create(input: { id: string; decks: [Deck, Deck]; stance: Stance; tutorial?: boolean }): Promise<WorkerResult<ClientPayload>> {
     return this.run(input.id, (service) => service.create(input));
   }
 
@@ -191,6 +191,7 @@ export default {
 async function route(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
   if (request.method === 'GET' && url.pathname === '/robots.txt') return robots();
+  if (request.method === 'POST' && url.pathname === '/api/metrics') return new Response(null, { status: 204 });
   if (!env.PASSCODE) return unavailable(request);
 
   if (request.method === 'POST' && url.pathname === '/api/unlock') return unlock(request, env.PASSCODE);
@@ -222,7 +223,12 @@ async function createMatch(request: Request, env: Env): Promise<Response> {
   if (!parsed) return json({ error: 'bad_request' }, 400);
   const id = crypto.randomUUID();
   try {
-    const result = await env.DUEL_MATCH.getByName(id).create({ id, decks: parsed.decks, stance: parsed.stance });
+    const result = await env.DUEL_MATCH.getByName(id).create({
+      id,
+      decks: parsed.decks,
+      stance: parsed.stance,
+      tutorial: parsed.tutorial === true,
+    });
     if (!result.ok) return json({ error: result.error }, result.error === 'redaction_failed' ? 500 : 400);
     return json(result.payload, 201);
   } catch {

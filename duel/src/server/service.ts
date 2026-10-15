@@ -1,6 +1,7 @@
 import { actorOf, buildSetup, deckError, IllegalActionError, recordedBundle, sameAction } from '../engine/adapter.js';
 import { cardFace } from '../engine/project.js';
 import type { EngineState } from '../engine/state.js';
+import { scriptedTutorialTurn, TUTORIAL_SEED, tutorialDecks } from '../tutorial/script.js';
 import type { ClientPayload, Deck, EngineAdapter, GameAction, PlayerId, Stance, TradePreview } from '../types.js';
 import { assertClientSafe } from './redact.js';
 import type { LogEntry, MatchRecord, MatchRepository } from './store.js';
@@ -18,6 +19,8 @@ export interface CreateMatchInput {
    * Express leaves this empty and the service draws a UUID.
    */
   id?: string;
+  /** Guided first match. The service forces the scripted seed and decks. */
+  tutorial?: boolean;
 }
 
 /** Replaces `setTimeout` where the process may be evicted (Durable Object alarms). */
@@ -41,6 +44,7 @@ export interface ReplayReport {
   aiVersion: string;
   rulesVersion: string;
   secondInkTurns: number;
+  secondVerse: number;
 }
 
 type Ok<T> = { ok: true; payload: T };
@@ -75,21 +79,24 @@ export class MatchService {
   }
 
   async create(input: CreateMatchInput): Promise<ServiceResult<ClientPayload>> {
-    const invalid = validateDecks(input.decks);
+    const tutorial = input.tutorial === true;
+    const decks = tutorial ? tutorialDecks() : input.decks;
+    const stance: Stance = tutorial ? 'patient' : input.stance;
+    const invalid = validateDecks(decks);
     if (invalid) return { ok: false, error: 'bad_deck' };
     const id = isUuid(input.id) ? input.id : crypto.randomUUID();
-    const seed = input.seed != null ? input.seed >>> 0 : randomSeed();
-    const setup = buildSetup(input.decks, seed, this.adapter);
+    const seed = tutorial ? TUTORIAL_SEED : input.seed != null ? input.seed >>> 0 : randomSeed();
+    const setup = buildSetup(decks, seed, this.adapter);
     let state: EngineState;
     try {
-      state = this.adapter.initialState(input.decks, setup.seed);
+      state = this.adapter.initialState(decks, setup.seed);
     } catch {
       return { ok: false, error: 'bad_deck' };
     }
     const match: MatchRecord = {
       id,
       setup,
-      stance: input.stance,
+      stance,
       state,
       log: [],
       generation: 0,
@@ -97,8 +104,10 @@ export class MatchService {
       thinking: false,
       deadline: null,
       createdAt: new Date().toISOString(),
+      tutorial,
     };
     await this.lock(id, async () => {
+      if (tutorial) this.finishMulligans(match);
       this.syncClock(match);
       await this.repo.put(match);
     });
@@ -154,6 +163,7 @@ export class MatchService {
       if (match.setup.aiVersion !== recorded.aiVersion) mismatches.push('ai_version');
       if (match.setup.rulesVersion !== recorded.rulesVersion) mismatches.push('rules_version');
       if (match.setup.rules.secondInkTurns !== recorded.secondInkTurns) mismatches.push('second_ink');
+      if ((match.setup.rules.secondVerse ?? 0) !== recorded.secondVerse) mismatches.push('second_verse');
     }
     if (match.state.v !== match.setup.engineVersion) mismatches.push('state_engine');
 
@@ -208,6 +218,7 @@ export class MatchService {
       aiVersion: match.setup.aiVersion,
       rulesVersion: match.setup.rulesVersion,
       secondInkTurns: match.setup.rules.secondInkTurns,
+      secondVerse: match.setup.rules.secondVerse ?? 0,
     };
     assertClientSafe(payload, match, 0);
     return { ok: true, payload };
@@ -237,26 +248,33 @@ export class MatchService {
   }
 
   private replayPure(match: MatchRecord): { state?: EngineState; mismatch?: string } {
-    const inputs = match.log.filter((entry) => entry.source !== 'pilot');
     let state = this.adapter.replay(match.setup, []);
     let cursor = 0;
     for (let guard = 0; guard < 5000 && actorOf(state) != null; guard++) {
       const actor = actorOf(state);
+      const next = match.log[cursor];
+      if (!next) return { mismatch: 'missing_player_action' };
+      if (next.actor !== actor) return { mismatch: `actor_${cursor}` };
+      if (next.source === 'pilot') {
+        const expected = this.adapter.pilot(state, match.stance);
+        if (!sameAction(expected, next.action)) return { mismatch: `pilot_${cursor}` };
+      }
       try {
-        if (actor === 1) {
-          state = this.adapter.apply(state, this.adapter.pilot(state, match.stance));
-        } else {
-          const next = inputs[cursor];
-          if (!next) return { mismatch: 'missing_player_action' };
-          cursor += 1;
-          state = this.adapter.apply(state, next.action);
-        }
+        state = this.adapter.apply(state, next.action);
       } catch {
         return { mismatch: 'pure_apply' };
       }
+      cursor += 1;
     }
-    if (cursor !== inputs.length) return { mismatch: 'unconsumed_actions' };
+    if (cursor !== match.log.length) return { mismatch: 'unconsumed_actions' };
     return { state };
+  }
+
+  /** Both seats keep their opening hands before the guided board is shown. */
+  private finishMulligans(match: MatchRecord): void {
+    for (let guard = 0; guard < 4 && match.state.phase === 'mulligan'; guard++) {
+      if (!this.applyLogged(match, { type: 'mulligan', idx: [] }, 'script')) break;
+    }
   }
 
   private applyLogged(match: MatchRecord, action: GameAction, source: LogEntry['source']): boolean {
@@ -288,6 +306,13 @@ export class MatchService {
       this.startPilot(match, depth);
       return;
     }
+    if (match.tutorial) {
+      this.clearTimer(match.id);
+      this.plans.delete(match.id);
+      match.thinking = false;
+      match.deadline = null;
+      return;
+    }
     if (match.deadline == null || match.thinking) {
       this.clearTimer(match.id);
       match.thinking = false;
@@ -304,10 +329,11 @@ export class MatchService {
     if (depth > 8) throw new Error('pilot_stuck');
     const actions = this.planPilot(match);
     if (actions.length === 0) throw new Error('pilot_stuck');
+    const source: LogEntry['source'] = match.tutorial ? 'script' : 'pilot';
     if (this.aiTurnMs <= 0) {
       for (const action of actions) {
         if (actorOf(match.state) !== 1) break;
-        if (!this.applyLogged(match, action, 'pilot')) throw new Error('pilot_illegal');
+        if (!this.applyLogged(match, action, source)) throw new Error('pilot_illegal');
       }
       if (actorOf(match.state) === 1) throw new Error('pilot_stuck');
       match.thinking = false;
@@ -325,6 +351,7 @@ export class MatchService {
   }
 
   private planPilot(match: MatchRecord): GameAction[] {
+    if (match.tutorial) return scriptedTutorialTurn(match.state);
     const actions: GameAction[] = [];
     let state = match.state;
     for (let guard = 0; guard < 80 && actorOf(state) === 1; guard++) {
@@ -349,7 +376,7 @@ export class MatchService {
         await this.repo.put(match);
         return;
       }
-      if (!this.applyLogged(match, action, 'pilot')) throw new Error('pilot_illegal');
+      if (!this.applyLogged(match, action, match.tutorial ? 'script' : 'pilot')) throw new Error('pilot_illegal');
       plan.next += 1;
       plan.expectedGen = match.generation;
       if (plan.next >= plan.actions.length || actorOf(match.state) !== 1) {
@@ -393,8 +420,10 @@ export class MatchService {
       rulesVersion: match.setup.rulesVersion,
       aiVersion: match.setup.aiVersion,
       secondInkTurns: match.setup.rules.secondInkTurns,
+      secondVerse: match.setup.rules.secondVerse ?? 0,
       stance: match.stance,
       status: match.state.winner >= 0 ? 'complete' : 'playing',
+      tutorial: match.tutorial === true,
     };
     if (!yourTurn) payload.view = { ...payload.view, yourTurn: false };
     assertClientSafe(payload, match, 0);
