@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" width="80" height="80">
+  <!-- hit splat: glossy black ink (Blot black), scale = damage. Paper-coloured core so the unit beneath still reads. -->
+  <path d="M40,8 L45,26 L60,12 L54,31 L73,28 L57,40 L72,52 L53,49 L58,68 L44,54 L38,74 L34,54 L18,66 L26,48 L7,50 L23,39 L9,26 L28,30 L22,12 L36,26 Z" fill="#000"/>
+  <circle cx="40" cy="40" r="9" fill="#FFFBF0"/>
+  <path d="M30,22 q4,-3 8,-2" stroke="#fff" stroke-width="2" stroke-linecap="round" fill="none" opacity=".8"/>
+</svg>

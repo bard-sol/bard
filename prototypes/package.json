@@ -1,0 +1,22 @@
+{
+  "name": "bard-prototypes",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "test": "vitest run && npm run gate",
+    "gate": "node engine/ref/check_golden.mjs && sh engine/ref/fuzz_parity.sh"
+  },
+  "dependencies": {
+    "pixi.js": "^8.14.3"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "typescript": "^5.9.3",
+    "vite": "^6.4.1",
+    "vitest": "^3.2.4"
+  }
+}
