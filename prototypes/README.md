@@ -1,71 +1,56 @@
 # Bard prototypes
 
-Two phone-sized games. Neither one talks to a wallet, a token, or a chain. Renown is a win counter stored in this browser.
+Two playable games. Neither one talks to a wallet, a token, or a chain. Renown is a win counter stored in this browser. The duel’s stake is Ink, match points for that game only.
 
 ```bash
 cd prototypes
 npm install
 npm run dev
+npm run build
 ```
 
-Open the hub, then **The line** (Prototype A) or **The duel** (Prototype B). `npm run build` writes a static site to `dist/`.
+`npm run dev` serves the hub at `/`. `npm run build` typechecks and writes a static site to `dist/` with root-relative asset paths, so the built `index.html` is the site root. `POST /api/metrics` exists only while the dev server is running. On a static host the request fails quietly and the game keeps the same events in `localStorage`.
 
 ## The line
 
-Three rounds. You get 3, then 5, then 7 coins. Coins do not carry. The shop shows five units. The first two are copies of un-merged units already on your line, when you have any. A unit costs its tier. Three copies merge to level 2 (a star). A fourth copy shakes off. Sell by dragging a unit onto the Bard for 1 coin.
+Three rounds. You get 3, then 5, then 7 coins. Coins do not carry, and they never buy attack or health. The shop shows five units. The first two are copies of un-merged units already on your line, when you have any. A unit costs its tier. Three copies merge to level 2. Sell a unit for 1 coin.
 
-Fight is watch-only. The reference resolver in `engine/ref/resolver.mjs` decides the fight. The page plays that log back. Speed, Pause, and Skip are the only controls. Skip still plays deaths, including the drain to linework.
+The fight is the v2 resolver: `resolve(lineA, lineB, seed, units)`. It is a pure function. The page plays that log. Every trigger names its source. Attack and health update as the log says. Ward, Silence, and attack-down show as icons. Ward breaks and fizzled summons are their own lines. The second mover’s Front unit wears a **Braced** badge for the +1 health.
 
-Best of three. A 2–0 does not play round 3. A drawn round scores for neither side. If the match is level after round 3, the higher surviving health wins. If that is tied too, the Book's seed picks a winner. A match never ends drawn.
+Best of three. The whole bought line returns each round at fresh stats. `?carry=survivors` stays off. A drawn round scores for neither side. If the match is level after round 3, surviving health wins, then the Book’s seed. A match never ends drawn.
 
-The opponent is a stored run with a saved line for every round. Round 3 only uses runs that stored all three rounds.
+The opponent is a stored run. Round 3 only uses runs that stored all three rounds.
+
+Speed, Pause, and Skip are the fight controls. Hover a card for the ability (desktop). Tap ? for the sheet (phone). Click pins the popover. Layout switches at 600px and 1200px: phone, tablet drawers, and a real desktop with opponent, board, and log.
 
 ### Flags
 
 | Flag | Default | Switch |
 |---|---|---|
-| Carry | `line` — the whole bought line returns at fresh stats | Hub, or `?carry=survivors` |
-| Bench (the Margin) | `0` — balance numbers assume no bench | Hub, or `?bench=3` |
-| House bar | `off` — a fake war is not shown | Hub, or `?housebar=mock` |
-| Lane rules (duel) | off | not enabled in this build |
+| Carry | `line` — the whole bought line returns | Hub, or `?carry=survivors` |
+| Bench (the Margin) | `0` | Hub, or `?bench=3` |
+| House bar | `off` — the matte track is always drawn; the live ink flow is the mock | Hub, or `?housebar=mock` |
+| Lane rules (duel) | always on | three locations from the match seed |
 
-Survivors-only carry is in the client and off until that call is made. Summoned and stitched units never carry in either mode.
-
-The tutorial is a practice match against the Blot, with one free reroll. Real matches always charge 1 coin to reroll. The fight in that practice is a real `resolve()` call (seed 1, a merged Deckhand and a Blotling against two Copyists skinned as blots) so the win, and a death on each side, come from the resolver.
+The tutorial is a practice match. Real matches charge 1 coin to reroll. The soft shop timer is 60 seconds a round.
 
 ## The duel
 
-Margin Duel. Three lanes, four cards a side, a deck of 12, six turns. Energy equals the turn number. You win two lanes, or the higher total power, or the Book's seed. No draws.
+Margin Duel v2. Three lanes, four cards a side (two at the Torn Margin), a deck of 12, six turns. Energy equals the turn number. You win two lanes, or the higher total power, or the Book’s seed. No draws.
 
-**Ink is match points.** Raise doubles the stake from 1 to 2 to 4 to 8. The result shows the Ink won or lost. It does not change Renown, and a loss does not spend Renown. Renown still goes up by 1 when you win a real line match.
+Every card has an ability. Three locations are drawn each match and revealed on turns 1, 2, and 3. An unrevealed lane has no rule.
 
-The opponent is a saved deck. Day one has no human recordings, so the ghosts are generated stand-ins: a real starter deck, a Cautious / Steady / Bold profile, scripted Raise turns, and a greedy policy (most expensive card it can afford, into the lane it is losing by the least). The policy runs from the hand the ghost actually holds, so it never sees your face-down cards. A future recording can pass a `plays` list and a `shuffleSeed` into the same `duel()` function.
+**Ink is match points.** Raise doubles the stake from 1 to 2 to 4 to 8. It does not change Renown, and a loss does not spend Renown. Renown still goes up by 1 when you win a real line match.
 
-Retreat loses the stake from before this turn's Raise. Bold ghosts do not retreat. Lane rules stay off.
+The opponent is a saved deck. With no human recording, the ghost plays its most expensive affordable cards into the lane it is losing by the least. Cautious, Steady, and Bold decide whether it retreats. A recorded `plays` list uses the same `duel()` function.
 
-After the first duel, open Deck and swap cards one for one. All 32 are free.
+## Art
 
-## Swap the unit sheet
-
-Fight stats, names, and abilities come from `engine/units-s0.json` (`version` is `s0-units-v1`). Replace that file with a sheet of the same shape and the resolver, the shop, and the art lookup follow it. Keep `version` honest. The duel uses the same ids and names; its cost and power live in `src/b/cards.ts`.
-
-Art for the screen is the v2 cutouts in `public/art/v2/` (webp, about 256px, with a linework twin for deaths). Each unit stands on `disc.webp` with a House-colour wash. Level 2 is the red wax star; a second copy is one pip. The older flat SVG shapes in `public/art/units/` are unused by the screens. Fonts are local (Cinzel, EB Garamond) in `public/fonts/`. A long-press opens the only text-heavy sheet: name, flavour, trigger, merge.
-
-The House ribbon is painted from the house colours. `?housebar=mock` (or the hub toggle) drops the live `public/vendor/house-bar.js` canvas into that ribbon and plays the drink animation on a real line win. It stays off by default so practice metrics are not a fake war.
+Unit art stays the v2 cutouts in `public/art/v2/units/`. The frame, type, and icons are the v3 kit (Inter and Newsreader). The live House bar, when the mock flag is on, is `public/vendor/house-bar.js`.
 
 ## Metrics
 
-Events sit in `localStorage` (`bard.proto.metrics.v1`) and, while `npm run dev` is running, also append to `prototypes/.metrics/events.jsonl` via `POST /api/metrics`. The hub button downloads a JSON summary:
-
-- matches per day
-- first real match completed
-- another match started within 5 minutes of a loss or fold
-- median session length, in matches (a 10-minute gap starts a new session)
-- the one-question preference
-- who went first in each round of a line match, and whether the first side won that round
-- duel raises, retreats (after their raise, after yours, unprompted), bluff success, and bluff caught
-
-Practice and the tutorial are not real matches.
+Events sit in `localStorage` (`bard.proto.metrics.v1`). While `npm run dev` is running they also POST to `/api/metrics`. A static server without that route does not affect play. The hub button downloads a JSON summary: matches per day, first real match completed, a replay within 5 minutes of a loss, median session length, the preference question, who went first, and duel raises, retreats, and bluffs.
 
 ## Determinism
 
@@ -73,9 +58,10 @@ Practice and the tutorial are not real matches.
 npm test
 ```
 
-That runs the vitest suite, then the gate:
+Vitest, then the gate:
 
-- `node engine/ref/check_golden.mjs` — 32 golden fights, zero mismatches
-- `engine/ref/fuzz_parity.sh` — 3000 fights, Python `resolver.py` against `resolver.mjs`, zero mismatches
+- `node engine/ref/v2/check_golden_v2.mjs` — 52 golden fights, zero mismatches
+- `engine/ref/v2/fuzz_parity_v2.sh 20000` — 20,000 fights, Python against the JS resolver, zero mismatches
+- `node engine/ref/v2/check_duel_parity.mjs 500` — duel replay logs against `duel_v2.py`, zero mismatches
 
-The client imports that same `resolver.mjs`. The vitest fold walks the log and checks the end health, so playback is reading the log rather than inventing a second result. `duel()` is pure: same deck, same ghost, same seed, same log.
+`resolve` and `duel` take the lines (or the recorded plays) and the seed. Nothing else.

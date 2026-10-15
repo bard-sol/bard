@@ -218,11 +218,16 @@ export function record(partial: Omit<MetricEvent, "id" | "ts"> & { ts?: number; 
   save(all);
   const body = JSON.stringify(event);
   if (typeof fetch !== "undefined") {
+    // Static hosts have no /api/metrics. A missing route must not surface in the game.
     fetch("/api/metrics", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body,
-    }).catch(() => {});
+    })
+      .then((res) => {
+        if (!res.ok) return;
+      })
+      .catch(() => {});
   }
   return event;
 }

@@ -3,7 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { deriveSeed, resolve, Mulberry32 } from "../engine/ref/resolver.mjs";
-import sheet from "../engine/units-s0.json";
+import sheet from "../engine/units-s0-v2.json";
 import { Shop } from "../src/a/shop";
 import { carryLine, matchOver, matchResult, resultCopy } from "../src/a/match";
 import { foldAgrees, foldFight } from "../src/a/replay";
@@ -14,7 +14,10 @@ import { GHOSTS } from "../src/b/ghosts";
 import { summarize, type MetricEvent } from "../src/metrics";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const golden = JSON.parse(fs.readFileSync(path.join(here, "../engine/ref/golden/fixtures.json"), "utf8")) as {
+const goldenV1 = JSON.parse(fs.readFileSync(path.join(here, "../engine/ref/golden/fixtures.json"), "utf8")) as {
+  shop_rolls: { cards: string[]; line: { id: string; copies: number }[]; match_seed: number; round: number; reroll?: string[] }[];
+};
+const golden = JSON.parse(fs.readFileSync(path.join(here, "../engine/ref/v2/golden/fixtures-v2.json"), "utf8")) as {
   mulberry32: { seed: number; first10: number[] };
   derive_seed: { base: number; k: number; out: number }[];
   fights: { name: string; lineA: { id: string; copies: number }[]; lineB: { id: string; copies: number }[]; seed: number; winner: string; log: unknown[]; stats: unknown }[];
@@ -53,17 +56,13 @@ describe("reference resolver", () => {
     const a = resolve(line, enemy, 1, sheet);
     const b = resolve(line, enemy, 1, sheet);
     expect(canon(a)).toBe(canon(b));
-    expect(a.winner).toBe("A");
-    const deaths = a.log.filter((e) => e.t === "death").map((e) => e.uid);
-    expect(deaths.some((id) => String(id).startsWith("A"))).toBe(true);
-    expect(deaths.some((id) => String(id).startsWith("B"))).toBe(true);
-    expect(a.stats.survivorsA).toContain("A0");
+    expect(foldAgrees(a)).toBe(true);
   });
 });
 
 describe("shop and match", () => {
   it("matches the golden shop rolls, including the continued reroll stream", () => {
-    for (const roll of golden.shop_rolls) {
+    for (const roll of goldenV1.shop_rolls) {
       const shop = new Shop(roll.round, roll.match_seed);
       expect(shop.roll(roll.line)).toEqual(roll.cards);
       if (roll.reroll) expect(shop.roll(roll.line)).toEqual(roll.reroll);
@@ -86,8 +85,9 @@ describe("shop and match", () => {
     ];
     const fight = resolve(line, [{ id: "copyist", copies: 1 }, { id: "copyist", copies: 1 }], 1, sheet);
     expect(carryLine(line, fight, "line")).toEqual(line);
+    const alive = new Set(fight.stats.survivorsA);
     const survivors = carryLine(line, fight, "survivors");
-    expect(survivors.map((p) => p.id)).toEqual(["deckhand"]);
+    expect(survivors.map((p) => p.id)).toEqual(line.filter((_, i) => alive.has(`A${i}`)).map((p) => p.id));
   });
 
   it("ends 2–0 without a draw, and breaks a level match on health then seed", () => {

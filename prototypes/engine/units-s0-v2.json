@@ -1,0 +1,2476 @@
+{
+ "version": "s0-units-v2",
+ "season": 0,
+ "rules": {
+  "first_mover": "seed",
+  "second_mover_bonus": {
+   "kind": "front_hp",
+   "n": 1
+  },
+  "max_line": 5,
+  "max_depth": 8,
+  "max_res_per_step": 64,
+  "turn_cap": 80,
+  "trait_tiers": [
+   2,
+   4
+  ],
+  "trait_count": "merged_counts_2"
+ },
+ "keywords": {
+  "Front": "Slot 1, the unit that gets attacked.",
+  "Back": "The last slot.",
+  "End": "Front or Back.",
+  "Ahead / Behind": "The ally one slot nearer the Front / the Back.",
+  "Adjacent": "The allies directly Ahead and Behind.",
+  "Start of fight": "Fires once before the first attack (see Foresight).",
+  "On attack": "Fires after this unit's attack lands.",
+  "On hurt": "Fires when this unit takes damage and survives.",
+  "On death": "Fires when this unit dies.",
+  "On ally death": "Fires when another ally dies.",
+  "Ward": "Blocks the next hit completely.",
+  "Guard N": "Takes N less damage from each hit (never below 1). Guards add up.",
+  "Endure": "The first time it would die, it stays at 1 health instead.",
+  "Snipe": "Its attacks hit the enemy Back unit instead of the Front.",
+  "Back-hit": "An attack that also deals damage to the enemy Back unit.",
+  "Cleave": "Its attack also hits the enemy behind the target.",
+  "Pierce": "Its attacks ignore Guard, and break Ward without being blocked.",
+  "Shelter": "Enemy hits aimed at allies behind the Front land on this unit instead.",
+  "Smother": "Enemy summons and Stitches arrive at 1 health with no ability.",
+  "Blight": "Enemies can't heal, gain health, Endure or be Stitched.",
+  "Silence": "Loses its abilities, passives and House bonuses for this fight.",
+  "Filed": "The enemy's first triggered ability this fight fizzles.",
+  "Foresight": "Your start-of-fight abilities all resolve before the enemy's.",
+  "Frenzy": "Attacks again right away.",
+  "Leap": "Strikes the enemy Front at start of fight (not an attack).",
+  "Riposte": "Hits back at whoever hurt it.",
+  "Grudge": "Weakens whoever hurt it.",
+  "Rally": "Buffs allies when one falls.",
+  "Summon": "Adds a unit to the line, if a slot is free (max 5).",
+  "Stitch": "Brings a fallen ally back with 1 health.",
+  "Devour": "Destroys or eats a unit to take its stats.",
+  "Relay": "Makes another unit repeat its start-of-fight ability.",
+  "Echo": "Makes an on-death ability fire again.",
+  "Giant-slayer": "Deals double damage to bigger targets.",
+  "Brace": "The side that attacks second starts with +1 health on its Front unit.",
+  "Glue": "A neutral that counts toward two Houses' synergies (named on the card)."
+ },
+ "traits": {
+  "The Pit": {
+   "name": "Grit",
+   "tiers": {
+    "2": {
+     "text": "Pit units: when hurt, gain +1 attack (up to 2 times).",
+     "members_ability": {
+      "trigger": "on_hurt",
+      "ops": [
+       {
+        "op": "buff",
+        "target": "self",
+        "atk": 1,
+        "hp": 0
+       }
+      ],
+      "limit_per_fight": 2
+     }
+    },
+    "4": {
+     "text": "Pit units: when hurt, gain another +1 attack (up to 3 more).",
+     "members_ability": {
+      "trigger": "on_hurt",
+      "ops": [
+       {
+        "op": "buff",
+        "target": "self",
+        "atk": 1,
+        "hp": 0
+       }
+      ],
+      "limit_per_fight": 3
+     }
+    }
+   }
+  },
+  "The Scriptorium": {
+   "name": "Revision",
+   "tiers": {
+    "2": {
+     "text": "Start of fight: deal 2 damage to the enemy Back unit and 1 to the unit ahead of it.",
+     "anchor_ability": {
+      "trigger": "start_of_fight",
+      "ops": [
+       {
+        "op": "damage",
+        "target": "enemy_back",
+        "n": 2
+       },
+       {
+        "op": "damage",
+        "target": "enemy_second_back",
+        "n": 1
+       }
+      ]
+     }
+    },
+    "4": {
+     "text": "Start of fight: Silence the enemy's highest-tier unit.",
+     "anchor_ability": {
+      "trigger": "start_of_fight",
+      "ops": [
+       {
+        "op": "silence",
+        "target": "enemy_highest_tier"
+       }
+      ]
+     }
+    }
+   }
+  },
+  "The Gilt": {
+   "name": "Remembrance",
+   "tiers": {
+    "2": {
+     "text": "Gilt units: when an ally dies, gain +1 attack (up to 2 times).",
+     "members_ability": {
+      "trigger": "on_ally_death",
+      "ops": [
+       {
+        "op": "buff",
+        "target": "self",
+        "atk": 1,
+        "hp": 0
+       }
+      ],
+      "limit_per_fight": 2
+     }
+    },
+    "4": {
+     "text": "The first ally to die is Stitched back with 1 health.",
+     "anchor_ability": {
+      "trigger": "on_ally_death",
+      "ops": [
+       {
+        "op": "return_dead_ally",
+        "max_per_fight": 1
+       }
+      ]
+     }
+    }
+   }
+  },
+  "The Tidewrack": {
+   "name": "Boarding",
+   "tiers": {
+    "2": {
+     "text": "Tidewrack units' first attack also deals 2 damage to the enemy Back unit.",
+     "members_passives": [
+      {
+       "k": "backhit",
+       "n": 2,
+       "first_only": true
+      }
+     ]
+    },
+    "4": {
+     "text": "Every Tidewrack attack also deals 2 damage to the enemy Back unit.",
+     "members_passives": [
+      {
+       "k": "backhit",
+       "n": 2
+      }
+     ]
+    }
+   }
+  },
+  "The Candle": {
+   "name": "Lamplight",
+   "tiers": {
+    "2": {
+     "text": "Start of fight: your Front and Back units gain Ward.",
+     "anchor_ability": {
+      "trigger": "start_of_fight",
+      "ops": [
+       {
+        "op": "ward",
+        "target": "front_ally"
+       },
+       {
+        "op": "ward",
+        "target": "back_ally"
+       }
+      ]
+     }
+    },
+    "4": {
+     "text": "Candle units: on attack, heal the most damaged ally 1.",
+     "members_ability": {
+      "trigger": "on_attack",
+      "ops": [
+       {
+        "op": "heal",
+        "target": "most_damaged_ally",
+        "n": 1
+       }
+      ]
+     }
+    }
+   }
+  },
+  "The Standard": {
+   "name": "Hold the Line",
+   "tiers": {
+    "2": {
+     "text": "Start of fight: Standard units gain +2 health.",
+     "members_ability": {
+      "trigger": "start_of_fight",
+      "ops": [
+       {
+        "op": "buff",
+        "target": "self",
+        "atk": 0,
+        "hp": 2
+       }
+      ]
+     }
+    },
+    "4": {
+     "text": "The first time your Front unit dies, the next one steps up with Ward.",
+     "anchor_ability": {
+      "trigger": "on_ally_death",
+      "ops": [
+       {
+        "op": "ward",
+        "target": "front_ally",
+        "if_dead_slot": 0
+       }
+      ],
+      "limit_per_fight": 1
+     }
+    }
+   }
+  },
+  "The Torn Margin": {
+   "name": "Hunt",
+   "tiers": {
+    "2": {
+     "text": "Torn Margin units' first attack deals +1 damage.",
+     "members_passives": [
+      {
+       "k": "first_strike_bonus",
+       "n": 1
+      }
+     ]
+    },
+    "4": {
+     "text": "Torn Margin units: their first attack deals +1 more (+2 total).",
+     "members_passives": [
+      {
+       "k": "first_strike_bonus",
+       "n": 1
+      }
+     ]
+    }
+   }
+  },
+  "The Fold": {
+   "name": "Two Blades",
+   "tiers": {
+    "2": {
+     "text": "Fold units: when hurt, deal 1 damage to the enemy Front unit.",
+     "members_ability": {
+      "trigger": "on_hurt",
+      "ops": [
+       {
+        "op": "damage",
+        "target": "enemy_front",
+        "n": 1
+       }
+      ]
+     }
+    },
+    "4": {
+     "text": "Fold units Cleave 1.",
+     "members_passives": [
+      {
+       "k": "cleave",
+       "n": 1
+      }
+     ]
+    }
+   }
+  }
+ },
+ "tokens": {
+  "ink_drop": {
+   "name": "Ink Drop [PLACEHOLDER]",
+   "attack": 2,
+   "health": 2
+  },
+  "ink_drop_2": {
+   "name": "Ink Drop [PLACEHOLDER]",
+   "attack": 3,
+   "health": 3
+  },
+  "scribble": {
+   "name": "Scribble [PLACEHOLDER]",
+   "attack": 2,
+   "health": 2
+  },
+  "scribble_2": {
+   "name": "Scribble [PLACEHOLDER]",
+   "attack": 3,
+   "health": 3
+  },
+  "pip": {
+   "name": "Pip Fennick",
+   "attack": 1,
+   "health": 3,
+   "as_unit": "pip"
+  },
+  "ember": {
+   "name": "Ember",
+   "attack": 2,
+   "health": 3,
+   "passives": [
+    {
+     "k": "cleave",
+     "n": "self_atk"
+    }
+   ]
+  },
+  "ember_2": {
+   "name": "Ember",
+   "attack": 5,
+   "health": 5,
+   "passives": [
+    {
+     "k": "cleave",
+     "n": "self_atk"
+    }
+   ]
+  }
+ },
+ "tier_spread": {
+  "1": 9,
+  "2": 8,
+  "3": 7,
+  "4": 5,
+  "5": 3
+ },
+ "units": [
+  {
+   "id": "sump_brawler",
+   "name": "Sump Brawler",
+   "house": "The Pit",
+   "kind": "rank-and-file",
+   "tier": 1,
+   "cost": 1,
+   "attack": 2,
+   "health": 4,
+   "ability_text": "Endure: the first time she would die, she stays at 1 health.",
+   "keywords": [
+    "Endure"
+   ],
+   "ability": {
+    "trigger": "passive",
+    "ops": [],
+    "text": "Endure: the first time she would die, she stays at 1 health."
+   },
+   "passives": [
+    {
+     "k": "endure",
+     "n": 1
+    }
+   ],
+   "merged": {
+    "attack": 3,
+    "health": 5,
+    "ability_text": "Endure twice: the first two times she would die, she stays at 1 health.",
+    "keywords": [
+     "Endure"
+    ],
+    "ability": {
+     "trigger": "passive",
+     "ops": [],
+     "text": "Endure twice: the first two times she would die, she stays at 1 health."
+    },
+    "passives": [
+     {
+      "k": "endure",
+      "n": 2
+     }
+    ]
+   },
+   "role": "front",
+   "flavour": "Knocked down, written on. Every fall is one more link on her chain.",
+   "flavour_source": "bard-story/proto/units-v1.md",
+   "tags": [
+    "wall",
+    "sustain"
+   ],
+   "strong_vs": [
+    "big_hit"
+   ],
+   "families": [
+    "pain",
+    "menders"
+   ]
+  },
+  {
+   "id": "copyist",
+   "name": "Palimpsest Copyist",
+   "house": "The Scriptorium",
+   "kind": "rank-and-file",
+   "tier": 1,
+   "cost": 1,
+   "attack": 2,
+   "health": 4,
+   "ability_text": "Start of fight: deal 3 damage to the enemy Back unit.",
+   "keywords": [
+    "Start of fight",
+    "Back"
+   ],
+   "ability": {
+    "trigger": "start_of_fight",
+    "ops": [
+     {
+      "op": "damage",
+      "target": "enemy_back",
+      "n": 3
+     }
+    ],
+    "text": "Start of fight: deal 3 damage to the enemy Back unit."
+   },
+   "passives": [],
+   "merged": {
+    "attack": 3,
+    "health": 5,
+    "ability_text": "Start of fight: deal 3 damage to the enemy Back unit and Silence it.",
+    "keywords": [
+     "Start of fight",
+     "Back",
+     "Silence"
+    ],
+    "ability": {
+     "trigger": "start_of_fight",
+     "ops": [
+      {
+       "op": "damage",
+       "target": "enemy_back",
+       "n": 3
+      },
+      {
+       "op": "silence",
+       "target": "enemy_back"
+      }
+     ],
+     "text": "Start of fight: deal 3 damage to the enemy Back unit and Silence it."
+    },
+    "passives": []
+   },
+   "role": "back",
+   "flavour": "Crosses out your line, writes a better one. The old one still shows through.",
+   "flavour_source": "bard-story/proto/units-v1.md",
+   "tags": [
+    "sof",
+    "snipe"
+   ],
+   "strong_vs": [
+    "backline"
+   ],
+   "families": [
+    "volley"
+   ]
+  },
+  {
+   "id": "portrait",
+   "name": "Breathing Portrait",
+   "house": "The Gilt",
+   "kind": "rank-and-file",
+   "tier": 1,
+   "cost": 1,
+   "attack": 1,
+   "health": 6,
+   "ability_text": "Grudge: when hurt, the attacker loses 1 attack.",
+   "keywords": [
+    "On hurt",
+    "Grudge"
+   ],
+   "ability": {
+    "trigger": "on_hurt",
+    "ops": [
+     {
+      "op": "debuff_atk",
+      "target": "attacker",
+      "n": 1
+     }
+    ],
+    "text": "Grudge: when hurt, the attacker loses 1 attack."
+   },
+   "passives": [],
+   "merged": {
+    "attack": 2,
+    "health": 8,
+    "ability_text": "Grudge: when hurt, steal 1 attack from the attacker.",
+    "keywords": [
+     "On hurt",
+     "Grudge"
+    ],
+    "ability": {
+     "trigger": "on_hurt",
+     "ops": [
+      {
+       "op": "debuff_atk",
+       "target": "attacker",
+       "n": 1
+      },
+      {
+       "op": "buff",
+       "target": "self",
+       "atk": 1,
+       "hp": 0
+      }
+     ],
+     "text": "Grudge: when hurt, steal 1 attack from the attacker."
+    },
+    "passives": []
+   },
+   "role": "front",
+   "flavour": "A Gildmere portrait that remembers your face. It never forgives a slight.",
+   "flavour_source": "bard-story/proto/units-v1.md",
+   "tags": [
+    "wall"
+   ],
+   "strong_vs": [
+    "big_hit",
+    "scaling"
+   ],
+   "families": [
+    "pain"
+   ]
+  },
+  {
+   "id": "deckhand",
+   "name": "Running-Sea Deckhand",
+   "house": "The Tidewrack",
+   "kind": "rank-and-file",
+   "tier": 1,
+   "cost": 1,
+   "attack": 2,
+   "health": 4,
+   "ability_text": "On attack: deal 1 damage to the enemy Back unit.",
+   "keywords": [
+    "On attack",
+    "Back"
+   ],
+   "ability": {
+    "trigger": "on_attack",
+    "ops": [
+     {
+      "op": "damage",
+      "target": "enemy_back",
+      "n": 1
+     }
+    ],
+    "text": "On attack: deal 1 damage to the enemy Back unit."
+   },
+   "passives": [],
+   "merged": {
+    "attack": 3,
+    "health": 6,
+    "ability_text": "On attack: deal 1 damage to each of the two rearmost enemies.",
+    "keywords": [
+     "On attack",
+     "Back"
+    ],
+    "ability": {
+     "trigger": "on_attack",
+     "ops": [
+      {
+       "op": "damage",
+       "target": "enemy_two_back",
+       "n": 1
+      }
+     ],
+     "text": "On attack: deal 1 damage to each of the two rearmost enemies."
+    },
+    "passives": []
+   },
+   "role": "mid",
+   "flavour": "Tea-brown coat, salt in every seam. Sings loudest about the ships she lost.",
+   "flavour_source": "bard-story/proto/units-v1.md",
+   "tags": [
+    "snipe"
+   ],
+   "strong_vs": [
+    "backline"
+   ],
+   "families": [
+    "volley"
+   ]
+  },
+  {
+   "id": "novice",
+   "name": "Lanternfall Novice",
+   "house": "The Candle",
+   "kind": "rank-and-file",
+   "tier": 1,
+   "cost": 1,
+   "attack": 1,
+   "health": 7,
+   "ability_text": "Start of fight: she and the ally Ahead gain Ward.",
+   "keywords": [
+    "Start of fight",
+    "Ahead",
+    "Ward"
+   ],
+   "ability": {
+    "trigger": "start_of_fight",
+    "ops": [
+     {
+      "op": "ward",
+      "target": "self"
+     },
+     {
+      "op": "ward",
+      "target": "ally_ahead"
+     }
+    ],
+    "text": "Start of fight: she and the ally Ahead gain Ward."
+   },
+   "passives": [],
+   "merged": {
+    "attack": 2,
+    "health": 8,
+    "ability_text": "Start of fight: the two allies Ahead gain Ward (she stays back).",
+    "keywords": [
+     "Start of fight",
+     "Ahead",
+     "Ward"
+    ],
+    "ability": {
+     "trigger": "start_of_fight",
+     "ops": [
+      {
+       "op": "ward",
+       "target": "two_allies_ahead"
+      }
+     ],
+     "text": "Start of fight: the two allies Ahead gain Ward (she stays back)."
+    },
+    "passives": []
+   },
+   "role": "mid",
+   "flavour": "One taper, one life. Keeps both burning longer than anyone expected.",
+   "flavour_source": "bard-story/proto/units-v1.md",
+   "tags": [
+    "wall",
+    "sof"
+   ],
+   "strong_vs": [
+    "sof",
+    "big_hit"
+   ],
+   "families": [
+    "menders",
+    "pain"
+   ]
+  },
+  {
+   "id": "drummer",
+   "name": "Muster Drummer",
+   "house": "The Standard",
+   "kind": "rank-and-file",
+   "tier": 1,
+   "cost": 1,
+   "attack": 1,
+   "health": 5,
+   "ability_text": "Start of fight: Adjacent allies gain +1/+1.",
+   "keywords": [
+    "Start of fight",
+    "Adjacent"
+   ],
+   "ability": {
+    "trigger": "start_of_fight",
+    "ops": [
+     {
+      "op": "buff",
+      "target": "adjacent_allies",
+      "atk": 1,
+      "hp": 1
+     }
+    ],
+    "text": "Start of fight: Adjacent allies gain +1/+1."
+   },
+   "passives": [],
+   "merged": {
+    "attack": 2,
+    "health": 6,
+    "ability_text": "Start of fight: Adjacent allies gain +1/+1 and Guard 1.",
+    "keywords": [
+     "Start of fight",
+     "Adjacent",
+     "Guard"
+    ],
+    "ability": {
+     "trigger": "start_of_fight",
+     "ops": [
+      {
+       "op": "buff",
+       "target": "adjacent_allies",
+       "atk": 1,
+       "hp": 1
+      },
+      {
+       "op": "grant",
+       "target": "adjacent_allies",
+       "passive": {
+        "k": "guard",
+        "n": 1
+       }
+      }
+     ],
+     "text": "Start of fight: Adjacent allies gain +1/+1 and Guard 1."
+    },
+    "passives": []
+   },
+   "role": "mid",
+   "flavour": "Beats the roll at dawn. Every name answers, and the line holds.",
+   "flavour_source": "bard-story/proto/units-v1.md",
+   "tags": [
+    "sof",
+    "buff"
+   ],
+   "strong_vs": [],
+   "families": [
+    "volley"
+   ]
+  },
+  {
+   "id": "hunter",
+   "name": "Deckle Hunter",
+   "house": "The Torn Margin",
+   "kind": "rank-and-file",
+   "tier": 1,
+   "cost": 1,
+   "attack": 3,
+   "health": 2,
+   "ability_text": "Frenzy: if its attack kills, it attacks again (up to 2 extra a turn).",
+   "keywords": [
+    "On attack",
+    "Frenzy"
+   ],
+   "ability": {
+    "trigger": "on_attack",
+    "ops": [
+     {
+      "op": "attack_again",
+      "cond": "target_died",
+      "per_turn": 2
+     }
+    ],
+    "text": "Frenzy: if its attack kills, it attacks again (up to 2 extra a turn)."
+   },
+   "passives": [],
+   "merged": {
+    "attack": 4,
+    "health": 3,
+    "ability_text": "Frenzy on kill (up to 3 extra a turn), and +1 attack for each kill.",
+    "keywords": [
+     "On attack",
+     "Frenzy"
+    ],
+    "ability": {
+     "trigger": "on_attack",
+     "ops": [
+      {
+       "op": "attack_again",
+       "cond": "target_died",
+       "per_turn": 3,
+       "gain_on_kill": 1
+      }
+     ],
+     "text": "Frenzy on kill (up to 3 extra a turn), and +1 attack for each kill."
+    },
+    "passives": []
+   },
+   "role": "mid",
+   "flavour": "Bone charms, bare feet, no name written anywhere. Strikes, and is gone.",
+   "flavour_source": "bard-story/proto/units-v1.md",
+   "tags": [
+    "striker"
+   ],
+   "strong_vs": [
+    "swarm"
+   ],
+   "families": [
+    "strikers"
+   ]
+  },
+  {
+   "id": "duellist",
+   "name": "Hinge Duellist",
+   "house": "The Fold",
+   "kind": "rank-and-file",
+   "tier": 1,
+   "cost": 1,
+   "attack": 2,
+   "health": 4,
+   "ability_text": "Riposte: when hurt, deal 2 damage to the attacker.",
+   "keywords": [
+    "On hurt",
+    "Riposte"
+   ],
+   "ability": {
+    "trigger": "on_hurt",
+    "ops": [
+     {
+      "op": "damage",
+      "target": "attacker",
+      "n": 2
+     }
+    ],
+    "text": "Riposte: when hurt, deal 2 damage to the attacker."
+   },
+   "passives": [],
+   "merged": {
+    "attack": 3,
+    "health": 6,
+    "ability_text": "Riposte: when hurt, deal damage equal to its attack to the attacker.",
+    "keywords": [
+     "On hurt",
+     "Riposte"
+    ],
+    "ability": {
+     "trigger": "on_hurt",
+     "ops": [
+      {
+       "op": "damage",
+       "target": "attacker",
+       "n": "self_atk"
+      }
+     ],
+     "text": "Riposte: when hurt, deal damage equal to its attack to the attacker."
+    },
+    "passives": []
+   },
+   "role": "front",
+   "flavour": "Fights back to back with a mirror. Two blades, two right answers.",
+   "flavour_source": "bard-story/proto/units-v1.md",
+   "tags": [
+    "wall"
+   ],
+   "strong_vs": [
+    "swarm",
+    "big_hit"
+   ],
+   "families": [
+    "pain"
+   ]
+  },
+  {
+   "id": "blotling",
+   "name": "The Blotling",
+   "house": "Neutral",
+   "kind": "blot",
+   "tier": 1,
+   "cost": 1,
+   "attack": 1,
+   "health": 4,
+   "ability_text": "On death: Summon a 2/2 Ink Drop. Counts as Pit and Tidewrack.",
+   "keywords": [
+    "On death",
+    "Summon",
+    "Glue"
+   ],
+   "ability": {
+    "trigger": "on_death",
+    "ops": [
+     {
+      "op": "summon",
+      "token": "ink_drop",
+      "count": 1,
+      "at": "self_slot"
+     }
+    ],
+    "text": "On death: Summon a 2/2 Ink Drop. Counts as Pit and Tidewrack."
+   },
+   "passives": [],
+   "merged": {
+    "attack": 2,
+    "health": 5,
+    "ability_text": "On death: Summon two 3/3 Ink Drops. Counts as Pit and Tidewrack.",
+    "keywords": [
+     "On death",
+     "Summon",
+     "Glue"
+    ],
+    "ability": {
+     "trigger": "on_death",
+     "ops": [
+      {
+       "op": "summon",
+       "token": "ink_drop_2",
+       "count": 2,
+       "at": "self_slot"
+      }
+     ],
+     "text": "On death: Summon two 3/3 Ink Drops. Counts as Pit and Tidewrack."
+    },
+    "passives": []
+   },
+   "role": "front",
+   "flavour": "A small grey seep with an appetite. It drinks the colour from the unread.",
+   "flavour_source": "bard-story/proto/units-v1.md",
+   "glue": [
+    "The Pit",
+    "The Tidewrack"
+   ],
+   "tags": [
+    "swarm"
+   ],
+   "strong_vs": [
+    "big_hit"
+   ],
+   "families": [
+    "swarm",
+    "sacrifice"
+   ]
+  },
+  {
+   "id": "footnote",
+   "name": "Sir Footnote",
+   "house": "The Standard",
+   "kind": "named",
+   "tier": 2,
+   "cost": 2,
+   "attack": 3,
+   "health": 7,
+   "ability_text": "Giant-slayer: double damage to targets with twice his health or more.",
+   "keywords": [
+    "Giant-slayer"
+   ],
+   "ability": {
+    "trigger": "passive",
+    "ops": [],
+    "text": "Giant-slayer: double damage to targets with twice his health or more."
+   },
+   "passives": [
+    {
+     "k": "giantslayer",
+     "ratio": 2
+    }
+   ],
+   "merged": {
+    "attack": 4,
+    "health": 9,
+    "ability_text": "Giant-slayer: double damage to any target with more health than him.",
+    "keywords": [
+     "Giant-slayer"
+    ],
+    "ability": {
+     "trigger": "passive",
+     "ops": [],
+     "text": "Giant-slayer: double damage to any target with more health than him."
+    },
+    "passives": [
+     {
+      "k": "giantslayer",
+      "ratio": 1
+     }
+    ]
+   },
+   "role": "front",
+   "flavour": "Small print, full plate, red plume. Charges anything twice his size.",
+   "flavour_source": "bard-story/proto/units-v1.md",
+   "tags": [
+    "striker"
+   ],
+   "strong_vs": [
+    "wall",
+    "big_hit"
+   ],
+   "families": [
+    "strikers"
+   ]
+  },
+  {
+   "id": "juniper",
+   "name": "Juniper",
+   "house": "The Tidewrack",
+   "kind": "named",
+   "tier": 2,
+   "cost": 2,
+   "attack": 4,
+   "health": 5,
+   "ability_text": "Pierce: her attacks ignore Guard and break Ward without being blocked.",
+   "keywords": [
+    "Pierce"
+   ],
+   "ability": {
+    "trigger": "passive",
+    "ops": [],
+    "text": "Pierce: her attacks ignore Guard and break Ward without being blocked."
+   },
+   "passives": [
+    {
+     "k": "pierce"
+    }
+   ],
+   "merged": {
+    "attack": 5,
+    "health": 7,
+    "ability_text": "Pierce and Snipe: her attacks hit the enemy Back unit.",
+    "keywords": [
+     "Pierce",
+     "Snipe",
+     "Back"
+    ],
+    "ability": {
+     "trigger": "passive",
+     "ops": [],
+     "text": "Pierce and Snipe: her attacks hit the enemy Back unit."
+    },
+    "passives": [
+     {
+      "k": "pierce"
+     },
+     {
+      "k": "snipe"
+     }
+    ]
+   },
+   "role": "mid",
+   "flavour": "A red fox with a brass key in her teeth. Locks are just questions.",
+   "flavour_source": "bard-story/proto/units-v1.md",
+   "tags": [
+    "striker"
+   ],
+   "strong_vs": [
+    "wall"
+   ],
+   "families": [
+    "strikers"
+   ]
+  },
+  {
+   "id": "corvin",
+   "name": "Corvin",
+   "house": "The Fold",
+   "kind": "named",
+   "tier": 2,
+   "cost": 2,
+   "attack": 2,
+   "health": 5,
+   "ability_text": "Start of fight: the ally Behind gains +2 attack.",
+   "keywords": [
+    "Start of fight",
+    "Behind"
+   ],
+   "ability": {
+    "trigger": "start_of_fight",
+    "ops": [
+     {
+      "op": "buff",
+      "target": "ally_behind",
+      "atk": 2,
+      "hp": 0
+     }
+    ],
+    "text": "Start of fight: the ally Behind gains +2 attack."
+   },
+   "passives": [],
+   "merged": {
+    "attack": 3,
+    "health": 6,
+    "ability_text": "Relay: on attack, the ally Behind repeats its start-of-fight ability.",
+    "keywords": [
+     "On attack",
+     "Relay",
+     "Behind"
+    ],
+    "ability": {
+     "trigger": "on_attack",
+     "ops": [
+      {
+       "op": "relay_sof"
+      }
+     ],
+     "text": "Relay: on attack, the ally Behind repeats its start-of-fight ability."
+    },
+    "passives": []
+   },
+   "role": "front",
+   "flavour": "A raven courier in a red scarf. Delivers before you've finished writing.",
+   "flavour_source": "bard-story/proto/units-v1.md",
+   "tags": [
+    "buff",
+    "sof"
+   ],
+   "strong_vs": [],
+   "families": [
+    "volley"
+   ]
+  },
+  {
+   "id": "wren",
+   "name": "Sister Wren",
+   "house": "The Candle",
+   "kind": "named",
+   "tier": 2,
+   "cost": 2,
+   "attack": 1,
+   "health": 6,
+   "ability_text": "On attack: heal the most damaged ally 3.",
+   "keywords": [
+    "On attack",
+    "Heal"
+   ],
+   "ability": {
+    "trigger": "on_attack",
+    "ops": [
+     {
+      "op": "heal",
+      "target": "most_damaged_ally",
+      "n": 3
+     }
+    ],
+    "text": "On attack: heal the most damaged ally 3."
+   },
+   "passives": [],
+   "merged": {
+    "attack": 2,
+    "health": 8,
+    "ability_text": "On attack: heal all allies 2.",
+    "keywords": [
+     "On attack",
+     "Heal"
+    ],
+    "ability": {
+     "trigger": "on_attack",
+     "ops": [
+      {
+       "op": "heal",
+       "target": "all_allies",
+       "n": 2
+      }
+     ],
+     "text": "On attack: heal all allies 2."
+    },
+    "passives": []
+   },
+   "role": "back",
+   "flavour": "Walks the dark pages with a lantern, lighting a lamp for the lost.",
+   "flavour_source": "bard-story/proto/units-v1.md",
+   "tags": [
+    "sustain",
+    "backline"
+   ],
+   "strong_vs": [
+    "striker"
+   ],
+   "families": [
+    "menders",
+    "volley"
+   ]
+  },
+  {
+   "id": "croak",
+   "name": "Baron Croak",
+   "house": "The Gilt",
+   "kind": "named",
+   "tier": 2,
+   "cost": 2,
+   "attack": 3,
+   "health": 5,
+   "ability_text": "Leap: at start of fight he strikes the enemy Front for his attack.",
+   "keywords": [
+    "Start of fight",
+    "Leap"
+   ],
+   "ability": {
+    "trigger": "start_of_fight",
+    "ops": [
+     {
+      "op": "strike",
+      "target": "enemy_front"
+     }
+    ],
+    "text": "Leap: at start of fight he strikes the enemy Front for his attack."
+   },
+   "passives": [],
+   "merged": {
+    "attack": 4,
+    "health": 7,
+    "ability_text": "Leap, then bow: strikes at start of fight, then gains Ward.",
+    "keywords": [
+     "Start of fight",
+     "Leap",
+     "Ward"
+    ],
+    "ability": {
+     "trigger": "start_of_fight",
+     "ops": [
+      {
+       "op": "strike",
+       "target": "enemy_front"
+      },
+      {
+       "op": "ward",
+       "target": "self"
+      }
+     ],
+     "text": "Leap, then bow: strikes at start of fight, then gains Ward."
+    },
+    "passives": []
+   },
+   "role": "mid",
+   "flavour": "Monocle, lace and a ruby brooch. He leaps first and bows after.",
+   "flavour_source": "bard-story/proto/units-v1.md",
+   "tags": [
+    "sof"
+   ],
+   "strong_vs": [
+    "backline"
+   ],
+   "families": [
+    "volley"
+   ]
+  },
+  {
+   "id": "grub",
+   "name": "Grub",
+   "house": "The Torn Margin",
+   "kind": "named",
+   "tier": 2,
+   "cost": 2,
+   "attack": 2,
+   "health": 9,
+   "ability_text": "Shelter: enemy hits aimed behind the Front land on Grub instead.",
+   "keywords": [
+    "Shelter"
+   ],
+   "ability": {
+    "trigger": "passive",
+    "ops": [],
+    "text": "Shelter: enemy hits aimed behind the Front land on Grub instead."
+   },
+   "passives": [
+    {
+     "k": "shelter"
+    }
+   ],
+   "merged": {
+    "attack": 3,
+    "health": 12,
+    "ability_text": "Shelter and Guard 1. Grub can't be moved.",
+    "keywords": [
+     "Shelter",
+     "Guard"
+    ],
+    "ability": {
+     "trigger": "passive",
+     "ops": [],
+     "text": "Shelter and Guard 1. Grub can't be moved."
+    },
+    "passives": [
+     {
+      "k": "shelter"
+     },
+     {
+      "k": "guard",
+      "n": 1
+     },
+     {
+      "k": "unmovable"
+     }
+    ]
+   },
+   "role": "front",
+   "flavour": "Grub doesn't move. A small bird lives in the nest on his head.",
+   "flavour_source": "bard-story/proto/units-v1.md",
+   "tags": [
+    "wall"
+   ],
+   "strong_vs": [
+    "snipe"
+   ],
+   "families": [
+    "pain"
+   ]
+  },
+  {
+   "id": "doodle",
+   "name": "Deckle Doodle",
+   "house": "Neutral",
+   "kind": "creature",
+   "tier": 2,
+   "cost": 2,
+   "attack": 2,
+   "health": 5,
+   "ability_text": "On death: Summon two 3/3 Scribbles. Counts as Fold and Scriptorium.",
+   "keywords": [
+    "On death",
+    "Summon",
+    "Glue"
+   ],
+   "ability": {
+    "trigger": "on_death",
+    "ops": [
+     {
+      "op": "summon",
+      "token": "scribble",
+      "count": 2,
+      "at": "self_slot"
+     }
+    ],
+    "text": "On death: Summon two 3/3 Scribbles. Counts as Fold and Scriptorium."
+   },
+   "passives": [],
+   "merged": {
+    "attack": 3,
+    "health": 6,
+    "ability_text": "On death: Summon two 3/3 Scribbles. Counts as Fold and Scriptorium.",
+    "keywords": [
+     "On death",
+     "Summon",
+     "Glue"
+    ],
+    "ability": {
+     "trigger": "on_death",
+     "ops": [
+      {
+       "op": "summon",
+       "token": "scribble_2",
+       "count": 2,
+       "at": "self_slot"
+      }
+     ],
+     "text": "On death: Summon two 3/3 Scribbles. Counts as Fold and Scriptorium."
+    },
+    "passives": []
+   },
+   "role": "front",
+   "flavour": "Sketched by the Author and never finished. Too many legs, all hungry.",
+   "flavour_source": "bard-story/proto/units-v1.md",
+   "glue": [
+    "The Fold",
+    "The Scriptorium"
+   ],
+   "tags": [
+    "swarm"
+   ],
+   "strong_vs": [
+    "big_hit"
+   ],
+   "families": [
+    "swarm",
+    "sacrifice"
+   ]
+  },
+  {
+   "id": "pip",
+   "name": "Pip Fennick",
+   "house": "The Tidewrack",
+   "kind": "hero",
+   "tier": 2,
+   "cost": 2,
+   "attack": 1,
+   "health": 4,
+   "ability_text": "On death: a random ally gains +2/+2.",
+   "keywords": [
+    "On death"
+   ],
+   "ability": {
+    "trigger": "on_death",
+    "ops": [
+     {
+      "op": "buff",
+      "target": "random_other_ally",
+      "atk": 2,
+      "hp": 2
+     }
+    ],
+    "text": "On death: a random ally gains +2/+2."
+   },
+   "passives": [],
+   "merged": {
+    "attack": 2,
+    "health": 6,
+    "ability_text": "On death: a random ally gains +2/+2, then a fresh Pip is Summoned.",
+    "keywords": [
+     "On death",
+     "Summon"
+    ],
+    "ability": {
+     "trigger": "on_death",
+     "ops": [
+      {
+       "op": "buff",
+       "target": "random_other_ally",
+       "atk": 2,
+       "hp": 2
+      },
+      {
+       "op": "summon",
+       "token": "pip",
+       "count": 1,
+       "at": "self_slot"
+      }
+     ],
+     "text": "On death: a random ally gains +2/+2, then a fresh Pip is Summoned."
+    },
+    "passives": []
+   },
+   "role": "front",
+   "flavour": "His Crown Coin has been in the air for nine years.",
+   "flavour_source": "bard-story/proto/units-v1.md",
+   "tags": [
+    "swarm",
+    "buff"
+   ],
+   "strong_vs": [],
+   "families": [
+    "sacrifice",
+    "swarm"
+   ]
+  },
+  {
+   "id": "index",
+   "name": "Old Mother Index",
+   "house": "The Scriptorium",
+   "kind": "named",
+   "tier": 3,
+   "cost": 3,
+   "attack": 3,
+   "health": 7,
+   "ability_text": "Filed: the enemy's first triggered ability this fight fizzles.",
+   "keywords": [
+    "Filed"
+   ],
+   "ability": {
+    "trigger": "passive",
+    "ops": [],
+    "text": "Filed: the enemy's first triggered ability this fight fizzles."
+   },
+   "passives": [
+    {
+     "k": "filed",
+     "n": 1
+    }
+   ],
+   "merged": {
+    "attack": 4,
+    "health": 9,
+    "ability_text": "Filed twice: the enemy's first two triggered abilities fizzle.",
+    "keywords": [
+     "Filed"
+    ],
+    "ability": {
+     "trigger": "passive",
+     "ops": [],
+     "text": "Filed twice: the enemy's first two triggered abilities fizzle."
+    },
+    "passives": [
+     {
+      "k": "filed",
+      "n": 2
+     }
+    ]
+   },
+   "role": "back",
+   "flavour": "Every name in Vellum has a card. She knows which drawer yours is in.",
+   "flavour_source": "bard-story/proto/units-v1.md",
+   "tags": [
+    "backline"
+   ],
+   "strong_vs": [
+    "sof",
+    "sustain",
+    "scaling"
+   ],
+   "families": [
+    "volley"
+   ]
+  },
+  {
+   "id": "kesh",
+   "name": "Kesh Varrow, the Ledger-Lord",
+   "house": "The Pit",
+   "kind": "named",
+   "tier": 3,
+   "cost": 3,
+   "attack": 4,
+   "health": 6,
+   "ability_text": "Devour: at start of fight, destroy the ally Behind and gain its stats.",
+   "keywords": [
+    "Start of fight",
+    "Devour",
+    "Behind"
+   ],
+   "ability": {
+    "trigger": "start_of_fight",
+    "ops": [
+     {
+      "op": "devour_behind",
+      "mult": 1
+     }
+    ],
+    "text": "Devour: at start of fight, destroy the ally Behind and gain its stats."
+   },
+   "passives": [],
+   "merged": {
+    "attack": 5,
+    "health": 8,
+    "ability_text": "Devour: destroy the ally Behind and gain double its stats.",
+    "keywords": [
+     "Start of fight",
+     "Devour",
+     "Behind"
+    ],
+    "ability": {
+     "trigger": "start_of_fight",
+     "ops": [
+      {
+       "op": "devour_behind",
+       "mult": 2
+      }
+     ],
+     "text": "Devour: destroy the ally Behind and gain double its stats."
+    },
+    "passives": []
+   },
+   "role": "front",
+   "flavour": "Never thrown a punch. Never needed to. Everyone in the room owes him.",
+   "flavour_source": "bard-story/proto/units-v1.md",
+   "tags": [
+    "scaling",
+    "sof"
+   ],
+   "strong_vs": [],
+   "families": [
+    "sacrifice",
+    "feast"
+   ]
+  },
+  {
+   "id": "hob",
+   "name": "Hob the Bookbinder",
+   "house": "Neutral",
+   "kind": "ally",
+   "tier": 3,
+   "cost": 3,
+   "attack": 2,
+   "health": 7,
+   "ability_text": "Stitch: the first ally to die returns with 1 health and Ward.",
+   "keywords": [
+    "On ally death",
+    "Stitch",
+    "Glue"
+   ],
+   "ability": {
+    "trigger": "on_ally_death",
+    "ops": [
+     {
+      "op": "return_dead_ally",
+      "max_per_fight": 1,
+      "ward": true
+     }
+    ],
+    "text": "Stitch: the first ally to die returns with 1 health and Ward."
+   },
+   "passives": [],
+   "merged": {
+    "attack": 3,
+    "health": 9,
+    "ability_text": "Stitch twice per fight (1 health and Ward).",
+    "keywords": [
+     "On ally death",
+     "Stitch",
+     "Glue"
+    ],
+    "ability": {
+     "trigger": "on_ally_death",
+     "ops": [
+      {
+       "op": "return_dead_ally",
+       "max_per_fight": 2,
+       "ward": true
+      }
+     ],
+     "text": "Stitch twice per fight (1 health and Ward)."
+    },
+    "passives": []
+   },
+   "role": "back",
+   "flavour": "Spectacles, apron, needle behind his ear. The Book holds because he sews it.",
+   "flavour_source": "bard-story/proto/units-v1.md",
+   "glue": [
+    "The Standard",
+    "The Candle"
+   ],
+   "tags": [
+    "sustain"
+   ],
+   "strong_vs": [
+    "striker"
+   ],
+   "families": [
+    "menders"
+   ]
+  },
+  {
+   "id": "wolf",
+   "name": "The Margin Wolf",
+   "house": "Neutral",
+   "kind": "creature",
+   "tier": 3,
+   "cost": 3,
+   "attack": 3,
+   "health": 5,
+   "ability_text": "Devour: when its attack kills, it gains +1/+2.",
+   "keywords": [
+    "On attack",
+    "Devour",
+    "Glue"
+   ],
+   "ability": {
+    "trigger": "on_attack",
+    "ops": [
+     {
+      "op": "if_target_died",
+      "then": [
+       {
+        "op": "buff",
+        "target": "self",
+        "atk": 1,
+        "hp": 2
+       }
+      ]
+     }
+    ],
+    "text": "Devour: when its attack kills, it gains +1/+2."
+   },
+   "passives": [],
+   "merged": {
+    "attack": 4,
+    "health": 7,
+    "ability_text": "When its attack kills: +1/+2 and attack again.",
+    "keywords": [
+     "On attack",
+     "Frenzy",
+     "Glue"
+    ],
+    "ability": {
+     "trigger": "on_attack",
+     "ops": [
+      {
+       "op": "if_target_died",
+       "then": [
+        {
+         "op": "buff",
+         "target": "self",
+         "atk": 1,
+         "hp": 2
+        }
+       ]
+      },
+      {
+       "op": "attack_again",
+       "cond": "target_died",
+       "per_turn": 1
+      }
+     ],
+     "text": "When its attack kills: +1/+2 and attack again."
+    },
+    "passives": []
+   },
+   "role": "mid",
+   "flavour": "White paper, black outline, a hunter's mind. It eats stragglers and footnotes.",
+   "flavour_source": "bard-story/proto/units-v1.md",
+   "glue": [
+    "The Torn Margin",
+    "The Pit"
+   ],
+   "tags": [
+    "scaling",
+    "striker"
+   ],
+   "strong_vs": [
+    "swarm"
+   ],
+   "families": [
+    "feast",
+    "strikers"
+   ]
+  },
+  {
+   "id": "weeping",
+   "name": "The Weeping Margin",
+   "house": "Neutral",
+   "kind": "blot",
+   "tier": 3,
+   "cost": 3,
+   "attack": 3,
+   "health": 8,
+   "ability_text": "Smother: enemy summons and Stitches arrive at 1 health with no ability.",
+   "keywords": [
+    "Smother",
+    "Glue"
+   ],
+   "ability": {
+    "trigger": "passive",
+    "ops": [],
+    "text": "Smother: enemy summons and Stitches arrive at 1 health with no ability."
+   },
+   "passives": [
+    {
+     "k": "smother",
+     "n": 1
+    }
+   ],
+   "merged": {
+    "attack": 4,
+    "health": 10,
+    "ability_text": "Smother+: enemy summons and Stitches fizzle entirely.",
+    "keywords": [
+     "Smother",
+     "Glue"
+    ],
+    "ability": {
+     "trigger": "passive",
+     "ops": [],
+     "text": "Smother+: enemy summons and Stitches fizzle entirely."
+    },
+    "passives": [
+     {
+      "k": "smother",
+      "n": 2
+     }
+    ]
+   },
+   "role": "front",
+   "flavour": "Where the page frays and bleeds. Everything near it starts to forget.",
+   "flavour_source": "bard-story/proto/units-v1.md",
+   "glue": [
+    "The Torn Margin",
+    "The Gilt"
+   ],
+   "tags": [
+    "wall"
+   ],
+   "strong_vs": [
+    "swarm",
+    "sustain"
+   ],
+   "families": [
+    "pain"
+   ]
+  },
+  {
+   "id": "thorn",
+   "name": "Thorn",
+   "house": "The Torn Margin",
+   "kind": "hero",
+   "tier": 3,
+   "cost": 3,
+   "attack": 2,
+   "health": 6,
+   "ability_text": "Frenzy: after each attack, attack again (once per turn).",
+   "keywords": [
+    "On attack",
+    "Frenzy"
+   ],
+   "ability": {
+    "trigger": "on_attack",
+    "ops": [
+     {
+      "op": "attack_again",
+      "cond": null,
+      "per_turn": 1
+     }
+    ],
+    "text": "Frenzy: after each attack, attack again (once per turn)."
+   },
+   "passives": [],
+   "merged": {
+    "attack": 3,
+    "health": 8,
+    "ability_text": "Frenzy: after each attack, attack again (twice per turn).",
+    "keywords": [
+     "On attack",
+     "Frenzy"
+    ],
+    "ability": {
+     "trigger": "on_attack",
+     "ops": [
+      {
+       "op": "attack_again",
+       "cond": null,
+       "per_turn": 2
+      }
+     ],
+     "text": "Frenzy: after each attack, attack again (twice per turn)."
+    },
+    "passives": []
+   },
+   "role": "mid",
+   "flavour": "The only one the Author never drew. Bites first, asks never.",
+   "flavour_source": "bard-story/proto/units-v1.md",
+   "tags": [
+    "striker"
+   ],
+   "strong_vs": [
+    "swarm"
+   ],
+   "families": [
+    "strikers"
+   ]
+  },
+  {
+   "id": "grenna",
+   "name": "Grenna Ironvow",
+   "house": "The Pit",
+   "kind": "hero",
+   "tier": 3,
+   "cost": 3,
+   "attack": 2,
+   "health": 9,
+   "ability_text": "On hurt: gain +2 attack.",
+   "keywords": [
+    "On hurt"
+   ],
+   "ability": {
+    "trigger": "on_hurt",
+    "ops": [
+     {
+      "op": "buff",
+      "target": "self",
+      "atk": 2,
+      "hp": 0
+     }
+    ],
+    "text": "On hurt: gain +2 attack."
+   },
+   "passives": [],
+   "merged": {
+    "attack": 3,
+    "health": 12,
+    "ability_text": "On hurt: gain +2 attack, and Adjacent allies gain +1 attack.",
+    "keywords": [
+     "On hurt",
+     "Adjacent"
+    ],
+    "ability": {
+     "trigger": "on_hurt",
+     "ops": [
+      {
+       "op": "buff",
+       "target": "self",
+       "atk": 2,
+       "hp": 0
+      },
+      {
+       "op": "buff",
+       "target": "adjacent_allies",
+       "atk": 1,
+       "hp": 0
+      }
+     ],
+     "text": "On hurt: gain +2 attack, and Adjacent allies gain +1 attack."
+    },
+    "passives": []
+   },
+   "role": "front",
+   "flavour": "One chain left to break. She laughs every time she's knocked down.",
+   "flavour_source": "bard-story/proto/units-v1.md",
+   "tags": [
+    "wall",
+    "scaling"
+   ],
+   "strong_vs": [
+    "striker"
+   ],
+   "families": [
+    "pain",
+    "feast"
+   ]
+  },
+  {
+   "id": "silas",
+   "name": "Silas Quill",
+   "house": "The Scriptorium",
+   "kind": "hero",
+   "tier": 4,
+   "cost": 4,
+   "attack": 5,
+   "health": 8,
+   "ability_text": "Start of fight: swap the enemy Front and Back; Silence the new Front.",
+   "keywords": [
+    "Start of fight",
+    "Front",
+    "Back",
+    "Silence"
+   ],
+   "ability": {
+    "trigger": "start_of_fight",
+    "ops": [
+     {
+      "op": "swap_enemy_front_back"
+     },
+     {
+      "op": "silence",
+      "target": "enemy_front"
+     }
+    ],
+    "text": "Start of fight: swap the enemy Front and Back; Silence the new Front."
+   },
+   "passives": [],
+   "merged": {
+    "attack": 6,
+    "health": 10,
+    "ability_text": "Start of fight: swap the enemy Front and Back, then Silence both.",
+    "keywords": [
+     "Start of fight",
+     "Front",
+     "Back",
+     "Silence"
+    ],
+    "ability": {
+     "trigger": "start_of_fight",
+     "ops": [
+      {
+       "op": "swap_enemy_front_back"
+      },
+      {
+       "op": "silence",
+       "target": "enemy_front"
+      },
+      {
+       "op": "silence",
+       "target": "enemy_back"
+      }
+     ],
+     "text": "Start of fight: swap the enemy Front and Back, then Silence both."
+    },
+    "passives": []
+   },
+   "role": "back",
+   "flavour": "He doesn't want to rule the story. He wants to write it.",
+   "flavour_source": "bard-story/proto/units-v1.md",
+   "tags": [
+    "sof"
+   ],
+   "strong_vs": [
+    "wall",
+    "backline"
+   ],
+   "families": [
+    "volley"
+   ]
+  },
+  {
+   "id": "marrow",
+   "name": "Lady Marrow",
+   "house": "The Gilt",
+   "kind": "hero",
+   "tier": 4,
+   "cost": 4,
+   "attack": 3,
+   "health": 7,
+   "ability_text": "Remembers: the first 3 times an ally dies, gain its starting attack.",
+   "keywords": [
+    "On ally death"
+   ],
+   "ability": {
+    "trigger": "on_ally_death",
+    "ops": [
+     {
+      "op": "gain_dead_attack"
+     }
+    ],
+    "limit_per_fight": 3,
+    "text": "Remembers: the first 3 times an ally dies, gain its starting attack."
+   },
+   "passives": [],
+   "merged": {
+    "attack": 4,
+    "health": 9,
+    "ability_text": "Remembers (3 times) and Echo: the fallen ally's on-death fires again.",
+    "keywords": [
+     "On ally death",
+     "Echo"
+    ],
+    "ability": {
+     "trigger": "on_ally_death",
+     "ops": [
+      {
+       "op": "gain_dead_attack"
+      },
+      {
+       "op": "echo_death"
+      }
+     ],
+     "limit_per_fight": 3,
+     "text": "Remembers (3 times) and Echo: the fallen ally's on-death fires again."
+    },
+    "passives": []
+   },
+   "role": "back",
+   "flavour": "Her guests keep vanishing. No one has heard her speak.",
+   "flavour_source": "bard-story/proto/units-v1.md",
+   "tags": [
+    "scaling",
+    "backline"
+   ],
+   "strong_vs": [],
+   "families": [
+    "feast",
+    "volley"
+   ]
+  },
+  {
+   "id": "wick",
+   "name": "Old Wick",
+   "house": "The Candle",
+   "kind": "hero",
+   "tier": 4,
+   "cost": 4,
+   "attack": 3,
+   "health": 6,
+   "ability_text": "Foresight. Start of fight: deal 2 damage to all enemies.",
+   "keywords": [
+    "Foresight",
+    "Start of fight"
+   ],
+   "ability": {
+    "trigger": "start_of_fight",
+    "ops": [
+     {
+      "op": "damage",
+      "target": "all_enemies",
+      "n": 2
+     }
+    ],
+    "text": "Foresight. Start of fight: deal 2 damage to all enemies."
+   },
+   "passives": [
+    {
+     "k": "foresight"
+    }
+   ],
+   "merged": {
+    "attack": 4,
+    "health": 8,
+    "ability_text": "Foresight. Start of fight: deal 3 damage to all enemies.",
+    "keywords": [
+     "Foresight",
+     "Start of fight"
+    ],
+    "ability": {
+     "trigger": "start_of_fight",
+     "ops": [
+      {
+       "op": "damage",
+       "target": "all_enemies",
+       "n": 3
+      }
+     ],
+     "text": "Foresight. Start of fight: deal 3 damage to all enemies."
+    },
+    "passives": [
+     {
+      "k": "foresight"
+     }
+    ]
+   },
+   "role": "back",
+   "flavour": "Claims to have read the Last Page. Smiles when you ask.",
+   "flavour_source": "bard-story/proto/units-v1.md",
+   "tags": [
+    "sof",
+    "backline"
+   ],
+   "strong_vs": [
+    "swarm",
+    "sof"
+   ],
+   "families": [
+    "volley"
+   ]
+  },
+  {
+   "id": "vey",
+   "name": "Captain Vey",
+   "house": "The Standard",
+   "kind": "hero",
+   "tier": 4,
+   "cost": 4,
+   "attack": 3,
+   "health": 6,
+   "ability_text": "Rally: when an ally dies, other allies gain +1 attack.",
+   "keywords": [
+    "On ally death",
+    "Rally"
+   ],
+   "ability": {
+    "trigger": "on_ally_death",
+    "ops": [
+     {
+      "op": "buff",
+      "target": "other_allies",
+      "atk": 1,
+      "hp": 0
+     }
+    ],
+    "text": "Rally: when an ally dies, other allies gain +1 attack."
+   },
+   "passives": [],
+   "merged": {
+    "attack": 4,
+    "health": 8,
+    "ability_text": "Rally: when an ally dies, other allies gain +1/+1.",
+    "keywords": [
+     "On ally death",
+     "Rally"
+    ],
+    "ability": {
+     "trigger": "on_ally_death",
+     "ops": [
+      {
+       "op": "buff",
+       "target": "other_allies",
+       "atk": 1,
+       "hp": 1
+      }
+     ],
+     "text": "Rally: when an ally dies, other allies gain +1/+1."
+    },
+    "passives": []
+   },
+   "role": "mid",
+   "flavour": "Lost 212 soldiers. Still carries their roll.",
+   "flavour_source": "bard-story/proto/units-v1.md",
+   "tags": [
+    "scaling"
+   ],
+   "strong_vs": [],
+   "families": [
+    "feast"
+   ]
+  },
+  {
+   "id": "reader",
+   "name": "The Watching Reader",
+   "house": "Neutral",
+   "kind": "reader",
+   "tier": 4,
+   "cost": 4,
+   "attack": 2,
+   "health": 6,
+   "ability_text": "If Back at start of fight: the two allies Ahead gain +1/+2.",
+   "keywords": [
+    "Start of fight",
+    "Back",
+    "Ahead",
+    "Glue"
+   ],
+   "ability": {
+    "trigger": "start_of_fight",
+    "ops": [
+     {
+      "op": "buff",
+      "target": "two_allies_ahead",
+      "atk": 1,
+      "hp": 2
+     }
+    ],
+    "cond": "self_back",
+    "text": "If Back at start of fight: the two allies Ahead gain +1/+2."
+   },
+   "passives": [],
+   "merged": {
+    "attack": 3,
+    "health": 8,
+    "ability_text": "Start of fight, from anywhere: all allies gain +1/+1.",
+    "keywords": [
+     "Start of fight",
+     "Glue"
+    ],
+    "ability": {
+     "trigger": "start_of_fight",
+     "ops": [
+      {
+       "op": "buff",
+       "target": "all_allies",
+       "atk": 1,
+       "hp": 1
+      }
+     ],
+     "text": "Start of fight, from anywhere: all allies gain +1/+1."
+    },
+    "passives": []
+   },
+   "role": "back",
+   "flavour": "Nobody in Vellum has ever seen one. Everyone has felt one look.",
+   "flavour_source": "bard-story/proto/units-v1.md",
+   "glue": [
+    "The Gilt",
+    "The Tidewrack"
+   ],
+   "tags": [
+    "buff",
+    "backline"
+   ],
+   "strong_vs": [],
+   "families": [
+    "volley"
+   ]
+  },
+  {
+   "id": "ash_ember",
+   "name": "Ash & Ember",
+   "house": "The Fold",
+   "kind": "hero",
+   "tier": 5,
+   "cost": 5,
+   "attack": 4,
+   "health": 5,
+   "ability_text": "Cleave. Start of fight: Ember (2/3, Cleave) joins at the other End.",
+   "keywords": [
+    "Cleave",
+    "Start of fight",
+    "End",
+    "Summon"
+   ],
+   "ability": {
+    "trigger": "start_of_fight",
+    "ops": [
+     {
+      "op": "summon",
+      "token": "ember",
+      "count": 1,
+      "at": "other_end"
+     }
+    ],
+    "text": "Cleave. Start of fight: Ember (2/3, Cleave) joins at the other End."
+   },
+   "passives": [
+    {
+     "k": "cleave",
+     "n": "self_atk"
+    }
+   ],
+   "merged": {
+    "attack": 5,
+    "health": 7,
+    "ability_text": "Cleave. Start of fight: Ember (5/5, Cleave) joins at the other End.",
+    "keywords": [
+     "Cleave",
+     "Start of fight",
+     "End",
+     "Summon"
+    ],
+    "ability": {
+     "trigger": "start_of_fight",
+     "ops": [
+      {
+       "op": "summon",
+       "token": "ember_2",
+       "count": 1,
+       "at": "other_end"
+      }
+     ],
+     "text": "Cleave. Start of fight: Ember (5/5, Cleave) joins at the other End."
+    },
+    "passives": [
+     {
+      "k": "cleave",
+      "n": "self_atk"
+     }
+    ]
+   },
+   "role": "mid",
+   "flavour": "Win together. Never agree how.",
+   "flavour_source": "bard-story/proto/units-v1.md",
+   "tags": [
+    "striker"
+   ],
+   "strong_vs": [
+    "swarm"
+   ],
+   "families": [
+    "strikers"
+   ]
+  },
+  {
+   "id": "errata",
+   "name": "Sir Errata",
+   "house": "Neutral",
+   "kind": "blot",
+   "tier": 5,
+   "cost": 5,
+   "attack": 7,
+   "health": 9,
+   "ability_text": "On attack: Silence the target.",
+   "keywords": [
+    "On attack",
+    "Silence",
+    "Glue"
+   ],
+   "ability": {
+    "trigger": "on_attack",
+    "ops": [
+     {
+      "op": "silence",
+      "target": "target"
+     }
+    ],
+    "text": "On attack: Silence the target."
+   },
+   "passives": [],
+   "merged": {
+    "attack": 8,
+    "health": 11,
+    "ability_text": "On attack: Silence the target and it loses 2 attack.",
+    "keywords": [
+     "On attack",
+     "Silence",
+     "Glue"
+    ],
+    "ability": {
+     "trigger": "on_attack",
+     "ops": [
+      {
+       "op": "silence",
+       "target": "target"
+      },
+      {
+       "op": "debuff_atk",
+       "target": "target",
+       "n": 2
+      }
+     ],
+     "text": "On attack: Silence the target and it loses 2 attack."
+    },
+    "passives": []
+   },
+   "role": "front",
+   "flavour": "A knight of crossings-out. \"You were a mistake. I'm here to fix it.\"",
+   "flavour_source": "bard-story/proto/units-v1.md",
+   "glue": [
+    "The Standard",
+    "The Fold"
+   ],
+   "tags": [
+    "big_hit"
+   ],
+   "strong_vs": [
+    "scaling",
+    "sustain",
+    "wall"
+   ],
+   "families": [
+    "finisher"
+   ]
+  },
+  {
+   "id": "colophon",
+   "name": "The Colophon",
+   "house": "Neutral",
+   "kind": "blot",
+   "tier": 5,
+   "cost": 5,
+   "attack": 5,
+   "health": 7,
+   "ability_text": "Blight. On attack: destroy a target left at 3 health or less.",
+   "keywords": [
+    "Blight",
+    "On attack",
+    "Glue"
+   ],
+   "ability": {
+    "trigger": "on_attack",
+    "ops": [
+     {
+      "op": "destroy_if_hp_le",
+      "target": "target",
+      "n": 3
+     }
+    ],
+    "text": "Blight. On attack: destroy a target left at 3 health or less."
+   },
+   "passives": [
+    {
+     "k": "blight"
+    }
+   ],
+   "merged": {
+    "attack": 6,
+    "health": 9,
+    "ability_text": "Blight. On attack: destroy a target left at 6 health or less.",
+    "keywords": [
+     "Blight",
+     "On attack",
+     "Glue"
+    ],
+    "ability": {
+     "trigger": "on_attack",
+     "ops": [
+      {
+       "op": "destroy_if_hp_le",
+       "target": "target",
+       "n": 6
+      }
+     ],
+     "text": "Blight. On attack: destroy a target left at 6 health or less."
+    },
+    "passives": [
+     {
+      "k": "blight"
+     }
+    ]
+   },
+   "role": "mid",
+   "flavour": "The gentle ending at the back of the Book. It weeps as it closes.",
+   "flavour_source": "bard-story/proto/units-v1.md",
+   "glue": [
+    "The Candle",
+    "The Scriptorium"
+   ],
+   "tags": [
+    "big_hit"
+   ],
+   "strong_vs": [
+    "sustain",
+    "swarm"
+   ],
+   "families": [
+    "finisher"
+   ]
+  }
+ ],
+ "tag_names": {
+  "wall": "Wall",
+  "sustain": "Sustain",
+  "big_hit": "Big hitter",
+  "sof": "Start-of-fight",
+  "snipe": "Snipe",
+  "backline": "Back-line carry",
+  "buff": "Buffer",
+  "striker": "Striker",
+  "swarm": "Swarm",
+  "scaling": "Scaler"
+ },
+ "pin_note": "Integer stats only. merged = 3 copies. A 2nd copy adds +1/+1 (a pip).",
+ "families": {
+  "feast": "Death-feeders: grow when allies fall.",
+  "menders": "Healers and protectors: heal, add health, give Ward, stitch back.",
+  "strikers": "Double-strikers: extra hits, splash and re-attacks.",
+  "sacrifice": "Sacrifices: units that pay off by dying, plus Kesh who makes them die.",
+  "swarm": "Swarm: units that summon bodies to refill the line.",
+  "pain": "Pain engines: grow or retaliate on hurt; the natural front line.",
+  "volley": "Opening volley: start-of-fight snipes, silences, swaps and buffs.",
+  "finisher": "Tier-5 finishers that fit any comp."
+ }
+}

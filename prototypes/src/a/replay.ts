@@ -29,6 +29,9 @@ export function foldFight(log: FightLogEvent[]): { hpA: number; hpB: number; win
     } else if (ev.t === "damage" || ev.t === "heal" || ev.t === "buff") {
       const body = index.get(String(ev.tgt));
       if (body && typeof ev.hp === "number") body.hp = ev.hp;
+    } else if (ev.t === "endure") {
+      const body = index.get(String(ev.uid));
+      if (body) body.hp = 1;
     } else if (ev.t === "death") {
       const body = index.get(String(ev.uid));
       if (body) body.alive = false;

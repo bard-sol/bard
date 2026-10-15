@@ -11,7 +11,8 @@ export const LINE_SLOTS = 5;
 export const ECHO_SLOTS = 2;
 export const MAX_MERGE = 2;
 export const PLAYER_HOUSE = "tidewrack" as const;
-export const LANE_RULES_DEFAULT = false;
+/** Lane rules are always on in v2. Three locations are drawn from the match seed. */
+export const LANE_RULES_DEFAULT = true;
 
 const HOUSE_BAR_KEY = "bard.proto.houseBar";
 const BENCH_KEY = "bard.proto.bench";

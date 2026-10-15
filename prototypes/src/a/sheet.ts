@@ -1,4 +1,4 @@
-import sheet from "../../engine/units-s0.json";
+import sheet from "../../engine/units-s0-v2.json";
 
 export const SHEET = sheet;
 export const UNITS_VERSION = sheet.version;

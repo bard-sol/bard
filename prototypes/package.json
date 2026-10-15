@@ -8,7 +8,7 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "test": "vitest run && npm run gate",
-    "gate": "node engine/ref/check_golden.mjs && sh engine/ref/fuzz_parity.sh"
+    "gate": "node engine/ref/v2/check_golden_v2.mjs && sh engine/ref/v2/fuzz_parity_v2.sh 20000 && node engine/ref/v2/check_duel_parity.mjs 500"
   },
   "dependencies": {
     "pixi.js": "^8.14.3"
