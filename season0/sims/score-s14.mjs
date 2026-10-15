@@ -4,6 +4,8 @@
  * Run: node season0/sims/score-s14.mjs
  * Participation variance: S14_BETA=1 node season0/sims/score-s14.mjs
  * Option B variants: S14_B=1 node season0/sims/score-s14.mjs
+ * Probabilistic edge: S14_PICK=1 node season0/sims/score-s14.mjs
+ * A3 is locked at a 0.3% Health gap.
  *
  * Moves are the share of qualifying verified clusters that play, times the
  * money edge. Unverified wallets and Readers cast nothing. Every House starts
@@ -188,6 +190,27 @@ function moneyMultiplier(locked, mid, edge) {
   return 1 + edge * Math.sqrt(locked / (3 * mid));
 }
 
+function stakePickFactor(locked, mid, reduction) {
+  if (!(reduction > 0) || !(mid > 0) || !(locked > 0)) return 1;
+  const curve = Math.min(1, Math.sqrt(locked / (3 * mid)));
+  return 1 - reduction * curve;
+}
+
+function pickByOdds(ranked, count, factorOf, seed, salt) {
+  const kept = [];
+  const skipped = [];
+  for (let i = 0; i < ranked.length && kept.length < count; i++) {
+    const id = ranked[i];
+    if (rand(seed, salt, INDEX[id], i, 7) < factorOf(id)) kept.push(id);
+    else skipped.push(id);
+  }
+  for (const id of skipped) {
+    if (kept.length >= count) break;
+    kept.push(id);
+  }
+  return kept;
+}
+
 function armorDay(house, seed, chapter, day, twist, coef) {
   let locked = lockedOf(house);
   const fresh = [];
@@ -320,11 +343,11 @@ function lowestOf(ids, scores, seed, salt) {
   return orderByHealth(ids, scores, seed, salt, false)[0];
 }
 
-function pour(incoming, weight, fromId, living, scores, seed, salt, crown, peekFrac) {
+function pour(incoming, weight, fromId, living, scores, seed, salt, crown, peekFrac, focusId) {
   if (weight <= 0) return;
   const rivals = fromId ? living.filter((id) => id !== fromId) : living.slice();
   if (!rivals.length) return;
-  const lowest = lowestOf(rivals, scores, seed, salt);
+  const lowest = focusId && rivals.includes(focusId) ? focusId : lowestOf(rivals, scores, seed, salt);
   const peeked = weight * peekFrac;
   const normal = weight - peeked;
   incoming[lowest] += peeked;
@@ -360,14 +383,15 @@ function softenHits(incoming, living, chapter) {
   return out;
 }
 
-function applyWave(wave, armor, twist, living, crown, grossHeal, grossHit, effectiveHit, chapter, underdog) {
+function applyWave(wave, armor, twist, living, crown, grossHeal, grossHit, effectiveHit, chapter, underdog, twistCrown) {
   const healMul = twist === 2 ? 1.25 : 1;
   const hitMul = twist === 1 ? 1.25 : 1;
   const scaled = {};
   for (const id of living) scaled[id] = (wave.incoming[id] || 0) * hitMul;
   const soft = softenHits(scaled, living, chapter);
+  const markedCrown = twist === 4 && twistCrown ? twistCrown : crown;
   for (const id of living) {
-    const crownMul = id === crown && twist !== 5 ? (twist === 4 ? 2 : 1.5) : 1;
+    const crownMul = id === markedCrown && twist !== 5 ? (twist === 4 ? 2 : 1.5) : 1;
     const mercyHit = id === underdog ? 0.75 : 1;
     const mercyHeal = id === underdog ? 1.25 : 1;
     grossHeal[id] += (wave.heals[id] || 0) * healMul * mercyHeal;
@@ -446,7 +470,7 @@ function runSeason(seed, pristine, opts) {
   const carryQuality = {};
   for (const id of IDS) carryQuality[id] = 0;
   const carryBonus = {};
-  const a3Gap = opts.a3Gap != null ? opts.a3Gap : 0.005;
+  const a3Gap = opts.a3Gap != null ? opts.a3Gap : 0.003;
   const ghosts = [];
   const pending = [];
   let a1 = false;
@@ -485,6 +509,7 @@ function runSeason(seed, pristine, opts) {
     const openedLock = {};
     for (const id of living) openedLock[id] = lockedOf(houses[id]);
     const midLock = median(living.map((id) => openedLock[id]));
+    const pickFactor = (id) => stakePickFactor(openedLock[id], midLock, opts.pickReduction || 0);
     const m = verifiedStakeMedian(houses, living);
     for (const id of living) applySurge(houses[id], m, chapter, surge);
     if (chapter === 1) {
@@ -585,28 +610,49 @@ function runSeason(seed, pristine, opts) {
         const heals = emptyMap(living);
         const peek = twist === 9 ? 0 : 0.1;
         const underdog = lowestOf(living, scores, seed, salt + 5);
+        let focusId = null;
+        if (opts.pickReduction > 0 && twist === 10) {
+          const low = orderByHealth(living, scores, seed, salt + 13, false);
+          focusId = pickByOdds(low, 1, pickFactor, seed, salt + 14)[0];
+        }
         for (const id of living) {
           const heal = castOf[id] * healShareOf[id] * frac;
           const hit = castOf[id] * (1 - healShareOf[id]) * frac;
           heals[id] += heal;
-          pour(incoming, hit, id, living, scores, seed, salt + INDEX[id] + 1, crown, peek);
+          pour(incoming, hit, id, living, scores, seed, salt + INDEX[id] + 1, crown, peek, focusId);
         }
         for (const ghost of ghosts) {
           const rate = ghost.verifiedN > 0 ? ghost.ghostActive / ghost.verifiedN : 0;
-          pour(incoming, fullDay * rate * 0.5 * (1 + 1 / 3) * frac, null, living, scores, seed, salt + 80 + INDEX[ghost.id], crown, peek);
+          pour(incoming, fullDay * rate * 0.5 * (1 + 1 / 3) * frac, null, living, scores, seed, salt + 80 + INDEX[ghost.id], crown, peek, focusId);
         }
         return { incoming, heals, underdog };
       };
-      const land = (piece) => applyWave(piece, armor, twist, living, crown, grossHeal, grossHit, effectiveHit, chapter, piece.underdog);
+      const land = (piece, scores, salt) => {
+        let twistCrown = null;
+        if (opts.pickReduction > 0 && twist === 4) {
+          const high = orderByHealth(living, scores, seed, salt + 11, true);
+          twistCrown = pickByOdds(high, 1, pickFactor, seed, salt + 12)[0];
+        }
+        applyWave(piece, armor, twist, living, crown, grossHeal, grossHit, effectiveHit, chapter, piece.underdog, twistCrown);
+      };
       if (twist === 10) {
-        land(wave(0.5, dayScores, chapter * 1000 + day * 10 + 1));
+        const firstSalt = chapter * 1000 + day * 10 + 1;
+        land(wave(0.5, dayScores, firstSalt), dayScores, firstSalt);
         dayScores = chapterHealth();
         noteCrown(orderByHealth(living, dayScores, seed, chapter * 1000 + day * 10 + 2, true)[0]);
-        land(wave(0.5, dayScores, chapter * 1000 + day * 10 + 3));
-      } else land(wave(1, dayScores, chapter * 1000 + day * 10 + 1));
+        const secondSalt = chapter * 1000 + day * 10 + 3;
+        land(wave(0.5, dayScores, secondSalt), dayScores, secondSalt);
+      } else {
+        const salt = chapter * 1000 + day * 10 + 1;
+        land(wave(1, dayScores, salt), dayScores, salt);
+      }
       dayScores = chapterHealth();
       if (day === 1) {
-        shortlist = orderByHealth(living, dayScores, seed, chapter * 1000 + day * 10 + 4, false).slice(0, Math.min(2, living.length));
+        const low = orderByHealth(living, dayScores, seed, chapter * 1000 + day * 10 + 4, false);
+        const slots = Math.min(2, living.length);
+        shortlist = opts.pickReduction > 0
+          ? pickByOdds(low, slots, pickFactor, seed, 7400 + chapter)
+          : low.slice(0, slots);
       }
       noteCrown(orderByHealth(living, dayScores, seed, chapter * 1000 + day * 10 + 5, true)[0]);
     }
@@ -625,7 +671,9 @@ function runSeason(seed, pristine, opts) {
       }
     }
     const ordered = orderByHealth(living, snapshot, seed, 7200 + chapter, false);
-    const marked = ordered.slice(0, take);
+    const marked = opts.pickReduction > 0
+      ? pickByOdds(ordered, take, pickFactor, seed, 7300 + chapter)
+      : ordered.slice(0, take);
     const stayed = [];
     for (const id of marked) {
       let revived = false;
@@ -1053,7 +1101,86 @@ async function runOptionB() {
   console.log('seconds', report.seconds);
 }
 
+async function runPick() {
+  const started = Date.now();
+  const tasks = [];
+  const add = (label, opts) => tasks.push(task(label, opts));
+  const base = (reduction, twistMode, extra) => ({
+    participation: 'beta',
+    a5Ch7: true,
+    rally: true,
+    surge: true,
+    edge: 0.25,
+    twistMode,
+    pickReduction: reduction,
+    ...extra
+  });
+  for (const reduction of [0.15, 0.25, 0.35]) {
+    for (const twistMode of ['none', 'deck']) {
+      add('pick:' + reduction + ':' + twistMode, base(reduction, twistMode));
+      for (const bots of [25, 50]) {
+        for (const catchRate of [0, 0.5, 0.8]) {
+          add('pick:' + reduction + ':farm:' + bots + ':' + catchRate + ':' + twistMode, base(reduction, twistMode, { bots, catch: catchRate }));
+        }
+      }
+    }
+  }
+  console.log('tasks', tasks.length, 'seasons', SEASONS);
+  const ran = await runTasks(tasks.map((item) => item.opts));
+  const byLabel = {};
+  tasks.forEach((item, index) => {
+    byLabel[item.label] = view(ran[index]);
+  });
+  const cells = {};
+  for (const reduction of [0.15, 0.25, 0.35]) {
+    for (const twistMode of ['none', 'deck']) {
+      const label = 'pick:' + reduction + ':' + twistMode;
+      const cell = byLabel[label];
+      const farms = {};
+      for (const bots of [25, 50]) {
+        farms[bots] = {};
+        for (const catchRate of [0, 0.5, 0.8]) {
+          farms[bots][catchRate] = byLabel['pick:' + reduction + ':farm:' + bots + ':' + catchRate + ':' + twistMode].targetWin;
+        }
+      }
+      cells[label] = { goals: cell.goals, conditionals: cell.conditionals, annotations: cell.annotations, farms };
+    }
+  }
+  const report = {
+    ruleSet: 's14-pick',
+    seasons: SEASONS,
+    seconds: Math.round((Date.now() - started) / 1000),
+    raise_loyalty_pays_default: false,
+    participation: 'Beta(4, 3) each chapter, plus the size slack. Money edge stays +25% at 3× median. Chapter Health still starts at 100.',
+    a3: 'Locked at 0.3% of the higher Health. A5 is the Crown changing hands inside chapter 7 only, band 15–35%. Other annotations stay on 20–85%.',
+    pick: 'A House at or above 3× median lock is the max reduction less likely to be kept when the Reaper draws its shortlist, or when Twist 4 or Twist 10 picks a House. Below 3× the reduction follows min(1, sqrt(lock / (3 × median))). Health order is unchanged. Ties stay an unweighted VRF roll. The snapshot draw is who falls. Twist 4\'s 2× hits land on the picked House. Twist 10\'s revealed aim uses the same draw for the lowest target.',
+    cells
+  };
+  mkdirSync(new URL('./results/', import.meta.url), { recursive: true });
+  writeFileSync(new URL('./results/score-s14-pick.json', import.meta.url), JSON.stringify(report));
+  for (const reduction of [0.15, 0.25, 0.35]) {
+    for (const twistMode of ['none', 'deck']) {
+      const cell = cells['pick:' + reduction + ':' + twistMode];
+      const g = cell.goals;
+      const k = cell.conditionals;
+      const line = [g.leaderWins, g.leaderTop3, g.lowestChampion].map((value) => (100 * value).toFixed(1)).join('/');
+      console.log('pick', reduction, twistMode, line, g.pass ? 'PASS' : '');
+      console.log('  engaged', k.engagedN, (100 * k.engagedChampion).toFixed(1), 'idle', k.idleN, (100 * k.idleLeaderChampion).toFixed(1));
+      console.log('  A', Object.entries(cell.annotations).map(([key, value]) => key + '=' + (100 * value).toFixed(1)).join(' '));
+      for (const bots of [25, 50]) {
+        const row = [0, 0.5, 0.8].map((catchRate) => catchRate + ':' + (100 * cell.farms[bots][catchRate]).toFixed(1)).join(' ');
+        console.log('  farm', bots, row);
+      }
+    }
+  }
+  console.log('seconds', report.seconds);
+}
+
 async function main() {
+  if (process.env.S14_PICK === '1') {
+    await runPick();
+    return;
+  }
   if (process.env.S14_B === '1') {
     await runOptionB();
     return;
