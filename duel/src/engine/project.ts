@@ -234,7 +234,7 @@ function eventText(entry: LogProjection): string | null {
     case 'verse': {
       const n = typeof entry.n === 'number' ? entry.n : 1;
       if (entry.why === 'hold') return `+${n} Hold`;
-      if (entry.why === 'conquer') return `+${n} Conquer`;
+      if (entry.why === 'conquer') return `Conquer +${n} Verses`;
       return `+${n} Verse`;
     }
     case 'play':

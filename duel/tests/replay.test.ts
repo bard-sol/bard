@@ -1,7 +1,10 @@
 import { afterEach, describe, expect, it } from 'vitest';
+import { apply as applyV1, newMatch as newMatchV1, replay as replayV1, stateHash as hashV1 } from '../engine/v1/engine.mjs';
+import { makeSmart as makeSmartV1 } from '../engine/v1/pilots.mjs';
 import { createEngineAdapter } from '../src/engine/adapter.js';
 import { MatchService } from '../src/server/service.js';
 import { MemoryMatchRepository, type MatchRecord } from '../src/server/store.js';
+import type { GameAction, PlayerId } from '../src/types.js';
 import { candleDeck, foldDeck, scriptedAction } from './support.js';
 
 const adapter = createEngineAdapter();
@@ -38,10 +41,10 @@ describe('determinism and replay', () => {
   it('records engine, cards, and AI versions plus the second-player Ink rule', async () => {
     const { stored, payload } = await playSeeded(seed, 'aggressive');
     expect(payload.view.winner === 0 || payload.view.winner === 1).toBe(true);
-    expect(stored.setup.engineVersion).toBe('duel-engine-1.0.0');
-    expect(stored.setup.cardsVersion).toBe('cards-proto-1');
-    expect(stored.setup.aiVersion).toBe('pilot-1.0.0');
-    expect(stored.setup.rulesVersion).toBe('rules-1.0.0');
+    expect(stored.setup.engineVersion).toBe('duel-engine-1.1.0');
+    expect(stored.setup.cardsVersion).toBe('cards-proto-1.1');
+    expect(stored.setup.aiVersion).toBe('pilot-1.1.0');
+    expect(stored.setup.rulesVersion).toBe('rules-1.1.0');
     expect(stored.setup.rules.secondInkTurns).toBe(1);
     expect(stored.setup.seed).toBe(seed);
     expect(payload.engineVersion).toBe(stored.setup.engineVersion);
@@ -66,9 +69,10 @@ describe('determinism and replay', () => {
     if (!report.ok) return;
     expect(report.payload.ok).toBe(true);
     expect(report.payload.mismatches).toEqual([]);
-    expect(report.payload.engineVersion).toBe('duel-engine-1.0.0');
-    expect(report.payload.cardsVersion).toBe('cards-proto-1');
-    expect(report.payload.aiVersion).toBe('pilot-1.0.0');
+    expect(report.payload.engineVersion).toBe('duel-engine-1.1.0');
+    expect(report.payload.cardsVersion).toBe('cards-proto-1.1');
+    expect(report.payload.aiVersion).toBe('pilot-1.1.0');
+    expect(report.payload.rulesVersion).toBe('rules-1.1.0');
     expect(report.payload.secondInkTurns).toBe(1);
     expect(JSON.stringify(report.payload)).not.toContain(String(seed));
 
@@ -83,6 +87,60 @@ describe('determinism and replay', () => {
     if (!broken.ok) return;
     expect(broken.payload.ok).toBe(false);
     expect(broken.payload.mismatches.length).toBeGreaterThan(0);
+  });
+
+  it('still verifies a match that was recorded on engine v1', async () => {
+    const candle = candleDeck();
+    const fold = foldDeck();
+    const setup = {
+      houseA: candle.house,
+      deckA: candle.cards.slice(),
+      houseB: fold.house,
+      deckB: fold.cards.slice(),
+      seed,
+      aiVersion: 'pilot-1.0.0',
+      engineVersion: 'duel-engine-1.0.0',
+      cardsVersion: 'cards-proto-1',
+      rulesVersion: 'rules-1.0.0',
+      rules: { secondVerse: 0, holdAtEnd: false, winVerses: 8, secondInkTurns: 1 },
+    };
+    let state = newMatchV1(setup);
+    const choose = makeSmartV1({ stance: 'balanced', slip: 300, salt: 99 });
+    const log: MatchRecord['log'] = [];
+    for (let guard = 0; guard < 400 && state.winner < 0; guard++) {
+      const actor = (state.phase === 'mulligan' ? state.mull : state.active) as PlayerId;
+      const action = choose(state, actor) as GameAction;
+      log.push({ index: log.length, actor, source: actor === 1 ? 'pilot' : 'human', action });
+      state = applyV1(state, action);
+    }
+    expect(state.v).toBe('duel-engine-1.0.0');
+    expect(state.winner === 0 || state.winner === 1).toBe(true);
+
+    const repo = new MemoryMatchRepository();
+    const service = new MatchService(repo, adapter, { aiTurnMs: 0, turnTimeoutMs: 60_000 });
+    services.push(service);
+    const record: MatchRecord = {
+      id: 'v1-old-replay',
+      setup,
+      stance: 'balanced',
+      state,
+      log,
+      generation: log.length,
+      turnToken: 1,
+      thinking: false,
+      deadline: null,
+      createdAt: '2026-10-15T00:00:00.000Z',
+    };
+    await repo.put(record);
+    const report = await service.replayVerify(record.id);
+    expect(report.ok).toBe(true);
+    if (!report.ok) return;
+    expect(report.payload.ok).toBe(true);
+    expect(report.payload.mismatches).toEqual([]);
+    expect(report.payload.engineVersion).toBe('duel-engine-1.0.0');
+    expect(report.payload.cardsVersion).toBe('cards-proto-1');
+    expect(report.payload.aiVersion).toBe('pilot-1.0.0');
+    expect(hashV1(replayV1(setup, log.map((entry) => entry.action)))).toBe(adapter.stateHash(state));
   });
 
   it('gives the second player 2 maximum Ink on their first turn', () => {

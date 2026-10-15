@@ -1,4 +1,4 @@
-import { actorOf, buildSetup, deckError, IllegalActionError, sameAction } from '../engine/adapter.js';
+import { actorOf, buildSetup, deckError, IllegalActionError, recordedBundle, sameAction } from '../engine/adapter.js';
 import { cardFace } from '../engine/project.js';
 import type { EngineState } from '../engine/state.js';
 import type { ClientPayload, Deck, EngineAdapter, GameAction, PlayerId, Stance, TradePreview } from '../types.js';
@@ -147,11 +147,14 @@ export class MatchService {
     const match = await this.repo.get(id);
     if (!match) return { ok: false, error: 'not_found' };
     const mismatches: string[] = [];
-    if (match.setup.engineVersion !== this.adapter.engineVersion) mismatches.push('engine_version');
-    if (match.setup.cardsVersion !== this.adapter.cardsVersion) mismatches.push('cards_version');
-    if (match.setup.aiVersion !== this.adapter.aiVersion) mismatches.push('ai_version');
-    if (match.setup.rulesVersion !== this.adapter.rulesVersion) mismatches.push('rules_version');
-    if (match.setup.rules.secondInkTurns !== this.adapter.rules.secondInkTurns) mismatches.push('second_ink');
+    const recorded = recordedBundle(match.setup.engineVersion);
+    if (!recorded) mismatches.push('engine_version');
+    else {
+      if (match.setup.cardsVersion !== recorded.cardsVersion) mismatches.push('cards_version');
+      if (match.setup.aiVersion !== recorded.aiVersion) mismatches.push('ai_version');
+      if (match.setup.rulesVersion !== recorded.rulesVersion) mismatches.push('rules_version');
+      if (match.setup.rules.secondInkTurns !== recorded.secondInkTurns) mismatches.push('second_ink');
+    }
     if (match.state.v !== match.setup.engineVersion) mismatches.push('state_engine');
 
     if (mismatches.length === 0) {
@@ -164,7 +167,7 @@ export class MatchService {
     }
 
     if (mismatches.length === 0) {
-      let state = this.adapter.initialState(decksOf(match), match.setup.seed);
+      let state = this.adapter.replay(match.setup, []);
       for (let i = 0; i < match.log.length; i++) {
         const entry = match.log[i];
         if (!entry) break;
@@ -235,7 +238,7 @@ export class MatchService {
 
   private replayPure(match: MatchRecord): { state?: EngineState; mismatch?: string } {
     const inputs = match.log.filter((entry) => entry.source !== 'pilot');
-    let state = this.adapter.initialState(decksOf(match), match.setup.seed);
+    let state = this.adapter.replay(match.setup, []);
     let cursor = 0;
     for (let guard = 0; guard < 5000 && actorOf(state) != null; guard++) {
       const actor = actorOf(state);
@@ -439,13 +442,6 @@ function randomSeed(): number {
   const bytes = new Uint8Array(4);
   crypto.getRandomValues(bytes);
   return new DataView(bytes.buffer).getUint32(0, false);
-}
-
-function decksOf(match: MatchRecord): [Deck, Deck] {
-  return [
-    { house: match.setup.houseA, legendId: '', cards: match.setup.deckA },
-    { house: match.setup.houseB, legendId: '', cards: match.setup.deckB },
-  ];
 }
 
 function validateDecks(decks: readonly [Deck, Deck]): string | null {

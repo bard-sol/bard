@@ -57,9 +57,10 @@ describe('end-to-end match', () => {
     const stored = await repo.get(payload.matchId);
     expect(stored).toBeTruthy();
     expect(stored!.log.some((entry) => entry.source === 'pilot')).toBe(true);
-    expect(stored!.setup.aiVersion).toBe('pilot-1.0.0');
-    expect(stored!.setup.engineVersion).toBe('duel-engine-1.0.0');
-    expect(stored!.setup.cardsVersion).toBe('cards-proto-1');
+    expect(stored!.setup.aiVersion).toBe('pilot-1.1.0');
+    expect(stored!.setup.engineVersion).toBe('duel-engine-1.1.0');
+    expect(stored!.setup.cardsVersion).toBe('cards-proto-1.1');
+    expect(stored!.setup.rulesVersion).toBe('rules-1.1.0');
     expect(stored!.setup.rules.secondInkTurns).toBe(1);
     for (const body of seen) expect(findLeaks(body, stored!, 0)).toEqual([]);
 
@@ -71,7 +72,7 @@ describe('end-to-end match', () => {
     expect(verified.body.mismatches).toEqual([]);
     expect(verified.body.actionCount).toBe(stored!.log.length);
     expect(verified.body.secondInkTurns).toBe(1);
-    expect(verified.body.engineVersion).toBe('duel-engine-1.0.0');
+    expect(verified.body.engineVersion).toBe('duel-engine-1.1.0');
     expect(JSON.stringify(verified.body)).not.toContain(String(stored!.setup.seed));
     expect(cardById('spare_ink').name).toBe('Spare Ink');
   });

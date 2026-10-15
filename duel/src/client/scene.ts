@@ -365,7 +365,7 @@ function drawPreview(root: Container, model: SceneModel) {
     line += 18;
   }
   if (preview.verseGain > 0) {
-    label(root, `Conquer +${preview.verseGain}`, rect.x + 12, rect.y + line, 13, tokens.color.gold, 0);
+    label(root, `Conquer +${preview.verseGain} Verses`, rect.x + 12, rect.y + line, 13, tokens.color.gold, 0);
     line += 18;
   }
   label(root, 'Release to attack', rect.x + 12, rect.y + h - 22, 12, tokens.color.muted, 0);
@@ -579,7 +579,7 @@ export function localTrade(attacker: UnitView, defender: UnitView, noteStrikes: 
   }
   const attackerDies = attackerHealth <= 0;
   const defenderDies = defenderHealth <= 0;
-  const verseGain = defenderDies && foes === 1 && !attackerDies && friends >= 1 ? 1 : 0;
+  const verseGain = defenderDies && foes === 1 && !attackerDies && friends >= 1 ? 2 : 0;
   return {
     attackerId: attacker.instanceId,
     defenderId: defender.instanceId,

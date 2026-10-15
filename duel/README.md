@@ -26,19 +26,19 @@ Timers default to a 35s human turn and about 5s for the pilot. Override them wit
 
 ## Versions
 
-The live rules are the pin in `engine/active.mjs`. Gameplay v1.1 arrives as a new folder (`engine/v1.1/`) with its own cards file and rules. Point that pin at the new folder. The server records, on every match setup:
+The live rules are the pin in `engine/active.mjs` (engine v1.1). Engine v1 stays in `engine/v1/` with its golden fixtures, and a stored v1 match replays on that engine. A data-only card-number pass is a new cards file plus the cards export in `active.mjs`: the engine reads cards from that pin. The server records, on every match setup:
 
-| Field | v1 |
+| Field | v1.1 |
 |---|---|
-| `engineVersion` | `duel-engine-1.0.0` |
-| `cardsVersion` | `cards-proto-1` |
-| `aiVersion` | `pilot-1.0.0` |
-| `rulesVersion` | `rules-1.0.0` |
+| `engineVersion` | `duel-engine-1.1.0` |
+| `cardsVersion` | `cards-proto-1.1` |
+| `aiVersion` | `pilot-1.1.0` |
+| `rulesVersion` | `rules-1.1.0` |
 | `rules.secondInkTurns` | `1` |
 
-`secondInkTurns: 1` is the second player's first-turn Ink. Their maximum Ink that turn is 2, not 1, and Spare Ink can take them to 3. Replay calls `replay(setup, actions)` with that same setup, so the flag is part of every replay.
+A Conquer scores 2 Verses. `secondInkTurns: 1` is the second player's first-turn Ink. Their maximum Ink that turn is 2, not 1, and Spare Ink can take them to 3. Replay calls `replay(setup, actions)` with that same setup, so the flag is part of every replay.
 
-`node engine/parity.mjs` replays the eight golden fixtures and checks purity plus redaction. CI runs it from `duel/` and fails on any mismatch.
+`node engine/parity.mjs` replays the v1 golden fixtures on engine v1 and the v1.1 golden fixtures on the live pin, then checks purity plus redaction. CI runs it from `duel/` and fails on any mismatch.
 
 ## Adapter
 

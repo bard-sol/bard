@@ -19,7 +19,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Engine parity
+      - name: Engine parity (v1 and v1.1 goldens)
         run: node engine/parity.mjs
       - name: Install
         run: npm ci

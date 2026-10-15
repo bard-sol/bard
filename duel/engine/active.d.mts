@@ -7,6 +7,7 @@ export const PILOT_VERSION: string;
 export const MAX_TURNS: number;
 export const WIN_VERSES: number;
 export const FIXTURES: URL;
+export const FIXTURES_V1: URL;
 export const DEFAULT_RULES: {
   secondVerse: number;
   holdAtEnd: boolean;
