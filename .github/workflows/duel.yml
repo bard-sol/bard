@@ -21,6 +21,8 @@ jobs:
           node-version: 22
       - name: Engine parity (v1 and v1.1 goldens)
         run: node engine/parity.mjs
+      - name: Gameplay v1.1 parity
+        run: node engine/v1.1/parity.mjs
       - name: Install
         run: npm ci
       - name: Test

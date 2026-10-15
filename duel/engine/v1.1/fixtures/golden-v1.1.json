@@ -1,6 +1,5 @@
 {
  "engine": "duel-engine-1.1.0",
- "note": "Action lists are the v1 golden games, replayed under duel-engine-1.1.0 (Conquer scores 2). Truncated where an earlier 8-Verse win made the rest illegal.",
  "fixtures": [
   {
    "name": "candle-v-fold-s11",
@@ -45,11 +44,11 @@
      "f_whirl",
      "f_counter",
      "f_closed",
+     "f_closed",
      "n_doodle",
      "n_doodle",
      "n_wolf",
-     "n_erasure",
-     "n_snare"
+     "n_erasure"
     ],
     "seed": 11,
     "aiVersion": "pilot-1.1.0"
@@ -99,17 +98,17 @@
      "page": 1
     },
     {
+     "type": "play",
+     "uid": 5,
+     "page": 0
+    },
+    {
      "type": "end"
     },
     {
      "type": "play",
-     "uid": 29,
+     "uid": 26,
      "page": 1
-    },
-    {
-     "type": "attack",
-     "uid": 44,
-     "target": 43
     },
     {
      "type": "end"
@@ -128,22 +127,21 @@
     },
     {
      "type": "attack",
-     "uid": 46,
-     "target": 45
+     "uid": 48,
+     "target": 43
     },
     {
      "type": "attack",
      "uid": 47,
-     "target": 43
+     "target": 45
     },
     {
      "type": "end"
     },
     {
      "type": "play",
-     "uid": 6,
-     "page": 1,
-     "target": 43
+     "uid": 8,
+     "page": 1
     },
     {
      "type": "end"
@@ -151,17 +149,12 @@
     {
      "type": "play",
      "uid": 30,
-     "page": 0
+     "page": 1
     },
     {
      "type": "play",
-     "uid": 31,
-     "page": 0
-    },
-    {
-     "type": "attack",
-     "uid": 47,
-     "target": 43
+     "uid": 29,
+     "page": 1
     },
     {
      "type": "end"
@@ -172,31 +165,26 @@
     },
     {
      "type": "attack",
-     "uid": 48,
-     "target": 46
+     "uid": 43,
+     "target": 48
+    },
+    {
+     "type": "attack",
+     "uid": 49,
+     "target": 50
     },
     {
      "type": "end"
     },
     {
      "type": "play",
-     "uid": 26,
-     "page": 1
-    },
-    {
-     "type": "play",
      "uid": 28,
-     "target": 51
+     "page": 0
     },
     {
      "type": "attack",
      "uid": 47,
-     "target": 43
-    },
-    {
-     "type": "attack",
-     "uid": 49,
-     "target": 43
+     "target": 49
     },
     {
      "type": "end"
@@ -204,37 +192,47 @@
     {
      "type": "play",
      "uid": 13,
-     "page": 0
+     "page": 1
     },
     {
      "type": "attack",
-     "uid": 48,
-     "target": 52
-    },
-    {
-     "type": "end"
-    },
-    {
-     "type": "move",
-     "uid": 47
+     "uid": 52,
+     "target": 53
     },
     {
      "type": "end"
     },
     {
      "type": "play",
-     "uid": 8,
+     "uid": 31,
      "page": 0
     },
     {
      "type": "play",
-     "uid": 14,
-     "page": 0
+     "uid": 33,
+     "target": 55
+    },
+    {
+     "type": "play",
+     "uid": 32,
+     "target": 43
+    },
+    {
+     "type": "legend",
+     "target": 55
+    },
+    {
+     "type": "end"
     },
     {
      "type": "attack",
-     "uid": 53,
-     "target": 49
+     "uid": 52,
+     "target": 55
+    },
+    {
+     "type": "attack",
+     "uid": 54,
+     "target": 51
     },
     {
      "type": "end"
@@ -242,14 +240,14 @@
    ],
    "expect": {
     "winner": 0,
-    "reason": "verses_after_7",
+    "reason": "verses",
     "verses": [
-     6,
+     8,
      4
     ],
-    "stateHash": "6de514a8",
-    "logHash": "fc632e76",
-    "logLen": 184
+    "stateHash": "c76916bf",
+    "logHash": "c50d1487",
+    "logLen": 179
    }
   },
   {
@@ -272,11 +270,11 @@
      "f_whirl",
      "f_counter",
      "f_closed",
+     "f_closed",
      "n_doodle",
      "n_doodle",
      "n_wolf",
-     "n_erasure",
-     "n_snare"
+     "n_erasure"
     ],
     "houseB": "tidewrack",
     "deckB": [
@@ -323,12 +321,17 @@
     },
     {
      "type": "play",
-     "uid": 1,
+     "uid": 4,
      "page": 1
     },
     {
      "type": "play",
      "uid": 21
+    },
+    {
+     "type": "play",
+     "uid": 1,
+     "page": 0
     },
     {
      "type": "end"
@@ -342,14 +345,13 @@
      "type": "end"
     },
     {
-     "type": "play",
-     "uid": 4,
-     "page": 0
+     "type": "legend",
+     "target": 44
     },
     {
      "type": "attack",
-     "uid": 43,
-     "target": 44
+     "uid": 44,
+     "target": 42
     },
     {
      "type": "end"
@@ -360,30 +362,88 @@
      "page": 1
     },
     {
+     "type": "move",
+     "uid": 45
+    },
+    {
      "type": "end"
     },
     {
      "type": "play",
+     "uid": 7,
+     "target": 44
+    },
+    {
+     "type": "play",
      "uid": 3,
+     "page": 0
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "play",
+     "uid": 27,
+     "page": 0
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "play",
+     "uid": 6,
+     "page": 1
+    },
+    {
+     "type": "play",
+     "uid": 9,
      "page": 1
     },
     {
      "type": "attack",
-     "uid": 45,
-     "target": 42
+     "uid": 44,
+     "target": 47
     },
     {
      "type": "end"
     },
     {
      "type": "champion",
-     "page": 0,
-     "target": 45
+     "page": 0
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "champion",
+     "page": 1
     },
     {
      "type": "attack",
-     "uid": 46,
-     "target": 45
+     "uid": 48,
+     "target": 46
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "play",
+     "uid": 25,
+     "page": 1
+    },
+    {
+     "type": "play",
+     "uid": 29,
+     "page": 0
+    },
+    {
+     "type": "play",
+     "uid": 28,
+     "target": 49
+    },
+    {
+     "type": "move",
+     "uid": 49
     },
     {
      "type": "end"
@@ -394,51 +454,8 @@
      "page": 0
     },
     {
-     "type": "play",
-     "uid": 7,
-     "target": 48
-    },
-    {
-     "type": "end"
-    },
-    {
-     "type": "play",
-     "uid": 27,
-     "page": 1
-    },
-    {
-     "type": "play",
-     "uid": 25,
-     "page": 0
-    },
-    {
-     "type": "end"
-    },
-    {
-     "type": "play",
-     "uid": 9,
-     "page": 0
-    },
-    {
-     "type": "play",
-     "uid": 6,
-     "page": 1
-    },
-    {
-     "type": "end"
-    },
-    {
-     "type": "play",
-     "uid": 29,
-     "page": 0
-    },
-    {
-     "type": "attack",
-     "uid": 47,
-     "target": 51
-    },
-    {
-     "type": "end"
+     "type": "legend",
+     "target": 50
     },
     {
      "type": "play",
@@ -446,53 +463,72 @@
      "page": 1
     },
     {
-     "type": "play",
-     "uid": 10,
-     "page": 1,
-     "target": 49
+     "type": "end"
     },
     {
      "type": "play",
-     "uid": 8,
-     "target": 47
+     "uid": 32,
+     "page": 1,
+     "target": 50
+    },
+    {
+     "type": "play",
+     "uid": 30,
+     "target": 55
     },
     {
      "type": "attack",
-     "uid": 48,
-     "target": 47
+     "uid": 51,
+     "target": 54
     },
     {
      "type": "end"
     },
     {
      "type": "play",
-     "uid": 32,
+     "uid": 8,
+     "page": 1
+    },
+    {
+     "type": "play",
+     "uid": 10,
+     "page": 0,
+     "target": 52
+    },
+    {
+     "type": "play",
+     "uid": 12,
      "page": 0
     },
     {
-     "type": "legend",
-     "target": 52,
-     "target2": 54
+     "type": "attack",
+     "uid": 53,
+     "target": 55
     },
     {
      "type": "attack",
-     "uid": 52,
-     "target": 53
+     "uid": 57,
+     "target": 52
+    },
+    {
+     "type": "attack",
+     "uid": 50,
+     "target": 51
     },
     {
      "type": "end"
     }
    ],
    "expect": {
-    "winner": 1,
+    "winner": 0,
     "reason": "verses",
     "verses": [
-     4,
-     8
+     8,
+     5
     ],
-    "stateHash": "78b5ec7d",
-    "logHash": "3e06920e",
-    "logLen": 171
+    "stateHash": "eb0689b1",
+    "logHash": "d67b55f4",
+    "logLen": 207
    }
   },
   {
@@ -592,13 +628,14 @@
     },
     {
      "type": "play",
-     "uid": 22,
-     "page": 1
+     "uid": 25,
+     "page": 1,
+     "target": 43
     },
     {
-     "type": "play",
-     "uid": 28,
-     "page": 1
+     "type": "attack",
+     "uid": 43,
+     "target": 42
     },
     {
      "type": "end"
@@ -613,7 +650,12 @@
     },
     {
      "type": "play",
-     "uid": 30,
+     "uid": 24,
+     "page": 0
+    },
+    {
+     "type": "attack",
+     "uid": 46,
      "target": 44
     },
     {
@@ -626,14 +668,23 @@
     },
     {
      "type": "move",
-     "uid": 48
+     "uid": 47
     },
     {
      "type": "end"
     },
     {
      "type": "champion",
-     "page": 1
+     "page": 0
+    },
+    {
+     "type": "attack",
+     "uid": 48,
+     "target": 42
+    },
+    {
+     "type": "move",
+     "uid": 46
     },
     {
      "type": "end"
@@ -645,27 +696,32 @@
     },
     {
      "type": "play",
-     "uid": 4,
+     "uid": 8,
+     "page": 0,
      "target": 50
+    },
+    {
+     "type": "move",
+     "uid": 47
     },
     {
      "type": "end"
     },
     {
      "type": "play",
-     "uid": 32,
-     "page": 1
+     "uid": 31,
+     "page": 0,
+     "target": 48
     },
     {
      "type": "play",
-     "uid": 31,
-     "page": 0,
-     "target": 46
+     "uid": 30,
+     "target": 47
     },
     {
      "type": "attack",
      "uid": 50,
-     "target": 42
+     "target": 51
     },
     {
      "type": "end"
@@ -677,102 +733,71 @@
     },
     {
      "type": "play",
-     "uid": 8,
+     "uid": 10,
      "page": 0
     },
     {
-     "type": "move",
-     "uid": 51
-    },
-    {
      "type": "attack",
-     "uid": 51,
-     "target": 50
-    },
-    {
-     "type": "move",
-     "uid": 48
-    },
-    {
-     "type": "attack",
-     "uid": 48,
-     "target": 46
+     "uid": 52,
+     "target": 53
     },
     {
      "type": "end"
     },
     {
      "type": "play",
-     "uid": 25,
-     "page": 0,
-     "target": 53
+     "uid": 32,
+     "page": 0
     },
     {
      "type": "play",
      "uid": 33,
      "page": 0,
-     "target": 53
+     "target": 50
     },
     {
      "type": "attack",
-     "uid": 53,
-     "target": 55
+     "uid": 50,
+     "target": 54
     },
     {
      "type": "attack",
-     "uid": 52,
-     "target": 51
-    },
-    {
-     "type": "attack",
-     "uid": 43,
+     "uid": 48,
      "target": 55
     },
     {
      "type": "end"
     },
     {
-     "type": "legend",
-     "target": 48,
-     "target2": 52
+     "type": "play",
+     "uid": 9,
+     "page": 0
+    },
+    {
+     "type": "play",
+     "uid": 12,
+     "page": 0,
+     "target": 48
     },
     {
      "type": "attack",
-     "uid": 54,
-     "target": 43
-    },
-    {
-     "type": "move",
-     "uid": 48
-    },
-    {
-     "type": "attack",
-     "uid": 48,
-     "target": 53
-    },
-    {
-     "type": "move",
-     "uid": 51
-    },
-    {
-     "type": "attack",
-     "uid": 51,
-     "target": 56
+     "uid": 59,
+     "target": 50
     },
     {
      "type": "end"
     }
    ],
    "expect": {
-    "winner": 0,
+    "winner": 1,
     "reason": "verses_after_7",
     "verses": [
-     6,
-     2
+     3,
+     6
     ],
-    "stateHash": "c9c29026",
-    "logHash": "3e236813",
-    "logLen": 210
+    "stateHash": "7ba14a1d",
+    "logHash": "7630a960",
+    "logLen": 209
    }
   },
   {
@@ -848,11 +873,6 @@
      "type": "end"
     },
     {
-     "type": "play",
-     "uid": 4,
-     "page": 1
-    },
-    {
      "type": "end"
     },
     {
@@ -865,8 +885,8 @@
     },
     {
      "type": "play",
-     "uid": 2,
-     "page": 0
+     "uid": 7,
+     "target": 43
     },
     {
      "type": "end"
@@ -874,21 +894,16 @@
     {
      "type": "play",
      "uid": 23,
-     "page": 0,
-     "target": 42
+     "page": 1,
+     "target": 43
     },
     {
      "type": "end"
     },
     {
      "type": "play",
-     "uid": 5,
+     "uid": 3,
      "page": 0
-    },
-    {
-     "type": "attack",
-     "uid": 44,
-     "target": 42
     },
     {
      "type": "end"
@@ -897,32 +912,46 @@
      "type": "play",
      "uid": 29,
      "page": 0,
-     "target": 45
+     "target": 42
+    },
+    {
+     "type": "play",
+     "uid": 25,
+     "page": 1
+    },
+    {
+     "type": "move",
+     "uid": 44
     },
     {
      "type": "end"
     },
     {
      "type": "play",
-     "uid": 9,
-     "page": 0,
-     "target": 47
+     "uid": 4,
+     "page": 0
+    },
+    {
+     "type": "play",
+     "uid": 1,
+     "target": 45
     },
     {
      "type": "attack",
-     "uid": 44,
-     "target": 42
-    },
-    {
-     "type": "attack",
-     "uid": 46,
+     "uid": 45,
      "target": 42
     },
     {
      "type": "end"
     },
     {
-     "type": "champion",
+     "type": "play",
+     "uid": 24,
+     "target": 45
+    },
+    {
+     "type": "play",
+     "uid": 22,
      "page": 1
     },
     {
@@ -934,101 +963,25 @@
     },
     {
      "type": "play",
-     "uid": 7,
-     "target": 43
-    },
-    {
-     "type": "legend",
-     "target": 48
-    },
-    {
-     "type": "attack",
-     "uid": 44,
-     "target": 43
-    },
-    {
-     "type": "attack",
-     "uid": 46,
-     "target": 43
-    },
-    {
-     "type": "attack",
-     "uid": 48,
-     "target": 45
-    },
-    {
-     "type": "end"
-    },
-    {
-     "type": "play",
-     "uid": 26,
+     "uid": 2,
      "page": 0
     },
     {
      "type": "play",
-     "uid": 24,
-     "target": 44
+     "uid": 10,
+     "page": 1
     },
     {
      "type": "end"
     },
     {
-     "type": "legend",
-     "target": 46
-    },
-    {
-     "type": "play",
-     "uid": 3,
-     "page": 1
-    },
-    {
-     "type": "play",
-     "uid": 11,
+     "type": "champion",
      "page": 1
     },
     {
      "type": "attack",
-     "uid": 46,
-     "target": 47
-    },
-    {
-     "type": "attack",
-     "uid": 48,
-     "target": 47
-    },
-    {
-     "type": "end"
-    },
-    {
-     "type": "play",
-     "uid": 32,
-     "page": 0,
-     "target": 45
-    },
-    {
-     "type": "play",
-     "uid": 22,
-     "page": 0
-    },
-    {
-     "type": "play",
-     "uid": 28,
-     "page": 0
-    },
-    {
-     "type": "attack",
-     "uid": 49,
-     "target": 52
-    },
-    {
-     "type": "attack",
-     "uid": 45,
-     "target": 46
-    },
-    {
-     "type": "attack",
-     "uid": 50,
-     "target": 46
+     "uid": 43,
+     "target": 49
     },
     {
      "type": "end"
@@ -1036,14 +989,14 @@
    ],
    "expect": {
     "winner": 1,
-    "reason": "verses_after_7",
+    "reason": "verses",
     "verses": [
      0,
-     7
+     9
     ],
-    "stateHash": "a470f15c",
-    "logHash": "857cc3b8",
-    "logLen": 203
+    "stateHash": "cf955e2d",
+    "logHash": "3943e06d",
+    "logLen": 127
    }
   },
   {
@@ -1112,7 +1065,7 @@
     {
      "type": "play",
      "uid": 24,
-     "page": 0
+     "page": 1
     },
     {
      "type": "end"
@@ -1120,7 +1073,7 @@
     {
      "type": "play",
      "uid": 6,
-     "page": 0
+     "page": 1
     },
     {
      "type": "end"
@@ -1128,27 +1081,33 @@
     {
      "type": "play",
      "uid": 27,
-     "page": 1
-    },
-    {
-     "type": "end"
+     "page": 0
     },
     {
      "type": "attack",
-     "uid": 43,
-     "target": 42
+     "uid": 42,
+     "target": 43
     },
     {
      "type": "end"
     },
     {
-     "type": "legend",
-     "target": 44,
-     "target2": 43
+     "type": "play",
+     "uid": 5,
+     "page": 0,
+     "target": 44
+    },
+    {
+     "type": "end"
     },
     {
      "type": "play",
-     "uid": 23,
+     "uid": 26,
+     "page": 1
+    },
+    {
+     "type": "play",
+     "uid": 28,
      "page": 1
     },
     {
@@ -1157,29 +1116,7 @@
     {
      "type": "play",
      "uid": 1,
-     "page": 0
-    },
-    {
-     "type": "end"
-    },
-    {
-     "type": "play",
-     "uid": 25,
      "page": 1
-    },
-    {
-     "type": "play",
-     "uid": 26,
-     "page": 1
-    },
-    {
-     "type": "attack",
-     "uid": 44,
-     "target": 46
-    },
-    {
-     "type": "move",
-     "uid": 45
     },
     {
      "type": "end"
@@ -1190,19 +1127,143 @@
      "target": 45
     },
     {
+     "type": "attack",
+     "uid": 46,
+     "target": 48
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "champion",
+     "page": 0,
+     "target": 44
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "play",
+     "uid": 25,
+     "page": 1
+    },
+    {
+     "type": "attack",
+     "uid": 47,
+     "target": 45
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "play",
+     "uid": 10,
+     "page": 1,
+     "target": 44
+    },
+    {
+     "type": "play",
+     "uid": 2,
+     "page": 1,
+     "target": 44
+    },
+    {
+     "type": "play",
+     "uid": 4,
+     "page": 1
+    },
+    {
+     "type": "play",
+     "uid": 8,
+     "page": 1
+    },
+    {
+     "type": "attack",
+     "uid": 52,
+     "target": 51
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "play",
+     "uid": 30,
+     "page": 1
+    },
+    {
+     "type": "play",
+     "uid": 22,
+     "page": 0
+    },
+    {
+     "type": "play",
+     "uid": 23,
+     "page": 1
+    },
+    {
+     "type": "play",
+     "uid": 29,
+     "page": 1
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "play",
+     "uid": 12,
+     "page": 1,
+     "target": 44
+    },
+    {
+     "type": "attack",
+     "uid": 54,
+     "target": 44
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "play",
+     "uid": 32,
+     "page": 1
+    },
+    {
+     "type": "attack",
+     "uid": 58,
+     "target": 60
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "play",
+     "uid": 13,
+     "page": 1
+    },
+    {
+     "type": "play",
+     "uid": 11,
+     "target": 53
+    },
+    {
+     "type": "attack",
+     "uid": 55,
+     "target": 61
+    },
+    {
      "type": "end"
     }
    ],
    "expect": {
     "winner": 1,
-    "reason": "verses",
+    "reason": "verses_after_7",
     "verses": [
-     4,
-     8
+     0,
+     7
     ],
-    "stateHash": "922578d9",
-    "logHash": "cb59d217",
-    "logLen": 92
+    "stateHash": "15207312",
+    "logHash": "1d51249e",
+    "logLen": 194
    }
   },
   {
@@ -1225,11 +1286,11 @@
      "f_whirl",
      "f_counter",
      "f_closed",
+     "f_closed",
      "n_doodle",
      "n_doodle",
      "n_wolf",
-     "n_erasure",
-     "n_snare"
+     "n_erasure"
     ],
     "houseB": "fold",
     "deckB": [
@@ -1248,11 +1309,11 @@
      "f_whirl",
      "f_counter",
      "f_closed",
+     "f_closed",
      "n_doodle",
      "n_doodle",
      "n_wolf",
-     "n_erasure",
-     "n_snare"
+     "n_erasure"
     ],
     "seed": 66,
     "aiVersion": "pilot-1.1.0"
@@ -1276,8 +1337,8 @@
     },
     {
      "type": "play",
-     "uid": 4,
-     "page": 1
+     "uid": 1,
+     "page": 0
     },
     {
      "type": "play",
@@ -1285,8 +1346,8 @@
     },
     {
      "type": "play",
-     "uid": 2,
-     "target": 43
+     "uid": 5,
+     "page": 1
     },
     {
      "type": "end"
@@ -1302,12 +1363,7 @@
     {
      "type": "play",
      "uid": 7,
-     "page": 0
-    },
-    {
-     "type": "attack",
-     "uid": 43,
-     "target": 44
+     "page": 1
     },
     {
      "type": "end"
@@ -1315,7 +1371,7 @@
     {
      "type": "play",
      "uid": 23,
-     "page": 1
+     "page": 0
     },
     {
      "type": "play",
@@ -1327,45 +1383,44 @@
     },
     {
      "type": "play",
-     "uid": 1,
-     "page": 1
+     "uid": 8,
+     "page": 0,
+     "target": 46
+    },
+    {
+     "type": "play",
+     "uid": 2,
+     "target": 48
+    },
+    {
+     "type": "attack",
+     "uid": 48,
+     "target": 46
     },
     {
      "type": "attack",
      "uid": 45,
-     "target": 42
+     "target": 44
     },
     {
      "type": "end"
     },
     {
      "type": "play",
-     "uid": 26,
-     "page": 0,
-     "target": 45
-    },
-    {
-     "type": "legend",
-     "target": 46
-    },
-    {
-     "type": "end"
-    },
-    {
-     "type": "play",
-     "uid": 8,
-     "page": 1,
-     "target": 46
-    },
-    {
-     "type": "play",
-     "uid": 9,
+     "uid": 29,
      "page": 1
     },
     {
+     "type": "end"
+    },
+    {
+     "type": "champion",
+     "page": 0
+    },
+    {
      "type": "attack",
-     "uid": 49,
-     "target": 46
+     "uid": 50,
+     "target": 42
     },
     {
      "type": "end"
@@ -1379,42 +1434,44 @@
      "type": "end"
     },
     {
-     "type": "champion",
-     "page": 1
-    },
-    {
      "type": "play",
      "uid": 10,
      "page": 0
     },
     {
-     "type": "attack",
-     "uid": 50,
-     "target": 46
+     "type": "play",
+     "uid": 9,
+     "page": 1
+    },
+    {
+     "type": "play",
+     "uid": 4,
+     "page": 1
     },
     {
      "type": "attack",
-     "uid": 52,
-     "target": 46
+     "uid": 50,
+     "target": 51
     },
     {
      "type": "end"
     },
     {
      "type": "champion",
-     "page": 1
-    },
-    {
-     "type": "legend",
-     "target": 48
-    },
-    {
-     "type": "end"
+     "page": 0
     },
     {
      "type": "play",
-     "uid": 5,
-     "page": 0
+     "uid": 30,
+     "page": 1
+    },
+    {
+     "type": "attack",
+     "uid": 49,
+     "target": 53
+    },
+    {
+     "type": "end"
     },
     {
      "type": "play",
@@ -1422,22 +1479,22 @@
      "page": 1
     },
     {
+     "type": "play",
+     "uid": 11,
+     "page": 1
+    },
+    {
      "type": "attack",
-     "uid": 52,
-     "target": 54
+     "uid": 54,
+     "target": 56
     },
     {
      "type": "end"
     },
     {
-     "type": "play",
-     "uid": 29,
-     "page": 1
-    },
-    {
      "type": "attack",
-     "uid": 51,
-     "target": 55
+     "uid": 49,
+     "target": 57
     },
     {
      "type": "end"
@@ -1447,12 +1504,12 @@
     "winner": 1,
     "reason": "verses",
     "verses": [
-     4,
+     2,
      8
     ],
-    "stateHash": "2c94758d",
-    "logHash": "afa1b916",
-    "logLen": 180
+    "stateHash": "8969776c",
+    "logHash": "b909d1e2",
+    "logLen": 178
    }
   },
   {
@@ -1475,11 +1532,11 @@
      "f_whirl",
      "f_counter",
      "f_closed",
+     "f_closed",
      "n_doodle",
      "n_doodle",
      "n_wolf",
-     "n_erasure",
-     "n_snare"
+     "n_erasure"
     ],
     "houseB": "candle",
     "deckB": [
@@ -1523,7 +1580,7 @@
     },
     {
      "type": "play",
-     "uid": 6,
+     "uid": 7,
      "page": 0
     },
     {
@@ -1534,7 +1591,7 @@
     },
     {
      "type": "play",
-     "uid": 7,
+     "uid": 8,
      "page": 1
     },
     {
@@ -1558,7 +1615,7 @@
     },
     {
      "type": "play",
-     "uid": 25,
+     "uid": 28,
      "page": 1
     },
     {
@@ -1583,7 +1640,12 @@
     },
     {
      "type": "champion",
-     "page": 0
+     "page": 1
+    },
+    {
+     "type": "attack",
+     "uid": 46,
+     "target": 43
     },
     {
      "type": "end"
@@ -1591,7 +1653,7 @@
     {
      "type": "play",
      "uid": 9,
-     "page": 0
+     "page": 1
     },
     {
      "type": "play",
@@ -1604,17 +1666,7 @@
     {
      "type": "play",
      "uid": 31,
-     "page": 1
-    },
-    {
-     "type": "attack",
-     "uid": 46,
-     "target": 43
-    },
-    {
-     "type": "attack",
-     "uid": 48,
-     "target": 42
+     "page": 0
     },
     {
      "type": "end"
@@ -1622,43 +1674,42 @@
     {
      "type": "play",
      "uid": 11,
-     "page": 1
+     "page": 0
     },
     {
      "type": "play",
      "uid": 5,
-     "target": 51
+     "page": 1
     },
     {
      "type": "attack",
      "uid": 49,
-     "target": 48
+     "target": 46
     },
     {
      "type": "attack",
-     "uid": 47,
-     "target": 48
+     "uid": 53,
+     "target": 46
     },
     {
      "type": "end"
     },
     {
-     "type": "play",
-     "uid": 28,
-     "page": 0
+     "type": "attack",
+     "uid": 48,
+     "target": 49
     },
     {
-     "type": "play",
-     "uid": 32,
+     "type": "attack",
+     "uid": 51,
      "target": 52
     },
     {
      "type": "end"
     },
     {
-     "type": "attack",
-     "uid": 49,
-     "target": 53
+     "type": "move",
+     "uid": 42
     },
     {
      "type": "end"
@@ -1666,14 +1717,14 @@
    ],
    "expect": {
     "winner": 0,
-    "reason": "verses",
+    "reason": "verses_after_7",
     "verses": [
-     9,
+     6,
      4
     ],
-    "stateHash": "26fb0049",
-    "logHash": "e17e7335",
-    "logLen": 156
+    "stateHash": "b4a41446",
+    "logHash": "114df4e6",
+    "logLen": 152
    }
   },
   {
@@ -1719,11 +1770,11 @@
      "f_whirl",
      "f_counter",
      "f_closed",
+     "f_closed",
      "n_doodle",
      "n_doodle",
      "n_wolf",
-     "n_erasure",
-     "n_snare"
+     "n_erasure"
     ],
     "seed": 88,
     "aiVersion": "pilot-1.1.0"
@@ -1749,7 +1800,7 @@
     },
     {
      "type": "play",
-     "uid": 22,
+     "uid": 23,
      "page": 1
     },
     {
@@ -1761,8 +1812,8 @@
      "page": 0
     },
     {
-     "type": "play",
-     "uid": 4,
+     "type": "attack",
+     "uid": 42,
      "target": 43
     },
     {
@@ -1770,7 +1821,7 @@
     },
     {
      "type": "play",
-     "uid": 23,
+     "uid": 21,
      "page": 1
     },
     {
@@ -1779,24 +1830,54 @@
     {
      "type": "play",
      "uid": 1,
-     "page": 1
-    },
-    {
-     "type": "play",
-     "uid": 6,
-     "target": 45
+     "page": 0
     },
     {
      "type": "end"
     },
     {
      "type": "play",
-     "uid": 26,
+     "uid": 29,
+     "page": 0
+    },
+    {
+     "type": "play",
+     "uid": 25,
+     "page": 1
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "play",
+     "uid": 8,
+     "page": 0
+    },
+    {
+     "type": "play",
+     "uid": 4,
+     "target": 45
+    },
+    {
+     "type": "attack",
+     "uid": 46,
+     "target": 45
+    },
+    {
+     "type": "attack",
+     "uid": 49,
+     "target": 45
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "champion",
      "page": 1
     },
     {
      "type": "move",
-     "uid": 45
+     "uid": 47
     },
     {
      "type": "end"
@@ -1807,60 +1888,57 @@
      "target": 47
     },
     {
-     "type": "attack",
-     "uid": 42,
-     "target": 45
-    },
-    {
-     "type": "end"
-    },
-    {
-     "type": "champion",
-     "page": 1
-    },
-    {
-     "type": "attack",
-     "uid": 49,
-     "target": 46
-    },
-    {
-     "type": "move",
-     "uid": 43
-    },
-    {
-     "type": "end"
-    },
-    {
-     "type": "play",
-     "uid": 8,
-     "page": 1
-    },
-    {
-     "type": "play",
-     "uid": 3,
-     "target": 50
-    },
-    {
-     "type": "attack",
-     "uid": 50,
-     "target": 47
-    },
-    {
-     "type": "attack",
-     "uid": 48,
-     "target": 43
-    },
-    {
      "type": "end"
     },
     {
      "type": "play",
      "uid": 28,
-     "page": 0
+     "page": 1
     },
     {
      "type": "move",
-     "uid": 47
+     "uid": 45
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "play",
+     "uid": 6,
+     "target": 48
+    },
+    {
+     "type": "legend",
+     "target": 51,
+     "target2": 47
+    },
+    {
+     "type": "play",
+     "uid": 10,
+     "page": 1
+    },
+    {
+     "type": "attack",
+     "uid": 51,
+     "target": 47
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "play",
+     "uid": 26,
+     "page": 1
+    },
+    {
+     "type": "play",
+     "uid": 30,
+     "page": 0
+    },
+    {
+     "type": "play",
+     "uid": 22,
+     "page": 1
     },
     {
      "type": "end"
@@ -1871,9 +1949,19 @@
      "page": 0
     },
     {
+     "type": "legend",
+     "target": 51,
+     "target2": 54
+    },
+    {
      "type": "play",
-     "uid": 10,
-     "page": 1
+     "uid": 3,
+     "target": 53
+    },
+    {
+     "type": "attack",
+     "uid": 53,
+     "target": 48
     },
     {
      "type": "end"
@@ -1885,68 +1973,8 @@
     },
     {
      "type": "attack",
-     "uid": 51,
-     "target": 52
-    },
-    {
-     "type": "end"
-    },
-    {
-     "type": "play",
-     "uid": 11,
-     "page": 0
-    },
-    {
-     "type": "play",
-     "uid": 7,
-     "target": 55
-    },
-    {
-     "type": "legend",
-     "target": 53,
-     "target2": 54
-    },
-    {
-     "type": "attack",
-     "uid": 52,
-     "target": 54
-    },
-    {
-     "type": "attack",
-     "uid": 53,
-     "target": 54
-    },
-    {
-     "type": "attack",
-     "uid": 55,
-     "target": 51
-    },
-    {
-     "type": "end"
-    },
-    {
-     "type": "play",
-     "uid": 21,
-     "page": 0
-    },
-    {
-     "type": "play",
-     "uid": 29,
-     "page": 0
-    },
-    {
-     "type": "play",
-     "uid": 30,
-     "page": 1
-    },
-    {
-     "type": "play",
-     "uid": 33,
-     "page": 0
-    },
-    {
-     "type": "move",
-     "uid": 54
+     "uid": 48,
+     "target": 57
     },
     {
      "type": "end"
@@ -1956,12 +1984,12 @@
     "winner": 1,
     "reason": "verses_after_7",
     "verses": [
-     6,
-     7
+     0,
+     5
     ],
-    "stateHash": "4458e9ed",
-    "logHash": "3ccbb401",
-    "logLen": 206
+    "stateHash": "c860673e",
+    "logHash": "bf77d7a0",
+    "logLen": 186
    }
   }
  ]

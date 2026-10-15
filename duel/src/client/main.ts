@@ -354,7 +354,7 @@ async function refreshPreview(hover: string | null) {
     const note = page?.marginalia.some((entry) => entry.owner !== payload.view.you && entry.faceDown) ?? false;
     const friends = page?.slots.filter((slot) => slot.you).length ?? 1;
     const foes = page?.slots.filter((slot) => slot.foe).length ?? 1;
-    ui.preview = localTrade(attacker, defender, note, friends, foes);
+    ui.preview = localTrade(attacker, defender, note, friends, foes, page?.name === 'The Spine');
     dirty = true;
   }
   const key = `${action.uid}:${action.target}`;

@@ -271,7 +271,15 @@ export interface EngineAdapter {
   readonly rulesVersion: string;
   readonly aiVersion: string;
   /** Pinned opening rules. `secondInkTurns: 1` is the second player's first-turn max of 2 Ink. */
-  readonly rules: { secondVerse: number; holdAtEnd: boolean; winVerses: number; secondInkTurns: number };
+  readonly rules: {
+    secondVerse: number;
+    holdAtEnd: boolean;
+    winVerses: number;
+    secondInkTurns: number;
+    holdMode?: string;
+    conquerVerses?: number;
+    spineMode?: string;
+  };
   initialState(decks: readonly [Deck, Deck], seed: number): EngineState;
   legalActions(state: EngineState, player: PlayerId): GameAction[];
   apply(state: EngineState, action: GameAction): EngineState;

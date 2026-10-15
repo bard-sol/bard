@@ -1,6 +1,14 @@
 # Bard Card Duel: match rules spec (prototype v1.1)
 
-15 Oct 2026 (GST). Source: *Card Duel Design Brief (Riftbound × Hearthstone)* (`/workspace/user-attach-oct15b.txt`). Engine: `engine.mjs`, `duel-engine-1.1.0`. Cards: `cards-proto.json`. This file is the contract. If the engine and this file disagree, it's a bug, and the golden fixtures (`fixtures/golden-v1.1.json`) settle it.
+15 Oct 2026 (GST). Source: *Card Duel Design Brief (Riftbound × Hearthstone)* (`/workspace/user-attach-oct15b.txt`). Engine: `engine-v1.1/engine.mjs`, `duel-engine-1.1.0`, pilot `pilot-1.1.0`. Cards: `cards-proto-v1.1.json`. v1 (`rules-spec.md`, `engine/`) is unchanged and frozen.
+
+**Changes from v1:**
+1. Conquer scores **2** Verses, not 1 (§2.6).
+2. The Spine: +1 Verse on a conquer there, not double holds (§10).
+3. Fort Crease gives +1/+0, not +0/+1 (§10).
+4. Two new effect modifiers: `unward` / `pierce`, and `nMoved` (§11).
+5. The user's decisions are now rules: the second player's turn-1 Ink, Riposte lasting until your next turn, the Legend power anywhere in the play step, and the champion on your own turn only (§15).
+6. Golden fixtures are `engine-v1.1/fixtures/golden-v1.1.json`. This file is the contract. If the engine and this file disagree, it's a bug, and the golden fixtures (`engine/fixtures/golden-v1.json`) settle it.
 
 ## 0. Hard rules
 - **A match is a pure function** `match(deckA, deckB, seed, actions[], aiVersion)`. The scoring-match attacker is always player 0 (`A`). The defender's saved deck is player 1 (`B`), played by AI pilot v1. The full server log replays bit-for-bit (§13).
@@ -15,12 +23,12 @@
 4. **Pages.** Fisher–Yates shuffle the 6 Pages in their fixed order (§10) with `derive(seed,3)` and take the first two. Index 0 is the left Page, index 1 the right.
 5. **Decks are shuffled** with Fisher–Yates (`j = next() % (i+1)`, from the top index down). Card instance ids (`uid`) are integers handed out in shuffled order. The client only ever sees uids of cards that are its own or public.
 6. **Opening hands.** The first player draws 4. The second player draws 5 and also gets a **Spare Ink** (0 cost, Inkwork: +1 Ink this turn).
-7. **Second-player compensation (prototype tuning, needs the user's sign-off).** The second player's first turn also starts at **2 maximum Ink, not 1**, so with Spare Ink they can reach 3 on turn 1. Without this the first player wins **69.6%** (gate 47–53%). With it they win **52.4%**. It's a setup flag (`rules.secondInkTurns = 1`, the default) and part of the replayed setup. The alternative tested was the second player starting on 1 Verse, which gave 45.9%, outside the gate.
+7. **Second-player compensation (decided by the user, 15 Oct).** The second player gets Spare Ink, and their first turn also starts at **2 maximum Ink**. It's set in the setup (`rules.secondInkTurns = 1`) and stored with each replay.
 8. **Mulligan, once each.** The first player chooses, then the second. A player picks any subset of their hand (Spare Ink can't be returned). The picked cards go to the bottom of their deck in hand order, then they draw that many from the top. No RNG is used.
 
 ## 2. Turn structure (the active player is P)
 1. **Gain Ink.** `turns += 1`. `maxInk = min(7, turns)`, plus 1 on the second player's first turn (§1.7). `ink = maxInk`. P's units become ready (not exhausted, not attacked, not moved). Any Riposte-until-next-turn on P's units ends. P's Legend power becomes available again.
-2. **Score holds.** For Page 0 then Page 1: if P has at least one unit there and the rival has none, P gains +1 Verse (+2 on The Spine). The win check runs after each gain.
+2. **Score holds.** For Page 0 then Page 1: if P has at least one unit there and the rival has none, P gains +1 Verse (`rules.holdMode = 'alone'`). The win check runs after each gain. The "+1 for more attack, +2 alone" variant (`holdMode: 'attack'`) is implemented as a setup flag but isn't used (see the v1.1 gates report).
 3. **Draw** one card. If the deck is empty, nothing happens (there's no fatigue). If the hand is already at 10, the drawn card is burned, with a log event.
    After the draw, the engine records `enemiesAtStart[page]`: whether the rival has any unit on each Page. Conquer uses it.
 4. **Main step (play).** P can, in any order and as often as Ink allows:
@@ -34,7 +42,7 @@
    - **Attack** one enemy on its own Page (§4); or
    - **Move** to the other Page once per turn (§5). A normal move exhausts the unit, so it can't also attack. A unit with **Board** moves without exhausting and can still attack after the move. A unit that has attacked can't move.
 6. **End (`end` action).** These run in order:
-   1. **Conquer:** for Page 0 then 1, if `enemiesAtStart[page]` was true, the rival now has no units there, and P has at least one, P gains +2 Verses. Units killed in the main step by Inkwork or Opening Lines count, because the snapshot is taken after the draw.
+   1. **Conquer:** for Page 0 then 1, if `enemiesAtStart[page]` was true, the rival now has no units there, and P has at least one, P gains **+2 Verses** (`rules.conquerVerses = 2`), or +3 on The Spine. Units killed in the main step by Inkwork or Opening Lines count, because the snapshot is taken after the draw.
    2. **Kindle** (§7).
    3. **Lanternfall** heals every unit on it by 1, P's side first.
    4. Temporary attack ends.
@@ -84,7 +92,7 @@
   4. Their Last Words fire in that order. New damage goes back to step 1.
   The loop stops when nothing new happened. It's bounded at 32 passes.
 - **Effect order:** an ability's effects resolve left to right. A multi-target effect resolves in the selector's array order (Page slot order; for "all other units here", the active side first). Random selectors pick `uniform(0..n-1)` from the in-match RNG over the candidates in array order.
-- **Trigger cap:** 64 resolutions per action (every ability, trap and Legend power counts), and a nesting depth of 8. On the first breach a **visible `trigger_cap` event** is logged and further triggers in that action are skipped. The 40-card set can't reach the cap. The gates log `capHit`, and it was 0 in all 39,000 gate games. No result depends on the cap.
+- **Trigger cap:** 64 resolutions per action (every ability, trap and Legend power counts), and a nesting depth of 8. On the first breach a **visible `trigger_cap` event** is logged and further triggers in that action are skipped. The 40-card set can't reach the cap. The gates log `capHit`, and it was 0 in every gate game. No result depends on the cap.
 
 ## 7. House signatures in the prototype
 - **Candle, Kindle N:** see §3. The House also leans on Ward from Lantern Watch, Light the Lamps and Sister Wren.
@@ -95,7 +103,7 @@ The other five Houses' signatures (Grit, Study, Remember, Muster, Hunt) are out 
 ## 8. Winning
 1. **8 Verses ends the match immediately**, at whatever moment the 8th Verse is gained. That can be a hold, a conquer or an ability. Any remaining effects of that action are skipped.
 2. **After both players' 7th turn**, most Verses wins. If tied, most total current health of units on the board wins. If still tied: `derive(seed,999) & 1` names the winner (0 = A).
-3. In sims, 2.2% of smart-vs-smart matches end at 8 Verses. 75% end on Verses after turn 7, 21.5% on board health and 1.4% on the seed (see the gates report, §Verse economy).
+3. With v1.1 scoring, about 60% of smart-vs-smart matches end by reaching 8 Verses and about 9% on board health. The exact numbers are in `gates-report-v1.1.md`.
 
 ## 9. Marginalia (traps)
 - **Setting:** costs Ink and goes face-down onto one Page. The rival sees only that P has a face-down note on that Page. Max one per side per Page.
@@ -107,7 +115,10 @@ The other five Houses' signatures (Grit, Study, Remember, Muster, Hunt) are out 
 - **Playing around traps:** a face-down note tells you its Page but not its trigger. The rival's House narrows it: Fold has 2 attack traps and 1 move trap, Candle 1 attack trap, Tidewrack 1 attack trap, and neutrals 1 attack trap.
 
 ## 10. Pages (6; 2 per match)
-In fixed order: Lanternfall, Port Foxing, Fort Crease, The Moot-Rings, The Torn Margin, The Spine. The rules are in `cards-proto.md`. Fort Crease's +0/+1 applies only when a Character is **played** there, never on a move, so it can't be farmed by moving back and forth.
+In fixed order: Lanternfall, Port Foxing, Fort Crease, The Moot-Rings, The Torn Margin, The Spine. The rules are in `cards-proto.md`. **v1.1 Page rules:**
+- **Fort Crease:** Characters played here get **+1/+0**. It applies on play only, never on a move.
+- **The Spine:** conquering this Page scores 1 extra Verse, so 3 instead of 2. Holds there score normally.
+- The other four Pages are unchanged.
 
 ## 11. Ability selectors (the `to` field in cards-proto.json)
 - `self`
@@ -122,7 +133,12 @@ In fixed order: Lanternfall, Port Foxing, Fort Crease, The Moot-Rings, The Torn 
 - `random_enemy_here` (excludes Hidden)
 - `random_ally` (both Pages, excludes self)
 
-Ops: `dmg`, `heal` (capped at max health), `buff` (+attack/+health, permanent), `tempAtk`, `tempRiposte`, `grant`, `silence`, `move`, `ready`, `exhaust`, `draw`, `ink`, `verse` (optional condition `no_enemies_here`).
+v1.1 modifiers:
+- `dmg.pierce`: removes Ward first, then deals the damage (Pip).
+- `dmg.nMoved`: a unit that made a move action on its owner's last turn takes that amount instead (Whirling Cut). The flag is reset when its owner's next turn starts.
+- `unward`: removes Ward (Deckhand, Tide Runner, Undertow).
+
+Ops: `dmg`, `heal` (capped at max health), `unward`, `buff` (+attack/+health, permanent), `tempAtk`, `tempRiposte`, `grant`, `silence`, `move`, `ready`, `exhaust`, `draw`, `ink`, `verse` (optional condition `no_enemies_here`).
 
 ## 12. RNG
 Mulberry32, uint32 state, written in `engine.mjs` (`m32`): `t = state + 0x6D2B79F5; t = imul(t ^ t>>>15, t|1); t ^= t + imul(t ^ t>>>7, t|61); out = (t ^ t>>>14)>>>0`. `rnd(n) = out % n`; the bias is under 1e-8 for n ≤ 4 and accepted. The in-match RNG is used only by random selectors (Pip, Blotling, Wick-Trimmer). The draw order is fixed by event order, so the same actions give the same draws.
@@ -149,8 +165,17 @@ Mulberry32, uint32 state, written in `engine.mjs` (`m32`): `t = state + 0x6D2B79
 - The seed is published with the full log only **after the match ends**, for audit.
 - The AI pilot is held to the same information as the client (`pilots.mjs: determinize`). It sees an empty rival hand and deck, rival traps only as Page positions, and its own deck reshuffled with its own seed. That seed comes from a hash of public state, never from the match seed. A pilot can't read the real RNG, and its lookahead can't trigger the real rival traps.
 
-## 15. Open rule readings (user or Story to confirm)
-1. Second player starts turn 1 on 2 maximum Ink, plus Spare Ink (§1.7). This is the only change from the brief's numbers that the first-player gate needed.
-2. The Legend power can be used anywhere in the main step, not strictly after plays.
-3. The champion card can be played only in your own main step.
-4. Ash & Ember's Riposte lasts until your next turn.
+## 15. Rule readings (decided by the user, 15 Oct)
+1. The second player starts turn 1 on 2 maximum Ink, plus Spare Ink (§1.7).
+2. The Legend power can be used anywhere in the play step.
+3. The champion card can be played only on your own turn.
+4. Ash & Ember's Riposte lasts until the start of your next turn.
+5. The match is 7 turns each. A 3–4 minute length is accepted for now; the human test will set it.
+
+## 16. AI pilot stances (v1.1)
+Every stance uses the **same** evaluation (Balanced weights), so no stance is a weaker player. The stance only breaks near-ties between actions scored within 2 points of the best:
+- **Aggressive:** plays first, then prefers attacks over moves, and sets traps last.
+- **Patient:** prefers setting traps, then plays and the Legend, then moves, and attacks last.
+- **Balanced:** takes the top score.
+
+The handicap, a 30% deterministic slip to the second-best action, is unchanged.

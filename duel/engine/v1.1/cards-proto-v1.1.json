@@ -15,7 +15,7 @@
   {
    "id": "fort_crease",
    "name": "Fort Crease",
-   "text": "Characters played here get +0/+1."
+   "text": "Characters played here get +1/+0."
   },
   {
    "id": "moot_rings",
@@ -30,7 +30,7 @@
   {
    "id": "spine",
    "name": "The Spine",
-   "text": "Holding this Page scores 2 Verses instead of 1."
+   "text": "Conquering this Page scores 1 extra Verse."
   }
  ],
  "legends": {
@@ -124,8 +124,8 @@
    "house": "candle",
    "type": "character",
    "cost": 2,
-   "atk": 1,
-   "hp": 3,
+   "atk": 2,
+   "hp": 2,
    "text": "Ward. Bound.",
    "story": "TODO-STORY"
   },
@@ -153,8 +153,8 @@
    "house": "candle",
    "type": "character",
    "cost": 3,
-   "atk": 2,
-   "hp": 4,
+   "atk": 3,
+   "hp": 3,
    "kindle": 1,
    "text": "Kindle 1. Opening Line: give an ally here Ward.",
    "story": "units-v1 #14"
@@ -170,8 +170,8 @@
      "t": "death",
      "fx": [
       {
-       "op": "grant",
-       "kw": "ward",
+       "op": "heal",
+       "n": 2,
        "to": "random_ally"
       }
      ]
@@ -185,7 +185,7 @@
    "cost": 3,
    "atk": 3,
    "hp": 3,
-   "text": "Ward. Last Word: give a random ally Ward.",
+   "text": "Ward. Last Word: restore 2 health to a random ally.",
    "story": "TODO-STORY"
   },
   {
@@ -203,8 +203,8 @@
    "cost": 4,
    "atk": 3,
    "hp": 4,
-   "kindle": 2,
-   "text": "Bound. Kindle 2.",
+   "kindle": 1,
+   "text": "Bound. Kindle 1.",
    "story": "TODO-STORY"
   },
   {
@@ -222,8 +222,8 @@
    "cost": 5,
    "atk": 4,
    "hp": 5,
-   "kindle": 2,
-   "text": "Ward. Kindle 2.",
+   "kindle": 1,
+   "text": "Ward. Kindle 1.",
    "story": "TODO-STORY"
   },
   {
@@ -237,6 +237,12 @@
        "op": "grant",
        "kw": "ward",
        "to": "allies_page"
+      },
+      {
+       "op": "buff",
+       "a": 1,
+       "h": 0,
+       "to": "allies_page"
       }
      ]
     }
@@ -246,8 +252,8 @@
    "name": "Light the Lamps",
    "house": "candle",
    "type": "inkwork",
-   "cost": 2,
-   "text": "Your units on a Page get Ward.",
+   "cost": 3,
+   "text": "Your units on a Page get Ward and +1 attack.",
    "story": "TODO-STORY"
   },
   {
@@ -318,7 +324,7 @@
    "name": "Lantern Watch",
    "house": "candle",
    "type": "marginalia",
-   "cost": 2,
+   "cost": 1,
    "trap": {
     "on": "enemy_attack",
     "fx": [
@@ -505,6 +511,7 @@
       {
        "op": "dmg",
        "n": 1,
+       "nMoved": 3,
        "to": "enemies_page"
       }
      ]
@@ -515,8 +522,8 @@
    "name": "Whirling Cut",
    "house": "fold",
    "type": "inkwork",
-   "cost": 3,
-   "text": "Deal 1 to every enemy on a Page.",
+   "cost": 2,
+   "text": "Deal 1 to every enemy on a Page, 3 to any that moved last turn.",
    "story": "TODO-STORY"
   },
   {
@@ -557,21 +564,36 @@
     "fx": [
      {
       "op": "dmg",
-      "n": 2,
+      "n": 3,
+      "to": "trigger"
+     },
+     {
+      "op": "exhaust",
       "to": "trigger"
      }
     ]
    },
-   "text": "When an enemy moves here, deal 2 to it.",
+   "text": "When an enemy moves here, deal 3 to it and exhaust it.",
    "story": "TODO-STORY"
   },
   {
    "rarity": "common",
    "kw": [
-    "board"
+    "board",
+    "opening_line"
    ],
-   "abilities": [],
-   "target": null,
+   "abilities": [
+    {
+     "t": "play",
+     "fx": [
+      {
+       "op": "unward",
+       "to": "target"
+      }
+     ]
+    }
+   ],
+   "target": "enemy_here",
    "id": "t_deckhand",
    "name": "Running-Sea Deckhand",
    "house": "tidewrack",
@@ -579,17 +601,28 @@
    "cost": 1,
    "atk": 1,
    "hp": 2,
-   "text": "Board.",
+   "text": "Board. Opening Line: an enemy here loses Ward.",
    "story": "units-v1 #12"
   },
   {
    "rarity": "common",
    "kw": [
     "board",
-    "swift"
+    "swift",
+    "opening_line"
    ],
-   "abilities": [],
-   "target": null,
+   "abilities": [
+    {
+     "t": "play",
+     "fx": [
+      {
+       "op": "unward",
+       "to": "target"
+      }
+     ]
+    }
+   ],
+   "target": "enemy_here",
    "id": "t_runner",
    "name": "Tide Runner",
    "house": "tidewrack",
@@ -597,7 +630,7 @@
    "cost": 2,
    "atk": 2,
    "hp": 2,
-   "text": "Board. Swift.",
+   "text": "Board. Swift. Opening Line: an enemy here loses Ward.",
    "story": "TODO-STORY"
   },
   {
@@ -630,6 +663,7 @@
       {
        "op": "dmg",
        "n": 2,
+       "pierce": true,
        "to": "random_enemy_here"
       }
      ]
@@ -643,7 +677,7 @@
    "cost": 3,
    "atk": 3,
    "hp": 2,
-   "text": "Board. When it moves, deal 2 to a random enemy there.",
+   "text": "Board. When it moves, deal 2 to a random enemy there, ignoring Ward.",
    "story": "units-v1 #10"
   },
   {
@@ -658,7 +692,7 @@
      "fx": [
       {
        "op": "verse",
-       "n": 1,
+       "n": 2,
        "cond": "no_enemies_here"
       }
      ]
@@ -672,7 +706,7 @@
    "cost": 2,
    "atk": 2,
    "hp": 2,
-   "text": "Board. Opening Line: if no enemies are here, +1 Verse.",
+   "text": "Board. Opening Line: if no enemies are here, +2 Verses.",
    "story": "TODO-STORY"
   },
   {
@@ -742,6 +776,10 @@
      "t": "cast",
      "fx": [
       {
+       "op": "unward",
+       "to": "target"
+      },
+      {
        "op": "move",
        "to": "target"
       }
@@ -753,8 +791,8 @@
    "name": "Undertow",
    "house": "tidewrack",
    "type": "inkwork",
-   "cost": 1,
-   "text": "Move an enemy to the other Page.",
+   "cost": 2,
+   "text": "Move an enemy to the other Page. It loses Ward.",
    "story": "TODO-STORY"
   },
   {
@@ -886,7 +924,7 @@
    "type": "character",
    "cost": 2,
    "atk": 1,
-   "hp": 4,
+   "hp": 3,
    "text": "Bound.",
    "story": "units-v1 #30"
   },
@@ -933,7 +971,7 @@
      "fx": [
       {
        "op": "heal",
-       "n": 3,
+       "n": 2,
        "to": "target"
       }
      ]
@@ -946,8 +984,8 @@
    "type": "character",
    "cost": 3,
    "atk": 2,
-   "hp": 4,
-   "text": "Opening Line: restore 3 health to an ally.",
+   "hp": 3,
+   "text": "Opening Line: restore 2 health to an ally.",
    "story": "units-v1 #25"
   },
   {
@@ -1001,8 +1039,8 @@
    "house": "neutral",
    "type": "character",
    "cost": 6,
-   "atk": 5,
-   "hp": 6,
+   "atk": 4,
+   "hp": 4,
    "text": "Opening Line: deal 2 to every other unit here.",
    "story": "units-v1 #28"
   },
@@ -1205,11 +1243,11 @@
    "f_whirl",
    "f_counter",
    "f_closed",
+   "f_closed",
    "n_doodle",
    "n_doodle",
    "n_wolf",
-   "n_erasure",
-   "n_snare"
+   "n_erasure"
   ],
   "tidewrack": [
    "t_deckhand",

@@ -13,6 +13,9 @@ export const DEFAULT_RULES: {
   holdAtEnd: boolean;
   winVerses: number;
   secondInkTurns: number;
+  holdMode: string;
+  conquerVerses: number;
+  spineMode: string;
 };
 
 export interface CardData {

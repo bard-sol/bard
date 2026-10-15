@@ -26,12 +26,6 @@ function checkSet(set) {
     const ok = JSON.stringify(got) === JSON.stringify(f.expect);
     if (!ok) bad++;
     console.log(ok ? 'OK  ' : 'FAIL', f.name, got.stateHash, got.logHash, 'winner', got.winner, got.reason, got.verses.join('-'));
-    if (set.engine === 'duel-engine-1.1.0') {
-      for (const e of s.log) if (e.e === 'verse' && e.why === 'conquer' && e.n !== 2) {
-        bad++;
-        console.log('FAIL', f.name, 'conquer n', e.n);
-      }
-    }
   }
   {
     const f = F.fixtures[0];

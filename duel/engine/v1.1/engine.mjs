@@ -1,7 +1,6 @@
-// Bard Card Duel engine v1.1 — pure, integer-only, array-only iteration, seeded.
-// match = f(deckA, deckB, seed, actions[], AI version). See rules-spec.md.
-// Cards come from the live pin so a data-only number pass edits that pin, not this file.
-import { CARDS, PAGES, LEGENDS } from '../active.mjs';
+// Bard Card Duel engine v1 — pure, integer-only, array-only iteration, seeded.
+// match = f(deckA, deckB, seed, actions[], AI version). See ../rules-spec.md.
+import { CARDS, PAGES, LEGENDS } from './cards-src.mjs';
 export const ENGINE_VERSION = 'duel-engine-1.1.0';
 export const MAX_TURNS = 7, WIN_VERSES = 8, MAX_INK = 7, PAGE_CAP = 4, HAND_CAP = 10, LEGEND_COST = 2;
 export const TRIGGER_CAP = 64, DEPTH_CAP = 8;
@@ -23,8 +22,8 @@ export function validateDeck(house, ids) {
 }
 
 // ---------- setup ----------
-export const DEFAULT_RULES = { secondVerse: 0, holdAtEnd: false, winVerses: 8, secondInkTurns: 1 };
-export function newMatch({ houseA, deckA, houseB, deckB, seed, aiVersion = 'pilot-1.1.0', rules = {} }) {
+export const DEFAULT_RULES = { secondVerse: 0, holdAtEnd: false, winVerses: 8, secondInkTurns: 1, holdMode: 'alone', conquerVerses: 2, spineMode: 'conquer' };
+export function newMatch({ houseA, deckA, houseB, deckB, seed, aiVersion = 'pilot-1.0.0', rules = {} }) {
   const R = { ...DEFAULT_RULES, ...rules };
   for (const [h, d] of [[houseA, deckA], [houseB, deckB]]) { const e = validateDeck(h, d); if (e) throw new Error(e); }
   seed = seed >>> 0;
@@ -120,7 +119,8 @@ function runFx(s, fx, x, depth) {
     const ts = sel(s, e.to, x);
     for (const u of ts) {
       switch (e.op) {
-        case 'dmg': damage(s, u, e.n, x.self ? x.self.uid : 'fx', x.hurtQ); break;
+        case 'dmg': if (e.pierce && u.ward) { u.ward = false; log(s, { e: 'unward', uid: u.uid }); } damage(s, u, e.nMoved && u.moved ? e.nMoved : e.n, x.self ? x.self.uid : 'fx', x.hurtQ); break;
+        case 'unward': if (u.ward) { u.ward = false; log(s, { e: 'unward', uid: u.uid }); } break;
         case 'heal': heal(s, u, e.n); break;
         case 'buff': u.atk += e.a; u.hp += e.h; u.maxHp += e.h; log(s, { e: 'buff', uid: u.uid, a: e.a, h: e.h }); break;
         case 'tempAtk': u.atk += e.a; u.tempAtk += e.a; log(s, { e: 'buff', uid: u.uid, a: e.a, h: 0, temp: true }); break;
@@ -178,10 +178,19 @@ function startTurn(s, p) {
   draw(s, p);
   for (let pg = 0; pg < 2; pg++) s.enemiesAtStart[pg] = s.board[pg][other(p)].length > 0;
 }
-function scoreHolds(s, p) { for (let pg = 0; pg < 2; pg++) if (s.board[pg][p].length > 0 && s.board[pg][other(p)].length === 0) { addVerse(s, p, s.pages[pg] === 'spine' ? 2 : 1, 'hold'); if (s.winner >= 0) return; } }
+export function holdValue(s, p, pg) {
+  const m = s.board[pg][p], o = s.board[pg][other(p)]; if (!m.length) return 0;
+  let v = 0;
+  if (s.R.holdMode === 'alone') v = o.length ? 0 : 1;
+  else if (s.R.holdMode === 'attack1') { if (!o.length) v = 1; else { let am = 0, ao = 0; for (const u of m) am += Math.max(0, u.atk); for (const u of o) ao += Math.max(0, u.atk); v = am > ao ? 1 : 0; } }
+  else { if (!o.length) v = 2; else { let am = 0, ao = 0; for (const u of m) am += Math.max(0, u.atk); for (const u of o) ao += Math.max(0, u.atk); v = am > ao ? 1 : 0; } }
+  if (v > 0 && s.pages[pg] === 'spine' && s.R.spineMode === 'hold') v += 1;
+  return v;
+}
+function scoreHolds(s, p) { for (let pg = 0; pg < 2; pg++) { const v = holdValue(s, p, pg); if (v > 0) { addVerse(s, p, v, 'hold'); if (s.winner >= 0) return; } } }
 function endTurn(s) {
   const p = s.active; s.res = 0;
-  for (let pg = 0; pg < 2; pg++) if (s.enemiesAtStart[pg] && s.board[pg][other(p)].length === 0 && s.board[pg][p].length > 0) { addVerse(s, p, 2, 'conquer'); if (s.winner >= 0) return; }
+  for (let pg = 0; pg < 2; pg++) if (s.enemiesAtStart[pg] && s.board[pg][other(p)].length === 0 && s.board[pg][p].length > 0) { addVerse(s, p, s.R.conquerVerses + (s.pages[pg] === 'spine' && s.R.spineMode === 'conquer' ? 1 : 0), 'conquer'); if (s.winner >= 0) return; }
   if (s.R.holdAtEnd) { scoreHolds(s, p); if (s.winner >= 0) return; }
   for (let pg = 0; pg < 2; pg++) for (const u of s.board[pg][p].slice()) if (!u.silenced && u.kindle > 0) {
     let best = null; for (const a of s.board[pg][p]) if (a.maxHp - a.hp > 0 && (!best || a.maxHp - a.hp > best.maxHp - best.hp)) best = a;
@@ -277,7 +286,7 @@ export function applyMut(s, a, check = true) {
       const hq = [];
       if (c.type === 'character') {
         const u = mkUnit(s, id, p, a.page); if (has(u, 'swift')) u.exhausted = false;
-        if (s.pages[a.page] === 'fort_crease') { u.hp += 1; u.maxHp += 1; }
+        if (s.pages[a.page] === 'fort_crease') { u.atk += 1; }
         s.board[a.page][p].push(u); log(s, { e: 'enter', uid: u.uid, id, page: a.page });
         if (s.pages[a.page] !== 'moot_rings') fireAbilities(s, u, 'play', { page: a.page, target: a.target, hurtQ: hq }, 0);
         settle(s, hq);

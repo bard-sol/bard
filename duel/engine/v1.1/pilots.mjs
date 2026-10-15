@@ -1,6 +1,6 @@
 // Pilots. All pilots see only a determinized copy of the state: rival hand/deck emptied, rival traps
 // removed (only their Page positions are known), own deck re-shuffled with the pilot's own RNG, game RNG replaced.
-import { legalActions, applyMut, clone, other, m32, fnv, cardById, deriveSeed } from './engine.mjs';
+import { legalActions, applyMut, clone, other, m32, fnv, cardById, deriveSeed, holdValue } from './engine.mjs';
 export const PILOT_VERSION = 'pilot-1.1.0';
 
 export function determinize(s, me, pseed) {
@@ -18,11 +18,10 @@ export function determinize(s, me, pseed) {
 function publicSeed(s, me, salt) { return deriveSeed(parseInt(fnv(JSON.stringify([s.board, s.pages, s.players.map((p) => p.verses), s.players[me].hand, s.step, salt])), 16) | 0, 7); }
 
 const KWV = { ward: 2, riposte: 2, bound: 1, hidden: 2, board: 1, cleave: 2, swift: 0 };
-// Every stance uses this one table and the same evaluate(). The margin below is the only stance branch.
 export const STANCES = {
   balanced: { verse: 30, hold: 14, atk: 3, hp: 2, card: 2, trap: 3 },
-  aggressive: { verse: 38, hold: 16, atk: 4, hp: 1, card: 1, trap: 2 },
-  patient: { verse: 26, hold: 12, atk: 2, hp: 3, card: 3, trap: 5 },
+  aggressive: { verse: 33, hold: 16, atk: 3.5, hp: 2, card: 2, trap: 3 },
+  patient: { verse: 30, hold: 15, atk: 2.5, hp: 2.5, card: 2.5, trap: 4 },
 };
 function unitVal(u, w) { let v = u.atk * w.atk + u.hp * w.hp; if (!u.silenced) { for (const k of u.kw) v += KWV[k] || 0; v += u.kindle * 2; if (u.ward) v += 2; } return v; }
 export function evaluate(s, me, w) {
@@ -30,8 +29,8 @@ export function evaluate(s, me, w) {
   const op = other(me); let v = w.verse * (s.players[me].verses - s.players[op].verses);
   const turnsLeft = 7 - s.players[me].turns;
   for (let pg = 0; pg < 2; pg++) {
-    const m = s.board[pg][me], o = s.board[pg][op]; const mult = s.pages[pg] === 'spine' ? 2 : 1;
-    if (m.length && !o.length) v += w.hold * mult; if (o.length && !m.length) v -= w.hold * mult * 1.3;
+    const m = s.board[pg][me], o = s.board[pg][op];
+    v += w.hold * holdValue(s, me, pg) - w.hold * 1.3 * holdValue(s, op, pg);
     for (const u of m) v += unitVal(u, w); for (const u of o) v -= unitVal(u, w);
   }
   v += w.card * s.players[me].hand.length;
@@ -42,7 +41,8 @@ function mulliganPick(s, me, smart) { const h = s.players[me].hand; if (!smart) 
 
 // Smart / AI pilot: greedy one-action lookahead on a determinized state, with trap-aware pessimism.
 export function makeSmart({ stance = 'balanced', slip = 0, trapAware = true, salt = 0 } = {}) {
-  const w = STANCES[stance];
+  const w = STANCES.balanced; // v1.1: one evaluator for every stance; stance only breaks near-ties
+  const PREF = { aggressive: { attack: 0, move: 1, legend: 2, play: 3, champion: 3 }, balanced: null, patient: { play: 0, champion: 0, legend: 1, move: 2, attack: 3 } }[stance];
   return function choose(s, me) {
     if (s.phase === 'mulligan') return { type: 'mulligan', idx: mulliganPick(s, me, true) };
     const ps = publicSeed(s, me, salt); const d = determinize(s, me, ps);
@@ -61,8 +61,11 @@ export function makeSmart({ stance = 'balanced', slip = 0, trapAware = true, sal
       scored.push({ a, v: evaluate(c, me, w) - pess });
     }
     scored.sort((x, y) => y.v - x.v);
-    // stance: Patient keeps units home unless the trade is clearly good; Aggressive takes any non-negative trade.
-    const margin = stance === 'aggressive' ? -1 : stance === 'patient' ? 3 : 0;
+    if (PREF && scored.length > 1) { const top = scored[0].v; const near = scored.filter((q) => q.v >= top - 2); const rest = scored.filter((q) => q.v < top - 2);
+      const isTrap = (q) => q.a.type === 'play' && cardById(d.players[me].hand.find((h) => h.uid === q.a.uid).id).type === 'marginalia';
+      const key = (q) => { if (stance === 'patient') return isTrap(q) ? -1 : PREF[q.a.type] ?? 9; const t = q.a.type; if (t === 'play' || t === 'champion' || t === 'legend') return isTrap(q) ? 3 : 0; return t === 'attack' ? 1 : 2; };
+      near.sort((x, y) => key(x) - key(y) || y.v - x.v); scored.length = 0; scored.push(...near, ...rest); }
+    const margin = 0;
     let pick = scored[0];
     if (slip > 0 && scored.length > 1) { const r = m32(ps ^ 0x5bd1e995)[0] % 1000; if (r < slip) pick = scored[1]; }
     if (pick && pick.v > base + margin) return pick.a;

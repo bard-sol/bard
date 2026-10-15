@@ -562,7 +562,7 @@ function stanceHint(stance: Stance): string {
   return 'Trade evenly';
 }
 
-export function localTrade(attacker: UnitView, defender: UnitView, noteStrikes: boolean, friends: number, foes: number): TradePreview {
+export function localTrade(attacker: UnitView, defender: UnitView, noteStrikes: boolean, friends: number, foes: number, spine = false): TradePreview {
   let attackerHealth = attacker.health;
   let defenderHealth = defender.health;
   let attackerWard = attacker.warded;
@@ -579,7 +579,7 @@ export function localTrade(attacker: UnitView, defender: UnitView, noteStrikes: 
   }
   const attackerDies = attackerHealth <= 0;
   const defenderDies = defenderHealth <= 0;
-  const verseGain = defenderDies && foes === 1 && !attackerDies && friends >= 1 ? 2 : 0;
+  const verseGain = defenderDies && foes === 1 && !attackerDies && friends >= 1 ? (spine ? 3 : 2) : 0;
   return {
     attackerId: attacker.instanceId,
     defenderId: defender.instanceId,

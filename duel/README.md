@@ -36,9 +36,9 @@ The live rules are the pin in `engine/active.mjs` (engine v1.1). Engine v1 stays
 | `rulesVersion` | `rules-1.1.0` |
 | `rules.secondInkTurns` | `1` |
 
-A Conquer scores 2 Verses. `secondInkTurns: 1` is the second player's first-turn Ink. Their maximum Ink that turn is 2, not 1, and Spare Ink can take them to 3. Replay calls `replay(setup, actions)` with that same setup, so the flag is part of every replay.
+A Conquer scores 2 Verses, or 3 on The Spine. Fort Crease gives +1 attack to a character played there. `secondInkTurns: 1` is the second player's first-turn Ink. Their maximum Ink that turn is 2, not 1, and Spare Ink can take them to 3. Replay calls `replay(setup, actions)` with that same setup, so the flag is part of every replay.
 
-`node engine/parity.mjs` replays the v1 golden fixtures on engine v1 and the v1.1 golden fixtures on the live pin, then checks purity plus redaction. CI runs it from `duel/` and fails on any mismatch.
+`node engine/parity.mjs` replays the v1 golden fixtures on engine v1 and the v1.1 golden fixtures on the live pin, then checks purity plus redaction. `node engine/v1.1/parity.mjs` is Gameplay's own v1.1 check. CI runs both from `duel/` and fails on any mismatch.
 
 ## Adapter
 
