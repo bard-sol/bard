@@ -14,7 +14,7 @@ Open the hub, then **The line** (Prototype A) or **The duel** (Prototype B). `np
 
 Three rounds. You get 3, then 5, then 7 coins. Coins do not carry. The shop shows five units. The first two are copies of un-merged units already on your line, when you have any. A unit costs its tier. Three copies merge to level 2 (a star). A fourth copy shakes off. Sell by dragging a unit onto the Bard for 1 coin.
 
-Fight is watch-only. The reference resolver in `engine/ref/resolver.mjs` decides the fight. The page plays that log back. Speed and Skip are the only controls. Skip still plays deaths.
+Fight is watch-only. The reference resolver in `engine/ref/resolver.mjs` decides the fight. The page plays that log back. Speed, Pause, and Skip are the only controls. Skip still plays deaths, including the drain to linework.
 
 Best of three. A 2–0 does not play round 3. A drawn round scores for neither side. If the match is level after round 3, the higher surviving health wins. If that is tied too, the Book's seed picks a winner. A match never ends drawn.
 
@@ -49,7 +49,9 @@ After the first duel, open Deck and swap cards one for one. All 32 are free.
 
 Fight stats, names, and abilities come from `engine/units-s0.json` (`version` is `s0-units-v1`). Replace that file with a sheet of the same shape and the resolver, the shop, and the art lookup follow it. Keep `version` honest. The duel uses the same ids and names; its cost and power live in `src/b/cards.ts`.
 
-Art is in `public/art/`. Tier is the shape, level 2 is the second ring (`m2`). Level-3 files are unused. House sets the fill. A long-press opens the only text-heavy sheet: name, flavour, trigger, merge.
+Art for the screen is the v2 cutouts in `public/art/v2/` (webp, about 256px, with a linework twin for deaths). Each unit stands on `disc.webp` with a House-colour wash. Level 2 is the red wax star; a second copy is one pip. The older flat SVG shapes in `public/art/units/` are unused by the screens. Fonts are local (Cinzel, EB Garamond) in `public/fonts/`. A long-press opens the only text-heavy sheet: name, flavour, trigger, merge.
+
+The House ribbon is painted from the house colours. `?housebar=mock` (or the hub toggle) drops the live `public/vendor/house-bar.js` canvas into that ribbon and plays the drink animation on a real line win. It stays off by default so practice metrics are not a fake war.
 
 ## Metrics
 

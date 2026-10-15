@@ -1,4 +1,3 @@
-import { houseBarMode } from "../config";
 import { houseById, houseName } from "../houses";
 import { pickNarration } from "../narration";
 import { ensureSession, newId, record } from "../metrics";
@@ -6,10 +5,10 @@ import { loadProfile, saveProfile } from "../profile";
 import { CARDS, card, STARTERS, starter } from "./cards";
 import { duel, type DuelResult, type LiveInput, type Play } from "./duel";
 import { ghostById, pickGhost } from "./ghosts";
-import { unitArt } from "../a/sheet";
+import { unit } from "../a/sheet";
+import { bookShell, costSeal, cutSrc, practiceRibbon, purse, staticRibbon, tierDiamonds, tools, washColor } from "../v2";
 
-const LANES = [12, 137, 262];
-const COLS = [15, 88, 161, 234, 307];
+const LANES = [14, 137, 260];
 
 type Phase = "cover" | "commit" | "reveal" | "result" | "deck";
 
@@ -137,119 +136,167 @@ function handIds(): string[] {
 }
 
 function render() {
-  const gHouse = houseById(ghost.house);
-  const mode = houseBarMode();
-  const ribbon = practice
-    ? `<div class="ribbon">practice — no House at stake</div>`
-    : mode === "off"
-      ? ""
-      : `<div class="ribbon">House bar stays out of the duel</div>`;
   if (phase === "deck") {
-    stage.innerHTML = deckHtml();
+    stage.innerHTML = `${tools()}<button class="navbook" data-act="back">Back</button>${deckHtml()}`;
     bind();
     return;
   }
+  if (phase === "cover") {
+    stage.innerHTML = `
+      ${tools()}
+      <button class="navbook" data-act="book">Book</button>
+      ${tutorial ? `<button class="skip-tut" data-act="skip">Skip</button>` : ""}
+      ${practiceRibbon()}
+      <img class="bard" alt="" src="/art/v2/bard.webp" style="left:150px;top:360px;width:92px;height:92px">
+      <div class="speech" style="left:70px;top:470px;width:250px"><span class="who">BARD</span>${esc(narration)}</div>
+      <div class="tap">TAP THE PAGE</div>`;
+    bind();
+    return;
+  }
+  const gHouse = houseById(ghost.house);
+  const ribbon = practice ? practiceRibbon() : staticRibbon("tidewrack", ghost.house);
   const powers = view?.powers ?? [
     [0, 0],
     [0, 0],
     [0, 0],
   ];
   const lanes = LANES.map((x, lane) => {
-    const mine = cells("A", lane, true);
-    const theirs = cells("B", lane, false);
-    const lead = powers[lane]![0] === powers[lane]![1] ? "" : powers[lane]![0] > powers[lane]![1] ? "right" : "left";
-    const wash = lead === "left" ? "#1b1712" : lead === "right" ? "#6fb3dd" : "transparent";
-    return `<div class="lane" style="left:${x}px;top:143px;height:108px"><div class="grid4">${theirs}</div></div>
-      <div class="lane-mid" style="position:absolute;left:${x}px;top:259px;width:116px">${powers[lane]![1]}<div class="wash" style="background:${wash}"></div>${powers[lane]![0]}</div>
-      <div class="lane" style="left:${x}px;top:345px;height:108px" data-drop="lane" data-i="${lane}"><div class="grid4">${mine}</div></div>`;
+    const theirs = minis("B", lane, false);
+    const mine = minis("A", lane, true);
+    const t = powers[lane]![1];
+    const m = powers[lane]![0];
+    return `${theirs}${mine}
+      <div class="lanehit" data-drop="lane" data-i="${lane}" style="left:${x}px;top:360px;width:116px"></div>
+      <div class="ltile" style="left:${x + 12}px"><span>${t}</span><span class="dot">·</span><span>${m}</span></div>
+      <div class="lname" style="left:${x + 12}px">Lane ${["I", "II", "III"][lane]}</div>`;
   }).join("");
-  const hand = handIds()
-    .map((id, i) => {
-      const def = card(id);
-      const left = COLS[Math.min(i, 4)]! - Math.max(0, i - 4) * 12;
-      const dear = def.cost > energyLeft() ? " dear" : "";
-      return `<button class="hcard${selected === i ? " on" : ""}${dear}" style="left:${left}px" data-hand="${i}" data-id="${id}">
-        <img class="frame" alt="" src="/art/cards/lane-card.svg">
-        <img class="face" alt="" src="${unitArt(id, 1)}">
-        <span class="nm">${def.cost} · ${esc(def.name)}</span>
-      </button>`;
-    })
-    .join("");
+  const hand =
+    phase === "commit"
+      ? handIds()
+          .map((id, i) => {
+            const def = card(id);
+            const left = 14 + 73 * Math.min(i, 4) - Math.max(0, i - 4) * 14;
+            const off = def.cost > energyLeft();
+            let tier = 1;
+            try {
+              tier = unit(id).tier;
+            } catch {
+              tier = 1;
+            }
+            return `<button class="card${off ? " off" : ""}${selected === i ? " glow" : ""}" style="left:${left}px" data-hand="${i}" data-id="${id}">
+              <div class="win"><img alt="" src="${cutSrc(id)}"></div>
+              <div class="hb" style="background:${washColor(id)}"></div>
+              <div class="np">${esc(def.name)}</div>
+              ${tierDiamonds(tier)}
+              ${costSeal(def.cost, off)}
+              <div class="pwseal"><img alt="" src="/art/v2/ui/seal-ink-cost-blank.webp"><span>${def.power}</span></div>
+            </button>`;
+          })
+          .join("")
+      : "";
   const pips = Array.from({ length: 6 }, (_, i) => {
-    const cls = i + 1 < turn ? "win" : i + 1 === turn ? "now" : "";
-    return `<i class="pip ${cls}" style="left:${12 + i * 22}px;width:16px;height:16px"></i>`;
+    const cls = i + 1 < turn ? "on" : i + 1 === turn ? "now" : "";
+    return `<i class="${cls}"></i>`;
   }).join("");
-  const coins = Array.from({ length: turn }, (_, i) => `<img alt="" src="/art/glyphs/coin${i < energyLeft() ? "" : "-empty"}.svg">`).join("");
-  const peek = view?.peek.A ? `<div class="peek">Next: ${esc(card(view.peek.A).name)}</div>` : "";
-  const backs = ghost.deck
-    .map((id) => `<i class="back">${card(id).cost}</i>`)
-    .join("");
-  const stamp = view?.raised.B ? `<div class="raise-stamp">RAISE</div>` : "";
+  const peek = view?.peek.A ? `<div>Next: ${esc(card(view.peek.A).name)}</div>` : "";
+  const stamp = view?.raised.B || raised ? `<div class="raised">RAISED</div>` : "";
+  const stake = view?.stake ?? 1;
   const actions =
     phase === "commit"
-      ? `<button class="btn-line" style="left:15px;width:150px" data-act="raise">Raise ×2</button>
-         <button class="btn-ink" style="left:180px;width:195px" data-act="end">End turn</button>`
+      ? `<button class="act" data-act="raise" style="left:20px;top:744px;width:64px;height:64px">
+           <img class="sealimg" alt="" src="/art/v2/ui/seal-oxb-blank.webp"><span class="sealnum">×2</span><span class="lbl">RAISE</span>
+         </button>
+         <button class="act" data-act="end" style="left:262px;top:726px;width:104px;height:104px">
+           <img class="sealimg" alt="" src="/art/v2/ui/seal-red-blank.webp"><span class="sealnum">END</span><span class="lbl">END TURN</span>
+         </button>`
       : phase === "reveal" && view && !view.over && turn < 6
-        ? `<button class="btn-line" style="left:15px;width:150px" data-act="retreat">Retreat</button>
-           <button class="btn-ink" style="left:180px;width:195px" data-act="next">Continue</button>`
-        : phase === "result"
-          ? `<button class="btn-ink again" data-act="again">Play again</button>`
-          : "";
+        ? `<button class="act" data-act="retreat" style="left:20px;top:744px;width:72px;height:72px">
+             <img class="sealimg" alt="" src="/art/v2/ui/seal-ink-blank.webp"><span class="lbl">RETREAT</span>
+           </button>
+           <button class="act" data-act="next" style="left:262px;top:726px;width:104px;height:104px">
+             <img class="sealimg" alt="" src="/art/v2/ui/seal-red-blank.webp"><span class="lbl">CONTINUE</span>
+           </button>`
+        : "";
   const result =
     phase === "result" && view
       ? `<div class="veil"></div><div class="panel">
-          <h2>${view.winner === "A" ? "Won" : "Lost"}</h2>
-          <p>${view.winner === "A" ? "+" : "−"}${view.stake} Ink</p>
+          <h2>${view.winner === "A" ? "WON" : "LOST"}</h2>
+          <div class="headline">${view.winner === "A" ? "+" : "−"}${view.stake} Ink</div>
           <p>Match points. Renown doesn't move.</p>
           <p>${esc(narration)}</p>
           <p>${esc(ghost.name)} · ${esc(ghost.profile)} · ${ghost.renown}</p>
           ${preferenceHtml()}
-        </div>`
+        </div>
+        <button class="again" data-act="again">PLAY AGAIN</button>`
       : "";
   stage.innerHTML = `
-    <button class="book" data-act="book">Book</button>
+    ${tools()}
+    <button class="navbook" data-act="book">Book</button>
     ${tutorial ? `<button class="skip-tut" data-act="skip">Skip</button>` : ""}
     ${ribbon}
-    <div class="pips">${pips}</div>
-    <div class="chip"><i class="crest" style="background:${gHouse?.a ?? "#1b1712"}"></i><b>${esc(ghost.name)}</b><span>${esc(houseName(ghost.house))} · ${ghost.renown} · ${esc(ghost.profile)}</span></div>
-    <div class="badge">${view ? `Ink ${view.stake}${raised ? " → ×2" : ""}` : "Ink 1"}</div>
-    ${stamp}
+    <div class="strip">
+      <div class="turnpips" style="top:8px;left:10px">${pips}</div>
+      <div class="turnlab" style="top:26px;left:10px">TURN ${turn} OF 6</div>
+      <div class="opp">
+        <div class="av"><img alt="" src="${cutSrc(ghost.deck[0] ?? "silas")}"></div>
+        <div class="nm">${esc(ghost.name)}</div>
+        <div class="hs"><i style="background:${gHouse?.a ?? "#1b1712"}"></i>${esc(houseName(ghost.house))}</div>
+        <div class="rn">${ghost.renown}</div>
+      </div>
+      <div class="stake" style="top:8px">INK ${stake}${raised ? " · ×2" : ""}</div>
+    </div>
+    ${bookShell()}
+    <div class="dsep" style="left:132px"></div>
+    <div class="dsep" style="left:255px"></div>
+    <div class="cap" style="left:22px;top:146px"><b>${esc(ghost.name)}</b> · saved deck</div>
+    <div class="cap" style="left:22px;top:500px"><b>Your cards</b></div>
     ${lanes}
-    <img class="bard" alt="" src="/art/bard-sticker.svg" style="top:466px">
-    <div class="speech" style="top:474px">${esc(narration)}${peek}<div class="deckbacks" title="their deck">${backs}</div></div>
-    <div class="energy">${coins}<span style="font-size:13px;margin-left:4px">energy ${energyLeft()}</span></div>
-    ${phase === "commit" ? `<div class="handrow">${hand}</div>` : ""}
-    <div class="actions">${actions}</div>
-    ${phase === "commit" ? `<button class="book" style="top:500px;width:70px" data-act="deck">Deck</button>` : ""}
+    ${stamp}
+    <img class="bard" alt="" src="/art/v2/bard.webp" style="top:508px">
+    <div class="speech" style="top:520px;width:150px"><span class="who">BARD</span>${esc(narration)}${peek}</div>
+    ${phase === "commit" ? purse(energyLeft(), turn, "ENERGY").replace('class="purse"', 'class="purse energy"') : ""}
+    ${phase === "commit" ? `<div class="drawer"><div class="lbl">YOUR HAND</div></div>${hand}` : ""}
+    ${phase === "commit" ? `<button class="deckbtn" data-act="deck">DECK</button>` : ""}
+    ${actions}
     ${result}
   `;
   bind();
 }
 
-function cells(side: "A" | "B", lane: number, includePending: boolean): string {
+function minis(side: "A" | "B", lane: number, includePending: boolean): string {
   const placed = (view?.board ?? []).filter((u) => u.side === side && u.lane === lane);
   const extra =
     includePending && side === "A"
-      ? pending
-          .filter((p) => p.lane === lane)
-          .map((p) => ({ id: p.cardId, revealed: false, token: false, uid: `p${p.cardId}` }))
+      ? pending.filter((p) => p.lane === lane).map((p) => ({ id: p.cardId, revealed: false, token: false, base: card(p.cardId).power }))
       : [];
-  const all = [...placed.map((u) => ({ id: u.id, revealed: u.revealed, token: u.token, uid: u.uid })), ...extra];
-  const boxes = all.slice(0, 4).map((u) => {
-    if (!u.revealed) return `<div class="cell down" data-pending="${u.id}" data-lane="${lane}">?</div>`;
-    return `<div class="cell"><img alt="" src="${u.token ? "/art/units/blot-t1.svg" : unitArt(u.id, 1)}"></div>`;
+  const all = [
+    ...placed.map((u) => ({ id: u.id, revealed: u.revealed, token: u.token, base: u.base })),
+    ...extra,
+  ];
+  const y0 = side === "B" ? 166 : 372;
+  const html = all.slice(0, 4).map((u, i) => {
+    const x = LANES[lane]! + 6 + (i % 2) * 58;
+    const y = y0 + Math.floor(i / 2) * 66;
+    if (!u.revealed) {
+      return `<button class="mini fd" style="left:${x}px;top:${y}px" data-pending="${u.id}" data-lane="${lane}"><b>?</b></button>`;
+    }
+    return `<div class="mini" style="left:${x}px;top:${y}px"><img class="face" alt="" src="${cutSrc(u.id)}"><div class="hb" style="background:${washColor(u.id)}"></div><div class="pw">${u.base}</div></div>`;
   });
-  while (boxes.length < 4) boxes.push(`<div class="cell"></div>`);
-  return boxes.join("");
+  for (let i = html.length; i < 4; i++) {
+    const x = LANES[lane]! + 6 + (i % 2) * 58;
+    const y = y0 + Math.floor(i / 2) * 66;
+    html.push(`<div class="emptymini" style="left:${x}px;top:${y}px"></div>`);
+  }
+  return html.join("");
 }
 
 function preferenceHtml(): string {
   const prof = loadProfile();
   if (practice || prof.preferenceAsked) return "";
-  return `<p>Which page do you want more of?</p>
-    <button class="btn-line" style="height:44px;margin-right:6px" data-act="pref" data-choice="A">The line</button>
-    <button class="btn-line" style="height:44px;margin-right:6px" data-act="pref" data-choice="B">The duel</button>
-    <button class="btn-line" style="height:44px" data-act="pref" data-choice="either">Either</button>`;
+  return `<p>Which page do you want more of?</p><div class="pref">
+    <button data-act="pref" data-choice="A">The line</button>
+    <button data-act="pref" data-choice="B">The duel</button>
+    <button data-act="pref" data-choice="either">Either</button></div>`;
 }
 
 function deckHtml(): string {
@@ -266,7 +313,7 @@ function deckHtml(): string {
           return `<button type="button" data-card="${c.id}" class="${cls}">${c.cost}/${c.power} ${esc(c.name)}</button>`;
         }).join("")
       : `<p>After the first duel you can swap cards one for one. For now, pick a starter.</p>`;
-  return `<button class="book" data-act="back">Back</button><div class="pool"><h2>Deck</h2><div>${starters}</div>${pool}</div>`;
+  return `<div class="pool"><h2>Deck</h2><div>${starters}</div>${pool}</div>`;
 }
 
 function bind() {

@@ -9,16 +9,32 @@ const noop: Fx = { splat() {}, thread() {}, destroy() {} };
 /** Fight splats and ink threads. The shop stays DOM; this layer is the Pixi stage. */
 export async function createFx(host: HTMLElement): Promise<Fx> {
   try {
-    const { Application, Graphics } = await import("pixi.js");
+    const { Application, Assets, Graphics, Sprite } = await import("pixi.js");
     const app = new Application();
-    await app.init({ width: 390, height: 250, backgroundAlpha: 0, antialias: true, preference: "webgl" });
+    await app.init({ width: 390, height: 844, backgroundAlpha: 0, antialias: true, preference: "webgl" });
     const canvas = app.canvas;
     canvas.style.width = "390px";
-    canvas.style.height = "250px";
+    canvas.style.height = "844px";
     canvas.style.pointerEvents = "none";
     host.appendChild(canvas);
+    let splatTex: unknown = null;
+    try {
+      splatTex = await Assets.load("/art/v2/splat-2.webp");
+    } catch {
+      splatTex = null;
+    }
     return {
       splat(x, y, dmg) {
+        if (splatTex) {
+          const s = new Sprite(splatTex as ConstructorParameters<typeof Sprite>[0]);
+          const sc = Math.min(1.1, 0.45 + 0.06 * Math.max(1, dmg));
+          s.anchor.set(0.5);
+          s.position.set(x, y);
+          s.scale.set(sc);
+          app.stage.addChild(s);
+          window.setTimeout(() => s.destroy(), 720);
+          return;
+        }
         const r = Math.min(34, 12 + 4 * Math.max(0, dmg));
         const g = new Graphics();
         g.circle(x, y, r).fill({ color: 0x1b1712, alpha: 0.82 });

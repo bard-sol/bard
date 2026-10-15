@@ -17,9 +17,24 @@ import { createFx, type Fx } from "../fx";
 import { pickRival, type StoredRun } from "./bots";
 import { carryLine, fightSeed, firstOf, matchOver, resultCopy } from "./match";
 import { buyPiece, moveWithin, Shop } from "./shop";
-import { roundStats, triggerGlyph, unit, unitArt, type Piece } from "./sheet";
-
-const COLS = [15, 88, 161, 234, 307];
+import { roundStats, unit, type Piece } from "./sheet";
+import {
+  COLX,
+  FOOT_ENEMY,
+  FOOT_YOU,
+  bookShell,
+  costSeal,
+  cutSrc,
+  pencilSlot,
+  practiceRibbon,
+  purse,
+  roundSeal,
+  staticRibbon,
+  tierDiamonds,
+  tools,
+  unitFigure,
+  washColor,
+} from "../v2";
 const TUT_A = [
   { id: "deckhand", copies: 3 },
   { id: "blotling", copies: 1 },
@@ -65,6 +80,7 @@ interface AppState {
   timer: number;
   blotSkin: boolean;
   hand: boolean;
+  paused: boolean;
 }
 
 const wait = (ms: number) => new Promise((r) => window.setTimeout(r, ms));
@@ -98,6 +114,7 @@ const state: AppState = {
   timer: SHOP_SECONDS,
   blotSkin: false,
   hand: false,
+  paused: false,
 };
 
 let stage: HTMLElement;
@@ -253,13 +270,30 @@ function pipClass(i: number): string {
   return "";
 }
 
-function pieceHtml(p: Piece, zone: "line" | "bench", index: number): string {
+function sealKind(i: number): "won" | "lost" | "draw" | "now" | "wait" {
+  const c = pipClass(i);
+  if (c === "win") return "won";
+  if (c === "loss") return "lost";
+  if (c === "draw") return "draw";
+  if (c === "now") return "now";
+  return "wait";
+}
+
+function lineFigure(p: Piece, index: number, foot: number, zone: "line" | "bench"): string {
   const st = roundStats(p.id, p.copies);
-  const ghost = zone === "line" && state.flash.includes(index) ? " ghosting" : "";
-  return `<div class="unit${ghost}" data-drag="unit" data-zone="${zone}" data-i="${index}">
-    <div class="clip" style="height:${68}px"><img class="art" alt="" src="${unitArt(p.id, p.copies)}"></div>
-    ${triggerGlyph(st.trigger) ? `<img class="glyph" alt="" src="${triggerGlyph(st.trigger)}">` : ""}
-  </div>`;
+  const ghost = zone === "line" && state.flash.includes(index);
+  return unitFigure({
+    id: p.id,
+    cx: COLX(index),
+    foot,
+    atk: st.atk,
+    hp: st.hp,
+    max: st.hp,
+    copies: p.copies,
+    ghost,
+    cls: ghost ? "ghosting" : "",
+    attrs: `data-drag="unit" data-drop="${zone}" data-zone="${zone}" data-i="${index}"`,
+  });
 }
 
 function render() {
@@ -267,94 +301,137 @@ function render() {
   const bench = benchSlots();
   const rival = state.rival;
   const house = rival ? houseById(rival.house) : null;
-  const pips = [0, 1, 2]
-    .map((i) => `<i class="pip ${pipClass(i)}" style="left:${16 + i * 34}px"></i>`)
-    .join("");
-  const slots = (zone: "line" | "bench", y: number, list: Piece[], xs: number[], w: number) =>
-    xs
-      .map((x, i) => {
-        const p = list[i];
-        return `<div class="slot${p ? " live" : ""}" data-drop="${zone}" data-i="${i}" style="left:${x}px;top:${y}px;width:${w}px;height:${w}px">${p ? pieceHtml(p, zone, i) : ""}</div>`;
-      })
-      .join("");
-  const stats = state.line
-    .map((p, i) => {
-      const st = roundStats(p.id, p.copies);
-      const pip =
-        p.copies >= 3
-          ? ""
-          : `<img class="pips-merge" alt="" style="left:${COLS[i]! + 6}px" src="/art/glyphs/merge-progress-${p.copies === 1 ? 0 : 1}.svg">`;
-      return `<div class="stat" style="left:${COLS[i]}px">◇${st.atk} ○${st.hp}</div>${pip}`;
-    })
-    .join("");
+  const showShop = state.phase === "shop";
+  const mode = houseBarMode();
+  if (state.phase === "cover") {
+    stage.innerHTML = `
+      ${tools()}
+      <button class="navbook" data-act="book">Book</button>
+      ${practiceRibbon()}
+      <img class="bard" alt="" src="/art/v2/bard.webp" style="left:150px;top:360px;width:92px;height:92px">
+      <div class="speech" style="left:70px;top:470px;width:250px"><span class="who">BARD</span>${esc(state.narration)}</div>
+      <div class="tap">TAP THE PAGE</div>
+    `;
+    bind();
+    return;
+  }
+  const ribbon = state.practice
+    ? practiceRibbon()
+    : mode === "mock" && bar
+      ? `<div class="ribbon live"></div>`
+      : staticRibbon("tidewrack", rival?.house ?? "pit");
+  const seals = [0, 1, 2].map((i) => roundSeal(sealKind(i), i, 16 + i * 33)).join("");
+  const c = 2 * Math.PI * 16;
+  const dash = c * (1 - state.timer / SHOP_SECONDS);
+  const timer =
+    showShop && !state.tutorial
+      ? `<svg class="timer" viewBox="0 0 40 40"><circle cx="20" cy="20" r="16" stroke="rgba(230,205,165,.25)" stroke-width="3"/><circle class="ink" cx="20" cy="20" r="16" stroke="#efdcb5" stroke-width="3.2" stroke-linecap="round" stroke-dasharray="${c.toFixed(1)}" stroke-dashoffset="${dash.toFixed(1)}" transform="rotate(-90 20 20)"/><text x="20" y="25" text-anchor="middle" font-family="Cinzel,serif" font-size="13" font-weight="900" fill="#fff1d8">${state.timer}</text></svg>`
+      : "";
+  const who = state.blotSkin || state.tutorial || !rival
+    ? { name: "The Blot", house: "practice", color: "#1B1712", av: "blotling", renown: "" }
+    : { name: rival.name, house: houseName(rival.house), color: house?.a ?? "#1b1712", av: rival.snaps[0]?.[0]?.id ?? "grenna", renown: String(rival.renown) };
+  const ghosts = state.tutorial
+    ? [{ id: "token_inkdrop" }, { id: "token_inkdrop" }]
+    : state.round > 1
+      ? (rival?.snaps[state.round - 2] ?? [])
+      : [];
+  const enemy = Array.from({ length: 5 }, (_, i) => {
+    const g = ghosts[i];
+    if (!g) return pencilSlot(COLX(i), FOOT_ENEMY, true);
+    return unitFigure({ id: g.id, cx: COLX(i), foot: FOOT_ENEMY, ghost: true });
+  }).join("");
+  const yours = showShop
+    ? Array.from({ length: 5 }, (_, i) => {
+        const p = state.line[i];
+        return p ? lineFigure(p, i, FOOT_YOU, "line") : pencilSlot(COLX(i), FOOT_YOU, false, `data-drop="line" data-i="${i}"`);
+      }).join("")
+    : "";
   const shop = state.shop
     .map((id, i) => {
-      if (!id) return `<div class="scard" style="left:${COLS[i]}px"></div>`;
+      const left = 14 + 73 * i;
+      if (!id) return `<div class="card empty" style="left:${left}px"></div>`;
       const def = unit(id);
       const afford = state.coins >= def.tier;
-      return `<button class="scard${afford ? "" : " dear"}" style="left:${COLS[i]}px" data-drag="card" data-i="${i}">
-        <img class="frame" alt="" src="/art/cards/shop-cost${def.tier}${afford ? "" : "-off"}.svg">
-        <img class="face" alt="" src="${unitArt(id, 1)}">
-        <span class="nm">${esc(def.name)}</span>
+      const owned = [...state.line, ...state.bench].find((p) => p.id === id);
+      const hint = owned && owned.copies === 2 ? "★ MERGE" : owned && owned.copies === 1 ? "2ND COPY" : "";
+      const glow = state.tutorial && i === 0 && hint ? " glow" : "";
+      const band = washColor(id);
+      const st = roundStats(id, 1);
+      return `<button class="card${afford ? "" : " off"}${glow}" style="left:${left}px" data-drag="card" data-i="${i}">
+        <div class="win"><img alt="" src="${cutSrc(id)}"></div>
+        <div class="hb" style="background:${band}"></div>
+        <div class="np">${esc(def.name)}</div>
+        ${tierDiamonds(def.tier)}
+        ${costSeal(def.tier, !afford)}
+        <div class="badge atk"><img alt="" src="/art/v2/ui/badge-atk.webp"><span>${st.atk}</span></div>
+        <div class="badge hp"><span>${st.hp}</span></div>
+        ${hint ? `<div class="hint">${hint}</div>` : ""}
       </button>`;
     })
     .join("");
-  const coins = Array.from({ length: 7 }, (_, i) => `<img alt="" src="/art/glyphs/coin${i < state.coins ? "" : "-empty"}.svg">`).join("");
-  const c = 2 * Math.PI * 16;
-  const dash = c * (1 - state.timer / SHOP_SECONDS);
-  const showShop = state.phase === "shop";
-  const mode = houseBarMode();
-  const ribbon =
-    state.practice
-      ? `<div class="ribbon">practice — no House at stake</div>`
-      : mode === "mock" && bar
-        ? `<div class="house"></div>`
-        : "";
-  const result = state.phase === "result" ? resultHtml() : "";
+  const margin =
+    bench && showShop
+      ? `<div class="benchlbl">THE MARGIN</div>` +
+        [0, 1, 2]
+          .map((i) => {
+            const p = state.bench[i];
+            return `<div class="slot" style="left:${232 + 50 * i}px" data-drop="bench" data-i="${i}"><div class="dash"></div>${p ? `<img class="miniart" alt="" src="${cutSrc(p.id)}" data-drag="unit" data-zone="bench" data-i="${i}">` : ""}</div>`;
+          })
+          .join("")
+      : "";
   const skip =
     state.tutorial && state.line.some((p) => p.id === "deckhand" && p.copies >= 3)
       ? `<button class="skip-tut" data-act="skip">Skip</button>`
       : "";
+  const maxCoins = ROUND_COINS[state.round - 1] ?? state.coins;
+  const result = state.phase === "result" ? resultHtml() : "";
+  const capName = esc(who.name);
   stage.innerHTML = `
-    <button class="book" data-act="book">Book</button>
+    ${tools()}
+    <button class="navbook" data-act="book">Book</button>
     ${skip}
     ${ribbon}
-    <div class="pips">${pips}</div>
+    <div class="strip">
+      ${seals}
+      <div class="opp"><div class="av"><img alt="" src="${cutSrc(who.av)}"></div>
+        <div class="nm">${capName}</div>
+        <div class="hs"><i style="background:${who.color}"></i>${esc(who.house)}</div>
+        ${who.renown ? `<div class="rn">${esc(who.renown)}</div>` : ""}
+      </div>
+      ${timer}
+    </div>
+    ${bookShell()}
+    <div class="cap" style="left:22px;top:146px"><b>${capName}</b> · round ${["I", "II", "III"][state.round - 1] ?? "I"} line</div>
+    <div class="cap" style="left:22px;top:500px"><b>Your line</b> · front ▸ back</div>
+    ${showShop ? enemy : ""}
+    ${showShop ? `<img class="lockseal" alt="" src="/art/v2/ui/seal-oxb-lock.webp"><div class="sealcap">Sealed until you Fight</div>` : ""}
+    ${yours}
+    <svg class="frontmark" width="10" height="44" viewBox="0 0 10 44"><path d="M2,2 L8,22 L2,42" fill="none" stroke="#3a2a17" stroke-width="2.4" stroke-linecap="round"/></svg>
+    <img class="bard" alt="" src="/art/v2/bard.webp" data-drop="bard">
+    <div class="speech${bench ? "" : " wide"}"><span class="who">BARD</span>${esc(state.narration)}</div>
+    ${margin}
+    ${showShop ? `<div class="drawer"><div class="lbl">THE DRAWER</div></div>${shop}` : ""}
     ${
-      rival
-        ? `<div class="chip"><i class="crest" style="background:${house?.a ?? "#1b1712"}"></i><b>${esc(rival.name)}</b><span>${esc(houseName(rival.house))} · ${rival.renown}</span></div>`
-        : `<div class="chip"><b>The Blot</b><span>practice</span></div>`
-    }
-    ${
-      showShop && !state.tutorial
-        ? `<svg class="timer" viewBox="0 0 44 44"><circle cx="22" cy="22" r="16" stroke="#8a8478"/><circle class="ink" cx="22" cy="22" r="16" stroke="#1b1712" stroke-dasharray="${c.toFixed(2)}" stroke-dashoffset="${dash.toFixed(2)}" transform="rotate(-90 22 22)"/></svg>`
+      showShop
+        ? `${purse(state.coins, Math.max(maxCoins, state.coins), "COINS")}
+           <button class="act" data-act="reroll" style="left:20px;top:744px;width:64px;height:64px" ${state.coins < 1 && !state.freeReroll ? "disabled" : ""}>
+             <img class="sealimg" alt="" src="/art/v2/ui/seal-ink-reroll.webp">
+             ${state.freeReroll ? `<span class="free">FREE</span>` : `<img class="coinpip" alt="" src="/art/v2/ui/coin.webp">`}
+             <span class="lbl">REROLL</span>
+           </button>
+           <button class="act" data-act="fight" style="left:262px;top:726px;width:104px;height:104px" ${canFight() ? "" : "disabled"}>
+             <img class="sealimg" alt="" src="/art/v2/ui/seal-red-fight.webp">
+             <span class="lbl">FIGHT</span>
+           </button>`
         : ""
     }
-    <div class="slots">${slots("line", 151, [], COLS, 68)}</div>
-    <div class="clash"></div>
-    <div class="front-tick"></div>
-    <div class="slots">${showShop ? slots("line", 303, state.line, COLS, 68) : ""}</div>
-    ${showShop ? stats : ""}
-    <img class="bard" alt="" src="/art/bard-sticker.svg" data-drop="bard">
-    <div class="speech">${esc(state.narration)}</div>
-    <div class="torn"></div>
-    ${bench && showShop ? slots("bench", 511, state.bench, [16, 84, 152], 60) : ""}
-    ${showShop ? `<div class="purse" data-purse>${coins}</div>` : ""}
-    ${showShop ? shop : ""}
-    <div class="actions">
-      ${
-        showShop
-          ? `<button class="btn-line reroll" data-act="reroll" ${state.coins < 1 && !state.freeReroll ? "disabled" : ""}>↻ ${state.freeReroll ? "free" : "1"}</button>
-             <button class="btn-ink fight" data-act="fight" ${canFight() ? "" : "disabled"}>Fight</button>`
-          : ""
-      }
-    </div>
-    ${state.hand && showShop ? `<div class="hand" id="ghosthand">▼</div>` : ""}
+    ${state.hand && showShop ? `<svg class="ghosthand" id="ghosthand" viewBox="0 0 64 76" width="40" height="48"><path d="M20,40 V10 a5,5 0 0 1 10,0 V32" fill="none" stroke="#f3e6c8" stroke-width="2.2" stroke-linecap="round"/><path d="M30,32 V26 a5,5 0 0 1 10,0 V36" fill="none" stroke="#f3e6c8" stroke-width="2.2"/><path d="M40,36 V30 a5,5 0 0 1 10,0 V40" fill="none" stroke="#f3e6c8" stroke-width="2.2"/><path d="M16,40 Q14,58 28,62 H40 Q54,58 50,40" fill="rgba(240,232,215,.2)" stroke="#f3e6c8" stroke-width="2"/></svg>` : ""}
     ${result}
   `;
-  const host = stage.querySelector(".house");
+  const host = stage.querySelector(".ribbon.live");
   if (host && bar) host.appendChild(bar.canvas);
   bind();
+  if (state.hand) window.setTimeout(placeHand, 30);
   if (state.flash.length) {
     window.setTimeout(() => {
       state.flash = [];
@@ -371,31 +448,45 @@ function resultHtml(): string {
     const max = Math.max(state.r3[0], state.r3[1], 1);
     const seed = copy.tiebreak === "seed";
     tie = `<div class="tie">
-      <div class="barrow"><div class="bar you" style="width:${(state.r3[0] / max) * 180}px"></div><b>${state.r3[0]}</b>${seed && copy.outcome === "win" ? "<span>the Book's seed</span>" : ""}</div>
-      <div class="barrow"><div class="bar" style="width:${(state.r3[1] / max) * 180}px"></div><b>${state.r3[1]}</b>${seed && copy.outcome === "loss" ? "<span>the Book's seed</span>" : ""}</div>
+      <div class="barrow"><div class="bar you" style="width:${(state.r3[0] / max) * 160}px"></div><b>${state.r3[0]}</b>${seed && copy.outcome === "win" ? "<span>the Book's seed</span>" : ""}</div>
+      <div class="barrow"><div class="bar" style="width:${(state.r3[1] / max) * 160}px"></div><b>${state.r3[1]}</b>${seed && copy.outcome === "loss" ? "<span>the Book's seed</span>" : ""}</div>
     </div>`;
   }
-  const renown = !state.practice && copy.outcome === "win" ? `<p>Renown +1 · ${prof.renown}</p>` : `<p>${state.practice ? "Practice." : "Renown stays."}</p>`;
+  const won = copy.outcome === "win";
+  const renown = !state.practice && won ? `<p>Renown +1 · ${prof.renown}</p>` : `<p>${state.practice ? "Practice. No House at stake." : "Renown stays."}</p>`;
+  const drink =
+    !state.practice && houseBarMode() === "mock" && won
+      ? `<p>Your House drinks. Theirs spends.</p>`
+      : "";
   const ask = !state.practice && !prof.preferenceAsked;
+  const rounds = [0, 1, 2]
+    .map((i) => {
+      const w = state.winners[i];
+      const kind = w === "A" ? "won" : w === "B" ? "lost" : w === "draw" ? "draw" : "wait";
+      return roundSeal(kind, i);
+    })
+    .join("");
   return `<div class="veil"></div><div class="panel">
-    <h2>${copy.outcome === "win" ? "Won" : "Lost"}</h2>
-    <p>${esc(copy.headline)}</p>
+    <h2>${won ? "WON" : "LOST"}</h2>
+    <div class="headline">${esc(copy.headline)}</div>
+    ${state.rival ? `<p>against ${esc(state.rival.name)} of ${esc(houseName(state.rival.house))}</p>` : ""}
+    <div class="rounds">${rounds}</div>
     ${tie}
-    <p>${esc(state.narration)}</p>
+    ${drink}
     ${renown}
-    ${state.rival ? `<p>${esc(state.rival.name)} · ${esc(houseName(state.rival.house))}</p>` : ""}
+    <p>“${esc(state.narration)}”</p>
     ${
       ask
         ? `<p>Which page do you want more of?</p>
-           <div class="actions" style="position:relative;top:0;height:auto">
-             <button class="btn-line" style="position:relative;width:100px;height:44px;margin-right:6px" data-act="pref" data-choice="A">The line</button>
-             <button class="btn-line" style="position:relative;width:100px;height:44px;margin-right:6px" data-act="pref" data-choice="B">The duel</button>
-             <button class="btn-line" style="position:relative;width:80px;height:44px" data-act="pref" data-choice="either">Either</button>
+           <div class="pref">
+             <button data-act="pref" data-choice="A">The line</button>
+             <button data-act="pref" data-choice="B">The duel</button>
+             <button data-act="pref" data-choice="either">Either</button>
            </div>`
         : ""
     }
   </div>
-  <div class="actions"><button class="btn-ink again" data-act="again">Play again</button></div>`;
+  <button class="again" data-act="again">PLAY AGAIN</button>`;
 }
 
 function placeHand() {
@@ -423,9 +514,9 @@ function bind() {
         moved = true;
         if (long) window.clearTimeout(long);
         long = 0;
-        t.style.position = "relative";
-        t.style.zIndex = "7";
-        t.style.transform = `translate(${e.clientX - startX}px, ${e.clientY - startY - 12}px) scale(1.08)`;
+        t.style.zIndex = "40";
+        const scale = stage.getBoundingClientRect().width / 390 || 1;
+        t.style.transform = `translate(${(e.clientX - startX) / scale}px, ${(e.clientY - startY) / scale - 12}px) scale(1.08)`;
         const hit = document.elementFromPoint(e.clientX, e.clientY);
         stage.querySelectorAll(".sellhot").forEach((n) => n.classList.remove("sellhot"));
         hit?.closest("[data-drop=bard]")?.classList.add("sellhot");
@@ -437,7 +528,6 @@ function bind() {
       window.removeEventListener("pointerup", up);
       t.style.transform = "";
       t.style.zIndex = "";
-      t.style.position = "";
       if (!moved) {
         if (t.dataset.drag === "card") tryBuy(Number(t.dataset.i));
         return;
@@ -769,58 +859,157 @@ interface Vis {
   copies: number;
   hp: number;
   max: number;
+  atk: number;
+  dying: boolean;
+  lost: number;
+}
+
+async function beatWait(ms: number) {
+  const step = 40;
+  let left = ms;
+  while (left > 0) {
+    if (state.paused && !state.skipping) {
+      await wait(step);
+      continue;
+    }
+    await wait(Math.min(step, left));
+    left -= step;
+  }
+}
+
+function popHit(el: HTMLElement | null, n: number) {
+  if (!el) return;
+  const img = document.createElement("img");
+  img.className = "splat";
+  img.alt = "";
+  img.src = `/art/v2/splat-${(Math.abs(Math.round(n)) % 3) + 1}.webp`;
+  img.style.left = `${el.offsetLeft - 18}px`;
+  img.style.top = `${el.offsetTop + 8}px`;
+  const d = document.createElement("div");
+  d.className = "dmg";
+  d.textContent = String(n);
+  d.style.left = `${el.offsetLeft + 8}px`;
+  d.style.top = `${el.offsetTop + 18}px`;
+  stage.appendChild(img);
+  stage.appendChild(d);
+  window.setTimeout(() => {
+    img.remove();
+    d.remove();
+  }, 640);
 }
 
 async function playback(result: FightResult, _enemy: Piece[]) {
   const speed = () => (state.skipping ? 4 : state.speed);
+  const first = firstOf(result.log);
+  const rival = state.rival;
+  const who = state.blotSkin ? "The Blot" : (rival?.name ?? "");
+  state.paused = false;
   stage.innerHTML = `
-    <button class="book" data-act="book">Book</button>
-    ${state.practice ? `<div class="ribbon">practice — no House at stake</div>` : ""}
-    <div class="pips">${[0, 1, 2].map((i) => `<i class="pip ${pipClass(i)}" style="left:${16 + i * 34}px"></i>`).join("")}</div>
-    <div class="chip"><b>${state.blotSkin ? "The Blot" : esc(state.rival?.name ?? "")}</b></div>
+    ${tools()}
+    <button class="navbook" data-act="book">Book</button>
+    ${state.practice ? practiceRibbon() : staticRibbon("tidewrack", rival?.house ?? "pit")}
+    <div class="strip">
+      ${[0, 1, 2].map((i) => roundSeal(sealKind(i), i, 16 + i * 33)).join("")}
+      <div class="opp"><div class="av"><img alt="" src="${cutSrc(state.blotSkin ? "blotling" : (rival?.snaps[0]?.[0]?.id ?? "grenna"))}"></div>
+        <div class="nm">${esc(who)}</div>
+        <div class="hs">${state.blotSkin ? "practice" : esc(houseName(rival?.house ?? ""))}</div>
+      </div>
+    </div>
+    ${bookShell()}
+    <div class="cap" style="left:22px;top:146px"><b>${esc(who)}</b></div>
+    <div class="cap" style="left:22px;top:500px"><b>Your line</b></div>
+    <div id="field"></div>
     <div class="fx" id="fx"></div>
-    <div id="enemy"></div>
-    <div id="you"></div>
-    <div class="front-tick"></div>
-    <div class="speech">${esc(state.narration)}</div>
-    <img class="bard" alt="" src="/art/bard-sticker.svg">
-    <div class="chain" id="chain"></div>
-    <div class="clash" style="top:219px;height:84px;position:absolute;width:390px"></div>
-    <div class="actions">
-      <button class="btn-line speed" data-act="speed">${state.speed === 2 ? "2×" : "1×"}</button>
-      <button class="btn-line skip" data-act="skip">Skip</button>
-    </div>`;
+    <img class="bard" alt="" src="/art/v2/bard.webp">
+    <div class="speech"><span class="who">BARD</span><span id="line">${esc(state.narration)}</span></div>
+    <div class="queue" id="queue"></div>
+    <div class="clash"></div>
+    <button class="act" data-act="speed" style="left:26px;top:706px;width:72px;height:72px">
+      <img class="sealimg" alt="" src="/art/v2/ui/seal-red-blank.webp"><span class="lbl" id="speedlbl">${state.speed === 2 ? "2×" : "1×"}</span>
+    </button>
+    <button class="act" data-act="pause" style="left:150px;top:696px;width:90px;height:90px">
+      <img class="sealimg" alt="" src="/art/v2/ui/seal-ink-blank.webp"><span class="lbl" id="pauselbl">PAUSE</span>
+    </button>
+    <button class="act" data-act="skip" style="left:292px;top:706px;width:72px;height:72px">
+      <img class="sealimg" alt="" src="/art/v2/ui/seal-ink-blank.webp"><span class="lbl">SKIP</span>
+    </button>`;
   stage.querySelector("[data-act=book]")?.addEventListener("click", () => {
     location.href = "./index.html";
   });
-  stage.querySelector("[data-act=speed]")?.addEventListener("click", (ev) => {
+  stage.querySelector("[data-act=speed]")?.addEventListener("click", () => {
     state.speed = state.speed === 2 ? 1 : 2;
-    (ev.currentTarget as HTMLButtonElement).textContent = state.speed === 2 ? "2×" : "1×";
+    const lbl = stage.querySelector("#speedlbl");
+    if (lbl) lbl.textContent = state.speed === 2 ? "2×" : "1×";
+  });
+  stage.querySelector("[data-act=pause]")?.addEventListener("click", () => {
+    state.paused = !state.paused;
+    const lbl = stage.querySelector("#pauselbl");
+    if (lbl) lbl.textContent = state.paused ? "PLAY" : "PAUSE";
   });
   stage.querySelector("[data-act=skip]")?.addEventListener("click", () => {
     state.skipping = true;
+    state.paused = false;
   });
   const host = stage.querySelector<HTMLElement>("#fx")!;
   fx = await createFx(host);
   const vis: Record<"A" | "B", Vis[]> = { A: [], B: [] };
   const by = new Map<string, Vis>();
   let saidDeath = false;
+  let acting = "";
   const paint = () => {
-    for (const side of ["A", "B"] as const) {
-      const root = stage.querySelector(side === "A" ? "#you" : "#enemy")!;
-      root.innerHTML = vis[side]
+    const field = stage.querySelector("#field");
+    if (!field) return;
+    const draw = (side: "A" | "B") =>
+      vis[side]
         .map((u, i) => {
-          const y = side === "A" ? 303 : 151;
-          const pct = Math.max(0, Math.min(1, u.max ? u.hp / u.max : 0));
-          const art =
-            state.blotSkin && side === "B" ? `/art/units/blot-t${Math.min(5, i + 1)}.svg` : unitArt(u.id, u.copies);
-          return `<div class="slot live" data-uid="${u.uid}" style="left:${COLS[i] ?? 15}px;top:${y}px"><div class="unit"><div class="clip" style="height:${Math.round(pct * 68)}px"><img class="art" alt="" src="${art}"></div></div></div>`;
+          const artId = state.blotSkin && side === "B" ? "blotling" : u.id;
+          return unitFigure({
+            id: u.id,
+            artId,
+            cx: COLX(i),
+            foot: side === "A" ? FOOT_YOU : FOOT_ENEMY,
+            atk: u.atk,
+            hp: Math.max(0, u.hp),
+            max: u.max,
+            copies: u.copies,
+            dying: u.dying,
+            lost: u.lost,
+            cls: `side-${side === "A" ? "a" : "b"}`,
+            attrs: `data-uid="${u.uid}"`,
+          });
         })
         .join("");
+    field.innerHTML = draw("B") + draw("A");
+    const queue = stage.querySelector("#queue");
+    if (queue) {
+      const alive = (side: "A" | "B") => vis[side].filter((u) => u.hp > 0 && !u.dying);
+      const a = alive("A");
+      const b = alive("B");
+      const order: Vis[] = [];
+      const n = Math.max(a.length, b.length);
+      for (let i = 0; i < n; i++) {
+        const pair = first === "A" ? [a[i], b[i]] : [b[i], a[i]];
+        for (const u of pair) if (u) order.push(u);
+      }
+      queue.innerHTML =
+        `<div class="lbl">ORDER OF BATTLE</div><div class="qnote">front acts first</div>` +
+        order
+          .slice(0, 6)
+          .map((u, i) => {
+            const artId = state.blotSkin && u.side === "B" ? "blotling" : u.id;
+            return `<div class="qf${u.uid === acting ? " now" : ""}" style="left:${12 + i * 60}px"><img alt="" src="${cutSrc(artId)}"><div class="sd" style="background:${washColor(artId)}"></div></div>`;
+          })
+          .join("");
     }
   };
   const add = (side: "A" | "B", uid: string, id: string, copies: number, hp: number, at: number) => {
-    const v: Vis = { uid, id, side, copies, hp, max: Math.max(1, hp) };
+    let atk = 1;
+    try {
+      atk = roundStats(id, copies).atk;
+    } catch {
+      atk = 1;
+    }
+    const v: Vis = { uid, id, side, copies, hp, max: Math.max(1, hp), atk, dying: false, lost: 0 };
     vis[side].splice(Math.max(0, Math.min(at, vis[side].length)), 0, v);
     by.set(uid, v);
   };
@@ -831,45 +1020,52 @@ async function playback(result: FightResult, _enemy: Piece[]) {
       lines.A.forEach((u, i) => add("A", u.uid, u.id, u.copies, u.hp, i));
       lines.B.forEach((u, i) => add("B", u.uid, u.id, u.copies, u.hp, i));
       paint();
-      if (!fast) await wait(200 / speed());
+      if (!fast) await beatWait(200 / speed());
     } else if (ev.t === "attack") {
+      acting = String(ev.src ?? "");
+      paint();
       const src = stage.querySelector(`[data-uid="${ev.src}"]`);
       src?.classList.add("lunge");
       const tgt = by.get(String(ev.tgt));
       if (tgt && fx) {
         const i = vis[tgt.side].indexOf(tgt);
-        const x = (COLS[i] ?? 15) + 34;
-        const y = tgt.side === "A" ? 186 : 34;
-        fx.splat(x, y, Number(ev.n ?? 1));
+        fx.splat(COLX(i), tgt.side === "A" ? FOOT_YOU - 40 : FOOT_ENEMY - 40, Number(ev.n ?? 1));
       }
-      if (!fast) await wait(420 / speed());
+      if (!fast) await beatWait(420 / speed());
       src?.classList.remove("lunge");
     } else if (ev.t === "damage" || ev.t === "heal" || ev.t === "buff") {
       const v = by.get(String(ev.tgt));
       if (v && typeof ev.hp === "number") {
+        if (ev.t === "damage") v.lost = Math.max(0, v.hp - ev.hp);
         v.hp = ev.hp;
         if (ev.t === "buff") v.max += Number(ev.dh ?? 0);
         paint();
       }
-      const node = stage.querySelector(`[data-uid="${ev.tgt}"]`);
-      if (ev.t === "damage") node?.classList.add("hit");
-      if (!fast) await wait(ev.t === "damage" ? 180 / speed() : 80 / speed());
+      const node = stage.querySelector<HTMLElement>(`[data-uid="${ev.tgt}"]`);
+      if (ev.t === "damage") {
+        node?.classList.add("hit");
+        popHit(node, Number(ev.n ?? v?.lost ?? 1));
+      }
+      if (!fast) await beatWait(ev.t === "damage" ? 180 / speed() : 80 / speed());
       node?.classList.remove("hit");
+      if (v) v.lost = 0;
     } else if (ev.t === "death") {
       const v = by.get(String(ev.uid));
       if (v) {
         v.hp = 0;
-        const side = v.side;
-        vis[side] = vis[side].filter((u) => u !== v);
-        by.delete(v.uid);
+        v.dying = true;
         paint();
         if (state.tutorial && !saidDeath) {
           saidDeath = true;
-          const speech = stage.querySelector(".speech");
+          const speech = stage.querySelector("#line");
           if (speech) speech.textContent = "Ink doesn't bleed. It just stops.";
         }
+        await beatWait(420 / (state.skipping ? 4 : speed()));
+        vis[v.side] = vis[v.side].filter((u) => u !== v);
+        by.delete(v.uid);
+        paint();
       }
-      await wait(900 / (state.skipping ? 4 : speed()));
+      await beatWait(480 / (state.skipping ? 4 : speed()));
     } else if (ev.t === "summon") {
       const uid = String(ev.uid);
       const side: "A" | "B" = uid.startsWith("B") ? "B" : "A";
@@ -886,16 +1082,19 @@ async function playback(result: FightResult, _enemy: Piece[]) {
         paint();
       }
     } else if (ev.t === "trigger") {
-      const chain = stage.querySelector("#chain");
-      if (chain) chain.textContent = `${chain.textContent ?? ""} ${String(ev.trig ?? "").replaceAll("_", " ")}`.trim();
       const src = by.get(String(ev.src));
-      if (src && fx) {
+      if (src) {
+        const tag = document.createElement("div");
+        tag.className = "tag";
+        tag.textContent = String(ev.trig ?? "").replaceAll("_", " ");
         const i = vis[src.side].indexOf(src);
-        const x = (COLS[i] ?? 15) + 34;
-        const y1 = src.side === "A" ? 186 : 34;
-        fx.thread(x, y1, x, src.side === "A" ? 34 : 186);
+        tag.style.left = `${COLX(i) - 40}px`;
+        tag.style.top = `${(src.side === "A" ? FOOT_YOU : FOOT_ENEMY) - 120}px`;
+        stage.appendChild(tag);
+        window.setTimeout(() => tag.remove(), 700);
+        if (fx) fx.thread(COLX(i), src.side === "A" ? FOOT_YOU : FOOT_ENEMY, COLX(i), src.side === "A" ? FOOT_ENEMY : FOOT_YOU);
       }
-      if (!fast) await wait(280 / speed());
+      if (!fast) await beatWait(280 / speed());
     } else if (ev.t === "destroy") {
       const v = by.get(String(ev.tgt));
       if (v) v.hp = 0;
