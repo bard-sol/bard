@@ -10,12 +10,23 @@ export default defineConfig({
     baseURL: live ?? 'http://127.0.0.1:5199',
   },
   projects: [
-    { name: 'desktop', use: { viewport: { width: 1440, height: 900 } } },
-    { name: 'phone', use: { viewport: { width: 390, height: 844 } } },
+    { name: 'desktop', testIgnore: /touch\.spec\.ts/, use: { viewport: { width: 1440, height: 900 } } },
+    { name: 'phone', testIgnore: /touch\.spec\.ts/, use: { viewport: { width: 390, height: 844 } } },
     {
       name: 'paced',
+      testIgnore: /touch\.spec\.ts/,
       timeout: 180_000,
       use: { viewport: { width: 1440, height: 900 }, baseURL: live ?? 'http://127.0.0.1:5200' },
+    },
+    {
+      name: 'touch',
+      testMatch: /touch\.spec\.ts/,
+      use: {
+        viewport: { width: 390, height: 844 },
+        hasTouch: true,
+        isMobile: true,
+        baseURL: live ?? 'http://127.0.0.1:5199',
+      },
     },
   ],
   webServer: live

@@ -37,10 +37,13 @@ document.addEventListener(
   true,
 );
 
-interface Drag {
+interface Piece {
   kind: 'card' | 'unit';
   uid: string;
   def: string;
+}
+
+interface Drag extends Piece {
   x: number;
   y: number;
   moved: boolean;
@@ -56,6 +59,7 @@ const ui = {
   sheet: null as string | null,
   preview: null as TradePreview | null,
   drag: null as Drag | null,
+  armed: null as Piece | null,
   legendArmed: false,
   skipAsk: false,
   confirm: null as { text: string; action: GameAction } | null,
@@ -95,6 +99,28 @@ function syncGuide(payload: ClientPayload, beatWasShown: boolean): void {
 
 function noteRivalBeat(): void {
   ui.step14Painted = ui.guide?.step?.id === 14 && Boolean(document.querySelector(RIVAL_BEAT));
+}
+
+function markArmed(): void {
+  if (!ui.armed) return;
+  const sel = `[data-uid="${CSS.escape(ui.armed.uid)}"]`;
+  document.querySelectorAll(`.handrow ${sel}, .row.you ${sel}`).forEach((el) => el.classList.add('armed'));
+}
+
+/** The guide dim is an SVG. Its mask is visual only, so hit-test past it. */
+function boardHit(x: number, y: number): Element | null {
+  for (const el of document.elementsFromPoint(x, y)) {
+    if (!(el instanceof Element)) continue;
+    if (el.closest('.ovl, #ghost, .toast-host, .sheet-host')) continue;
+    return el;
+  }
+  return null;
+}
+
+function gestureTarget(event: PointerEvent): Element | null {
+  const raw = event.target instanceof Element ? event.target : null;
+  if (raw?.closest('.cm-bub, .cm-skip, .skip-box, .confirm-box, .sheet-host, button, a')) return raw;
+  return boardHit(event.clientX, event.clientY) ?? raw;
 }
 
 function publish(): void {
@@ -178,6 +204,7 @@ function paint(): void {
   publish();
   maybeTips();
   noteRivalBeat();
+  markArmed();
 }
 
 function mountSheets(): void {
@@ -191,7 +218,10 @@ function mountSheets(): void {
 
 function trackStep(): void {
   const id = ui.guide?.visible(Boolean(ui.preview))?.id ?? null;
-  if (ui.stepSeen != null && id !== ui.stepSeen) ui.sheet = null;
+  if (ui.stepSeen != null && id !== ui.stepSeen) {
+    ui.sheet = null;
+    ui.armed = null;
+  }
   ui.stepSeen = id;
 }
 
@@ -399,6 +429,7 @@ function offerPlayStepTip(): void {
 async function act(action: GameAction): Promise<void> {
   const payload = ui.payload;
   if (!payload || ui.busy || !acting(payload)) return;
+  ui.armed = null;
   if ((action.type === 'play' || action.type === 'champion' || action.type === 'legend') && payload.view.phase === 'fight') {
     offerPlayStepTip();
     return;
@@ -433,8 +464,10 @@ function unitOf(uid: string): UnitView | null {
 function beginDrag(event: PointerEvent): void {
   if (ui.legendArmed) return;
   if (!ui.payload || !acting(ui.payload) || ui.payload.view.phase === 'mulligan') return;
-  const target = event.target;
-  if (!(target instanceof Element)) return;
+  const raw = event.target instanceof Element ? event.target : null;
+  if (raw?.closest('.cm-bub, .cm-skip, .skip-box, .confirm-box, .sheet-host, .dc-q, button, a')) return;
+  const target = raw && !raw.closest('.ovl') ? raw : boardHit(event.clientX, event.clientY);
+  if (!target) return;
   if (!holeHit(target)) return;
   const card = target.closest('.handrow .dc');
   const unit = target.closest('.row.you .un');
@@ -442,6 +475,13 @@ function beginDrag(event: PointerEvent): void {
   const uid = (card ?? unit)?.getAttribute('data-uid') ?? '';
   const def = (card ?? unit)?.getAttribute('data-def') ?? '';
   ui.drag = { kind: card ? 'card' : 'unit', uid, def, x: event.clientX, y: event.clientY, moved: false, pointer: event.pointerId };
+  if (app instanceof Element) {
+    try {
+      app.setPointerCapture(event.pointerId);
+    } catch {
+      /* The pointer can already be gone on a cancelled touch. */
+    }
+  }
 }
 
 function moveDrag(event: PointerEvent): void {
@@ -449,6 +489,7 @@ function moveDrag(event: PointerEvent): void {
   if (!drag || drag.pointer !== event.pointerId) return;
   if (Math.hypot(event.clientX - drag.x, event.clientY - drag.y) > 8) drag.moved = true;
   if (!drag.moved) return;
+  if (event.cancelable) event.preventDefault();
   let ghost = document.getElementById('ghost');
   if (!ghost) {
     ghost = document.createElement('div');
@@ -459,7 +500,7 @@ function moveDrag(event: PointerEvent): void {
   }
   ghost.style.left = `${event.clientX}px`;
   ghost.style.top = `${event.clientY}px`;
-  const under = document.elementFromPoint(event.clientX, event.clientY);
+  const under = boardHit(event.clientX, event.clientY);
   const foe = under?.closest('.row.rival .un');
   if (drag.kind === 'unit' && foe) {
     const target = foe.getAttribute('data-uid');
@@ -486,13 +527,18 @@ async function endDrag(event: PointerEvent, held = false): Promise<void> {
   document.getElementById('ghost')?.remove();
   if (!drag?.moved || !ui.payload) {
     ui.preview = null;
-    const target = event.target;
-    if (drag && !drag.moved && !held && drag.def && target instanceof Element && holeHit(target)) ui.sheet = drag.def;
+    const target = boardHit(event.clientX, event.clientY);
+    if (drag && !drag.moved && !held && finishTap(target)) return;
+    if (drag && !drag.moved && !held && drag.def && target && holeHit(target)) {
+      ui.sheet = drag.def;
+      armSuppress();
+    }
     paint();
     return;
   }
   armSuppress();
-  const under = document.elementFromPoint(event.clientX, event.clientY);
+  ui.armed = null;
+  const under = boardHit(event.clientX, event.clientY);
   const action = dropAction(drag, under);
   ui.preview = null;
   const blocked = action ? blockedToast(drag, action) : null;
@@ -507,7 +553,7 @@ async function endDrag(event: PointerEvent, held = false): Promise<void> {
   await act(action);
 }
 
-function blockedToast(drag: Drag, action: GameAction): ToastCopy | null {
+function blockedToast(drag: Piece, action: GameAction): ToastCopy | null {
   const payload = ui.payload;
   if (!payload) return null;
   if (action.type === 'attack') {
@@ -534,12 +580,12 @@ function blockedToast(drag: Drag, action: GameAction): ToastCopy | null {
   return null;
 }
 
-function dropAction(drag: Drag, under: Element | null): GameAction | null {
+function dropAction(drag: Piece, under: Element | null): GameAction | null {
   const payload = ui.payload;
   if (!payload || !under) return null;
   const slot = under.closest('.slot');
   const unit = under.closest('.un');
-  const pageAttr = slot?.getAttribute('data-page') ?? unit?.closest('.page')?.getAttribute('data-i');
+  const pageAttr = slot?.getAttribute('data-page') ?? unit?.closest('.page')?.getAttribute('data-i') ?? under.closest('.page')?.getAttribute('data-i');
   const page = pageAttr === '0' || pageAttr === '1' ? Number(pageAttr) as 0 | 1 : null;
   if (drag.kind === 'card') {
     const card = cardOf(drag.uid);
@@ -574,7 +620,7 @@ function dropAction(drag: Drag, under: Element | null): GameAction | null {
   return null;
 }
 
-function explain(drag: Drag, under: Element | null): void {
+function explain(drag: Piece, under: Element | null): void {
   const payload = ui.payload;
   if (!payload) return;
   if (drag.kind === 'card') {
@@ -590,6 +636,65 @@ function explain(drag: Drag, under: Element | null): void {
   const toast = attackToast(payload, unit, defender) ?? (unit ? moveToast(unit, false, 'that Page') : null);
   if (toast) showToast(toast);
   else paint();
+}
+
+/** Steps that ask for a drag also accept tap, then tap the target. Reading steps still open the sheet. */
+function tapPlays(): boolean {
+  if (!ui.payload || !acting(ui.payload)) return false;
+  const guide = ui.guide;
+  if (!guide || guide.done) return true;
+  const id = guide.step?.id;
+  return id === 7 || id === 12 || id === 15 || id === 20 || id === 21 || id === 22;
+}
+
+function finishTap(target: Element | null): boolean {
+  if (!target || !ui.payload || !acting(ui.payload)) return false;
+  if (target.closest('.dc-q')) {
+    const def = target.closest('[data-def]')?.getAttribute('data-def');
+    if (!def) return false;
+    ui.sheet = def;
+    ui.armed = null;
+    paint();
+    armSuppress();
+    return true;
+  }
+  if (target.closest('.cm-bub, .cm-skip, .skip-box, .confirm-box, button, a')) return false;
+  if (restricting() && !holeHit(target)) return false;
+  const card = target.closest('.handrow .dc');
+  const mine = target.closest('.row.you .un');
+  const source = card ?? mine;
+  if (ui.armed && (source || target.closest('.page, .slot, .un'))) {
+    const piece = ui.armed;
+    if (source && source.getAttribute('data-uid') === piece.uid) {
+      ui.sheet = piece.def;
+      ui.armed = null;
+      paint();
+      armSuppress();
+      return true;
+    }
+    const action = dropAction(piece, target);
+    ui.armed = null;
+    armSuppress();
+    if (action) {
+      const blocked = blockedToast(piece, action);
+      if (blocked) showToast(blocked);
+      else void act(action);
+      return true;
+    }
+    if (restricting()) showToast({ title: 'Follow the highlight', body: 'The bubble names the one action that moves the guide on.' });
+    else explain(piece, target);
+    return true;
+  }
+  if (!tapPlays() || !source) return false;
+  ui.armed = {
+    kind: card ? 'card' : 'unit',
+    uid: source.getAttribute('data-uid') ?? '',
+    def: source.getAttribute('data-def') ?? '',
+  };
+  ui.sheet = null;
+  paint();
+  armSuppress();
+  return true;
 }
 
 function armSuppress(): void {
@@ -694,6 +799,7 @@ function onClick(event: MouseEvent): void {
     paint();
     return;
   }
+  if (finishTap(target)) return;
   const card = target.closest('.handrow .dc');
   if (card && ui.payload?.view.phase === 'mulligan') {
     const def = card.getAttribute('data-def');
@@ -813,7 +919,19 @@ function onPointerUp(event: PointerEvent): void {
       showToast({ title: name, body: KEYWORDS[name] ?? name });
     });
   }
-  if (ui.drag) void endDrag(event, held);
+  if (ui.drag) {
+    void endDrag(event, held);
+    return;
+  }
+  if (!held) finishTap(gestureTarget(event));
+}
+
+function onPointerCancel(event: PointerEvent): void {
+  if (!ui.drag || ui.drag.pointer !== event.pointerId) return;
+  ui.drag = null;
+  ui.preview = null;
+  document.getElementById('ghost')?.remove();
+  paint();
 }
 
 function maybeTips(): void {
@@ -842,10 +960,19 @@ function maybeTips(): void {
 }
 
 app.addEventListener('pointerdown', (event) => onPointerDown(event as PointerEvent));
-app.addEventListener('pointermove', (event) => moveDrag(event as PointerEvent));
+app.addEventListener('pointermove', (event) => moveDrag(event as PointerEvent), { passive: false });
 app.addEventListener('pointerover', (event) => onHover(event as PointerEvent));
 app.addEventListener('pointerup', (event) => onPointerUp(event as PointerEvent));
+app.addEventListener('pointercancel', (event) => onPointerCancel(event as PointerEvent));
 app.addEventListener('click', (event) => onClick(event as MouseEvent));
+document.addEventListener(
+  'touchmove',
+  (event) => {
+    if (!ui.drag || !event.cancelable) return;
+    event.preventDefault();
+  },
+  { passive: false, capture: true },
+);
 
 function onHover(event: PointerEvent): void {
   if (window.IS_PHONE() || ui.drag) return;

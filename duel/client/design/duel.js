@@ -237,7 +237,7 @@ const ov = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.
 window.coach = function (o) {
   const app = document.querySelector('.app'), W = app.clientWidth, H = app.clientHeight, pad = o.pad ?? 6;
   const holes = o.holes.flatMap((s) => [...document.querySelectorAll(s)]).map((el) => rectOf(el, app)).map((r) => ({ x: r.x - pad, y: r.y - pad, w: r.w + pad * 2, h: r.h + pad * 2 }));
-  const dim = `<svg class="cm-dim" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}"><defs><mask id="cm"><rect width="${W}" height="${H}" fill="#fff"/>${holes.map((h) => `<rect x="${h.x}" y="${h.y}" width="${h.w}" height="${h.h}" rx="12" fill="#000"/>`).join('')}</mask></defs>
+  const dim = `<svg class="cm-dim" pointer-events="none" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}"><defs><mask id="cm"><rect width="${W}" height="${H}" fill="#fff"/>${holes.map((h) => `<rect x="${h.x}" y="${h.y}" width="${h.w}" height="${h.h}" rx="12" fill="#000"/>`).join('')}</mask></defs>
     <rect width="${W}" height="${H}" fill="rgba(5,7,10,.76)" mask="url(#cm)"/>${holes.map((h) => `<rect class="cm-ring" x="${h.x}" y="${h.y}" width="${h.w}" height="${h.h}" rx="12"/>`).join('')}</svg>`;
   const ovl = document.getElementById('ovl');
   ovl.innerHTML = dim + `<button class="cm-skip">Skip tutorial</button><div class="cm-bub" id="bub"><div class="cm-tx">${o.text}</div>
@@ -271,11 +271,11 @@ window.coach = function (o) {
     if (o.arrowTo) { const t = rectOf(document.querySelector(o.arrowTo), app); x2 = t.x + t.w / 2; y2 = t.y > y1 ? t.y - 3 : t.y + t.h + 3; }
     const mx = (x1 + x2) / 2 + (Math.abs(x2 - x1) < 20 ? 0 : (y2 < y1 ? -1 : 1) * 0), my = (y1 + y2) / 2;
     const cx = (x1 + x2) / 2 + (x2 > x1 ? -1 : 1) * Math.min(40, Math.abs(y2 - y1) / 3);
-    ovl.insertAdjacentHTML('beforeend', `<svg class="cm-arrow" width="${W}" height="${H}"><defs><marker id="cma" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="4.5" markerHeight="4.5" orient="auto"><path d="M0 0L10 5L0 10z" fill="#F1EBDF"/></marker></defs>
+    ovl.insertAdjacentHTML('beforeend', `<svg class="cm-arrow" pointer-events="none" width="${W}" height="${H}"><defs><marker id="cma" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="4.5" markerHeight="4.5" orient="auto"><path d="M0 0L10 5L0 10z" fill="#F1EBDF"/></marker></defs>
       <path d="M${x1} ${y1} Q${cx} ${my} ${x2} ${y2}" marker-end="url(#cma)"/></svg>`);
   }
   if (o.drag) { const f = rectOf(document.querySelector(o.drag[0]), app), t = rectOf(document.querySelector(o.drag[1]), app);
-    ovl.insertAdjacentHTML('beforeend', `<svg class="cm-drag" width="${W}" height="${H}"><path d="M${f.x + f.w / 2} ${f.y + 10} Q${(f.x + t.x) / 2 + 40} ${(f.y + t.y) / 2} ${t.x + t.w / 2} ${t.y + t.h / 2}"/></svg><span class="cm-tap" style="left:${t.x + t.w / 2 - 12}px;top:${t.y + t.h / 2 - 4}px">${icon('tap')}</span>`); }
+    ovl.insertAdjacentHTML('beforeend', `<svg class="cm-drag" pointer-events="none" width="${W}" height="${H}"><path d="M${f.x + f.w / 2} ${f.y + 10} Q${(f.x + t.x) / 2 + 40} ${(f.y + t.y) / 2} ${t.x + t.w / 2} ${t.y + t.h / 2}"/></svg><span class="cm-tap" style="left:${t.x + t.w / 2 - 12}px;top:${t.y + t.h / 2 - 4}px">${icon('tap')}</span>`); }
 };
 // labels: [{sel, t, at:'t'|'b'|'l'|'r'|'tl'..., dx, dy}]
 window.labels = function (list) {
