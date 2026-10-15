@@ -1,0 +1,16 @@
+{
+  "_note": "Prototype tokens. Lilac is Bard-only and is deliberately NOT in this file's unit/UI sets. Metallic gold is revival/champion-only and not used in the prototype at all.",
+  "paper": "#F3EAD7", "paperDark": "#E2D5B9", "paperHi": "#FFFBF0",
+  "ink": "#1B1712", "pencil": "#8A8478", "blot": "#000000",
+  "bardOnly": {"smile": "#C8A8F0", "glow": "#9F7FE6"},
+  "houses": {
+    "pit":         {"name": "The Pit",         "a": "#D9481C", "b": "#4A4E54"},
+    "scriptorium": {"name": "The Scriptorium", "a": "#1E7F72", "b": "#23262E"},
+    "gilt":        {"name": "The Gilt",        "a": "#D4B25A", "b": "#F3ECDA", "_note": "flat matte wash, never metallic"},
+    "tidewrack":   {"name": "The Tidewrack",   "a": "#6FB3DD", "b": "#C9A97E"},
+    "candle":      {"name": "The Candle",      "a": "#8E2F5E", "b": "#8B8580"},
+    "standard":    {"name": "The Standard",    "a": "#2B4F8C", "b": "#A7A9A6"},
+    "tornmargin":  {"name": "The Torn Margin", "a": "#C8862A", "b": "#5E6B34"},
+    "fold":        {"name": "The Fold",        "a": "#E4DCC8", "b": "#5B5D63"}
+  }
+}
