@@ -1,4 +1,3 @@
-import { randomBytes, randomUUID } from 'node:crypto';
 import { actorOf, buildSetup, deckError, IllegalActionError, sameAction } from '../engine/adapter.js';
 import { cardFace } from '../engine/project.js';
 import type { EngineState } from '../engine/state.js';
@@ -14,6 +13,23 @@ export interface CreateMatchInput {
   stance: Stance;
   /** Server tests inject a uint32. The HTTP API never forwards one. */
   seed?: number;
+  /**
+   * Durable Object matches pass the id that was used with `getByName`.
+   * Express leaves this empty and the service draws a UUID.
+   */
+  id?: string;
+}
+
+/** Replaces `setTimeout` where the process may be evicted (Durable Object alarms). */
+export interface ClockRequest {
+  kind: 'human' | 'pilot';
+  token: number;
+  delayMs: number;
+}
+
+export interface TimerBridge {
+  arm(clock: ClockRequest): void;
+  disarm(): void;
 }
 
 export interface ReplayReport {
@@ -31,7 +47,7 @@ type Ok<T> = { ok: true; payload: T };
 type Err = { ok: false; error: 'not_found' | 'illegal_action' | 'opponent_turn' | 'forbidden_view' | 'bad_deck' };
 export type ServiceResult<T> = Ok<T> | Err;
 
-interface PilotPlan {
+export interface PilotPlan {
   expectedGen: number;
   actions: GameAction[];
   next: number;
@@ -47,6 +63,7 @@ export class MatchService {
     private readonly repo: MatchRepository,
     private readonly adapter: EngineAdapter,
     private readonly options: { turnTimeoutMs?: number; aiTurnMs?: number } = {},
+    private readonly clock?: TimerBridge,
   ) {}
 
   get turnTimeoutMs(): number {
@@ -60,8 +77,8 @@ export class MatchService {
   async create(input: CreateMatchInput): Promise<ServiceResult<ClientPayload>> {
     const invalid = validateDecks(input.decks);
     if (invalid) return { ok: false, error: 'bad_deck' };
-    const id = randomUUID();
-    const seed = input.seed != null ? input.seed >>> 0 : randomBytes(4).readUInt32BE(0);
+    const id = isUuid(input.id) ? input.id : crypto.randomUUID();
+    const seed = input.seed != null ? input.seed >>> 0 : randomSeed();
     const setup = buildSetup(input.decks, seed, this.adapter);
     let state: EngineState;
     try {
@@ -193,10 +210,27 @@ export class MatchService {
     return { ok: true, payload };
   }
 
+  /** Restore a pilot plan loaded from Durable Object storage. */
+  installPlan(id: string, plan: PilotPlan | null): void {
+    if (!plan) this.plans.delete(id);
+    else this.plans.set(id, plan);
+  }
+
+  exportPlan(id: string): PilotPlan | null {
+    return this.plans.get(id) ?? null;
+  }
+
+  /** Alarm entry. `token` is the human turn token; pilot steps follow the stored plan. */
+  fireClock(id: string, kind: ClockRequest['kind'], token: number): Promise<void> {
+    if (kind === 'human') return this.onTimeout(id, token);
+    return this.stepPilot(id);
+  }
+
   dispose(): void {
     for (const timer of this.timers.values()) clearTimeout(timer);
     this.timers.clear();
     this.plans.clear();
+    this.clock?.disarm();
   }
 
   private replayPure(match: MatchRecord): { state?: EngineState; mismatch?: string } {
@@ -257,12 +291,9 @@ export class MatchService {
       match.turnToken += 1;
       match.deadline = Date.now() + this.turnTimeoutMs;
       const token = match.turnToken;
-      this.timers.set(
-        match.id,
-        setTimeout(() => {
-          void this.onTimeout(match.id, token);
-        }, this.turnTimeoutMs),
-      );
+      this.armClock(match.id, { kind: 'human', token, delayMs: this.turnTimeoutMs }, () => {
+        void this.onTimeout(match.id, token);
+      });
     }
   }
 
@@ -285,12 +316,9 @@ export class MatchService {
     match.deadline = Date.now() + this.aiTurnMs;
     const step = Math.max(1, Math.round(this.aiTurnMs / actions.length));
     this.plans.set(match.id, { expectedGen: match.generation, actions, next: 0, step });
-    this.timers.set(
-      match.id,
-      setTimeout(() => {
-        void this.stepPilot(match.id);
-      }, step),
-    );
+    this.armClock(match.id, { kind: 'pilot', token: match.turnToken, delayMs: step }, () => {
+      void this.stepPilot(match.id);
+    });
   }
 
   private planPilot(match: MatchRecord): GameAction[] {
@@ -328,12 +356,9 @@ export class MatchService {
         this.syncClock(match);
       } else {
         match.thinking = true;
-        this.timers.set(
-          id,
-          setTimeout(() => {
-            void this.stepPilot(id);
-          }, plan.step),
-        );
+        this.armClock(id, { kind: 'pilot', token: match.turnToken, delayMs: plan.step }, () => {
+          void this.stepPilot(id);
+        });
       }
       await this.repo.put(match);
     });
@@ -373,10 +398,19 @@ export class MatchService {
     return payload;
   }
 
+  private armClock(id: string, clock: ClockRequest, fire: () => void): void {
+    if (this.clock) {
+      this.clock.arm(clock);
+      return;
+    }
+    this.timers.set(id, setTimeout(fire, clock.delayMs));
+  }
+
   private clearTimer(id: string) {
     const timer = this.timers.get(id);
     if (timer) clearTimeout(timer);
     this.timers.delete(id);
+    this.clock?.disarm();
   }
 
   private async lock<T>(id: string, fn: () => Promise<T>): Promise<T> {
@@ -395,6 +429,16 @@ export class MatchService {
       if (this.tails.get(id) === tail) this.tails.delete(id);
     }
   }
+}
+
+function isUuid(value: string | undefined): value is string {
+  return typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+}
+
+function randomSeed(): number {
+  const bytes = new Uint8Array(4);
+  crypto.getRandomValues(bytes);
+  return new DataView(bytes.buffer).getUint32(0, false);
 }
 
 function decksOf(match: MatchRecord): [Deck, Deck] {
