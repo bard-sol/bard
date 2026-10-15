@@ -79,7 +79,15 @@ test('clicks through all 27 guided steps', async ({ page }) => {
   await at(page, 13);
   await page.locator('#endturn').click();
   await at(page, 14);
+  if (test.info().project.name === 'paced') {
+    await expect(page.locator('#endturn')).toBeDisabled();
+    await expect(page.locator('#endturn')).toHaveText("Rival's turn");
+    await expect(page.locator('#legend')).toBeDisabled();
+  }
   await expect(page.locator('.cm-tx')).toContainText('played a unit');
+  if (test.info().project.name === 'paced' && fs.existsSync(SHOTS)) {
+    await page.screenshot({ path: `${SHOTS}/rival-turn-step-14.png` });
+  }
   await at(page, 15);
   await drag(page, page.locator('.page[data-i="0"] .row.you [data-def="c_novice"]'), page.locator('.page[data-i="0"] .row.rival .un'), 16);
   await at(page, 17);
@@ -97,6 +105,10 @@ test('clicks through all 27 guided steps', async ({ page }) => {
   await expect(page.locator('.cm-tx')).toContainText('end the turn');
   await drag(page, page.locator('.page[data-i="0"] .row.you [data-def="c_novice"]'), page.locator('.page[data-i="0"] .row.rival .un'));
   await page.locator('#endturn').click();
+  if (test.info().project.name === 'paced') {
+    await expect(page.locator('#endturn')).toBeDisabled();
+    await expect.poll(() => step(page)).toBe('21');
+  }
   await at(page, 22);
   await drag(page, page.locator('.handrow [data-def="champ_old_wick"]'), page.locator('.page[data-i="0"] .row.you .slot').first());
   await at(page, 23);
@@ -106,10 +118,11 @@ test('clicks through all 27 guided steps', async ({ page }) => {
   await expect(page.locator('.cm-tx')).toContainText('7 turns');
   await next(page);
   await at(page, 25);
-  for (let guard = 0; guard < 12; guard++) {
+  for (let guard = 0; guard < 48; guard++) {
     if ((await step(page)) !== '25') break;
-    await page.locator('#endturn').click();
-    await page.waitForTimeout(450);
+    const end = page.locator('#endturn');
+    if (await end.isEnabled().catch(() => false)) await end.click();
+    await page.waitForTimeout(500);
   }
   await at(page, 26);
   await expect(page.locator('.why')).toContainText('because');

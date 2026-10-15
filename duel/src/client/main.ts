@@ -65,7 +65,37 @@ const ui = {
   keywordReady: false,
   suppressClick: false,
   stepSeen: null as number | null,
+  beat: '',
+  step14Painted: false,
 };
+
+const RIVAL_BEAT = '.page[data-i="0"] .row.rival .un';
+
+function viewBeat(payload: ClientPayload): string {
+  const view = payload.view;
+  const units = view.pages.flatMap((page) => page.slots.flatMap((slot) => [slot.you, slot.foe].flatMap((unit) => (unit ? [`${unit.instanceId}:${unit.health}:${unit.attack}`] : []))));
+  const notes = view.pages.flatMap((page) => page.marginalia.map((note) => `${note.owner}:${note.faceDown}:${note.defId ?? ''}`));
+  const last = view.events.at(-1);
+  return [payload.opponentThinking, view.yourTurn, view.turn.join(','), view.verse.join(','), view.ink, view.events.length, last ? `${last.id}:${last.kind}` : '', units.join('|'), notes.join('|'), view.winner ?? ''].join(';');
+}
+
+function acting(payload: ClientPayload): boolean {
+  return payload.view.yourTurn && !payload.opponentThinking;
+}
+
+/** Step 14 names the rival's new unit. Leave it only after that unit has been painted and the turn has come back. */
+function syncGuide(payload: ClientPayload, beatWasShown: boolean): void {
+  const guide = ui.guide;
+  if (!guide || guide.done) return;
+  const settled = payload.view.yourTurn && !payload.opponentThinking;
+  const holdStep14 = guide.step?.id === 14 && (!beatWasShown || !settled);
+  if (payload.tutorial && !holdStep14) guide.sync(payload);
+  if (payload.view.winner) guide.sync(payload);
+}
+
+function noteRivalBeat(): void {
+  ui.step14Painted = ui.guide?.step?.id === 14 && Boolean(document.querySelector(RIVAL_BEAT));
+}
 
 function publish(): void {
   const step = ui.guide?.visible(Boolean(ui.preview)) ?? null;
@@ -124,7 +154,7 @@ function paint(): void {
     mode: payload.tutorial ? 'Card Duel · Guided first match' : 'Card Duel',
     log: logEntries(payload.view),
     inspect: step?.id === 6 ? 'c_novice' : ui.sheet && ui.sheet !== 'howto' ? ui.sheet : payload.view.hand[0]?.defId,
-    lockText: payload.view.yourTurn ? 'Fighting has started.' : 'Their turn.',
+    lockText: payload.view.yourTurn ? 'Fighting has started.' : "Rival's turn.",
     hint: caption || 'Tap a card to read it',
     drop: false,
     pageHl: model.pageHl,
@@ -147,6 +177,7 @@ function paint(): void {
   mountSheets();
   publish();
   maybeTips();
+  noteRivalBeat();
 }
 
 function mountSheets(): void {
@@ -283,12 +314,15 @@ function holeHit(target: EventTarget | null): boolean {
 }
 
 function adopt(payload: ClientPayload): void {
+  const beatWasShown = ui.step14Painted;
+  const before = ui.guide?.step?.id;
   ui.payload = payload;
-  if (payload.tutorial && ui.guide && !ui.guide.done) ui.guide.sync(payload);
-  if (payload.view.winner && ui.guide && !ui.guide.done) ui.guide.sync(payload);
+  ui.beat = viewBeat(payload);
+  if (before === 14) paint();
+  syncGuide(payload, beatWasShown);
   const step = ui.guide?.visible(false);
   ui.screen = payload.view.winner && (!ui.guide || ui.guide.done || (step && step.id >= 26)) ? 'end' : 'board';
-  paint();
+  if (ui.guide?.step?.id !== before || before !== 14) paint();
 }
 
 async function refresh(): Promise<void> {
@@ -296,7 +330,7 @@ async function refresh(): Promise<void> {
   if (!id || ui.drag || ui.busy) return;
   try {
     const next = await fetchMatch(id);
-    if (next.view.winner !== ui.payload?.view.winner || next.view.turn[0] !== ui.payload?.view.turn[0] || next.view.yourTurn !== ui.payload?.view.yourTurn || next.opponentThinking !== ui.payload?.opponentThinking) {
+    if (viewBeat(next) !== ui.beat) {
       adopt(next);
       return;
     }
@@ -310,7 +344,7 @@ async function refresh(): Promise<void> {
 function pumpGuide(): void {
   if (!ui.guide || !ui.payload?.tutorial || ui.guide.done || ui.drag) return;
   const before = ui.guide.step?.id;
-  ui.guide.sync(ui.payload);
+  syncGuide(ui.payload, ui.step14Painted);
   if (ui.guide.step?.id !== before) paint();
   else publish();
 }
@@ -364,7 +398,7 @@ function offerPlayStepTip(): void {
 
 async function act(action: GameAction): Promise<void> {
   const payload = ui.payload;
-  if (!payload || ui.busy) return;
+  if (!payload || ui.busy || !acting(payload)) return;
   if ((action.type === 'play' || action.type === 'champion' || action.type === 'legend') && payload.view.phase === 'fight') {
     offerPlayStepTip();
     return;
@@ -398,7 +432,7 @@ function unitOf(uid: string): UnitView | null {
 
 function beginDrag(event: PointerEvent): void {
   if (ui.legendArmed) return;
-  if (!ui.payload?.view.yourTurn || ui.payload.view.phase === 'mulligan') return;
+  if (!ui.payload || !acting(ui.payload) || ui.payload.view.phase === 'mulligan') return;
   const target = event.target;
   if (!(target instanceof Element)) return;
   if (!holeHit(target)) return;
@@ -683,6 +717,7 @@ function onClick(event: MouseEvent): void {
     return;
   }
   if (target.closest('#legend')) {
+    if (ui.payload && !acting(ui.payload)) return;
     const toast = ui.payload ? legendToast(ui.payload) : null;
     if (toast) {
       showToast(toast);
@@ -721,7 +756,7 @@ function onClick(event: MouseEvent): void {
 
 async function endTurn(): Promise<void> {
   const payload = ui.payload;
-  if (!payload) return;
+  if (!payload || !acting(payload)) return;
   if (payload.view.phase === 'mulligan') {
     const idx = Array.from(document.querySelectorAll('.handrow .dc.sel')).flatMap((card) => {
       const uid = card.getAttribute('data-uid');

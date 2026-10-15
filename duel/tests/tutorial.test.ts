@@ -194,6 +194,9 @@ describe('bubble-guide v1.2', () => {
     expect(conquer?.text).toContain('2');
     expect(conquer?.pageName).toBe('Lanternfall');
     expect(conquer?.turn).toBe(4);
+    const waiting = guide.step;
+    expect(waiting?.id).toBe(21);
+    expect(guideReady(waiting!, { ...payload, opponentThinking: true, view: { ...payload.view, yourTurn: false } }, { pageRead: false, keywordHeld: false })).toBe(false);
     guide.sync(payload);
     note();
     expect(guide.step?.id).toBe(22);

@@ -219,7 +219,7 @@ export function guideReady(step: GuideStep, payload: ClientPayload, local: { pag
       return view.turn[0] > after || !view.yourTurn;
     }
     case 'rival':
-      if (step.id === 14) return view.yourTurn && view.turn[0] >= 3 && foeOnLeft(view);
+      if (step.id === 14) return view.yourTurn && !payload.opponentThinking && view.turn[0] >= 3 && foeOnLeft(view);
       return view.yourTurn && view.turn[0] >= 2;
     case 'two-cost':
       return unitOnBoard(view, 'n_doodle', 'you');
@@ -230,7 +230,7 @@ export function guideReady(step: GuideStep, payload: ClientPayload, local: { pag
       return view.youLegend.powerUsed && doodle != null && doodle.health >= doodle.maxHealth;
     }
     case 'conquer':
-      return hasEvent(view, 'conquer', view.you);
+      return hasEvent(view, 'conquer', view.you) && view.yourTurn && !payload.opponentThinking;
     case 'hold':
       return hasEvent(view, 'hold', view.you);
     case 'inkwork': {

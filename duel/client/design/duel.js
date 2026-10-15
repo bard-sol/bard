@@ -140,10 +140,10 @@ window.inkHTML = (n, max, o = {}) => `<div class="inkm ${o.cls || ''}" id="ink">
 window.legendBtn = function (house, state = 'ready', o = {}) {
   const L = D13.legends[house], art = C(L.champion).art;
   const sub = { ready: L.text, used: 'Used this turn. Back next turn.', locked: o.lockText || 'Fighting has started. Back next turn.', noink: L.text }[state];
-  return `<button class="lgd ${state} ${o.cls || ''}" id="${o.id || 'legend'}" style="${hv(house)}"><span class="lg-face"><img src="${art}" alt=""><span class="lg-cost ${state === 'noink' ? 'short' : ''}">${icon('ink_f')}<b>${L.cost}</b></span>${state === 'used' ? `<span class="lg-badge">${icon('check')}</span>` : state === 'locked' ? `<span class="lg-badge">${icon('lock')}</span>` : ''}</span>
+  return `<button class="lgd ${state} ${o.cls || ''}" id="${o.id || 'legend'}"${o.disabled ? ' disabled' : ''} style="${hv(house)}"><span class="lg-face"><img src="${art}" alt=""><span class="lg-cost ${state === 'noink' ? 'short' : ''}">${icon('ink_f')}<b>${L.cost}</b></span>${state === 'used' ? `<span class="lg-badge">${icon('check')}</span>` : state === 'locked' ? `<span class="lg-badge">${icon('lock')}</span>` : ''}</span>
     <span class="lg-txt"><span class="lg-n">${L.name}<span class="lg-pw">Power</span></span><span class="lg-d">${sub}</span></span></button>`;
 };
-window.turnChip = (t, o = {}) => `<div class="turn ${o.cls || ''}" id="turn"><span class="t-who ${o.rival ? 'rv' : ''}">${o.rival ? 'Their turn' : 'Your turn'}</span><b>Turn ${t}<small> / 7</small></b>${o.step ? `<span class="t-step">${o.step}</span>` : ''}</div>`;
+window.turnChip = (t, o = {}) => `<div class="turn ${o.cls || ''}" id="turn"><span class="t-who ${o.rival ? 'rv' : ''}">${o.rival ? "Rival's turn" : 'Your turn'}</span><b>Turn ${t}<small> / 7</small></b>${o.step ? `<span class="t-step">${o.step}</span>` : ''}</div>`;
 window.rivalBar = function (S, o = {}) {
   const R = S.rival, L = D13.legends[R.house];
   return `<div class="rbar" style="${hv(R.house)}"><span class="r-av"><img src="${C(L.champion).art}" alt=""></span>
@@ -152,9 +152,10 @@ window.rivalBar = function (S, o = {}) {
 };
 window.youBar = function (S, o = {}) {
   const Y = S.you;
+  const rival = S.active === 'rival';
   return `<div class="ybar" style="${hv(Y.house)}"><div class="y-res">${verseHTML(Y.verse, { id: 'yverse', delta: o.vdelta, pips: !IS_PHONE() })}${inkHTML(Y.ink, Y.maxInk)}</div>
-    ${legendBtn(Y.house, Y.legend, { lockText: o.lockText })}
-    <button class="btn primary endt ${o.endCls || ''}" id="endturn">${S.active === 'rival' ? 'Their turn' : 'End turn'}</button></div>`;
+    ${legendBtn(Y.house, Y.legend, { lockText: o.lockText, disabled: rival })}
+    <button class="btn primary endt ${rival ? 'wait' : ''} ${o.endCls || ''}" id="endturn"${rival ? ' disabled' : ''}>${rival ? "Rival's turn" : 'End turn'}</button></div>`;
 };
 window.handHTML = function (S, o = {}) {
   const sz = IS_PHONE() ? 'hand-s' : 'hand';
