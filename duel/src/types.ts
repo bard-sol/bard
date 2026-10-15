@@ -103,6 +103,16 @@ export interface PublicEvent {
   kind: 'hold' | 'conquer' | 'play' | 'attack' | 'power' | 'trap' | 'draw' | 'mulligan' | 'win' | 'move';
   text: string;
   player: PlayerId | null;
+  /** Public page name for a hold, conquer, or board action. */
+  pageName?: string;
+  /** Turn number of the player who scored, when this is a hold or conquer. */
+  turn?: number;
+  /** Verses gained, when this is a hold or conquer. */
+  amount?: number;
+  /** Page index of the action to highlight. Omitted for face-down notes' card ids. */
+  focusPage?: 0 | 1;
+  /** Face-up card id to highlight. Never a face-down Marginalia. */
+  focusDef?: string;
 }
 
 /**

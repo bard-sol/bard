@@ -4,7 +4,7 @@ export {};
 declare global {
   interface Window {
     D13: {
-      cards: Record<string, { art: string; name: string; mini?: string; cost: number; type: string; house: string }>;
+      cards: Record<string, { art: string; name: string; mini?: string; cost: number; type: string; house: string; text?: string; atk?: number; hp?: number; kw?: string[] | string }>;
       pages: Array<{ id: string; name: string; text: string }>;
       legends: Record<string, { name: string; champion: string; text: string; cost: number }>;
     };
@@ -15,6 +15,7 @@ declare global {
     bardSays: (text: string, options?: Record<string, unknown>) => string;
     IS_PHONE: () => boolean;
     KW13: Record<string, { name: string; short: string; long: string }>;
+    kwRow: (key: string, options?: { long?: boolean }) => string;
     KW_ORDER: string[];
     KWI: Record<string, string>;
     __duel?: unknown;

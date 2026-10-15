@@ -1,5 +1,15 @@
 .dc-art img { object-position: 50% 22%; }
-.toast-host { position: absolute; z-index: 70; left: 16px; right: 16px; bottom: 128px; display: grid; gap: 8px; pointer-events: none; }
+#help-d, #settings { position: relative; z-index: 70; }
+.sheet-host { position: absolute; inset: 0; z-index: 80; pointer-events: none; }
+.sheet-host .scrim, .sheet-host .sheet { pointer-events: auto; }
+.page.hl { box-shadow: inset 0 0 0 2px var(--text-1); }
+.kwdefs { display: grid; gap: 10px; margin-top: 14px; }
+.kwdef b { display: block; font: 650 13px/1.2 var(--font-ui); color: var(--text-1); }
+.kwdef p { margin: 4px 0 0; font: 450 13px/1.4 var(--font-ui); color: var(--text-2); }
+.score-table { width: 100%; border-collapse: collapse; }
+.score-table td { padding: 6px 8px 6px 0; vertical-align: top; font: 450 13px/1.35 var(--font-ui); color: var(--text-2); }
+.score-table td:first-child { color: var(--text-1); font-weight: 650; white-space: nowrap; }
+.toast-host { position: absolute; z-index: 90; left: 16px; right: 16px; bottom: 128px; display: grid; gap: 8px; pointer-events: none; }
 .toast-host .toast { pointer-events: none; }
 .ghost { position: fixed; z-index: 80; pointer-events: none; width: 120px; transform: translate(-40%, -30%); }
 .ghost .dc, .ghost .un { pointer-events: none; }

@@ -87,6 +87,7 @@ export function stateHash(state: EngineState): string;
 export function fnv(value: string): string;
 export function clientView(state: EngineState, player: number): ClientProjection;
 export function clientLog(state: EngineState, player: number): LogProjection[];
+export function holdValue(state: EngineState, player: number, page: number): number;
 export function makeSmart(options?: { stance?: string; slip?: number; trapAware?: boolean; salt?: number }): (state: EngineState, me: number) => EngineAction;
 
 export interface EngineAction {

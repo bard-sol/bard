@@ -208,7 +208,8 @@ FIX.mainLog = [
 // ───────────────────────── screen assembly ─────────────────────────
 window.boardScreen = function (S, o = {}) {
   const pp = S.pages.map((p, i) => pagePanel(p, i, { open: o.open === i, drop: o.drop, hl: o.pageHl?.[i], status: o.status?.[i] }));
-  const ribbon = `<div class="ribbon m-only">${o.ticker ? `<div class="ticker"><span class="now">Now</span>${o.ticker}</div>` : turnChip(S.turn, { rival: S.active === 'rival', step: S.step })}<button class="ib sm" id="logbtn" aria-label="Move log">${icon('log')}<span>Log</span>${o.logDot ? '<i class="dotn"></i>' : ''}</button></div>`;
+  const ticker = o.ticker ? `<div class="ticker"><span class="now">Now</span>${o.ticker}</div>` : '';
+  const ribbon = `<div class="ribbon m-only">${turnChip(S.turn, { rival: S.active === 'rival', step: S.step })}${ticker}<button class="ib sm" id="logbtn" aria-label="Move log">${icon('log')}<span>Log</span>${o.logDot ? '<i class="dotn"></i>' : ''}</button></div>`;
   const pages = pp[0] + ribbon + pp[1];
   const desk = !IS_PHONE();
   return `<div class="app duel ${o.cls || ''}" style="--mine:var(--h-${S.you.house}-a);--rival:var(--h-${S.rival.house}-a)">

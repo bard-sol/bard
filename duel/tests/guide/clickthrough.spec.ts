@@ -1,4 +1,12 @@
+import fs from 'node:fs';
 import { expect, test, type Locator, type Page } from '@playwright/test';
+
+const SHOTS = '/opt/cursor/artifacts';
+
+async function shot(page: Page, name: string): Promise<void> {
+  if (test.info().project.name !== 'desktop' || !fs.existsSync(SHOTS)) return;
+  await page.screenshot({ path: `${SHOTS}/${name}.png` });
+}
 
 async function step(page: Page): Promise<string | undefined> {
   return page.evaluate(() => document.documentElement.dataset.guideStep);
@@ -42,6 +50,8 @@ test('clicks through all 27 guided steps', async ({ page }) => {
   await page.goto('/');
   await at(page, 1);
   await expect(page.locator('.cm-tx')).toContainText('Welcome to the Book');
+  await expect(page.locator('#help, #help-d').first()).toBeVisible();
+  await shot(page, 'tutorial-step');
   await next(page);
   await at(page, 2);
   await expect(page.locator('.cm-tx')).toContainText('Old Wick');
@@ -54,8 +64,7 @@ test('clicks through all 27 guided steps', async ({ page }) => {
   await expect(page.locator('#ink')).toBeVisible();
   await next(page);
   await at(page, 6);
-  await page.locator('.handrow [data-def="c_novice"]').click();
-  await page.locator('[data-keyword="Kindle"]').click({ delay: 700 });
+  await page.locator('#lift [data-keyword="Kindle"], #inspect [data-keyword="Kindle"]').click({ delay: 700 });
   await at(page, 7);
   await drag(page, page.locator('.handrow [data-def="c_novice"]'), page.locator('.page[data-i="0"] .row.you .slot').first());
   await at(page, 8);
@@ -97,13 +106,17 @@ test('clicks through all 27 guided steps', async ({ page }) => {
   await expect(page.locator('.cm-tx')).toContainText('7 turns');
   await next(page);
   await at(page, 25);
-  for (let guard = 0; guard < 8; guard++) {
+  for (let guard = 0; guard < 12; guard++) {
     if ((await step(page)) !== '25') break;
     await page.locator('#endturn').click();
-    await page.waitForTimeout(200);
+    await page.waitForTimeout(450);
   }
   await at(page, 26);
   await expect(page.locator('.why')).toContainText('because');
+  await expect(page.locator('.score-table')).toContainText('Lanternfall');
+  await expect(page.locator('.score-table')).toContainText('Port Foxing');
+  await expect(page.locator('.swing').first()).toContainText('Swing: turn');
+  await shot(page, 'end-screen');
   await next(page);
   await at(page, 27);
   await expect(page.locator('.cm-tx')).toContainText('Play');

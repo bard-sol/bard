@@ -111,6 +111,10 @@ describe('bubble-guide v1.2', () => {
     expect(payload.view.turn[0]).toBe(2);
     expect(payload.view.verse[0]).toBe(1);
     expect(unit(payload, 't_deckhand', 'foe', 1)).toBeTruthy();
+    const played = payload.view.events.find((event) => event.focusDef === 't_deckhand' && event.player === 1);
+    expect(played?.text).toContain('Port Foxing');
+    expect(played?.focusPage).toBe(1);
+    expect(payload.view.events.find((event) => event.kind === 'hold' && event.player === 0)?.pageName).toBe('Lanternfall');
     guide.next(payload);
     note();
     expect(guide.step?.id).toBe(12);
@@ -188,6 +192,8 @@ describe('bubble-guide v1.2', () => {
     payload = await act(match, payload.matchId, { type: 'end' });
     const conquer = payload.view.events.find((event) => event.kind === 'conquer' && event.player === 0);
     expect(conquer?.text).toContain('2');
+    expect(conquer?.pageName).toBe('Lanternfall');
+    expect(conquer?.turn).toBe(4);
     guide.sync(payload);
     note();
     expect(guide.step?.id).toBe(22);

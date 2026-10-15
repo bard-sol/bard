@@ -20,6 +20,7 @@ export {
   clientLog,
   cardById,
   validateDeck,
+  holdValue,
 } from './v1.3/engine.mjs';
 export { PILOT_VERSION, makeSmart, AI_SLIP } from './v1.3/pilots.mjs';
 

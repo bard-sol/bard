@@ -1,5 +1,6 @@
+import { KEYWORDS } from './guide.js';
 import type { GuideStep } from './guide.js';
-import type { ClientPayload, PlayerView, TradePreview, UnitView } from '../types.js';
+import type { ClientPayload, PlayerId, PlayerView, PublicEvent, TradePreview, UnitView } from '../types.js';
 
 export interface CoachOpts {
   holes: string[];
@@ -69,7 +70,7 @@ export function coachOpts(step: GuideStep, board: { foeLeft: boolean }): CoachOp
     case 24:
       return { holes: ['#turn'], point: '#turn', next: true };
     case 25:
-      return { holes: ['.center'], point: '.pages', next: false, action: 'Finish the match' };
+      return { holes: ['.center', '#endturn'], point: '#endturn', next: false, action: 'Finish the match' };
     case 26:
       return { holes: ['.why', '.end-in'], point: '.why', next: true };
     case 27:
@@ -83,11 +84,37 @@ export function pageKey(name: string): string {
   return window.D13.pages.find((page) => page.name === name)?.id ?? 'lanternfall';
 }
 
+export function boardFocus(view: PlayerView): PublicEvent | null {
+  for (let index = view.events.length - 1; index >= 0; index--) {
+    const event = view.events[index];
+    if (!event || event.player == null || event.player === view.you) continue;
+    if (event.focusPage == null && !event.focusDef) continue;
+    if (event.kind !== 'play' && event.kind !== 'attack' && event.kind !== 'move' && event.kind !== 'trap') continue;
+    return event;
+  }
+  return null;
+}
+
+export function keywordKeys(defId: string): string[] {
+  const raw = window.D13.cards[defId]?.kw;
+  if (Array.isArray(raw)) return raw.filter((key) => typeof key === 'string');
+  if (typeof raw === 'string' && raw.length > 0) return [raw];
+  return [];
+}
+
+export function keywordText(name: string): string {
+  return KEYWORDS[name] ?? '';
+}
+
 export function boardModel(payload: ClientPayload, open: number | null) {
   const view = payload.view;
   const you = view.you;
+  const focus = boardFocus(view);
   return {
     open,
+    focus,
+    pageHl: view.pages.map((_, index) => (focus?.focusPage === index ? 'hl' : '')),
+    ticker: focus?.text ?? '',
     state: {
       turn: view.yourTurn ? Math.max(1, view.turn[0]) : Math.max(1, view.turn[1] || view.turn[0]),
       active: view.yourTurn ? 'you' : 'rival',
@@ -110,8 +137,8 @@ export function boardModel(payload: ClientPayload, open: number | null) {
       },
       pages: view.pages.map((page) => ({
         id: pageKey(page.name),
-        you: page.slots.flatMap((slot) => (slot.you ? [token(slot.you, view.yourTurn)] : [])),
-        rival: page.slots.flatMap((slot) => (slot.foe ? [token(slot.foe, false)] : [])),
+        you: page.slots.flatMap((slot) => (slot.you ? [token(slot.you, view.yourTurn, highlight(slot.you, page.index, focus))] : [])),
+        rival: page.slots.flatMap((slot) => (slot.foe ? [token(slot.foe, false, highlight(slot.foe, page.index, focus))] : [])),
         youNote: page.marginalia.find((note) => note.owner === you && note.known)?.defId ?? null,
         rivalNote: page.marginalia.some((note) => note.owner !== you),
       })),
@@ -136,7 +163,14 @@ function handEntries(view: PlayerView) {
   return cards;
 }
 
-function token(unit: UnitView, yourTurn: boolean) {
+function highlight(unit: UnitView, page: 0 | 1, focus: PublicEvent | null): string {
+  if (!focus || focus.focusPage !== page) return '';
+  if (focus.focusDef && focus.focusDef === unit.defId) return 'hl-new';
+  if (focus.kind === 'attack') return 'hl-atk';
+  return '';
+}
+
+function token(unit: UnitView, yourTurn: boolean, hl: string) {
   return {
     id: unit.defId,
     uid: unit.instanceId,
@@ -147,23 +181,30 @@ function token(unit: UnitView, yourTurn: boolean) {
     ready: yourTurn && unit.owner === 0 && !unit.exhausted,
     ward: unit.warded,
     hidden: unit.keywords.includes('Hidden'),
+    hl,
   };
 }
 
 export function logEntries(view: PlayerView) {
-  const rows = view.events.slice(-12).map((event) => ({
+  const recent = view.events.slice(-12);
+  const focus = boardFocus(view);
+  let current = recent.length - 1;
+  if (focus) {
+    for (let index = recent.length - 1; index >= 0; index--) {
+      if (recent[index]?.id === focus.id) {
+        current = index;
+        break;
+      }
+    }
+  }
+  const rows = recent.map((event, index) => ({
     t: event.text,
     i: event.kind === 'attack' ? 'atk' : event.kind === 'trap' ? 't_marginalia' : event.kind === 'hold' || event.kind === 'conquer' ? 'verse' : event.kind === 'move' ? 'move' : event.kind === 'power' ? 'legend' : 'dot',
     who: event.player === view.you ? 'you' : '',
-    done: true,
-    cur: false,
+    done: index !== current,
+    cur: index === current,
   }));
-  if (rows.length === 0) rows.push({ t: 'The page is open.', i: 'dot', who: 'you', done: true, cur: false });
-  const last = rows[rows.length - 1];
-  if (last) {
-    last.cur = true;
-    last.done = false;
-  }
+  if (rows.length === 0) rows.push({ t: 'The page is open.', i: 'dot', who: 'you', done: false, cur: true });
   return rows;
 }
 
@@ -197,8 +238,8 @@ export function endHtml(view: PlayerView, tutorial: boolean): string {
     <div class="end-in">
       <div class="end-hd"><span class="eyebrow">${win ? 'Victory' : 'Defeat'}</span><h1>${win ? 'Won' : 'Lost'}</h1>
         <div class="score"><span class="sc you">You <b>${view.verse[0]}</b></span><span class="dash">–</span><span class="sc them"><b>${view.verse[1]}</b> ${foe}</span></div></div>
-      <div class="panel why"><span class="eyebrow">${win ? 'You won because…' : 'You lost because…'}</span><p>${why}</p></div>
-      <div class="panel"><span class="eyebrow">Key moments</span><ol class="mom">${moments(view)}</ol></div>
+      <div class="panel why"><span class="eyebrow">${win ? 'You won because…' : 'You lost because…'}</span><p>${why}</p>${swingLine(view)}</div>
+      <div class="panel"><span class="eyebrow">Verses by Page</span>${scoreTable(view)}</div>
       <div class="panel war"><span class="eyebrow">${war}</span></div>
       <div class="end-acts"><button class="btn secondary" id="review-log">Review log</button><button class="btn secondary" id="rematch">Rematch</button><button class="btn primary" id="play-real">Play for real</button></div>
     </div>
@@ -206,12 +247,72 @@ export function endHtml(view: PlayerView, tutorial: boolean): string {
   </div>`;
 }
 
-function moments(view: PlayerView): string {
-  return view.events
-    .filter((event) => event.kind === 'hold' || event.kind === 'conquer' || event.kind === 'win')
-    .slice(-6)
-    .map((event) => `<li><span class="s">${event.text}</span></li>`)
+function scoreTable(view: PlayerView): string {
+  const rows = view.events.filter((event) => (event.kind === 'hold' || event.kind === 'conquer') && event.pageName);
+  if (rows.length === 0) {
+    return `<ol class="mom">${view.events
+      .filter((event) => event.kind === 'hold' || event.kind === 'conquer' || event.kind === 'win')
+      .slice(-6)
+      .map((event) => `<li><span class="s">${event.text}</span></li>`)
+      .join('')}</ol>`;
+  }
+  const pages: string[] = [];
+  for (const event of rows) {
+    if (event.pageName && !pages.includes(event.pageName)) pages.push(event.pageName);
+  }
+  const body = pages
+    .map((page) => {
+      const bits = rows
+        .filter((event) => event.pageName === page)
+        .map((event) => `${sideName(view, event.player)} ${event.kind === 'hold' ? 'hold' : 'conquer'} +${event.amount ?? ''} (turn ${event.turn ?? ''})`);
+      return `<tr><td>${page}</td><td>${bits.join(' · ')}</td></tr>`;
+    })
     .join('');
+  return `<table class="score-table">${body}</table>${openingLine(view)}`;
+}
+
+function sideName(view: PlayerView, player: PlayerId | null): string {
+  if (player === view.you) return 'You';
+  return view.foeLegend.name;
+}
+
+function scored(view: PlayerView, player: PlayerId): number {
+  return view.events
+    .filter((event) => (event.kind === 'hold' || event.kind === 'conquer') && event.player === player)
+    .reduce((sum, event) => sum + (event.amount ?? 0), 0);
+}
+
+function openingLine(view: PlayerView): string {
+  const foe: PlayerId = view.you === 0 ? 1 : 0;
+  const parts: string[] = [];
+  const yours = view.verse[0] - scored(view, view.you);
+  const theirs = view.verse[1] - scored(view, foe);
+  if (yours > 0) parts.push(`You started on +${yours} Verse for going second.`);
+  if (theirs > 0) parts.push(`${view.foeLegend.name} started on +${theirs} Verse for going second.`);
+  return parts.length ? `<p class="swing">${parts.join(' ')}</p>` : '';
+}
+
+function swingLine(view: PlayerView): string {
+  const winner = view.winner;
+  if (winner == null) return '';
+  const gains = new Map<number, number>();
+  for (const event of view.events) {
+    if (event.player !== winner || event.turn == null) continue;
+    if (event.kind !== 'hold' && event.kind !== 'conquer') continue;
+    gains.set(event.turn, (gains.get(event.turn) ?? 0) + (event.amount ?? 0));
+  }
+  let turn = 0;
+  let best = 0;
+  for (const [index, gain] of gains) {
+    if (gain > best || (gain === best && index > turn)) {
+      best = gain;
+      turn = index;
+    }
+  }
+  if (best === 0) return '';
+  const who = winner === view.you ? 'you' : view.foeLegend.name;
+  const label = best === 1 ? 'Verse' : 'Verses';
+  return `<p class="swing">Swing: turn ${turn}, ${who} gained ${best} ${label}.</p>`;
 }
 
 export function howtoHtml(): string {
@@ -229,8 +330,19 @@ export function howtoHtml(): string {
 }
 
 export function cardSheet(defId: string): string {
+  const card = window.D13.cards[defId];
   const face = window.cardFace(defId, { size: 'inspect' });
-  return `<div class="scrim"></div><div class="sheet" id="card-sheet"><div class="grab"></div><div class="sh-hd"><h3>Card</h3><button class="sh-x" id="sheet-x" aria-label="Close">${window.icon('close')}</button></div><div class="sh-bd">${face}</div></div>`;
+  const defs = keywordKeys(defId)
+    .map((key) => {
+      const row = window.KW13[key];
+      const name = row?.name ?? key;
+      const text = keywordText(name) || row?.long || '';
+      if (!text) return '';
+      return `<div class="kwdef"><b>${name}</b><p>${text}</p></div>`;
+    })
+    .join('');
+  const title = card?.name ?? 'Card';
+  return `<div class="scrim"></div><div class="sheet" id="card-sheet"><div class="grab"></div><div class="sh-hd"><h3>${title}</h3><button class="sh-x" id="sheet-x" aria-label="Close">${window.icon('close')}</button></div><div class="sh-bd">${face}<div class="kwdefs">${defs}</div></div></div>`;
 }
 
 export function toastHtml(title: string, body: string): string {

@@ -2,12 +2,18 @@ import type { ClientPayload, GameAction, Stance, TradePreview, UnitView } from '
 import { createMatch, fetchMatch, previewAttack, sendAction } from './api.js';
 import { GuideController, logMetric, markTip, noteRealMatch, setTutorialFlag, tipSeen, tipsEnabled, tutorialFlag } from './guide.js';
 import { INFO_TOASTS, PLAY_STEP_OVER, TIP_COPY, attackToast, endTurnWarning, legendToast, moveToast, playToast, toastCopy, type ToastCopy } from './illegal.js';
-import { boardModel, cardSheet, coachOpts, endHtml, foeOnLeft, howtoHtml, logEntries, openingCaption, toastHtml, tradeHtml } from './present.js';
+import { KEYWORDS } from './guide.js';
+import { boardModel, cardSheet, coachOpts, endHtml, foeOnLeft, howtoHtml, keywordKeys, logEntries, openingCaption, toastHtml, tradeHtml } from './present.js';
 
 const app = document.querySelector('#app');
 if (!app) throw new Error('missing #app');
 
 window.IS_PHONE = () => window.innerWidth <= 600;
+
+for (const row of Object.values(window.KW13)) {
+  const spec = KEYWORDS[row.name];
+  if (spec) row.long = spec;
+}
 
 for (const [id, card] of Object.entries(window.D13.cards)) card.art = `/art/${id}.png`;
 
@@ -58,6 +64,7 @@ const ui = {
   holdTimer: 0,
   keywordReady: false,
   suppressClick: false,
+  stepSeen: null as number | null,
 };
 
 function publish(): void {
@@ -84,6 +91,7 @@ function restricting(): boolean {
 }
 
 function paint(): void {
+  trackStep();
   if (ui.drag) {
     paintCoach();
     return;
@@ -105,6 +113,7 @@ function paint(): void {
     ui.screen = 'end';
     root.innerHTML = endHtml(payload.view, payload.tutorial) + toastHost();
     paintCoach();
+    mountSheets();
     publish();
     return;
   }
@@ -118,17 +127,13 @@ function paint(): void {
     lockText: payload.view.yourTurn ? 'Fighting has started.' : 'Their turn.',
     hint: caption || 'Tap a card to read it',
     drop: false,
+    pageHl: model.pageHl,
+    ticker: model.ticker,
   });
   root.innerHTML = html;
   if (caption) {
     document.querySelector('.hand-hd')?.insertAdjacentHTML('afterbegin', `<p class="opening" id="opening">${caption}</p>`);
   }
-  if (restricting()) {
-    document.querySelector('#help')?.remove();
-    document.querySelector('#help-d')?.remove();
-  }
-  if (ui.sheet === 'howto') document.getElementById('ovl')?.insertAdjacentHTML('beforeend', howtoHtml());
-  else if (ui.sheet && ui.sheet !== 'howto') document.getElementById('ovl')?.insertAdjacentHTML('beforeend', cardSheet(ui.sheet));
   const host = document.createElement('div');
   host.className = 'toast-host';
   host.innerHTML = ui.toasts.map((toast) => toastHtml(toast.title, toast.body)).join('');
@@ -139,8 +144,24 @@ function paint(): void {
     document.querySelector('.app')?.insertAdjacentHTML('beforeend', `<div class="lift" id="lift">${window.cardFace('c_novice', { size: 'inspect' })}</div>`);
   }
   paintCoach();
+  mountSheets();
   publish();
   maybeTips();
+}
+
+function mountSheets(): void {
+  document.querySelector('.sheet-host')?.remove();
+  if (!ui.sheet) return;
+  const host = document.createElement('div');
+  host.className = 'sheet-host';
+  host.innerHTML = ui.sheet === 'howto' ? howtoHtml() : cardSheet(ui.sheet);
+  document.querySelector('.app')?.append(host);
+}
+
+function trackStep(): void {
+  const id = ui.guide?.visible(Boolean(ui.preview))?.id ?? null;
+  if (ui.stepSeen != null && id !== ui.stepSeen) ui.sheet = null;
+  ui.stepSeen = id;
 }
 
 function toastHost(): string {
@@ -256,7 +277,7 @@ function holeHit(target: EventTarget | null): boolean {
   const step = ui.guide?.visible(Boolean(ui.preview));
   if (!step || step.id === 25 || ui.guide?.done) return true;
   if (!(target instanceof Element)) return false;
-  if (target.closest('.cm-next, .cm-skip, .skip-yes, .skip-no, #confirm-yes, #confirm-no, #play-real, .sh-x, #sheet-x')) return true;
+  if (target.closest('.cm-next, .cm-skip, .skip-yes, .skip-no, #confirm-yes, #confirm-no, #play-real, .sh-x, #sheet-x, #help, #help-d, #howto-close')) return true;
   const opts = coachOpts(step, { foeLeft: ui.payload ? foeOnLeft(ui.payload.view) : false });
   return opts.holes.some((sel) => target.closest(sel));
 }
@@ -425,25 +446,58 @@ async function loadPreview(uid: number, target: number): Promise<void> {
   }
 }
 
-async function endDrag(event: PointerEvent): Promise<void> {
+async function endDrag(event: PointerEvent, held = false): Promise<void> {
   const drag = ui.drag;
   ui.drag = null;
   document.getElementById('ghost')?.remove();
   if (!drag?.moved || !ui.payload) {
     ui.preview = null;
+    const target = event.target;
+    if (drag && !drag.moved && !held && drag.def && target instanceof Element && holeHit(target)) ui.sheet = drag.def;
     paint();
     return;
   }
-  ui.suppressClick = true;
+  armSuppress();
   const under = document.elementFromPoint(event.clientX, event.clientY);
   const action = dropAction(drag, under);
   ui.preview = null;
+  const blocked = action ? blockedToast(drag, action) : null;
+  if (blocked) {
+    showToast(blocked);
+    return;
+  }
   if (!action) {
     explain(drag, under);
-    paint();
     return;
   }
   await act(action);
+}
+
+function blockedToast(drag: Drag, action: GameAction): ToastCopy | null {
+  const payload = ui.payload;
+  if (!payload) return null;
+  if (action.type === 'attack') {
+    return attackToast(payload, unitOf(String(action.uid)), unitOf(String(action.target)));
+  }
+  if (action.type === 'play' || action.type === 'champion') {
+    const card = cardOf(drag.uid);
+    if (!card) return null;
+    const page = action.page === 0 || action.page === 1 ? action.page : null;
+    const pageView = page == null ? null : payload.view.pages[page];
+    const yours = pageView?.slots.filter((slot) => slot.you).length ?? 0;
+    const cap = pageView?.name === 'The Torn Margin' ? 2 : 4;
+    const pageFull = card.type === 'character' && pageView && yours >= cap ? cap : null;
+    const noteTaken = card.type === 'marginalia' && (pageView?.marginalia.some((note) => note.owner === payload.view.you) ?? false);
+    return playToast(payload, card.name, card.cost, pageView?.name ?? null, pageFull, noteTaken);
+  }
+  if (action.type === 'move') {
+    const unit = unitOf(String(action.uid));
+    if (unit?.exhausted) return attackToast(payload, unit, null);
+    const dest = unit ? payload.view.pages[unit.page === 0 ? 1 : 0] : null;
+    const full = (dest?.slots.filter((slot) => slot.you).length ?? 0) >= (dest?.name === 'The Torn Margin' ? 2 : 4);
+    return moveToast(unit, full, dest?.name ?? 'that Page');
+  }
+  return null;
 }
 
 function dropAction(drag: Drag, under: Element | null): GameAction | null {
@@ -501,6 +555,14 @@ function explain(drag: Drag, under: Element | null): void {
   const defender = foe ? unitOf(foe.getAttribute('data-uid') ?? '') : null;
   const toast = attackToast(payload, unit, defender) ?? (unit ? moveToast(unit, false, 'that Page') : null);
   if (toast) showToast(toast);
+  else paint();
+}
+
+function armSuppress(): void {
+  ui.suppressClick = true;
+  window.setTimeout(() => {
+    ui.suppressClick = false;
+  }, 0);
 }
 
 function onClick(event: MouseEvent): void {
@@ -641,6 +703,15 @@ function onClick(event: MouseEvent): void {
     if (uid) void act({ type: 'legend', target: Number(uid) });
     return;
   }
+  const boardCard = target.closest('.un');
+  if (boardCard && !ui.legendArmed) {
+    const def = boardCard.getAttribute('data-def');
+    if (def) {
+      ui.sheet = def;
+      paint();
+    }
+    return;
+  }
   if (ui.payload?.view.phase === 'mulligan') {
     const handCard = target.closest('.handrow .dc');
     if (handCard) handCard.classList.toggle('sel');
@@ -698,16 +769,16 @@ function onPointerUp(event: PointerEvent): void {
   const held = ui.keywordReady;
   ui.keywordReady = false;
   if (held && ui.guide && ui.payload) {
+    armSuppress();
     const keyword = event.target instanceof Element ? event.target.closest('[data-keyword]') : null;
     const name = keyword?.getAttribute('data-keyword') ?? 'Kindle';
     ui.guide.keywordHeld = true;
     ui.guide.sync(ui.payload);
     window.requestAnimationFrame(() => {
-      const copy = window.KW13[name.toLowerCase()] ?? window.KW13.kindle;
-      showToast({ title: name, body: copy?.long ?? name });
+      showToast({ title: name, body: KEYWORDS[name] ?? name });
     });
   }
-  if (ui.drag) void endDrag(event);
+  if (ui.drag) void endDrag(event, held);
 }
 
 function maybeTips(): void {
@@ -737,8 +808,26 @@ function maybeTips(): void {
 
 app.addEventListener('pointerdown', (event) => onPointerDown(event as PointerEvent));
 app.addEventListener('pointermove', (event) => moveDrag(event as PointerEvent));
+app.addEventListener('pointerover', (event) => onHover(event as PointerEvent));
 app.addEventListener('pointerup', (event) => onPointerUp(event as PointerEvent));
 app.addEventListener('click', (event) => onClick(event as MouseEvent));
+
+function onHover(event: PointerEvent): void {
+  if (window.IS_PHONE() || ui.drag) return;
+  const target = event.target;
+  if (!(target instanceof Element)) return;
+  const card = target.closest('[data-def]');
+  const def = card?.getAttribute('data-def');
+  if (!def || !window.D13.cards[def]) return;
+  const panel = document.getElementById('inspect');
+  if (!panel || panel.dataset.def === def) return;
+  const face = panel.querySelector('.insp-c');
+  const keywords = panel.querySelector('.insp-kw');
+  if (!face || !keywords) return;
+  panel.dataset.def = def;
+  face.innerHTML = window.cardFace(def, { size: 'inspect' });
+  keywords.innerHTML = keywordKeys(def).map((key) => window.kwRow(key, { long: true })).join('');
+}
 
 window.setInterval(() => {
   pumpGuide();

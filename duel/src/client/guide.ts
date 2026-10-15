@@ -57,16 +57,19 @@ export const GUIDE_STEPS: GuideStep[] = [
   { id: 27, target: 'play', text: 'Ready? <b>Play</b> for real against a rival House.', advance: 'play', chip: 'Play' },
 ];
 
+/** rules-spec v1.3 §3, one sentence per keyword. Keys match the names on the card. */
 export const KEYWORDS: Record<string, string> = {
-  Kindle: 'At the end of your turn, heal the most wounded ally here.',
-  Ward: 'The first damage this takes is ignored.',
-  Bound: 'While an enemy Bound unit is here, you must attack one of them.',
-  Swift: 'Enters ready, so it can act the turn it is played.',
-  Hidden: "Can't be chosen as a target until it attacks.",
-  Riposte: 'When attacked, this strikes first. A dead attacker deals nothing back.',
-  Cleave: 'An attack also hits the units beside the defender.',
-  Board: 'Moving does not tire this unit, and it can still attack after the move.',
-  Silence: 'Loses keywords, abilities, Ward, Kindle, and Hidden.',
+  Bound: 'When you attack on a Page where the rival has a targetable Bound unit, the target must be a Bound unit. Inkwork and abilities can still choose any target.',
+  Ward: 'The next damage of 1 or more is reduced to 0, and then Ward is spent. A 0-damage event leaves it in place. Ward can be granted again.',
+  Swift: 'Enters ready, so it can attack or move the turn it is played.',
+  Hidden: 'Cannot be chosen as a target until it declares an attack. Effects that hit every unit on a Page still hit it. Hidden ends when it declares an attack, before traps.',
+  'Opening Line': 'Resolves when the card is played, after it enters the Page and after Fort Crease. With no legal target, the card can still be played and the effect does nothing. It does not happen on The Moot-Rings.',
+  'Last Word': 'Resolves when the unit dies, on the Page it died on.',
+  Silence: 'The unit loses keywords, abilities, Ward, Kindle, Hidden, and temporary Riposte. Its attack and health stay. It cannot gain keywords afterwards.',
+  Cleave: 'When this unit attacks, it also deals its attack to the units in the slots beside the defender. Cleave does not apply when this unit is attacked.',
+  Kindle: 'At the end of its owner\'s turn, heal N to the most-damaged allied unit on its Page, which can be itself.',
+  Riposte: 'When this unit is attacked, it deals its damage first. If the attacker dies, the attacker deals nothing.',
+  Board: 'Moving does not exhaust this unit, and it can still attack after the move. It is still limited to one move per turn.',
 };
 
 export const HOW_TO_PLAY = [

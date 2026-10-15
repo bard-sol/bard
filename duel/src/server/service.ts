@@ -1,8 +1,9 @@
 import { actorOf, buildSetup, deckError, IllegalActionError, recordedBundle, sameAction } from '../engine/adapter.js';
 import { cardFace } from '../engine/project.js';
+import { applyScoreNotes, collectScoreNotes } from '../engine/scores.js';
 import type { EngineState } from '../engine/state.js';
 import { scriptedTutorialTurn, TUTORIAL_SEED, tutorialDecks } from '../tutorial/script.js';
-import type { ClientPayload, Deck, EngineAdapter, GameAction, PlayerId, Stance, TradePreview } from '../types.js';
+import type { ClientPayload, Deck, EngineAdapter, GameAction, PlayerId, PlayerView, Stance, TradePreview } from '../types.js';
 import { assertClientSafe } from './redact.js';
 import type { LogEntry, MatchRecord, MatchRepository } from './store.js';
 
@@ -408,9 +409,11 @@ export class MatchService {
 
   private toClient(match: MatchRecord): ClientPayload {
     const yourTurn = !match.thinking && actorOf(match.state) === 0;
+    let view = this.annotateView(match, this.adapter.view(match.state, 0));
+    if (!yourTurn) view = { ...view, yourTurn: false };
     const payload: ClientPayload = {
       matchId: match.id,
-      view: this.adapter.view(match.state, 0),
+      view,
       legalActions: yourTurn ? this.adapter.legalActions(match.state, 0) : [],
       turnDeadline: match.deadline,
       turnDurationMs: match.thinking ? this.aiTurnMs : this.turnTimeoutMs,
@@ -425,9 +428,20 @@ export class MatchService {
       status: match.state.winner >= 0 ? 'complete' : 'playing',
       tutorial: match.tutorial === true,
     };
-    if (!yourTurn) payload.view = { ...payload.view, yourTurn: false };
     assertClientSafe(payload, match, 0);
     return payload;
+  }
+
+  /** Page names for holds and conquers. Computed by replaying actions, never written into engine state. */
+  private annotateView(match: MatchRecord, view: PlayerView): PlayerView {
+    if (match.setup.engineVersion !== this.adapter.engineVersion) return view;
+    try {
+      const open = this.adapter.replay(match.setup, []);
+      const notes = collectScoreNotes(open, match.log.map((entry) => entry.action), (state, action) => this.adapter.apply(state, action));
+      return { ...view, events: applyScoreNotes(view.events, notes) };
+    } catch {
+      return view;
+    }
   }
 
   private armClock(id: string, clock: ClockRequest, fire: () => void): void {
