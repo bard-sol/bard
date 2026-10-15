@@ -1,0 +1,25 @@
+{
+  "name": "bard-duel",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx src/dev.ts",
+    "start": "tsx src/server/index.ts",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "parity": "node engine/parity.mjs"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "pixi.js": "^8.14.0"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/node": "^22.15.3",
+    "tsx": "^4.20.3",
+    "typescript": "^5.9.2",
+    "vite": "^6.3.5",
+    "vitest": "^3.2.4"
+  }
+}
