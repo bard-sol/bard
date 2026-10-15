@@ -558,7 +558,7 @@ function bind() {
     }
     const act = t.dataset.act;
     if (act === "book") location.href = "./index.html";
-    else if (act === "skip") skipTutorial();
+    else if (act === "skip" && state.phase !== "fight") skipTutorial();
     else if (act === "reroll") reroll();
     else if (act === "fight") void fight();
     else if (act === "again") startMatch(state.practice);
