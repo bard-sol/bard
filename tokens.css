@@ -1,0 +1,30 @@
+:root{
+  --void:#0b0b0f; --ink-1:#121217; --surface:#17171d; --surface-2:#1f1f27; --surface-3:#2a2a34;
+  --line:rgba(242,242,247,.08); --line-strong:rgba(242,242,247,.16);
+  --text:#f2f2f7; --text-2:#c9c9d3; --muted:#9d9daa; --dim:#6b6b78;
+  --bard:#a78bfa; --bard-hi:#d9c8f5; --bard-soft:rgba(167,139,250,.14);
+  --bard-line:rgba(167,139,250,.35); --bard-glow:0 0 24px rgba(167,139,250,.45); --on-bard:#17121f;
+  --alive:#4ade80; --danger:#ff9f43; --reaper:#ef4444; --reaper-text:#f87171;
+  --revive:#f2c14e; --relic:#5a5a66; --relic-filter:grayscale(1) contrast(.9) brightness(.75);
+  --info:#7dd3fc; --devnet:#fbbf24;
+  --c-grenna:#D55E00; --c-grenna-text:#F07A2E;
+  --c-silas:#009E73; --c-silas-text:#19B88A;
+  --c-marrow:#F0E442; --c-pip:#56B4E9; --c-wick:#CC79A7;
+  --c-vey:#0072B2; --c-vey-text:#4C9BE0;
+  --c-thorn:#E69F00; --c-twins:#E8E1D0;
+  --font-ui:"Archivo","Helvetica Neue",Helvetica,Arial,sans-serif;
+  --font-voice:"Fraunces","Iowan Old Style",Georgia,serif;
+  --fs-micro:.6875rem; --fs-xs:.75rem; --fs-sm:.875rem; --fs-md:1rem; --fs-lg:1.25rem;
+  --fs-xl:1.75rem; --fs-2xl:2.5rem; --fs-3xl:clamp(3rem,12vw,5rem);
+  --s-1:4px; --s-2:8px; --s-3:12px; --s-4:16px; --s-5:20px; --s-6:24px; --s-8:32px;
+  --gutter:var(--s-4); --tap:44px; --header-h:56px; --tabbar-h:64px;
+  --r-xs:4px; --r-sm:8px; --r-md:12px; --r-lg:20px; --r-pill:999px;
+  --shadow-1:0 1px 0 rgba(255,255,255,.04) inset,0 4px 16px rgba(0,0,0,.35);
+  --shadow-sheet:0 -12px 40px rgba(0,0,0,.55);
+  --z-bar:40; --z-banner:45; --z-sheet:60; --z-stage:80; --z-toast:90;
+  --ease-out:cubic-bezier(.22,1,.36,1);
+  --t-fast:120ms; --t-base:220ms; --t-slow:480ms;
+}
+@media (min-width:600px){:root{--gutter:24px}}
+@media (min-width:1080px){:root{--gutter:40px}}
+@media (prefers-reduced-motion:reduce){:root{--t-fast:0ms;--t-base:0ms;--t-slow:0ms}}

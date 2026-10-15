@@ -1,0 +1,28 @@
+{
+  "name": "Old Wick",
+  "symbol": "WIK",
+  "description": "A hermit who swears he has already read the Last Page, and will not say whose name is on it. Season 0 devnet token. Bard is the narrator, not a contestant.",
+  "image": "https://bard.is/season0/meta/wick.svg",
+  "attributes": [
+    {
+      "trait_type": "Archetype",
+      "value": "The Mystic"
+    },
+    {
+      "trait_type": "STR",
+      "value": "25"
+    },
+    {
+      "trait_type": "CUN",
+      "value": "65"
+    },
+    {
+      "trait_type": "CHA",
+      "value": "40"
+    },
+    {
+      "trait_type": "LCK",
+      "value": "70"
+    }
+  ]
+}

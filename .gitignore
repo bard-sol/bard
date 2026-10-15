@@ -1,0 +1,6 @@
+node_modules/
+season0/.keys/
+season0/.secrets/
+.dev.vars
+*.keypair.json
+.wrangler/

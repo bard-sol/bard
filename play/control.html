@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Bard · Season 0 control</title>
+  <link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75,400;75,600&family=Fraunces:ital,opsz,wght@1,9..144,500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/tokens.css">
+  <link rel="stylesheet" href="/season.css">
+</head>
+<body>
+  <div class="app">
+    <header class="header">
+      <p class="kicker">Control room · devnet only</p>
+      <p class="headline">These buttons call the local API. They do not broadcast, and they refuse mainnet.</p>
+    </header>
+    <main>
+      <section class="banner info">
+        <p>Pre-fund the drip wallet and create pools from the shell, against devnet only:</p>
+        <pre class="log">node season0/scripts/prefund-drip.mjs --generate --sol 2
+node season0/scripts/create-dbc.mjs --dry-run
+node season0/scripts/create-dbc.mjs --generate --write-public</pre>
+      </section>
+      <div class="row">
+        <button class="btn" type="button" id="health">Health</button>
+        <button class="btn" type="button" id="config">Config</button>
+        <button class="btn" type="button" id="publish">State-file plan</button>
+        <button class="btn reaper" type="button" id="void">Void chapter plan</button>
+      </div>
+      <label>Chapter <input class="field" id="chapter" value="3" inputmode="numeric"></label>
+      <label>Void reason
+        <select class="field" id="reason">
+          <option value="vrf">vrf</option>
+          <option value="indexer">indexer</option>
+          <option value="exploit">exploit</option>
+        </select>
+      </label>
+      <pre class="log" id="out">Idle.</pre>
+      <p><a href="/play/">Back to the game</a></p>
+    </main>
+  </div>
+  <script type="module" src="/season0/ui/control.js"></script>
+</body>
+</html>

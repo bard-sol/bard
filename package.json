@@ -1,0 +1,17 @@
+{
+  "name": "bard",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test season0/test/*.test.mjs",
+    "dev": "node season0/scripts/dev-server.mjs"
+  },
+  "dependencies": {
+    "@meteora-ag/dynamic-bonding-curve-sdk": "^1.5.6",
+    "@solana/spl-token": "^0.4.13",
+    "@solana/web3.js": "^1.98.4",
+    "@sqds/multisig": "^2.1.4",
+    "bn.js": "^5.2.2",
+    "bs58": "^6.0.0"
+  }
+}

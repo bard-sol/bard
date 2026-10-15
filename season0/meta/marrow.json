@@ -1,0 +1,28 @@
+{
+  "name": "Lady Marrow",
+  "symbol": "MAR",
+  "description": "Vellum's beloved hostess. Guests adore her. Some of them are never seen again. Season 0 devnet token. Bard is the narrator, not a contestant.",
+  "image": "https://bard.is/season0/meta/marrow.svg",
+  "attributes": [
+    {
+      "trait_type": "Archetype",
+      "value": "The Darling"
+    },
+    {
+      "trait_type": "STR",
+      "value": "30"
+    },
+    {
+      "trait_type": "CUN",
+      "value": "45"
+    },
+    {
+      "trait_type": "CHA",
+      "value": "80"
+    },
+    {
+      "trait_type": "LCK",
+      "value": "45"
+    }
+  ]
+}

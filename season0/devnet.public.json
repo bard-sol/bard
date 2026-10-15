@@ -1,0 +1,12 @@
+{
+  "cluster": "devnet",
+  "rpc": "https://api.devnet.solana.com",
+  "tbardMint": null,
+  "dripWallet": null,
+  "feeClaimer": null,
+  "dbcConfig": null,
+  "liqAta": null,
+  "potAta": null,
+  "escrowAta": null,
+  "pools": {}
+}

@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#100e0c">
+  <title>Bard · Season 0</title>
+  <link rel="manifest" href="/play/manifest.webmanifest">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75,400;75,600;100,400&family=Fraunces:ital,opsz,wght@1,9..144,500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/tokens.css">
+  <link rel="stylesheet" href="/season.css">
+</head>
+<body>
+  <a class="skip" href="#main">Skip to the arena</a>
+  <div class="grain" aria-hidden="true"></div>
+  <div class="app">
+    <header class="header" id="top"></header>
+    <div class="shell">
+      <nav class="rail" id="rail" aria-label="Sections"></nav>
+      <main id="main"></main>
+    </div>
+  </div>
+  <nav class="tabs" id="tabs" aria-label="Sections"></nav>
+  <div id="sheet"></div>
+  <div id="toast" class="toast" hidden></div>
+  <script type="module" src="/season0/ui/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,24 @@
+{
+  "name": "Bard Season 0",
+  "short_name": "Bard",
+  "description": "Season 0 on Solana devnet. Daily Trial, letter, and free cosmetic chests.",
+  "start_url": "/play/",
+  "scope": "/play/",
+  "display": "standalone",
+  "background_color": "#100e0c",
+  "theme_color": "#100e0c",
+  "icons": [
+    {
+      "src": "/play/assets/avatars/bard.webp",
+      "sizes": "256x256",
+      "type": "image/webp",
+      "purpose": "any"
+    },
+    {
+      "src": "/play/assets/portraits/bard.webp",
+      "sizes": "512x512",
+      "type": "image/webp",
+      "purpose": "any"
+    }
+  ]
+}

@@ -1,0 +1,28 @@
+{
+  "name": "Silas Quill",
+  "symbol": "SIL",
+  "description": "A court scribe who forged a king's will, and has been editing his own story ever since. Season 0 devnet token. Bard is the narrator, not a contestant.",
+  "image": "https://bard.is/season0/meta/silas.svg",
+  "attributes": [
+    {
+      "trait_type": "Archetype",
+      "value": "The Schemer"
+    },
+    {
+      "trait_type": "STR",
+      "value": "30"
+    },
+    {
+      "trait_type": "CUN",
+      "value": "80"
+    },
+    {
+      "trait_type": "CHA",
+      "value": "50"
+    },
+    {
+      "trait_type": "LCK",
+      "value": "40"
+    }
+  ]
+}
