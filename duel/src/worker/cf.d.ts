@@ -1,3 +1,7 @@
+declare const WebSocketPair: {
+  new (): { 0: WebSocket; 1: WebSocket };
+};
+
 declare module 'cloudflare:workers' {
   export interface SqlCursor {
     toArray(): Array<Record<string, string | null>>;
@@ -12,6 +16,9 @@ declare module 'cloudflare:workers' {
       setAlarm(scheduledTime: number): Promise<void>;
       deleteAlarm(): Promise<void>;
     };
+    acceptWebSocket(ws: WebSocket, tags?: string[]): void;
+    getWebSockets(tag?: string): WebSocket[];
+    getTags(ws: WebSocket): string[];
   }
 
   export abstract class DurableObject<E> {

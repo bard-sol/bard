@@ -12,7 +12,7 @@ export type Glyph = 'flame' | 'lamp' | 'shield' | 'spark' | 'note' | 'blade' | '
 
 export type Phase = 'mulligan' | 'main' | 'fight' | 'game_over';
 
-export type WinReason = 'verse' | 'health' | 'tiebreak';
+export type WinReason = 'verse' | 'health' | 'tiebreak' | 'forfeit';
 
 export interface CardEffect {
   kind: 'damage' | 'ink' | 'trap';
@@ -264,6 +264,23 @@ export interface ClientPayload {
   status: 'playing' | 'complete';
   /** Guided first match. The rival follows the bubble-guide script. */
   tutorial: boolean;
+  /** Human versus human. The rival is the other seated player. */
+  friend?: boolean;
+  /** A rematch is waiting at `/m/<code>`. */
+  rematchCode?: string | null;
+  /** Monotonic match revision. A live update older than this is ignored. */
+  generation?: number;
+}
+
+/** Lobby or seated view for a friend match. Card lists stay on the server. */
+export interface FriendBody {
+  kind: 'lobby' | 'match';
+  code: string;
+  path: string;
+  role: 'host' | 'guest' | 'open';
+  cancelled: boolean;
+  decks: Array<{ id: string; name: string }>;
+  payload: ClientPayload | null;
 }
 
 export interface UnitPreview {

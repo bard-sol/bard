@@ -1,5 +1,5 @@
-import type { ClientPayload, GameAction, Stance, TradePreview, UnitView } from '../types.js';
-import { createMatch, fetchMatch, previewAttack, sendAction } from './api.js';
+import type { ClientPayload, FriendBody, GameAction, Stance, TradePreview, UnitView } from '../types.js';
+import { cancelFriend, createFriend, createMatch, fetchMatch, joinFriend, previewAttack, readFriend, rematchFriend, sendAction } from './api.js';
 import { GuideController, logMetric, markTip, noteRealMatch, setTutorialFlag, tipSeen, tipsEnabled, tutorialFlag } from './guide.js';
 import { INFO_TOASTS, PLAY_STEP_OVER, TIP_COPY, attackToast, endTurnWarning, legendToast, moveToast, playToast, refused, toastCopy, type ToastCopy } from './illegal.js';
 import { KEYWORDS } from './guide.js';
@@ -65,7 +65,8 @@ function cancelPreviews(): void {
 }
 
 const ui = {
-  screen: 'title' as 'title' | 'board' | 'end',
+  screen: 'title' as 'title' | 'board' | 'end' | 'deck',
+  invite: null as { code: string; role: 'host' | 'guest' | 'open'; cancelled: boolean; path: string } | null,
   stance: 'balanced' as Stance,
   payload: null as ClientPayload | null,
   guide: null as GuideController | null,
@@ -334,6 +335,11 @@ function paint(): void {
     return;
   }
   const root = app as HTMLElement;
+  if (!ui.payload && (ui.invite || ui.screen === 'deck')) {
+    root.innerHTML = friendHtml();
+    publish();
+    return;
+  }
   if (ui.screen === 'title') {
     root.innerHTML = titleHtml();
     publish();
@@ -348,7 +354,7 @@ function paint(): void {
   const ended = payload.view.winner != null && (step == null || step.id >= 26);
   if (ended || ui.screen === 'end') {
     ui.screen = 'end';
-    root.innerHTML = endHtml(payload.view, payload.tutorial) + toastHost();
+    root.innerHTML = endHtml(payload.view, payload.tutorial, payload.friend === true) + toastHost();
     paintCoach();
     mountSheets();
     publish();
@@ -362,7 +368,7 @@ function paint(): void {
     ? `${second ? 'You go second: +1 card, Spare Ink, 2 Ink on turn 1, and you start on 1 Verse' : 'You go first'}. Tap cards to swap them. Spare Ink stays.`
     : 'Tap a card to read it';
   const html = window.boardScreen(model.state, {
-    mode: payload.tutorial ? 'Card Duel · Guided first match' : 'Card Duel',
+    mode: payload.tutorial ? 'Card Duel · Guided first match' : payload.friend ? 'Card Duel · Friend match' : 'Card Duel',
     log: logEntries(payload.view),
     lockText: payload.view.yourTurn ? 'Fighting has started.' : "Rival's turn.",
     hint,
@@ -438,6 +444,7 @@ function titleHtml(): string {
   return `<div class="title-screen"><div class="title-card"><h1>Bard</h1><p>Card Duel</p>
     <label>Stance <select id="stance"><option value="balanced">Balanced</option><option value="aggressive">Aggressive</option><option value="patient">Patient</option></select></label>
     <button class="btn primary" id="play-title">Play</button>
+    <button class="btn secondary" id="play-friend">Play a friend</button>
     <button class="btn secondary" id="replay-title">Replay tutorial</button></div></div>`;
 }
 
@@ -657,6 +664,12 @@ function holeHit(target: EventTarget | null): boolean {
 }
 
 function adopt(payload: ClientPayload): void {
+  if (payload.rematchCode && payload.rematchCode !== payload.matchId) {
+    location.assign(`/m/${payload.rematchCode}`);
+    return;
+  }
+  const seen = ui.payload?.generation ?? -1;
+  if (ui.payload && payload.matchId === ui.payload.matchId && (payload.generation ?? 0) < seen) return;
   cancelPreviews();
   const beatWasShown = ui.step14Painted;
   const before = ui.guide?.step?.id;
@@ -673,6 +686,8 @@ function adopt(payload: ClientPayload): void {
   syncGuide(payload, beatWasShown);
   const step = ui.guide?.visible(false);
   ui.screen = payload.view.winner && (!ui.guide || ui.guide.done || (step && step.id >= 26)) ? 'end' : 'board';
+  ui.invite = null;
+  if (payload.friend) connectLive(payload.matchId);
   if (ui.guide?.step?.id !== before || before !== 14) paint();
 }
 
@@ -681,7 +696,7 @@ async function refresh(): Promise<void> {
   if (!id || ui.drag || ui.busy) return;
   try {
     const next = await fetchMatch(id);
-    if (viewBeat(next) !== ui.beat) {
+    if (viewBeat(next) !== ui.beat || (next.generation ?? 0) !== (ui.payload?.generation ?? -1) || next.rematchCode !== ui.payload?.rematchCode) {
       adopt(next);
       return;
     }
@@ -698,6 +713,180 @@ function pumpGuide(): void {
   syncGuide(ui.payload, ui.step14Painted);
   if (ui.guide.step?.id !== before) paint();
   else publish();
+}
+
+const DECKS = [
+  { id: 'candle', name: 'The Candle' },
+  { id: 'fold', name: 'The Fold' },
+  { id: 'tidewrack', name: 'The Tidewrack' },
+];
+
+function friendCodeFromPath(): string | null {
+  const match = /^\/m\/([0-9a-hjkmnp-tv-z]{26})$/i.exec(location.pathname);
+  return match?.[1]?.toLowerCase() ?? null;
+}
+
+function friendHtml(): string {
+  const invite = ui.invite;
+  if (invite?.cancelled) {
+    return `<div class="title-screen"><div class="title-card"><h1>Invite closed</h1><p>The host cancelled this match.</p><a class="btn primary" id="lobby" href="/">Lobby</a></div></div>`;
+  }
+  if (invite?.role === 'host') {
+    const url = new URL(invite.path, location.href).href;
+    return `<div class="title-screen"><div class="title-card"><span class="eyebrow">Friend match</span><h1>Play a friend</h1><p>Send this link. They enter the passcode, pick a deck, and the match starts.</p><p class="invite-url" id="invite-url">${url}</p><div class="friend-acts"><button class="btn primary" id="copy-invite" type="button">Copy link</button><button class="btn secondary" id="share-invite" type="button">Share</button></div><p id="invite-wait">Waiting for your friend…</p><button class="btn ghost" id="cancel-invite" type="button">Cancel</button></div></div>`;
+  }
+  const decks = DECKS.map((deck) => `<button class="btn secondary" type="button" data-deck="${deck.id}">${deck.name}</button>`).join('');
+  const heading = invite ? 'Join the match' : 'Play a friend';
+  const blurb = invite ? 'Pick a deck. The Candle, the Fold, and the Tidewrack are the same houses as a match against the rival.' : 'Pick a deck, then send your friend the link.';
+  return `<div class="title-screen"><div class="title-card"><span class="eyebrow">Friend match</span><h1>${heading}</h1><p>${blurb}</p><div class="deck-pick">${decks}</div></div></div>`;
+}
+
+async function hostInvite(deckId: string): Promise<void> {
+  ui.busy = true;
+  try {
+    const body = await createFriend(deckId);
+    ui.busy = false;
+    showInvite(body);
+  } catch (error) {
+    showToast({ title: 'Could not open a table', body: error instanceof Error ? error.message : 'Try again.' });
+    paint();
+  } finally {
+    ui.busy = false;
+  }
+}
+
+async function joinInvite(deckId: string): Promise<void> {
+  const code = ui.invite?.code;
+  if (!code) return;
+  ui.busy = true;
+  try {
+    const body = await joinFriend(code, deckId);
+    ui.busy = false;
+    showInvite(body);
+  } catch (error) {
+    showToast({ title: 'Could not join', body: error instanceof Error ? error.message : 'Try again.' });
+    paint();
+  } finally {
+    ui.busy = false;
+  }
+}
+
+async function openFriend(code: string): Promise<void> {
+  ui.screen = 'deck';
+  paint();
+  try {
+    showInvite(await readFriend(code));
+  } catch (error) {
+    ui.screen = 'title';
+    showToast({ title: 'No such match', body: error instanceof Error ? error.message : 'That link is not open.' });
+    paint();
+  }
+}
+
+function showInvite(body: FriendBody): void {
+  if (body.kind === 'match' && body.payload) {
+    history.replaceState({}, '', body.path);
+    ui.invite = null;
+    adopt(body.payload);
+    return;
+  }
+  ui.payload = null;
+  ui.invite = { code: body.code, role: body.role, cancelled: body.cancelled, path: body.path };
+  ui.screen = body.role === 'open' && !body.cancelled ? 'deck' : 'title';
+  if (!body.cancelled) history.replaceState({}, '', body.path);
+  paint();
+}
+
+async function pollInvite(): Promise<void> {
+  const code = ui.invite?.code;
+  if (!code || ui.payload || ui.busy) return;
+  try {
+    const body = await readFriend(code);
+    if (body.kind === 'match' && body.payload) showInvite(body);
+    else if (body.cancelled !== ui.invite?.cancelled || body.role !== ui.invite?.role) showInvite(body);
+  } catch {
+    /* The waiting screen stays up while the request retries. */
+  }
+}
+
+async function copyInvite(): Promise<void> {
+  const url = document.getElementById('invite-url')?.textContent ?? '';
+  if (!url) return;
+  try {
+    await navigator.clipboard.writeText(url);
+  } catch {
+    return;
+  }
+  const button = document.getElementById('copy-invite');
+  if (button) button.textContent = 'Copied';
+}
+
+async function shareInvite(): Promise<void> {
+  const url = document.getElementById('invite-url')?.textContent ?? '';
+  if (!url) return;
+  if (typeof navigator.share === 'function') {
+    try {
+      await navigator.share({ title: 'Bard', text: 'Play a friend match', url });
+      return;
+    } catch {
+      /* A dismissed sheet still leaves the copy button. */
+    }
+  }
+  await copyInvite();
+}
+
+async function cancelInvite(): Promise<void> {
+  const code = ui.invite?.code;
+  if (!code) return;
+  try {
+    await cancelFriend(code);
+  } catch {
+    /* Closing the screen is still the way back to the lobby. */
+  }
+  ui.invite = null;
+  ui.screen = 'title';
+  history.pushState({}, '', '/');
+  paint();
+}
+
+async function rematchInvite(): Promise<void> {
+  const code = ui.payload?.matchId;
+  if (!code || ui.busy) return;
+  ui.busy = true;
+  try {
+    const body = await rematchFriend(code);
+    ui.busy = false;
+    showInvite(body);
+  } catch (error) {
+    ui.busy = false;
+    showToast({ title: 'No rematch', body: error instanceof Error ? error.message : 'Try again.' });
+    paint();
+  }
+}
+
+let liveId = '';
+let liveSocket: WebSocket | null = null;
+
+function connectLive(matchId: string): void {
+  if (liveId === matchId && liveSocket && liveSocket.readyState <= WebSocket.OPEN) return;
+  liveSocket?.close();
+  liveId = matchId;
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  const socket = new WebSocket(`${proto}//${location.host}/api/matches/${matchId}/live`);
+  liveSocket = socket;
+  socket.onmessage = (event) => {
+    if (ui.drag || ui.busy) return;
+    try {
+      const next = JSON.parse(String(event.data)) as ClientPayload;
+      if (!next?.view || next.matchId !== matchId) return;
+      if (viewBeat(next) !== ui.beat || (next.generation ?? 0) !== (ui.payload?.generation ?? -1)) adopt(next);
+    } catch {
+      /* A bad frame leaves the board as it is. */
+    }
+  };
+  socket.onclose = () => {
+    if (liveSocket === socket) liveSocket = null;
+  };
 }
 
 async function start(tutorial: boolean): Promise<void> {
@@ -729,6 +918,11 @@ async function start(tutorial: boolean): Promise<void> {
 }
 
 function boot(): void {
+  const code = friendCodeFromPath();
+  if (code) {
+    void openFriend(code);
+    return;
+  }
   if (tutorialFlag() === 'due') void start(true);
   else {
     ui.screen = 'title';
@@ -1161,6 +1355,32 @@ function onClick(event: MouseEvent): void {
   }
   const target = event.target;
   if (!(target instanceof Element)) return;
+  if (target.closest('#play-friend')) {
+    ui.guide = null;
+    ui.payload = null;
+    ui.invite = null;
+    ui.screen = 'deck';
+    paint();
+    return;
+  }
+  if (target.closest('[data-deck]')) {
+    const deck = target.closest('[data-deck]')?.getAttribute('data-deck') ?? '';
+    if (ui.invite?.role === 'open') void joinInvite(deck);
+    else void hostInvite(deck);
+    return;
+  }
+  if (target.closest('#copy-invite')) {
+    void copyInvite();
+    return;
+  }
+  if (target.closest('#share-invite')) {
+    void shareInvite();
+    return;
+  }
+  if (target.closest('#cancel-invite')) {
+    void cancelInvite();
+    return;
+  }
   if (target.closest('#play-title')) {
     const stance = document.querySelector('#stance');
     if (stance instanceof HTMLSelectElement && (stance.value === 'aggressive' || stance.value === 'balanced' || stance.value === 'patient')) ui.stance = stance.value;
@@ -1201,7 +1421,8 @@ function onClick(event: MouseEvent): void {
     return;
   }
   if (target.closest('#rematch')) {
-    void start(Boolean(ui.payload?.tutorial && tutorialFlag() !== 'done'));
+    if (ui.payload?.friend) void rematchInvite();
+    else void start(Boolean(ui.payload?.tutorial && tutorialFlag() !== 'done'));
     return;
   }
   if (target.closest('#confirm-no')) {
@@ -1501,8 +1722,10 @@ window.setInterval(() => {
     end.classList.toggle('urgent', left <= 10_000 && left > 0);
   }
   if (ui.banner && Date.now() > ui.banner.until) document.getElementById('turn-banner')?.remove();
+  if (ui.invite && !ui.payload) void pollInvite();
   if (!payload || ui.drag) return;
-  if (!payload.view.yourTurn || payload.opponentThinking || payload.view.winner) void refresh();
+  const clockUp = Boolean(payload.friend && payload.turnDeadline && payload.turnDeadline < Date.now() - 200);
+  if (clockUp || !payload.view.yourTurn || payload.opponentThinking || payload.view.winner) void refresh();
 }, 450);
 
 boot();

@@ -4,6 +4,7 @@ import type { EngineState } from '../engine/state.js';
 import { scriptedTutorialTurn, TUTORIAL_SEED, tutorialDecks } from '../tutorial/script.js';
 import type { ClientPayload, Deck, EngineAdapter, GameAction, PlayerId, PlayerView, Stance, TradePreview } from '../types.js';
 import { assertClientSafe } from './redact.js';
+import { FRIEND_CODE } from './session.js';
 import type { LogEntry, MatchRecord, MatchRepository } from './store.js';
 
 export const DEFAULT_TURN_MS = 35_000;
@@ -11,6 +12,7 @@ export const DEFAULT_AI_TURN_MS = 5_000;
 export const MULLIGAN_MS = 20_000;
 const EARLY_MATCH_TURN_MS = 60_000;
 const EARLY_MATCHES = 3;
+const MISS_LIMIT = 3;
 
 export interface CreateMatchInput {
   decks: readonly [Deck, Deck];
@@ -26,6 +28,10 @@ export interface CreateMatchInput {
   tutorial?: boolean;
   /** Real matches already finished on this session. The first three use a 60s turn. */
   matchesPlayed?: number;
+  /** When set, this match uses this turn length and skips the first-three-matches rule. */
+  humanTurnMs?: number;
+  /** Both seats are human. Seat order still comes from the engine seed. */
+  friend?: { sessions: [string, string]; deckIds: [string, string] };
 }
 
 /** Replaces `setTimeout` where the process may be evicted (Durable Object alarms). */
@@ -71,7 +77,7 @@ export class MatchService {
   constructor(
     private readonly repo: MatchRepository,
     private readonly adapter: EngineAdapter,
-    private readonly options: { turnTimeoutMs?: number; aiTurnMs?: number } = {},
+    private readonly options: { turnTimeoutMs?: number; aiTurnMs?: number; onChange?: (id: string) => void } = {},
     private readonly clock?: TimerBridge,
   ) {}
 
@@ -89,7 +95,7 @@ export class MatchService {
     const stance: Stance = tutorial ? 'patient' : input.stance;
     const invalid = validateDecks(decks);
     if (invalid) return { ok: false, error: 'bad_deck' };
-    const id = isUuid(input.id) ? input.id : crypto.randomUUID();
+    const id = isServerId(input.id) ? input.id : crypto.randomUUID();
     const seed = tutorial ? TUTORIAL_SEED : input.seed != null ? input.seed >>> 0 : randomSeed();
     const setup = buildSetup(decks, seed, this.adapter);
     let state: EngineState;
@@ -110,55 +116,105 @@ export class MatchService {
       deadline: null,
       createdAt: new Date().toISOString(),
       tutorial,
-      humanTurnMs: tutorial ? 0 : input.matchesPlayed == null ? this.turnTimeoutMs : input.matchesPlayed < EARLY_MATCHES ? EARLY_MATCH_TURN_MS : this.turnTimeoutMs,
+      humanTurnMs: input.humanTurnMs ?? (tutorial ? 0 : input.matchesPlayed == null ? this.turnTimeoutMs : input.matchesPlayed < EARLY_MATCHES ? EARLY_MATCH_TURN_MS : this.turnTimeoutMs),
+      friend: input.friend
+        ? { sessions: input.friend.sessions, deckIds: input.friend.deckIds, misses: [0, 0], forfeitedBy: null, rematchCode: null }
+        : undefined,
     };
     await this.lock(id, async () => {
       if (tutorial) this.finishMulligans(match);
       this.syncClock(match);
       await this.repo.put(match);
+      this.note(match);
     });
     return { ok: true, payload: this.toClient(match) };
   }
 
-  async get(id: string): Promise<ServiceResult<ClientPayload>> {
+  async get(id: string, player: PlayerId = 0): Promise<ServiceResult<ClientPayload>> {
     const match = await this.repo.get(id);
     if (!match) return { ok: false, error: 'not_found' };
-    return { ok: true, payload: this.toClient(match) };
+    if (!this.allows(match, player)) return { ok: false, error: 'forbidden_view' };
+    return { ok: true, payload: this.toClient(match, player) };
+  }
+
+  async seatForId(id: string, session: string | null): Promise<PlayerId | null> {
+    if (!session) return null;
+    const match = await this.repo.get(id);
+    if (!match?.friend) return null;
+    if (match.friend.sessions[0] === session) return 0;
+    if (match.friend.sessions[1] === session) return 1;
+    return null;
+  }
+
+  async isFriend(id: string): Promise<boolean> {
+    const match = await this.repo.get(id);
+    return Boolean(match?.friend);
+  }
+
+  async rematchCode(id: string): Promise<string | null> {
+    const match = await this.repo.get(id);
+    const code = match?.friend?.rematchCode;
+    return code && code !== 'pending' ? code : null;
+  }
+
+  /** The seated pair, once the match is over. Pending rematches stay on the record. */
+  async friendSeed(id: string): Promise<{ sessions: [string, string]; deckIds: [string, string]; turnMs: number } | null> {
+    const match = await this.repo.get(id);
+    if (!match?.friend || !friendOver(match)) return null;
+    return { sessions: match.friend.sessions, deckIds: match.friend.deckIds, turnMs: match.humanTurnMs ?? this.turnTimeoutMs };
+  }
+
+  async markRematch(id: string, code: string): Promise<boolean> {
+    return this.lock(id, async () => {
+      const match = await this.repo.get(id);
+      if (!match?.friend) return false;
+      match.friend.rematchCode = code.length > 0 ? code : null;
+      match.generation += 1;
+      await this.repo.put(match);
+      this.note(match);
+      return true;
+    });
   }
 
   async act(id: string, player: PlayerId, action: GameAction): Promise<ServiceResult<ClientPayload>> {
-    if (player !== 0) return { ok: false, error: 'forbidden_view' };
     return this.lock(id, async () => {
       const match = await this.repo.get(id);
       if (!match) return { ok: false, error: 'not_found' };
-      if (match.thinking || actorOf(match.state) !== 0) return { ok: false, error: 'opponent_turn' };
+      if (!this.allows(match, player)) return { ok: false, error: 'forbidden_view' };
+      if (match.friend?.forfeitedBy != null) return { ok: false, error: 'illegal_action' };
+      if (match.thinking || actorOf(match.state) !== player) return { ok: false, error: 'opponent_turn' };
       const played = action.type === 'end' && match.state.phase === 'mulligan' ? { type: 'mulligan' as const, idx: [] } : action;
+      if (match.friend && !this.adapter.legalActions(match.state, player).some((item) => sameAction(item, played))) {
+        return { ok: false, error: 'illegal_action' };
+      }
       const applied = this.applyLogged(match, played, 'human');
       if (!applied) return { ok: false, error: 'illegal_action' };
+      if (match.friend) match.friend.misses[player] = 0;
       this.syncClock(match);
       await this.repo.put(match);
-      return { ok: true, payload: this.toClient(match) };
+      this.note(match);
+      return { ok: true, payload: this.toClient(match, player) };
     });
   }
 
   async preview(id: string, player: PlayerId, action: GameAction): Promise<ServiceResult<{ matchId: string; preview: TradePreview }>> {
-    if (player !== 0) return { ok: false, error: 'forbidden_view' };
     const match = await this.repo.get(id);
     if (!match) return { ok: false, error: 'not_found' };
-    if (match.thinking || actorOf(match.state) !== 0) return this.quietPreview(id, match, action);
+    if (!this.allows(match, player)) return { ok: false, error: 'forbidden_view' };
+    if (match.thinking || actorOf(match.state) !== player || match.friend?.forfeitedBy != null) return this.quietPreview(id, match, player);
     try {
-      const preview = this.adapter.previewAction(match.state, 0, action);
+      const preview = this.adapter.previewAction(match.state, player, action);
       const payload = { matchId: id, preview };
-      assertClientSafe(payload, match, 0);
+      assertClientSafe(payload, match, player);
       return { ok: true, payload };
     } catch (error) {
-      if (error instanceof IllegalActionError) return this.quietPreview(id, match, action);
+      if (error instanceof IllegalActionError) return this.quietPreview(id, match, player);
       throw error;
     }
   }
 
   /** A preview that lost the race with a committed action. No error status, no hidden ids. */
-  private quietPreview(id: string, match: MatchRecord, _action: GameAction): ServiceResult<{ matchId: string; preview: TradePreview }> {
+  private quietPreview(id: string, match: MatchRecord, viewer: PlayerId): ServiceResult<{ matchId: string; preview: TradePreview }> {
     const preview: TradePreview = {
       attackerId: '',
       defenderId: '',
@@ -179,7 +235,7 @@ export class MatchService {
       footnote: null,
     };
     const payload = { matchId: id, preview };
-    assertClientSafe(payload, match, 0);
+    assertClientSafe(payload, match, viewer);
     return { ok: true, payload };
   }
 
@@ -324,14 +380,14 @@ export class MatchService {
 
   private syncClock(match: MatchRecord, depth = 0): void {
     const actor = actorOf(match.state);
-    if (actor == null) {
+    if (match.friend?.forfeitedBy != null || actor == null) {
       this.clearTimer(match.id);
       this.plans.delete(match.id);
       match.thinking = false;
       match.deadline = null;
       return;
     }
-    if (actor === 1) {
+    if (actor === 1 && !match.friend) {
       this.clearTimer(match.id);
       match.turnToken += 1;
       this.startPilot(match, depth);
@@ -345,13 +401,15 @@ export class MatchService {
       return;
     }
     const leftMulligan = match.clockPhase === 'mulligan' && match.state.phase !== 'mulligan';
-    if (match.deadline == null || match.thinking || leftMulligan) {
+    const seatChanged = match.clockSeat !== actor;
+    if (match.deadline == null || match.thinking || leftMulligan || seatChanged) {
       this.clearTimer(match.id);
       match.thinking = false;
       match.turnToken += 1;
       const delayMs = this.clockDelay(match);
       match.deadline = Date.now() + delayMs;
       match.clockPhase = match.state.phase;
+      match.clockSeat = actor;
       const token = match.turnToken;
       this.armClock(match.id, { kind: 'human', token, delayMs }, () => {
         void this.onTimeout(match.id, token);
@@ -439,26 +497,48 @@ export class MatchService {
   private async onTimeout(id: string, token: number): Promise<void> {
     await this.lock(id, async () => {
       const match = await this.repo.get(id);
-      if (!match || match.turnToken !== token || match.state.winner >= 0) return;
-      if (actorOf(match.state) !== 0) return;
+      if (!match || match.turnToken !== token || match.state.winner >= 0 || match.friend?.forfeitedBy != null) return;
+      const actor = actorOf(match.state);
+      if (actor == null) return;
+      if (!match.friend && actor !== 0) return;
+      if (match.friend) {
+        match.friend.misses[actor] += 1;
+        if (match.friend.misses[actor] >= MISS_LIMIT) {
+          match.friend.forfeitedBy = actor;
+          match.generation += 1;
+          match.deadline = null;
+          match.thinking = false;
+          this.clearTimer(match.id);
+          await this.repo.put(match);
+          this.note(match);
+          return;
+        }
+      }
       const action: GameAction = match.state.phase === 'mulligan' ? { type: 'mulligan', idx: [] } : { type: 'end' };
       if (!this.applyLogged(match, action, 'timeout')) return;
       this.syncClock(match);
       await this.repo.put(match);
+      this.note(match);
     });
   }
 
-  private toClient(match: MatchRecord): ClientPayload {
-    const yourTurn = !match.thinking && actorOf(match.state) === 0;
-    let view = this.annotateView(match, this.adapter.view(match.state, 0));
+  private toClient(match: MatchRecord, viewer: PlayerId = 0): ClientPayload {
+    const forfeited = match.friend?.forfeitedBy ?? null;
+    const yourTurn = forfeited == null && !match.thinking && actorOf(match.state) === viewer;
+    let view = this.annotateView(match, this.adapter.view(match.state, viewer));
     if (!yourTurn) view = { ...view, yourTurn: false };
+    if (forfeited != null) {
+      const winner: PlayerId = forfeited === 0 ? 1 : 0;
+      view = { ...view, winner, winReason: 'forfeit', yourTurn: false, phase: 'game_over' };
+    }
+    const over = view.winner != null;
     const payload: ClientPayload = {
       matchId: match.id,
       view,
-      legalActions: yourTurn ? this.adapter.legalActions(match.state, 0) : [],
-      turnDeadline: match.deadline,
+      legalActions: yourTurn ? this.adapter.legalActions(match.state, viewer) : [],
+      turnDeadline: over ? null : match.deadline,
       turnDurationMs: this.clockDelay(match),
-      opponentThinking: match.thinking,
+      opponentThinking: match.friend ? false : match.thinking,
       engineVersion: match.setup.engineVersion,
       cardsVersion: match.setup.cardsVersion,
       rulesVersion: match.setup.rulesVersion,
@@ -466,11 +546,23 @@ export class MatchService {
       secondInkTurns: match.setup.rules.secondInkTurns,
       secondVerse: match.setup.rules.secondVerse ?? 0,
       stance: match.stance,
-      status: match.state.winner >= 0 ? 'complete' : 'playing',
+      status: over ? 'complete' : 'playing',
       tutorial: match.tutorial === true,
+      friend: Boolean(match.friend),
+      rematchCode: match.friend?.rematchCode && match.friend.rematchCode !== 'pending' ? match.friend.rematchCode : null,
+      generation: match.generation,
     };
-    assertClientSafe(payload, match, 0);
+    assertClientSafe(payload, match, viewer);
     return payload;
+  }
+
+  private allows(match: MatchRecord, player: PlayerId): boolean {
+    if (match.friend) return player === 0 || player === 1;
+    return player === 0;
+  }
+
+  private note(match: MatchRecord): void {
+    if (match.friend) this.options.onChange?.(match.id);
   }
 
   /** Page names for holds and conquers. Computed by replaying actions, never written into engine state. */
@@ -518,8 +610,12 @@ export class MatchService {
   }
 }
 
-function isUuid(value: string | undefined): value is string {
-  return typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+function isServerId(value: string | undefined): value is string {
+  return typeof value === 'string' && (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value) || FRIEND_CODE.test(value));
+}
+
+function friendOver(match: MatchRecord): boolean {
+  return match.friend?.forfeitedBy != null || match.state.winner >= 0;
 }
 
 function randomSeed(): number {

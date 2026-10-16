@@ -29,6 +29,16 @@ export interface MatchRecord {
   humanTurnMs?: number;
   /** Phase the current human clock was armed for. Leaving mulligan starts a fresh turn clock. */
   clockPhase?: string;
+  /** Seat the current human clock belongs to. A friend match re-arms when the seat changes. */
+  clockSeat?: PlayerId;
+  /** Two human seats. Absent on AI and tutorial matches. */
+  friend?: {
+    sessions: [string, string];
+    deckIds: [string, string];
+    misses: [number, number];
+    forfeitedBy: PlayerId | null;
+    rematchCode: string | null;
+  };
 }
 
 export interface MatchRepository {

@@ -248,17 +248,22 @@ export function tradeHtml(preview: TradePreview, stats?: { attackerAtk: number; 
   return `<div class="trade" id="trade"><div class="tr-row">${side(preview.attackerName, stats?.attackerAtk ?? 0, preview.attackerHealthBefore, preview.attackerHealthAfter, preview.attackerDies)}<span class="vs">vs</span>${side(preview.defenderName, stats?.defenderAtk ?? 0, preview.defenderHealthBefore, preview.defenderHealthAfter, preview.defenderDies)}</div>${foot}</div>`;
 }
 
-export function endHtml(view: PlayerView, tutorial: boolean): string {
+export function endHtml(view: PlayerView, tutorial: boolean, friend = false): string {
   const win = view.winner === view.you;
   const foe = view.foeLegend.name;
-  const why = win
+  const why = friend ? friendWhy(view, win, foe) : win
     ? view.verse[0] >= view.verseGoal
       ? `You won because you reached <b>${view.verse[0]} Verses</b>.`
       : `You won because you had <b>more Verses after both 7th turns: ${view.verse[0]} to ${view.verse[1]}</b>.`
     : `You lost because <b>${foe} reached ${view.verse[1]} Verses</b>.`;
   const war = tutorial
     ? 'House war · this was a guided match, so no change'
-    : 'Each win moves your House’s bar in the war.';
+    : friend
+      ? 'Friend match'
+      : 'Each win moves your House’s bar in the war.';
+  const again = friend
+    ? '<button class="btn secondary" id="rematch">Rematch</button><a class="btn primary" id="lobby" href="/">Lobby</a>'
+    : '<button class="btn secondary" id="rematch">Rematch</button><button class="btn primary" id="play-real">Play for real</button>';
   return `<div class="app duel end ${win ? 'win' : 'loss'}" style="--mine:var(--h-${view.youLegend.house}-a);--rival:var(--h-${view.foeLegend.house}-a)">
     <div class="end-in">
       <div class="end-hd"><span class="eyebrow">${win ? 'Victory' : 'Defeat'}</span><h1>${win ? 'Won' : 'Lost'}</h1>
@@ -266,10 +271,25 @@ export function endHtml(view: PlayerView, tutorial: boolean): string {
       <div class="panel why"><span class="eyebrow">${win ? 'You won because…' : 'You lost because…'}</span><p>${why}</p>${swingLine(view)}</div>
       <div class="panel"><span class="eyebrow">Verses by Page</span>${scoreTable(view)}</div>
       <div class="panel war"><span class="eyebrow">${war}</span></div>
-      <div class="end-acts"><button class="btn secondary" id="review-log">Review log</button><button class="btn secondary" id="rematch">Rematch</button><button class="btn primary" id="play-real">Play for real</button></div>
+      <div class="end-acts"><button class="btn secondary" id="review-log">Review log</button>${again}</div>
     </div>
     <div class="ovl" id="ovl"></div>
   </div>`;
+}
+
+function friendWhy(view: PlayerView, win: boolean, foe: string): string {
+  if (view.winReason === 'forfeit') {
+    return win ? 'You won because your friend missed three turns in a row.' : 'You lost because you missed three turns in a row.';
+  }
+  if (view.winReason === 'health') {
+    return win ? 'You won because you had more health on the board.' : `You lost because ${foe} had more health on the board.`;
+  }
+  if (view.winReason === 'tiebreak') {
+    return win ? 'You won on the final tiebreak.' : 'You lost on the final tiebreak.';
+  }
+  if (win && view.verse[0] >= view.verseGoal) return `You won because you reached <b>${view.verse[0]} Verses</b>.`;
+  if (win) return `You won because you had <b>more Verses: ${view.verse[0]} to ${view.verse[1]}</b>.`;
+  return `You lost because <b>${foe} reached ${view.verse[1]} Verses</b>.`;
 }
 
 function scoreTable(view: PlayerView): string {

@@ -1,4 +1,4 @@
-import type { ClientPayload, GameAction, Stance, TradePreview } from '../types.js';
+import type { ClientPayload, FriendBody, GameAction, Stance, TradePreview } from '../types.js';
 
 async function readJson<T>(response: Response): Promise<T> {
   const text = await response.text();
@@ -45,4 +45,32 @@ export function previewAttack(matchId: string, action: GameAction, signal?: Abor
 
 export function verifyReplay(matchId: string): Promise<{ ok: boolean; actionCount: number; mismatches: string[] }> {
   return fetch(`/api/matches/${matchId}/replay-verify`, { method: 'POST' }).then((response) => readJson(response));
+}
+
+export function createFriend(deckId: string): Promise<FriendBody> {
+  return fetch('/api/friends', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ deckId }),
+  }).then((response) => readJson<FriendBody>(response));
+}
+
+export function readFriend(code: string): Promise<FriendBody> {
+  return fetch(`/api/friends/${code}`).then((response) => readJson<FriendBody>(response));
+}
+
+export function joinFriend(code: string, deckId: string): Promise<FriendBody> {
+  return fetch(`/api/friends/${code}/join`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ deckId }),
+  }).then((response) => readJson<FriendBody>(response));
+}
+
+export function cancelFriend(code: string): Promise<FriendBody> {
+  return fetch(`/api/friends/${code}/cancel`, { method: 'POST' }).then((response) => readJson<FriendBody>(response));
+}
+
+export function rematchFriend(code: string): Promise<FriendBody> {
+  return fetch(`/api/friends/${code}/rematch`, { method: 'POST' }).then((response) => readJson<FriendBody>(response));
 }
