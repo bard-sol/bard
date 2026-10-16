@@ -1,10 +1,15 @@
 import fs from 'node:fs';
 import { expect, test, type Locator, type Page } from '@playwright/test';
 
-const SHOTS = '/opt/cursor/artifacts';
+const SHOTS = process.env.ARTIFACT_DIR ?? '/opt/cursor/artifacts';
 
 async function shot(page: Page, name: string): Promise<void> {
-  if (test.info().project.name !== 'desktop' || !fs.existsSync(SHOTS)) return;
+  if (test.info().project.name !== 'desktop') return;
+  try {
+    fs.mkdirSync(SHOTS, { recursive: true });
+  } catch {
+    return;
+  }
   await page.screenshot({ path: `${SHOTS}/${name}.png` });
 }
 

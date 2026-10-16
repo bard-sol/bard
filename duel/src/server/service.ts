@@ -145,16 +145,42 @@ export class MatchService {
     if (player !== 0) return { ok: false, error: 'forbidden_view' };
     const match = await this.repo.get(id);
     if (!match) return { ok: false, error: 'not_found' };
-    if (match.thinking || actorOf(match.state) !== 0) return { ok: false, error: 'opponent_turn' };
+    if (match.thinking || actorOf(match.state) !== 0) return this.quietPreview(id, match, action);
     try {
       const preview = this.adapter.previewAction(match.state, 0, action);
       const payload = { matchId: id, preview };
       assertClientSafe(payload, match, 0);
       return { ok: true, payload };
     } catch (error) {
-      if (error instanceof IllegalActionError) return { ok: false, error: 'illegal_action' };
+      if (error instanceof IllegalActionError) return this.quietPreview(id, match, action);
       throw error;
     }
+  }
+
+  /** A preview that lost the race with a committed action. No error status, no hidden ids. */
+  private quietPreview(id: string, match: MatchRecord, _action: GameAction): ServiceResult<{ matchId: string; preview: TradePreview }> {
+    const preview: TradePreview = {
+      attackerId: '',
+      defenderId: '',
+      attackerName: '',
+      defenderName: '',
+      attackerHealthBefore: 0,
+      defenderHealthBefore: 0,
+      attackerHealthAfter: 0,
+      defenderHealthAfter: 0,
+      attackerDies: false,
+      defenderDies: false,
+      verseGain: 0,
+      marginNoteStrikes: false,
+      units: [],
+      deaths: [],
+      conquer: false,
+      noteMayFire: false,
+      footnote: null,
+    };
+    const payload = { matchId: id, preview };
+    assertClientSafe(payload, match, 0);
+    return { ok: true, payload };
   }
 
   async replayVerify(id: string): Promise<ServiceResult<ReplayReport>> {

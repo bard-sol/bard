@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import { expect, test, type Locator, type Page } from '@playwright/test';
 
-const SHOTS = '/opt/cursor/artifacts';
+const SHOTS = process.env.ARTIFACT_DIR ?? '/opt/cursor/artifacts';
 
 async function step(page: Page): Promise<string | undefined> {
   return page.evaluate(() => document.documentElement.dataset.guideStep);
@@ -127,7 +127,12 @@ test('touch taps play a card and attack at step 15', async ({ page }) => {
   const foe = page.locator('.page[data-i="0"] .row.rival .un');
   await touchTap(page, novice);
   await expect(novice).toHaveClass(/armed/);
-  if (fs.existsSync(SHOTS)) await page.screenshot({ path: `${SHOTS}/touch-attack-armed.png` });
+  try {
+    fs.mkdirSync(SHOTS, { recursive: true });
+    await page.screenshot({ path: `${SHOTS}/touch-attack-armed.png` });
+  } catch {
+    /* Screenshot dir is optional away from the artifact machine. */
+  }
   await touchTap(page, foe);
   await at(page, 17);
 });

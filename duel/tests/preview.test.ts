@@ -3,7 +3,7 @@ import { actorOf, createEngineAdapter } from '../src/engine/adapter.js';
 import { createApp } from '../src/server/http.js';
 import { MemoryMatchRepository } from '../src/server/store.js';
 import { MatchService } from '../src/server/service.js';
-import type { ClientPayload, GameAction } from '../src/types.js';
+import type { ClientPayload, GameAction, TradePreview } from '../src/types.js';
 import { candleDeck, foldDeck, listen, postJson } from './support.js';
 
 describe('end turn and preview', () => {
@@ -58,6 +58,31 @@ describe('end turn and preview', () => {
       });
       const next = (await after.json()) as ClientPayload;
       if (next.view.yourTurn && next.view.phase !== 'mulligan') expect(next.turnDurationMs).toBe(35_000);
+    } finally {
+      service.dispose();
+      await server.close();
+    }
+  });
+
+  it('answers an illegal preview during mulligan with 200 and an empty trade', async () => {
+    const { app, service } = createApp({ aiTurnMs: 0, turnTimeoutMs: 35_000 });
+    const server = await listen(app);
+    try {
+      const created = await postJson<ClientPayload>(`${server.url}/api/matches`, {
+        playerDeckId: 'candle',
+        opponentDeckId: 'fold',
+        stance: 'balanced',
+      });
+      expect(created.status).toBe(201);
+      expect(created.body.view.phase).toBe('mulligan');
+      const preview = await postJson<{ matchId: string; preview: TradePreview }>(`${server.url}/api/matches/${created.body.matchId}/preview`, {
+        action: { type: 'attack', uid: 1, target: 2 },
+      });
+      expect(preview.status).toBe(200);
+      expect(preview.body.preview.attackerName).toBe('');
+      expect(preview.body.preview.defenderName).toBe('');
+      expect(preview.body.preview.attackerId).toBe('');
+      expect(JSON.stringify(preview.body)).not.toContain('"seed"');
     } finally {
       service.dispose();
       await server.close();

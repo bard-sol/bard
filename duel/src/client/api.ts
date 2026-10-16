@@ -34,11 +34,12 @@ export function sendAction(matchId: string, action: GameAction): Promise<ClientP
   }).then((response) => readJson<ClientPayload>(response));
 }
 
-export function previewAttack(matchId: string, action: GameAction): Promise<{ matchId: string; preview: TradePreview }> {
+export function previewAttack(matchId: string, action: GameAction, signal?: AbortSignal): Promise<{ matchId: string; preview: TradePreview }> {
   return fetch(`/api/matches/${matchId}/preview`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ action }),
+    signal,
   }).then((response) => readJson(response));
 }
 

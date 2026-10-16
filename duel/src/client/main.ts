@@ -48,6 +48,18 @@ interface Drag extends Piece {
   y: number;
   moved: boolean;
   pointer: number;
+  /** Horizontal movement scrolls the phone hand instead of starting a play drag. */
+  scroll?: boolean;
+  lastX?: number;
+}
+
+let previewGen = 0;
+let previewAbort = new AbortController();
+
+function cancelPreviews(): void {
+  previewGen += 1;
+  previewAbort.abort();
+  previewAbort = new AbortController();
 }
 
 const ui = {
@@ -112,57 +124,71 @@ function markArmed(): void {
   document.querySelectorAll(`.handrow ${sel}, .row.you ${sel}`).forEach((el) => el.classList.add('armed'));
 }
 
-/** Phone hand: 92px fan, a word-bounded ability line, names that wrap or shrink. */
+/** Phone hand: full 92px cards in a sideways row. Ability text stays at 10.5px across up to three lines. */
 function fitPhoneHand(): void {
   if (window.innerWidth > 600) return;
   const hand = document.getElementById('hand');
   if (!hand) return;
   const cards = Array.from(hand.querySelectorAll(':scope > .dc.sz-hand-s')) as HTMLElement[];
-  const cardW = 92;
-  const gap = 6;
-  const fan = Math.max(cardW, hand.clientWidth - 1);
-  const n = cards.length;
-  const flat = n * cardW + Math.max(0, n - 1) * gap;
-  const step = n <= 1 ? cardW : flat <= fan ? cardW + gap : (fan - cardW) / Math.max(1, n - 1);
-  hand.style.setProperty('--fan-step', `${step}px`);
-  hand.style.justifyContent = flat <= fan ? 'center' : 'flex-start';
-  const textW = Math.max(24, Math.min(cardW - 8, step - 8));
   for (const card of cards) {
     const armed = card.classList.contains('armed');
-    fitHandName(card.querySelector('.dc-name'), armed ? 132 : textW);
-    fitHandAbility(card.querySelector('.dc-text'), textW, armed);
-    fitHandStats(card.querySelector('.dc-stats'), textW, armed);
+    if (armed) liftArmedCard(card);
+    else resetCardBox(card);
+    fitHandName(card.querySelector('.dc-name'), armed);
+    fitHandAbility(card.querySelector('.dc-text'), armed);
+    fitHandStats(card.querySelector('.dc-stats'), armed);
   }
 }
 
-function fitHandName(el: Element | null, width: number): void {
+function resetCardBox(card: HTMLElement): void {
+  card.style.position = '';
+  card.style.left = '';
+  card.style.top = '';
+  card.style.zIndex = '';
+}
+
+function liftArmedCard(card: HTMLElement): void {
+  const box = card.getBoundingClientRect();
+  card.style.position = 'fixed';
+  card.style.zIndex = '40';
+  card.style.left = `${Math.max(8, Math.min(box.left, window.innerWidth - 156))}px`;
+  card.style.top = `${Math.max(8, box.bottom - 208)}px`;
+}
+
+function fitHandName(el: Element | null, armed: boolean): void {
   if (!(el instanceof HTMLElement)) return;
   const full = (el.textContent ?? '').trim();
+  if (armed) {
+    el.style.fontSize = '';
+    el.style.width = '';
+    el.style.maxWidth = '';
+    el.style.whiteSpace = 'normal';
+    return;
+  }
   el.style.display = 'block';
   el.style.whiteSpace = 'normal';
-  el.style.overflow = 'visible';
+  el.style.overflow = 'hidden';
   el.style.setProperty('-webkit-line-clamp', 'unset');
   el.style.boxSizing = 'border-box';
-  el.style.paddingRight = '2px';
-  el.style.maxWidth = `${width}px`;
-  el.style.width = `${width}px`;
+  el.style.width = '100%';
+  el.style.maxWidth = '100%';
   const longest = full.split(/\s+/).reduce((best, word) => (word.length > best.length ? word : best), '');
   let size = 11;
-  while (size >= 4.5) {
+  while (size >= 7) {
     el.style.fontSize = `${size}px`;
     el.style.lineHeight = '1.15';
     el.style.whiteSpace = 'nowrap';
     el.textContent = longest;
-    const wordWide = el.scrollWidth > el.clientWidth;
+    const wordWide = el.scrollWidth > el.clientWidth + 1;
     el.style.whiteSpace = 'normal';
     el.textContent = full;
-    const tooTall = el.scrollHeight > size * 1.15 * 2 + 4;
+    const tooTall = el.scrollHeight > size * 1.15 * 2 + 2;
     if (!wordWide && !tooTall) break;
     size -= 0.5;
   }
 }
 
-function fitHandAbility(el: Element | null, width: number, armed: boolean): void {
+function fitHandAbility(el: Element | null, armed: boolean): void {
   if (!(el instanceof HTMLElement)) return;
   if (!el.dataset.fullHtml) {
     el.dataset.fullHtml = el.innerHTML;
@@ -171,57 +197,51 @@ function fitHandAbility(el: Element | null, width: number, armed: boolean): void
   if (armed) {
     el.innerHTML = el.dataset.fullHtml;
     el.style.whiteSpace = 'normal';
-    el.style.width = 'auto';
+    el.style.width = '';
     el.style.maxWidth = 'none';
+    el.style.maxHeight = 'none';
     el.style.fontSize = '11px';
+    el.style.overflow = 'visible';
     return;
   }
   const words = (el.dataset.full ?? '').split(' ').filter(Boolean);
   el.style.display = 'block';
-  el.style.whiteSpace = 'nowrap';
-  el.style.width = `${width}px`;
-  el.style.maxWidth = `${width}px`;
-  el.style.fontSize = '11px';
+  el.style.whiteSpace = 'normal';
+  el.style.width = '100%';
+  el.style.maxWidth = '100%';
+  el.style.boxSizing = 'border-box';
+  el.style.overflow = 'hidden';
+  el.style.fontSize = '10.5px';
+  el.style.lineHeight = '1.25';
+  const line = 10.5 * 1.25;
+  const body = el.parentElement;
+  const name = body?.querySelector('.dc-name');
+  const nameH = name instanceof HTMLElement ? name.offsetHeight : 0;
+  const bodyH = body instanceof HTMLElement ? body.clientHeight : line * 3;
+  const available = Math.max(line * 2, bodyH - nameH - 4);
+  const cap = Math.min(line * 3, available);
+  el.style.maxHeight = `${cap}px`;
   let kept = '';
   for (const word of words) {
     const next = kept ? `${kept} ${word}` : word;
     el.textContent = next;
-    if (el.scrollWidth > el.clientWidth - 1 && kept) {
+    if (el.scrollHeight > cap + 1 && kept) {
       el.textContent = kept;
       break;
     }
     kept = next;
   }
   if (!kept && words[0]) el.textContent = words[0];
-  let size = 11;
-  while (size > 8 && el.scrollWidth > el.clientWidth - 1) {
-    size -= 0.5;
-    el.style.fontSize = `${size}px`;
-  }
 }
 
-function fitHandStats(el: Element | null, width: number, armed: boolean): void {
+function fitHandStats(el: Element | null, armed: boolean): void {
   if (!(el instanceof HTMLElement)) return;
   el.style.transform = '';
-  if (armed) {
-    el.style.width = 'auto';
-    el.style.maxWidth = 'none';
-    return;
-  }
-  el.style.width = `${width}px`;
-  el.style.maxWidth = `${width}px`;
-  el.style.overflow = 'hidden';
-  el.style.boxSizing = 'border-box';
-  const sts = Array.from(el.querySelectorAll('.st')) as HTMLElement[];
-  let size = 12;
-  for (const st of sts) st.style.fontSize = '';
-  while (sts.length && el.scrollWidth > el.clientWidth + 1 && size > 8) {
-    size -= 0.5;
-    for (const st of sts) st.style.fontSize = `${size}px`;
-  }
+  el.style.width = '';
+  el.style.maxWidth = '';
+  if (armed) return;
   if (el.scrollWidth > el.clientWidth + 1 && el.scrollWidth > 0) {
-    const scale = el.clientWidth / el.scrollWidth;
-    el.style.transform = `scale(${scale})`;
+    el.style.transform = `scale(${el.clientWidth / el.scrollWidth})`;
     el.style.transformOrigin = 'left bottom';
   }
 }
@@ -314,6 +334,7 @@ function paint(): void {
     spareUid: spareInHand(payload.view)?.uid ?? '',
     championId: championStub(payload.view, payload.tutorial)?.id ?? '',
   });
+  const savedHand = document.getElementById('hand')?.scrollLeft ?? 0;
   root.innerHTML = html;
   const host = document.createElement('div');
   host.className = 'toast-host';
@@ -322,6 +343,7 @@ function paint(): void {
   const hand = document.getElementById('hand');
   const manyAt = payload.tutorial ? 5 : 4;
   if (hand && hand.children.length > manyAt) hand.classList.add('many');
+  if (hand && !payload.tutorial) hand.scrollLeft = savedHand;
   for (const uid of ui.swap) document.querySelector(`.handrow [data-uid="${CSS.escape(uid)}"]`)?.classList.add('sel');
   paintBanner();
   paintTray();
@@ -329,6 +351,9 @@ function paint(): void {
   if (step?.id === 6 && window.IS_PHONE()) {
     document.querySelector('.app')?.insertAdjacentHTML('beforeend', `<div class="lift" id="lift">${window.cardFace('c_novice', { size: 'inspect' })}</div>`);
   }
+  markArmed();
+  fitPhoneHand();
+  revealGuideCard();
   paintCoach();
   mountSheets();
   if (ui.confirm && !payload.tutorial) {
@@ -341,8 +366,6 @@ function paint(): void {
   publish();
   maybeTips();
   noteRivalBeat();
-  markArmed();
-  fitPhoneHand();
   if (ui.busy) holdControls();
   void aimPreviews();
 }
@@ -374,6 +397,21 @@ function titleHtml(): string {
     <label>Stance <select id="stance"><option value="balanced">Balanced</option><option value="aggressive">Aggressive</option><option value="patient">Patient</option></select></label>
     <button class="btn primary" id="play-title">Play</button>
     <button class="btn secondary" id="replay-title">Replay tutorial</button></div></div>`;
+}
+
+function revealGuideCard(): void {
+  if (!window.IS_PHONE() || !ui.payload?.tutorial || !ui.guide) return;
+  const step = ui.guide.visible(Boolean(ui.preview));
+  if (!step) return;
+  const hand = document.getElementById('hand');
+  if (!hand) return;
+  const opts = coachOpts(step, { foeLeft: foeOnLeft(ui.payload.view) });
+  const hole = opts.holes
+    .map((sel) => document.querySelector(sel))
+    .find((el) => el instanceof HTMLElement && hand.contains(el));
+  const card = hole instanceof HTMLElement ? hole.closest('.dc') ?? hole : null;
+  if (!(card instanceof HTMLElement) || !hand.contains(card)) return;
+  hand.scrollLeft = Math.max(0, card.offsetLeft - (hand.clientWidth - card.offsetWidth) / 2);
 }
 
 function paintCoach(): void {
@@ -543,18 +581,21 @@ async function aimPreviews(): Promise<void> {
   const payload = ui.payload;
   const piece = ui.armed;
   if (!payload || !piece || piece.kind !== 'unit') return;
+  const gen = previewGen;
+  const signal = previewAbort.signal;
   const attacks = payload.legalActions.filter((action) => action.type === 'attack' && String(action.uid) === piece.uid);
   const next = new Map<string, TradePreview>();
   await Promise.all(attacks.map(async (action) => {
     if (action.type !== 'attack') return;
     try {
-      const result = await previewAttack(payload.matchId, action);
+      const result = await previewAttack(payload.matchId, action, signal);
+      if (!result.preview.attackerName && !result.preview.defenderName) return;
       next.set(String(action.target), result.preview);
     } catch {
-      /* The badge stays off when the server refuses the preview. */
+      /* A cancelled or quiet preview leaves the badge off. */
     }
   }));
-  if (ui.armed?.uid !== piece.uid) return;
+  if (gen !== previewGen || ui.armed?.uid !== piece.uid) return;
   ui.badges = next;
   document.querySelectorAll('.un-float.preview').forEach((node) => node.remove());
   for (const [id, preview] of next) {
@@ -574,6 +615,7 @@ function holeHit(target: EventTarget | null): boolean {
 }
 
 function adopt(payload: ClientPayload): void {
+  cancelPreviews();
   const beatWasShown = ui.step14Painted;
   const before = ui.guide?.step?.id;
   const previous = ui.payload;
@@ -682,6 +724,7 @@ async function act(action: GameAction): Promise<void> {
     offerPlayStepTip();
     return;
   }
+  cancelPreviews();
   ui.busy = true;
   ui.preview = null;
   ui.legendArmed = false;
@@ -737,7 +780,20 @@ function beginDrag(event: PointerEvent): void {
 function moveDrag(event: PointerEvent): void {
   const drag = ui.drag;
   if (!drag || drag.pointer !== event.pointerId) return;
-  if (Math.hypot(event.clientX - drag.x, event.clientY - drag.y) > 8) drag.moved = true;
+  const dx = event.clientX - drag.x;
+  const dy = event.clientY - drag.y;
+  if (!drag.moved && !drag.scroll && Math.hypot(dx, dy) > 8) {
+    const card = document.querySelector(`.handrow > .dc[data-uid="${CSS.escape(drag.uid)}"]`);
+    if (drag.kind === 'card' && window.IS_PHONE() && card && Math.abs(dx) > Math.abs(dy)) drag.scroll = true;
+    else drag.moved = true;
+  }
+  if (drag.scroll) {
+    const hand = document.getElementById('hand');
+    if (hand) hand.scrollLeft -= event.clientX - (drag.lastX ?? drag.x);
+    drag.lastX = event.clientX;
+    if (event.cancelable) event.preventDefault();
+    return;
+  }
   if (!drag.moved) return;
   if (event.cancelable) event.preventDefault();
   let ghost = document.getElementById('ghost');
@@ -761,20 +817,50 @@ function moveDrag(event: PointerEvent): void {
 async function loadPreview(uid: number, target: number): Promise<void> {
   const id = ui.payload?.matchId;
   if (!id) return;
+  const gen = previewGen;
+  const signal = previewAbort.signal;
   try {
-    const result = await previewAttack(id, { type: 'attack', uid, target });
-    if (!ui.drag) return;
+    const result = await previewAttack(id, { type: 'attack', uid, target }, signal);
+    if (gen !== previewGen || !ui.drag) return;
+    if (!result.preview.attackerName && !result.preview.defenderName) return;
     ui.preview = result.preview;
     paintCoach();
-  } catch {
+  } catch (error) {
+    if (gen !== previewGen || (error instanceof DOMException && error.name === 'AbortError')) return;
     ui.preview = null;
   }
+}
+
+function snapHand(): void {
+  const hand = document.getElementById('hand');
+  if (!hand || window.innerWidth > 600) return;
+  const cards = Array.from(hand.querySelectorAll(':scope > .dc')) as HTMLElement[];
+  if (cards.length === 0) return;
+  const mid = hand.scrollLeft + hand.clientWidth / 2;
+  let best = cards[0];
+  let bestDist = Number.POSITIVE_INFINITY;
+  for (const card of cards) {
+    if (!best) break;
+    const center = card.offsetLeft + card.offsetWidth / 2;
+    const dist = Math.abs(center - mid);
+    if (dist < bestDist) {
+      bestDist = dist;
+      best = card;
+    }
+  }
+  if (!best) return;
+  hand.scrollLeft = Math.max(0, best.offsetLeft - (hand.clientWidth - best.offsetWidth) / 2);
 }
 
 async function endDrag(event: PointerEvent, held = false): Promise<void> {
   const drag = ui.drag;
   ui.drag = null;
   document.getElementById('ghost')?.remove();
+  if (drag?.scroll) {
+    snapHand();
+    ui.preview = null;
+    return;
+  }
   if (!drag?.moved || !ui.payload) {
     ui.preview = null;
     const target = boardHit(event.clientX, event.clientY);
