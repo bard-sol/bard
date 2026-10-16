@@ -13,6 +13,7 @@ interface Board {
   matchId: string;
   generation?: number;
   friend?: boolean;
+  turnDurationMs?: number;
   view: {
     you: number;
     yourTurn: boolean;
@@ -139,7 +140,8 @@ test('a missed turn ends itself', async ({ page, browser }) => {
   }, { timeout: 15_000 }).toBe(true);
   const active = (await page.evaluate(() => (window.__duel as Board).view.yourTurn)) ? page : guest;
   const stamp = await stampOf(active);
-  await expect.poll(() => stampOf(active), { timeout: 12_000 }).not.toBe(stamp);
+  const turnMs = await active.evaluate(() => (window.__duel as Board | undefined)?.turnDurationMs ?? 60_000);
+  await expect.poll(() => stampOf(active), { timeout: turnMs + 15_000 }).not.toBe(stamp);
   await guest.close();
 });
 
