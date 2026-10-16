@@ -20,6 +20,13 @@ async function next(page: Page): Promise<void> {
   await page.locator('[data-guide-next]').click();
 }
 
+async function keywordHold(page: Page): Promise<void> {
+  const lift = page.locator('#lift [data-keyword="Kindle"]');
+  const hand = page.locator('.handrow [data-keyword="Kindle"]');
+  const target = (await lift.count()) > 0 ? lift.first() : hand.first();
+  await target.click({ delay: 700 });
+}
+
 async function drag(page: Page, from: Locator, to: Locator, hold?: number): Promise<void> {
   const start = await from.boundingBox();
   const end = await to.boundingBox();
@@ -64,7 +71,7 @@ test('clicks through all 27 guided steps', async ({ page }) => {
   await expect(page.locator('#ink')).toBeVisible();
   await next(page);
   await at(page, 6);
-  await page.locator('#lift [data-keyword="Kindle"], #inspect [data-keyword="Kindle"]').click({ delay: 700 });
+  await keywordHold(page);
   await at(page, 7);
   await drag(page, page.locator('.handrow [data-def="c_novice"]'), page.locator('.page[data-i="0"] .row.you .slot').first());
   await at(page, 8);

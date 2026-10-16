@@ -39,8 +39,8 @@ window.TERMS = {
 // ───────────────────────── helpers ─────────────────────────
 const hv = (h) => `--house:var(--h-${h}-a);--house-b:var(--h-${h}-b)`;
 const KWRE = /\b(Opening Line|Last Word|Bound|Ward|Swift|Hidden|Silence|Cleave|Kindle(?: \d)?|Riposte|Board)\b/g;
-function abil(text) {
-  return text.replace(KWRE, (m) => `<b class="kwt">${m}</b>`).replace(/\(No ability\.\)/, '<span class="noab">No ability.</span>');
+function abil(text, mark) {
+  return text.replace(KWRE, (m) => `<b class="kwt"${mark ? ` data-keyword="${m.replace(/ \d$/, '')}"` : ''}>${m}</b>`).replace(/\(No ability\.\)/, '<span class="noab">No ability.</span>');
 }
 function kwOf(c) { return (c.kw || []).filter((k) => KW13[k]); }
 function costHTML(c, o = {}) { return `<span class="dc-cost ${o.cant ? 'cant' : ''}" title="${c.cost} Ink">${icon('ink_f', 'drop')}<b>${c.cost}</b></span>`; }
@@ -72,11 +72,11 @@ window.cardFace = function (id, o = {}) {
     const k = kwOf(c);
     return `<div class="${cls}" style="${hv(c.house)}">${artHTML(c, { noTag: true, cssPh: true })}${costHTML(c, o)}
       <span class="dc-ti">${icon(TYPEI[c.type])}</span>${id.startsWith('champ_') ? '<span class="dc-champ">Champion</span>' : ''}
-      <div class="dc-body"><div class="dc-name">${c.mini}</div>${k.length ? `<div class="dc-kwi">${k.slice(0, 3).map((x) => icon(KWI[x])).join('')}</div>` : ''}</div>${foot}</div>`;
+      <div class="dc-body"><div class="dc-name">${c.mini}</div>${k.length ? `<div class="dc-kwi">${k.slice(0, 3).map((x) => icon(KWI[x])).join('')}</div>` : ''}<p class="dc-text">${abil(c.text)}</p></div>${foot}</div>`;
   }
   return `<div class="${cls}" style="${hv(c.house)}">${artHTML(c)}${costHTML(c, o)}${id.startsWith('champ_') ? '<span class="dc-champ">Champion · once per match</span>' : ''}<button class="dc-q" aria-label="Card details">${icon('help')}</button>
     <div class="dc-body"><div class="dc-name">${c.name}</div>${typeLine(c)}
-      ${size === 'inspect' ? kwChips(c) : ''}<p class="dc-text">${abil(c.text)}</p></div>${foot}</div>`;
+      ${size === 'inspect' ? kwChips(c) : ''}<p class="dc-text">${abil(c.text, size === 'hand')}</p></div>${foot}</div>`;
 };
 
 // Board unit token. u = { id, atk, hp, maxHp, ward, hidden, silenced, tired, ready, rip, buff, dmgd, hl, tag }
@@ -143,26 +143,35 @@ window.legendBtn = function (house, state = 'ready', o = {}) {
   return `<button class="lgd ${state} ${o.cls || ''}" id="${o.id || 'legend'}"${o.disabled ? ' disabled' : ''} style="${hv(house)}"><span class="lg-face"><img src="${art}" alt=""><span class="lg-cost ${state === 'noink' ? 'short' : ''}">${icon('ink_f')}<b>${L.cost}</b></span>${state === 'used' ? `<span class="lg-badge">${icon('check')}</span>` : state === 'locked' ? `<span class="lg-badge">${icon('lock')}</span>` : ''}</span>
     <span class="lg-txt"><span class="lg-n">${L.name}<span class="lg-pw">Power</span></span><span class="lg-d">${sub}</span></span></button>`;
 };
-window.turnChip = (t, o = {}) => `<div class="turn ${o.cls || ''}" id="turn"><span class="t-who ${o.rival ? 'rv' : ''}">${o.rival ? "Rival's turn" : 'Your turn'}</span><b>Turn ${t}<small> / 7</small></b>${o.step ? `<span class="t-step">${o.step}</span>` : ''}</div>`;
+window.turnChip = (t, o = {}) => {
+  const phase = o.phase || '';
+  const bar = phase ? `<span class="t-step">${['Play', 'Fight', 'End'].map((name) => `<i class="${phase === name ? 'on' : ''}">${name}</i>`).join('<em>·</em>')}</span>` : (o.step ? `<span class="t-step">${o.step}</span>` : '');
+  return `<div class="turn ${o.cls || ''}" id="turn"><span class="t-who ${o.rival ? 'rv' : ''}">${o.rival ? "Rival's turn" : 'Your turn'}</span><b>Turn ${t}<small> / 7</small></b>${bar}</div>`;
+};
 window.rivalBar = function (S, o = {}) {
-  const R = S.rival, L = D13.legends[R.house];
+  const R = S.rival, Y = S.you, L = D13.legends[R.house];
   return `<div class="rbar" style="${hv(R.house)}"><span class="r-av"><img src="${C(L.champion).art}" alt=""></span>
     <div class="r-id"><b>${R.name}</b><span>${HOUSE_NAME[R.house].replace(/^The /, '')} · ${icon('hand')}${R.hand} · ${icon('deck')}${R.deck}</span></div>
-    ${verseHTML(R.verse, { cls: 'rival', id: 'rverse', pips: !IS_PHONE() })}<button class="ib help" id="help" aria-label="How to play">${icon('help')}</button></div>`;
+    <div class="race">${verseHTML(Y.verse, { id: 'yverse', pips: false })}${verseHTML(R.verse, { cls: 'rival', id: 'rverse', pips: false })}</div>
+    <button class="ib help" id="help" aria-label="How to play">${icon('help')}</button></div>`;
 };
 window.youBar = function (S, o = {}) {
   const Y = S.you;
   const rival = S.active === 'rival';
-  return `<div class="ybar" style="${hv(Y.house)}"><div class="y-res">${verseHTML(Y.verse, { id: 'yverse', delta: o.vdelta, pips: !IS_PHONE() })}${inkHTML(Y.ink, Y.maxInk)}</div>
-    ${legendBtn(Y.house, Y.legend, { lockText: o.lockText, disabled: rival })}
-    <button class="btn primary endt ${rival ? 'wait' : ''} ${o.endCls || ''}" id="endturn"${rival ? ' disabled' : ''}>${rival ? "Rival's turn" : 'End turn'}</button></div>`;
+  const label = rival ? "Rival's turn" : (o.endLabel || 'End turn');
+  const phase = !rival && o.phaseLabel ? `<small class="endt-ph">${o.phaseLabel}</small>` : '';
+  const stub = o.championId ? `<button type="button" class="champ-stub" data-uid="champion" data-def="${o.championId}">${C(o.championId).mini}</button>` : '';
+  const spare = o.spareUid ? `<button type="button" class="spare" id="spare" data-uid="${o.spareUid}" data-def="spare_ink">+1</button>` : '';
+  return `<div class="ybar" style="${hv(Y.house)}"><div class="y-res">${inkHTML(Y.ink, Y.maxInk)}${spare}</div>
+    ${stub}${legendBtn(Y.house, Y.legend, { lockText: o.lockText, disabled: rival })}
+    <button class="btn primary endt ${rival ? 'wait' : ''} ${o.endCls || ''}" id="endturn"${rival ? ' disabled' : ''}>${label}${phase}</button></div>`;
 };
 window.handHTML = function (S, o = {}) {
   const sz = IS_PHONE() ? 'hand-s' : 'hand';
   const cards = S.you.hand.map((entry, i) => {
     const id = typeof entry === 'string' ? entry : entry.id;
     const uid = typeof entry === 'string' ? '' : (entry.uid ?? '');
-    const face = cardFace(id, { size: sz, cant: (entry.cant ?? C(id).cost > S.you.ink), sel: o.sel === i || entry.sel, cls: o.handCls?.[i] || '' });
+    const face = cardFace(id, { size: sz, cant: (entry.cant ?? C(id).cost > S.you.ink), playable: entry.playable, sel: o.sel === i || entry.sel, cls: o.handCls?.[i] || '' });
     return face.replace('<div class="', `<div data-uid="${uid}" data-def="${id}" class="`);
   });
   return `<div class="hand-wrap"><div class="hand-hd"><span class="eyebrow">Your hand · ${S.you.hand.length}</span><span class="eyebrow">${icon('deck')} Deck ${S.you.deck}</span><span class="eyebrow hint">${o.hint || 'Tap a card to read it'}</span></div>
@@ -173,7 +182,7 @@ window.bardSays = (txt, o = {}) => `<div class="bsay ${o.cls || ''}"><span class
 
 // desktop rails
 window.logPanel = function (entries, o = {}) {
-  return `<div class="panel logp ${o.cls || ''}" id="logp"><div class="ph"><span class="eyebrow">${o.title || 'Move log'}</span><span class="eyebrow">${o.right || 'Turn 4'}</span></div>
+  return `<div class="panel logp ${o.cls || ''}" id="logp"><div class="ph"><span class="eyebrow">${o.title || 'Move log'}</span><span class="eyebrow">${o.right || ''}</span></div>
     <ol class="log">${entries.map((e) => `<li class="${e.cur ? 'cur' : ''} ${e.who || ''} ${e.done ? 'done' : ''}"><span class="lg-i">${icon(e.i || 'dot')}</span><span class="lg-t">${e.t}</span>${e.cur ? '<span class="now">Now</span>' : e.r ? `<span class="res ${e.rc || ''}">${e.r}</span>` : ''}</li>`).join('')}</ol></div>`;
 };
 window.inspectPanel = function (id, o = {}) {
@@ -210,16 +219,16 @@ FIX.mainLog = [
 window.boardScreen = function (S, o = {}) {
   const pp = S.pages.map((p, i) => pagePanel(p, i, { open: o.open === i, drop: o.drop, hl: o.pageHl?.[i], status: o.status?.[i] }));
   const ticker = o.ticker ? `<div class="ticker"><span class="now">Now</span>${o.ticker}</div>` : '';
-  const ribbon = `<div class="ribbon m-only">${turnChip(S.turn, { rival: S.active === 'rival', step: S.step })}${ticker}<button class="ib sm" id="logbtn" aria-label="Move log">${icon('log')}<span>Log</span>${o.logDot ? '<i class="dotn"></i>' : ''}</button></div>`;
+  const phase = S.step === 'Fight' ? 'Fight' : S.step === 'Mulligan' ? '' : 'Play';
+  const ribbon = `<div class="ribbon m-only">${turnChip(S.turn, { rival: S.active === 'rival', phase })}${ticker}<button class="ib sm" id="logbtn" aria-label="Move log">${icon('log')}<span>Log</span>${o.logDot ? '<i class="dotn"></i>' : ''}</button></div>`;
   const pages = pp[0] + ribbon + pp[1];
   const desk = !IS_PHONE();
   return `<div class="app duel ${o.cls || ''}" style="--mine:var(--h-${S.you.house}-a);--rival:var(--h-${S.rival.house}-a)">
   ${statusBar()}
-  ${desk ? `<header class="dtop"><div class="brand"><span class="word">Bard</span><span class="mode">${o.mode || 'Card Duel · Guided first match'}</span></div>${turnChip(S.turn, { rival: S.active === 'rival', step: S.step })}<div class="dt-r"><button class="btn ghost" id="help-d">${icon('help')}How to play</button><button class="btn icon secondary" id="settings" aria-label="Settings">${icon('settings')}</button></div></header>` : ''}
+  ${desk ? `<header class="dtop"><div class="brand"><span class="word">Bard</span><span class="mode">${o.mode || 'Card Duel · Guided first match'}</span></div>${turnChip(S.turn, { rival: S.active === 'rival', phase })}<div class="dt-r"><button class="btn ghost" id="help-d">${icon('help')}How to play</button><button class="btn icon secondary" id="settings" aria-label="Settings">${icon('settings')}</button></div></header>` : ''}
   <div class="dmain">
-    ${desk ? `<aside class="rail l">${o.leftRail || logPanel(o.log || FIX.mainLog)}${o.leftBard ? `<div class="panel">${bardSays(o.leftBard)}</div>` : ''}</aside>` : ''}
+    ${desk ? `<aside class="rail l">${o.leftRail || logPanel(o.log || FIX.mainLog, { right: `Turn ${S.turn}` })}${o.leftBard ? `<div class="panel">${bardSays(o.leftBard)}</div>` : ''}</aside>` : ''}
     <div class="center">${rivalBar(S, o)}<div class="pages" id="pages">${pages}</div>${youBar(S, o)}${handHTML(S, o)}</div>
-    ${desk ? `<aside class="rail r">${o.rightRail ?? inspectPanel(o.inspect || 'c_wren')}</aside>` : ''}
   </div>
   <div class="ovl" id="ovl">${o.overlay || ''}</div>
 </div>`;

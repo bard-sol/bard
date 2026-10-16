@@ -25,6 +25,10 @@ export interface MatchRecord {
   createdAt: string;
   /** Guided first match. The rival's moves are the bubble-guide script, not the pilot. */
   tutorial?: boolean;
+  /** Human turn length for this match. Mulligan uses its own clock. */
+  humanTurnMs?: number;
+  /** Phase the current human clock was armed for. Leaving mulligan starts a fresh turn clock. */
+  clockPhase?: string;
 }
 
 export interface MatchRepository {

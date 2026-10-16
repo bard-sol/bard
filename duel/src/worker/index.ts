@@ -16,6 +16,7 @@ import {
 import { MemoryMatchRepository, type MatchRecord } from '../server/store.js';
 
 const COOKIE = 'bard_duel_session';
+const PLAYED_COOKIE = 'bard_duel_played';
 const COOKIE_MAX_AGE = 2_592_000;
 const SESSION_LABEL = 'bard-duel-v1';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -40,7 +41,7 @@ interface Env {
 }
 
 interface DuelStub {
-  create(input: { id: string; decks: [Deck, Deck]; stance: Stance; tutorial?: boolean }): Promise<WorkerResult<ClientPayload>>;
+  create(input: { id: string; decks: [Deck, Deck]; stance: Stance; tutorial?: boolean; matchesPlayed?: number }): Promise<WorkerResult<ClientPayload>>;
   get(id: string): Promise<WorkerResult<ClientPayload>>;
   act(id: string, action: GameAction): Promise<WorkerResult<ClientPayload>>;
   preview(id: string, action: GameAction): Promise<WorkerResult<{ matchId: string; preview: TradePreview }>>;
@@ -86,7 +87,7 @@ export class DuelMatch extends DurableObject<Env> {
     });
   }
 
-  async create(input: { id: string; decks: [Deck, Deck]; stance: Stance; tutorial?: boolean }): Promise<WorkerResult<ClientPayload>> {
+  async create(input: { id: string; decks: [Deck, Deck]; stance: Stance; tutorial?: boolean; matchesPlayed?: number }): Promise<WorkerResult<ClientPayload>> {
     return this.run(input.id, (service) => service.create(input));
   }
 
@@ -222,15 +223,20 @@ async function createMatch(request: Request, env: Env): Promise<Response> {
   const parsed = parseCreate(parsedBody);
   if (!parsed) return json({ error: 'bad_request' }, 400);
   const id = crypto.randomUUID();
+  const tutorial = parsed.tutorial === true;
+  const played = tutorial ? 0 : playedCount(request.headers.get('cookie'));
   try {
     const result = await env.DUEL_MATCH.getByName(id).create({
       id,
       decks: parsed.decks,
       stance: parsed.stance,
-      tutorial: parsed.tutorial === true,
+      tutorial,
+      matchesPlayed: tutorial ? undefined : played,
     });
     if (!result.ok) return json({ error: result.error }, result.error === 'redaction_failed' ? 500 : 400);
-    return json(result.payload, 201);
+    const extra = new Headers();
+    if (!tutorial) extra.set('Set-Cookie', `${PLAYED_COOKIE}=${played + 1}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${COOKIE_MAX_AGE}`);
+    return json(result.payload, 201, extra);
   } catch {
     console.error('[duel] internal');
     return json({ error: 'internal' }, 500);
@@ -325,6 +331,12 @@ function sessionCookie(token: string, secure: boolean): string {
   return parts.join('; ');
 }
 
+function playedCount(header: string | null): number {
+  const raw = readCookie(header, PLAYED_COOKIE);
+  if (!raw || !/^\d+$/.test(raw)) return 0;
+  return Number(raw);
+}
+
 function readCookie(header: string | null, name: string): string | null {
   if (!header) return null;
   for (const part of header.split(';')) {
@@ -408,11 +420,11 @@ function gate(rejected: boolean): Response {
   });
 }
 
-function json(body: unknown, status: number): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' },
-  });
+function json(body: unknown, status: number, extra?: Headers): Response {
+  const headers = extra ?? new Headers();
+  headers.set('content-type', 'application/json; charset=utf-8');
+  headers.set('cache-control', 'no-store');
+  return new Response(JSON.stringify(body), { status, headers });
 }
 
 function seal(response: Response): Response {

@@ -74,7 +74,9 @@ test('card sheet, labelled board, illegal reason, and the rival log', async ({ p
   await expect(sheet).toHaveCount(0);
   await at(page, 6);
 
-  await page.locator('#lift [data-keyword="Kindle"], #inspect [data-keyword="Kindle"]').click({ delay: 700 });
+  const lift = page.locator('#lift [data-keyword="Kindle"]');
+  const hand = page.locator('.handrow [data-keyword="Kindle"]');
+  await ((await lift.count()) > 0 ? lift.first() : hand.first()).click({ delay: 700 });
   await at(page, 7);
   await drag(page, page.locator('.handrow [data-def="c_novice"]'), page.locator('.page[data-i="0"] .row.you .slot').first());
   await at(page, 8);

@@ -37,7 +37,7 @@ describe('timer bridge', () => {
       expect(created.payload.matchId).toBe(id);
       expect(scheduled).toBe(0);
       expect(bridge.pending?.kind).toBe('human');
-      expect(bridge.pending?.delayMs).toBe(35_000);
+      expect(bridge.pending?.delayMs).toBe(20_000);
       expect(service.exportPlan(id)).toBeNull();
       service.dispose();
     } finally {

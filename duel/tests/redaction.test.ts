@@ -91,7 +91,7 @@ describe('redaction', () => {
     bodies.push(again.body);
 
     const illegal = await postJson(`${server.url}/api/matches/${created.body.matchId}/actions`, {
-      action: { type: 'end' },
+      action: { type: 'play', uid: 1, page: 0 },
     });
     expect(illegal.status).toBe(400);
     bodies.push(illegal.body);

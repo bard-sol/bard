@@ -1,5 +1,4 @@
 import { actorOf, buildSetup, deckError, IllegalActionError, recordedBundle, sameAction } from '../engine/adapter.js';
-import { cardFace } from '../engine/project.js';
 import { applyScoreNotes, collectScoreNotes } from '../engine/scores.js';
 import type { EngineState } from '../engine/state.js';
 import { scriptedTutorialTurn, TUTORIAL_SEED, tutorialDecks } from '../tutorial/script.js';
@@ -9,6 +8,9 @@ import type { LogEntry, MatchRecord, MatchRepository } from './store.js';
 
 export const DEFAULT_TURN_MS = 35_000;
 export const DEFAULT_AI_TURN_MS = 5_000;
+export const MULLIGAN_MS = 20_000;
+const EARLY_MATCH_TURN_MS = 60_000;
+const EARLY_MATCHES = 3;
 
 export interface CreateMatchInput {
   decks: readonly [Deck, Deck];
@@ -22,6 +24,8 @@ export interface CreateMatchInput {
   id?: string;
   /** Guided first match. The service forces the scripted seed and decks. */
   tutorial?: boolean;
+  /** Real matches already finished on this session. The first three use a 60s turn. */
+  matchesPlayed?: number;
 }
 
 /** Replaces `setTimeout` where the process may be evicted (Durable Object alarms). */
@@ -106,6 +110,7 @@ export class MatchService {
       deadline: null,
       createdAt: new Date().toISOString(),
       tutorial,
+      humanTurnMs: tutorial ? 0 : input.matchesPlayed == null ? this.turnTimeoutMs : input.matchesPlayed < EARLY_MATCHES ? EARLY_MATCH_TURN_MS : this.turnTimeoutMs,
     };
     await this.lock(id, async () => {
       if (tutorial) this.finishMulligans(match);
@@ -127,7 +132,8 @@ export class MatchService {
       const match = await this.repo.get(id);
       if (!match) return { ok: false, error: 'not_found' };
       if (match.thinking || actorOf(match.state) !== 0) return { ok: false, error: 'opponent_turn' };
-      const applied = this.applyLogged(match, action, 'human');
+      const played = action.type === 'end' && match.state.phase === 'mulligan' ? { type: 'mulligan' as const, idx: [] } : action;
+      const applied = this.applyLogged(match, played, 'human');
       if (!applied) return { ok: false, error: 'illegal_action' };
       this.syncClock(match);
       await this.repo.put(match);
@@ -137,13 +143,11 @@ export class MatchService {
 
   async preview(id: string, player: PlayerId, action: GameAction): Promise<ServiceResult<{ matchId: string; preview: TradePreview }>> {
     if (player !== 0) return { ok: false, error: 'forbidden_view' };
-    if (action.type !== 'attack') return { ok: false, error: 'illegal_action' };
     const match = await this.repo.get(id);
     if (!match) return { ok: false, error: 'not_found' };
     if (match.thinking || actorOf(match.state) !== 0) return { ok: false, error: 'opponent_turn' };
     try {
-      const next = this.adapter.apply(match.state, action);
-      const preview = diffAttack(match.state, next, action);
+      const preview = this.adapter.previewAction(match.state, 0, action);
       const payload = { matchId: id, preview };
       assertClientSafe(payload, match, 0);
       return { ok: true, payload };
@@ -314,16 +318,27 @@ export class MatchService {
       match.deadline = null;
       return;
     }
-    if (match.deadline == null || match.thinking) {
+    const leftMulligan = match.clockPhase === 'mulligan' && match.state.phase !== 'mulligan';
+    if (match.deadline == null || match.thinking || leftMulligan) {
       this.clearTimer(match.id);
       match.thinking = false;
       match.turnToken += 1;
-      match.deadline = Date.now() + this.turnTimeoutMs;
+      const delayMs = this.clockDelay(match);
+      match.deadline = Date.now() + delayMs;
+      match.clockPhase = match.state.phase;
       const token = match.turnToken;
-      this.armClock(match.id, { kind: 'human', token, delayMs: this.turnTimeoutMs }, () => {
+      this.armClock(match.id, { kind: 'human', token, delayMs }, () => {
         void this.onTimeout(match.id, token);
       });
     }
+  }
+
+  /** Tutorial has no clock. Mulligan is 20s and keeps the hand. Later turns use the match's own length. */
+  private clockDelay(match: MatchRecord): number {
+    if (match.tutorial) return 0;
+    if (match.thinking) return this.aiTurnMs;
+    if (match.state.phase === 'mulligan') return MULLIGAN_MS;
+    return match.humanTurnMs ?? this.turnTimeoutMs;
   }
 
   private startPilot(match: MatchRecord, depth: number): void {
@@ -416,7 +431,7 @@ export class MatchService {
       view,
       legalActions: yourTurn ? this.adapter.legalActions(match.state, 0) : [],
       turnDeadline: match.deadline,
-      turnDurationMs: match.thinking ? this.aiTurnMs : this.turnTimeoutMs,
+      turnDurationMs: this.clockDelay(match),
       opponentThinking: match.thinking,
       engineVersion: match.setup.engineVersion,
       cardsVersion: match.setup.cardsVersion,
@@ -495,37 +510,3 @@ function validateDecks(decks: readonly [Deck, Deck]): string | null {
   return null;
 }
 
-function findUnit(state: EngineState, uid: number) {
-  for (const page of state.board) {
-    for (const side of page) {
-      for (const unit of side) if (unit.uid === uid) return unit;
-    }
-  }
-  return null;
-}
-
-function diffAttack(before: EngineState, after: EngineState, action: { uid: number; target: number }): TradePreview {
-  const attacker = findUnit(before, action.uid);
-  const defender = findUnit(before, action.target);
-  if (!attacker || !defender) throw new IllegalActionError();
-  const attackerAfter = findUnit(after, attacker.uid);
-  const defenderAfter = findUnit(after, defender.uid);
-  const notesBefore = before.traps.filter((trap) => trap.page === attacker.page && trap.owner !== attacker.owner).length;
-  const notesAfter = after.traps.filter((trap) => trap.page === attacker.page && trap.owner !== attacker.owner).length;
-  const attackerCard = cardFace(attacker.id, String(attacker.uid));
-  const defenderCard = cardFace(defender.id, String(defender.uid));
-  return {
-    attackerId: String(attacker.uid),
-    defenderId: String(defender.uid),
-    attackerName: attackerCard.name,
-    defenderName: defenderCard.name,
-    attackerHealthBefore: attacker.hp,
-    defenderHealthBefore: defender.hp,
-    attackerHealthAfter: attackerAfter?.hp ?? 0,
-    defenderHealthAfter: defenderAfter?.hp ?? 0,
-    attackerDies: !attackerAfter,
-    defenderDies: !defenderAfter,
-    verseGain: after.players[attacker.owner].verses - before.players[attacker.owner].verses,
-    marginNoteStrikes: notesAfter < notesBefore,
-  };
-}

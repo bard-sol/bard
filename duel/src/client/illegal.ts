@@ -1,4 +1,4 @@
-import type { ClientPayload, UnitView } from '../types.js';
+import type { ClientPayload, GameAction, UnitView } from '../types.js';
 
 export interface ToastCopy {
   title: string;
@@ -55,13 +55,63 @@ export function legendToast(payload: ClientPayload): ToastCopy | null {
   return null;
 }
 
-export function endTurnWarning(payload: ClientPayload): { ink: string | null; ready: string | null } {
+export function endTurnWarning(payload: ClientPayload): { ink: string | null; ready: string | null; hand: string | null } {
   const view = payload.view;
   const ready = view.pages.flatMap((page) => page.slots.map((slot) => slot.you)).find((unit) => unit && !unit.exhausted);
   return {
     ink: view.ink > 0 ? `You still have ${view.ink} Ink. End anyway?` : null,
     ready: ready ? `Your ${ready.name} can still attack or move.` : null,
+    hand: view.hand.length >= 10 ? 'Your hand is full (10). A draw will burn.' : null,
   };
+}
+
+/** A refused action names the reason. The raw `illegal_action` string never reaches the player. */
+export function refused(payload: ClientPayload | null, action: GameAction, message: string): ToastCopy {
+  if (payload) {
+    if (action.type === 'play' || action.type === 'champion') {
+      const card = payload.view.hand.find((entry) => entry.instanceId === (action.type === 'champion' ? 'champion' : String(action.uid)));
+      if (card) {
+        const page = action.page === 0 || action.page === 1 ? payload.view.pages[action.page] : null;
+        const yours = page?.slots.filter((slot) => slot.you).length ?? 0;
+        const cap = page?.name === 'The Torn Margin' ? 2 : 4;
+        const pageFull = card.type === 'character' && page && yours >= cap ? cap : null;
+        const noteTaken = card.type === 'marginalia' && (page?.marginalia.some((note) => note.owner === payload.view.you) ?? false);
+        const toast = playToast(payload, card.name, card.cost, page?.name ?? null, pageFull, noteTaken);
+        if (toast) return toast;
+        if (card.cost <= payload.view.ink) return toastCopy(pageFull != null ? 'Page full' : 'No target', pageFull != null ? 'That Page has no open seat.' : 'Nothing can take this card.');
+      }
+    }
+    if (action.type === 'attack') {
+      const mine = findUnit(payload, String(action.uid));
+      const foe = findUnit(payload, String(action.target));
+      const toast = attackToast(payload, mine, foe);
+      if (toast) return toast;
+    }
+    if (action.type === 'legend') {
+      const toast = legendToast(payload);
+      if (toast) return toast;
+    }
+    if (action.type === 'move') {
+      const unit = findUnit(payload, String(action.uid));
+      const dest = unit ? payload.view.pages[unit.page === 0 ? 1 : 0] : null;
+      const full = (dest?.slots.filter((slot) => slot.you).length ?? 0) >= (dest?.name === 'The Torn Margin' ? 2 : 4);
+      const toast = moveToast(unit, full, dest?.name ?? 'that Page');
+      if (toast) return toast;
+    }
+    if (!payload.view.yourTurn) return toastCopy('Not your turn', `${payload.view.foeLegend.name} is playing. You can still read any card.`);
+  }
+  if (message === 'illegal_action') return toastCopy('Not available', 'That action is not available right now.');
+  return toastCopy('Not available', message || 'That action is not available right now.');
+}
+
+function findUnit(payload: ClientPayload, uid: string): UnitView | null {
+  for (const page of payload.view.pages) {
+    for (const slot of page.slots) {
+      if (slot.you?.instanceId === uid) return slot.you;
+      if (slot.foe?.instanceId === uid) return slot.foe;
+    }
+  }
+  return null;
 }
 
 export const INFO_TOASTS = {

@@ -304,6 +304,8 @@ function eventText(entry: LogProjection, pages: readonly string[]): string | nul
       return entry.why === 'port_foxing' ? 'Port Foxing gives +1 attack.' : 'A Page rule fires.';
     case 'trigger':
       return entry.t === 'death' ? 'Last Word.' : 'Opening Line.';
+    case 'burn':
+      return 'A draw burned: the hand was full.';
     default:
       return null;
   }

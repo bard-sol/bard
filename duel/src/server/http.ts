@@ -33,8 +33,16 @@ export function createApp(options: AppOptions = {}) {
     try {
       const parsed = parseCreate(req.body);
       if (!parsed) return sendError(res, 400, 'bad_request');
-      const created = await service.create({ decks: parsed.decks, stance: parsed.stance, tutorial: parsed.tutorial });
+      const tutorial = parsed.tutorial === true;
+      const played = tutorial ? 0 : playedCount(req.headers.cookie);
+      const created = await service.create({
+        decks: parsed.decks,
+        stance: parsed.stance,
+        tutorial,
+        matchesPlayed: tutorial ? undefined : played,
+      });
       if (!created.ok) return sendError(res, 400, created.error);
+      if (!tutorial) res.setHeader('Set-Cookie', playedCookie(played + 1));
       res.status(201).json(created.payload);
     } catch (error) {
       next(error);
@@ -118,6 +126,30 @@ function allowedViewer(req: Request): boolean {
   const requested = req.query.player;
   if (requested == null) return true;
   return requested === '0';
+}
+
+const PLAYED_COOKIE = 'bard_duel_played';
+const PLAYED_MAX_AGE = 2_592_000;
+
+function playedCount(header: string | undefined): number {
+  const raw = readCookie(header, PLAYED_COOKIE);
+  if (!raw || !/^\d+$/.test(raw)) return 0;
+  return Number(raw);
+}
+
+function playedCookie(next: number): string {
+  return `${PLAYED_COOKIE}=${next}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${PLAYED_MAX_AGE}`;
+}
+
+function readCookie(header: string | undefined, name: string): string | null {
+  if (!header) return null;
+  for (const part of header.split(';')) {
+    const trimmed = part.trim();
+    const eq = trimmed.indexOf('=');
+    if (eq === -1) continue;
+    if (trimmed.slice(0, eq) === name) return trimmed.slice(eq + 1);
+  }
+  return null;
 }
 
 export type { PlayerId };

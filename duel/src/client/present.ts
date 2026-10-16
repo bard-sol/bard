@@ -1,6 +1,6 @@
 import { KEYWORDS } from './guide.js';
 import type { GuideStep } from './guide.js';
-import type { ClientPayload, PlayerId, PlayerView, PublicEvent, TradePreview, UnitView } from '../types.js';
+import type { ClientPayload, GameAction, PlayerId, PlayerView, PublicEvent, TradePreview, UnitView } from '../types.js';
 
 export interface CoachOpts {
   holes: string[];
@@ -28,7 +28,7 @@ export function coachOpts(step: GuideStep, board: { foeLeft: boolean }): CoachOp
     case 5:
       return { holes: ['#ink'], point: '#ink', next: true };
     case 6: {
-      const keyword = window.IS_PHONE() ? '#lift [data-keyword="Kindle"]' : '#inspect [data-keyword="Kindle"]';
+      const keyword = window.IS_PHONE() ? '#lift [data-keyword="Kindle"]' : '.handrow [data-keyword="Kindle"]';
       return { holes: ['.handrow [data-def="c_novice"]', keyword], point: keyword, next: false, action: step.chip };
     }
     case 7:
@@ -125,7 +125,7 @@ export function boardModel(payload: ClientPayload, open: number | null) {
         ink: view.ink,
         maxInk: view.maxInk,
         legend: legendState(view),
-        hand: handEntries(view),
+        hand: handEntries(view, payload.legalActions, payload.tutorial),
         deck: view.yourDeckCount,
       },
       rival: {
@@ -153,14 +153,39 @@ function legendState(view: PlayerView): 'ready' | 'used' | 'locked' | 'noink' {
   return 'ready';
 }
 
-function handEntries(view: PlayerView) {
-  const cards = view.hand.map((card) => ({
-    id: card.defId,
-    uid: card.instanceId,
-    cant: !view.yourTurn || view.phase === 'fight' || card.cost > view.ink,
-  }));
+function handEntries(view: PlayerView, legal: GameAction[], tutorial: boolean) {
+  const cards = view.hand.flatMap((card) => {
+    const spare = card.defId === 'spare_ink';
+    const champion = card.defId.startsWith('champ_') || card.instanceId === 'champion';
+    if (spare && view.phase !== 'mulligan') return [];
+    if (champion && !tutorial) return [];
+    const cant = !view.yourTurn || view.phase === 'fight' || card.cost > view.ink;
+    return [{
+      id: card.defId,
+      uid: card.instanceId,
+      cant,
+      playable: !cant && canPlay(card.instanceId, card.defId, legal),
+    }];
+  });
   cards.sort((a, b) => Number(b.id.startsWith('champ_')) - Number(a.id.startsWith('champ_')));
   return cards;
+}
+
+function canPlay(uid: string, defId: string, legal: GameAction[]): boolean {
+  if (defId.startsWith('champ_') || uid === 'champion') return legal.some((action) => action.type === 'champion');
+  return legal.some((action) => action.type === 'play' && String(action.uid) === uid);
+}
+
+export function spareInHand(view: PlayerView): { uid: string } | null {
+  if (view.phase === 'mulligan') return null;
+  const card = view.hand.find((entry) => entry.defId === 'spare_ink');
+  return card ? { uid: card.instanceId } : null;
+}
+
+export function championStub(view: PlayerView, tutorial: boolean): { id: string } | null {
+  if (tutorial || view.phase === 'mulligan') return null;
+  const card = view.hand.find((entry) => entry.defId.startsWith('champ_') || entry.instanceId === 'champion');
+  return card ? { id: card.defId } : null;
 }
 
 function highlight(unit: UnitView, page: 0 | 1, focus: PublicEvent | null): string {

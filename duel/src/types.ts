@@ -266,6 +266,14 @@ export interface ClientPayload {
   tutorial: boolean;
 }
 
+export interface UnitPreview {
+  instanceId: string;
+  damage: number;
+  healthBefore: number;
+  healthAfter: number;
+  dies: boolean;
+}
+
 export interface TradePreview {
   attackerId: string;
   defenderId: string;
@@ -279,6 +287,15 @@ export interface TradePreview {
   defenderDies: boolean;
   verseGain: number;
   marginNoteStrikes: boolean;
+  /** Health immediately after the action, before end-of-turn heals. */
+  units?: UnitPreview[];
+  deaths?: string[];
+  /** True when ending the turn from this position would score a Conquer. */
+  conquer?: boolean;
+  /** A face-down rival note sits on the page this action touches. The id stays on the server. */
+  noteMayFire?: boolean;
+  /** Set only when an end-of-turn heal changes survival or the health a unit ends on. */
+  footnote?: string | null;
 }
 
 export interface EngineAdapter {
@@ -299,6 +316,11 @@ export interface EngineAdapter {
   initialState(decks: readonly [Deck, Deck], seed: number): EngineState;
   legalActions(state: EngineState, player: PlayerId): GameAction[];
   apply(state: EngineState, action: GameAction): EngineState;
+  /**
+   * Outcome of `action` for `player`, from `apply` on a clone.
+   * Hidden traps are removed first, so the result is deterministic and names no face-down card.
+   */
+  previewAction(state: EngineState, player: PlayerId, action: GameAction): TradePreview;
   view(state: EngineState, player: PlayerId): PlayerView;
   /** Must not read the match seed. The pilot derives its own salt from public state. */
   pilot(state: EngineState, stance: Stance): GameAction;

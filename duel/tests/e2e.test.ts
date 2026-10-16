@@ -94,8 +94,8 @@ describe('end-to-end match', () => {
       body = await waitFor(server.url, body.matchId, (next) => next.view.yourTurn);
     }
     expect(body.view.phase).toBe('mulligan');
-    expect(body.turnDurationMs).toBe(35_000);
-    expect(body.turnDeadline ?? 0).toBeGreaterThan(Date.now() + 20_000);
+    expect(body.turnDurationMs).toBe(20_000);
+    expect(body.turnDeadline ?? 0).toBeGreaterThan(Date.now() + 10_000);
 
     const kept = await postJson<ClientPayload>(`${server.url}/api/matches/${body.matchId}/actions`, {
       action: { type: 'mulligan', idx: [] },
@@ -106,7 +106,7 @@ describe('end-to-end match', () => {
     expect(kept.body.turnDurationMs).toBe(120);
 
     const after = await waitFor(server.url, body.matchId, (next) => next.view.yourTurn && next.view.phase !== 'mulligan');
-    expect(after.turnDurationMs).toBe(35_000);
+    expect(after.turnDurationMs).toBe(60_000);
     const stored = await repo.get(body.matchId);
     expect(stored!.log.some((entry) => entry.source === 'pilot')).toBe(true);
     expect(stored!.setup.rules.secondInkTurns).toBe(1);

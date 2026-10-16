@@ -1,9 +1,9 @@
 import type { ClientPayload, GameAction, Stance, TradePreview, UnitView } from '../types.js';
 import { createMatch, fetchMatch, previewAttack, sendAction } from './api.js';
 import { GuideController, logMetric, markTip, noteRealMatch, setTutorialFlag, tipSeen, tipsEnabled, tutorialFlag } from './guide.js';
-import { INFO_TOASTS, PLAY_STEP_OVER, TIP_COPY, attackToast, endTurnWarning, legendToast, moveToast, playToast, toastCopy, type ToastCopy } from './illegal.js';
+import { INFO_TOASTS, PLAY_STEP_OVER, TIP_COPY, attackToast, endTurnWarning, legendToast, moveToast, playToast, refused, toastCopy, type ToastCopy } from './illegal.js';
 import { KEYWORDS } from './guide.js';
-import { boardModel, cardSheet, coachOpts, endHtml, foeOnLeft, howtoHtml, keywordKeys, logEntries, openingCaption, toastHtml, tradeHtml } from './present.js';
+import { boardModel, cardSheet, championStub, coachOpts, endHtml, foeOnLeft, howtoHtml, logEntries, spareInHand, toastHtml, tradeHtml } from './present.js';
 
 const app = document.querySelector('#app');
 if (!app) throw new Error('missing #app');
@@ -71,6 +71,11 @@ const ui = {
   stepSeen: null as number | null,
   beat: '',
   step14Painted: false,
+  swap: new Set<string>(),
+  banner: null as { text: string; until: number } | null,
+  badges: new Map<string, TradePreview>(),
+  longPress: false,
+  hoverTimer: 0,
 };
 
 const RIVAL_BEAT = '.page[data-i="0"] .row.rival .un';
@@ -175,37 +180,56 @@ function paint(): void {
   }
   ui.screen = 'board';
   const model = boardModel(payload, ui.openPage);
-  const caption = openingCaption(payload);
+  const mulligan = payload.view.phase === 'mulligan' && payload.view.yourTurn;
+  const second = payload.view.verse[0] > 0;
+  const hint = mulligan
+    ? `${second ? 'You go second: +1 card, Spare Ink, 2 Ink on turn 1, and you start on 1 Verse' : 'You go first'}. Tap cards to swap them. Spare Ink stays.`
+    : 'Tap a card to read it';
   const html = window.boardScreen(model.state, {
     mode: payload.tutorial ? 'Card Duel · Guided first match' : 'Card Duel',
     log: logEntries(payload.view),
-    inspect: step?.id === 6 ? 'c_novice' : ui.sheet && ui.sheet !== 'howto' ? ui.sheet : payload.view.hand[0]?.defId,
     lockText: payload.view.yourTurn ? 'Fighting has started.' : "Rival's turn.",
-    hint: caption || 'Tap a card to read it',
+    hint,
     drop: false,
     pageHl: model.pageHl,
     ticker: model.ticker,
+    cls: payload.tutorial ? 'guided' : '',
+    endLabel: mulligan ? (ui.swap.size ? `Swap ${ui.swap.size}` : 'Keep all') : 'End turn',
+    phaseLabel: payload.view.phase === 'fight' ? 'Fight' : payload.view.phase === 'main' ? 'Play' : '',
+    endCls: nothingLeft(payload) ? 'pulse' : '',
+    spareUid: spareInHand(payload.view)?.uid ?? '',
+    championId: championStub(payload.view, payload.tutorial)?.id ?? '',
   });
   root.innerHTML = html;
-  if (caption) {
-    document.querySelector('.hand-hd')?.insertAdjacentHTML('afterbegin', `<p class="opening" id="opening">${caption}</p>`);
-  }
   const host = document.createElement('div');
   host.className = 'toast-host';
   host.innerHTML = ui.toasts.map((toast) => toastHtml(toast.title, toast.body)).join('');
   document.querySelector('.app')?.append(host);
   const hand = document.getElementById('hand');
-  if (hand && hand.children.length > 6) hand.classList.add('many');
+  const manyAt = payload.tutorial ? 5 : 4;
+  if (hand && hand.children.length > manyAt) hand.classList.add('many');
+  for (const uid of ui.swap) document.querySelector(`.handrow [data-uid="${CSS.escape(uid)}"]`)?.classList.add('sel');
+  paintBanner();
+  paintTray();
+  markAim();
   if (step?.id === 6 && window.IS_PHONE()) {
     document.querySelector('.app')?.insertAdjacentHTML('beforeend', `<div class="lift" id="lift">${window.cardFace('c_novice', { size: 'inspect' })}</div>`);
   }
   paintCoach();
   mountSheets();
+  if (ui.confirm && !payload.tutorial) {
+    const ovl = document.getElementById('ovl');
+    if (ovl) {
+      ovl.innerHTML = `<div class="confirm-box"><p>${ui.confirm.text}</p><div class="row"><button class="btn secondary" id="confirm-no">Cancel</button><button class="btn primary" id="confirm-yes">End</button></div></div>`;
+      ovl.classList.add('on');
+    }
+  }
   publish();
   maybeTips();
   noteRivalBeat();
   markArmed();
   if (ui.busy) holdControls();
+  void aimPreviews();
 }
 
 function mountSheets(): void {
@@ -330,9 +354,99 @@ function placeCoach(opts: { holes: string[]; point: string; text: string; step: 
 function tradeMarkup(preview: TradePreview): string {
   const attacker = unitOf(preview.attackerId);
   const defender = unitOf(preview.defenderId);
-  const pageName = attacker ? ui.payload?.view.pages[attacker.page]?.name : '';
-  const footnote = pageName === 'Lanternfall' && !preview.attackerDies && !preview.defenderDies ? 'Lanternfall heals both 1 at end of turn' : undefined;
-  return tradeHtml(preview, { attackerAtk: attacker?.attack ?? 0, defenderAtk: defender?.attack ?? 0, footnote });
+  const notes = [preview.footnote, preview.noteMayFire ? 'A face-down note here may fire.' : '', preview.conquer ? 'Conquer' : ''].filter(Boolean);
+  return tradeHtml(preview, { attackerAtk: attacker?.attack ?? 0, defenderAtk: defender?.attack ?? 0, footnote: notes.join(' ') || undefined });
+}
+
+function nothingLeft(payload: ClientPayload): boolean {
+  if (!acting(payload) || ui.armed || ui.legendArmed) return false;
+  if (payload.view.phase !== 'main' && payload.view.phase !== 'fight') return false;
+  return !payload.legalActions.some((action) => action.type === 'play' || action.type === 'champion' || action.type === 'legend' || action.type === 'attack');
+}
+
+function paintBanner(): void {
+  const banner = ui.banner;
+  if (!banner || Date.now() > banner.until) return;
+  document.querySelector('.app')?.insertAdjacentHTML('beforeend', `<div class="turn-banner" id="turn-banner">${banner.text}</div>`);
+}
+
+function paintTray(): void {
+  const piece = ui.armed;
+  const payload = ui.payload;
+  if (!piece || !payload) return;
+  const card = piece.kind === 'card' ? cardOf(piece.uid) : null;
+  let line = 'Choose a target';
+  if (piece.kind === 'unit') line = 'Choose an enemy to attack, or a Page to move to';
+  else if (ui.legendArmed) line = 'Choose an ally';
+  else if (card?.type === 'character' || card?.defId.startsWith('champ_')) line = 'Choose a Page';
+  else if (card?.type === 'inkwork') line = 'Choose an ally';
+  else if (card?.type === 'marginalia') line = 'Choose a Page';
+  const sub = piece.kind === 'unit' ? 'Attacking ends your plays this turn' : card ? `${card.cost} Ink · arrives ${card.keywords.includes('Swift') ? 'ready (Swift)' : 'tired'}` : '';
+  document.querySelector('.hand-wrap')?.insertAdjacentHTML('afterbegin', `<p class="tray" id="tray">${line}${sub ? `<small>${sub}</small>` : ''}</p>`);
+}
+
+function markAim(): void {
+  const appEl = document.querySelector('.app');
+  const payload = ui.payload;
+  if (!appEl || !payload) return;
+  if (payload.view.phase === 'fight' && payload.view.yourTurn) appEl.classList.add('fightlock');
+  if (ui.armed || ui.legendArmed) appEl.classList.add('aiming');
+  if (ui.armed) document.getElementById('endturn')?.setAttribute('disabled', 'true');
+  const piece = ui.armed;
+  for (const action of payload.legalActions) {
+    if (ui.legendArmed && action.type === 'legend') {
+      document.querySelector(`.row.you [data-uid="${action.target}"]`)?.classList.add('lit', 'lit-ally');
+    }
+    if (!piece) continue;
+    if (piece.kind === 'card' && (piece.uid === 'champion' || piece.def.startsWith('champ_')) && action.type === 'champion' && action.page != null) lightPage(action.page);
+    if (piece.kind === 'card' && action.type === 'play' && String(action.uid) === piece.uid) {
+      if (action.target != null && action.page == null) document.querySelector(`.row.you [data-uid="${action.target}"]`)?.classList.add('lit', 'lit-ally');
+      else if (action.page != null) lightPage(action.page);
+    }
+    if (piece.kind === 'unit' && action.type === 'attack' && String(action.uid) === piece.uid) {
+      document.querySelector(`.row.rival [data-uid="${action.target}"]`)?.classList.add('lit', 'lit-enemy');
+    }
+    if (piece.kind === 'unit' && action.type === 'move' && String(action.uid) === piece.uid) {
+      const mine = unitOf(piece.uid);
+      if (mine) lightPage(mine.page === 0 ? 1 : 0);
+    }
+  }
+  for (const [id, preview] of ui.badges) {
+    const foe = document.querySelector(`.row.rival [data-uid="${CSS.escape(id)}"]`);
+    if (!foe) continue;
+    const damage = Math.max(0, preview.defenderHealthBefore - preview.defenderHealthAfter);
+    foe.insertAdjacentHTML('beforeend', `<span class="un-float preview">−${damage}</span>`);
+  }
+}
+
+function lightPage(page: number): void {
+  document.querySelectorAll(`.page[data-i="${page}"] .row.you .slot`).forEach((slot) => slot.classList.add('lit'));
+  document.querySelector(`.page[data-i="${page}"]`)?.classList.add('lit-lane');
+}
+
+async function aimPreviews(): Promise<void> {
+  const payload = ui.payload;
+  const piece = ui.armed;
+  if (!payload || !piece || piece.kind !== 'unit') return;
+  const attacks = payload.legalActions.filter((action) => action.type === 'attack' && String(action.uid) === piece.uid);
+  const next = new Map<string, TradePreview>();
+  await Promise.all(attacks.map(async (action) => {
+    if (action.type !== 'attack') return;
+    try {
+      const result = await previewAttack(payload.matchId, action);
+      next.set(String(action.target), result.preview);
+    } catch {
+      /* The badge stays off when the server refuses the preview. */
+    }
+  }));
+  if (ui.armed?.uid !== piece.uid) return;
+  ui.badges = next;
+  document.querySelectorAll('.un-float.preview').forEach((node) => node.remove());
+  for (const [id, preview] of next) {
+    const foe = document.querySelector(`.row.rival [data-uid="${CSS.escape(id)}"]`);
+    const damage = Math.max(0, preview.defenderHealthBefore - preview.defenderHealthAfter);
+    foe?.insertAdjacentHTML('beforeend', `<span class="un-float preview">−${damage}</span>`);
+  }
 }
 
 function holeHit(target: EventTarget | null): boolean {
@@ -347,6 +461,13 @@ function holeHit(target: EventTarget | null): boolean {
 function adopt(payload: ClientPayload): void {
   const beatWasShown = ui.step14Painted;
   const before = ui.guide?.step?.id;
+  const previous = ui.payload;
+  if (!previous || previous.matchId !== payload.matchId || previous.view.yourTurn !== payload.view.yourTurn) {
+    const name = payload.view.foeLegend.name;
+    ui.banner = { text: payload.view.yourTurn ? 'Your turn' : `${name}'s turn`, until: Date.now() + 900 };
+  }
+  ui.swap.clear();
+  ui.badges.clear();
   ui.payload = payload;
   ui.beat = viewBeat(payload);
   if (before === 14) paint();
@@ -397,6 +518,7 @@ async function start(tutorial: boolean): Promise<void> {
       noteRealMatch();
     }
     const payload = await createMatch(tutorial ? 'patient' : ui.stance, tutorial);
+    ui.busy = false;
     adopt(payload);
   } catch (error) {
     ui.screen = 'title';
@@ -455,7 +577,8 @@ async function act(action: GameAction): Promise<void> {
     adopt(next);
   } catch (error) {
     ui.busy = false;
-    showToast({ title: 'That play is not legal', body: error instanceof Error ? error.message : 'Try a different action.' });
+    const message = error instanceof Error ? error.message : '';
+    showToast(refused(payload, action, message));
   }
 }
 
@@ -481,7 +604,7 @@ function beginDrag(event: PointerEvent): void {
   const target = raw && !raw.closest('.ovl') ? raw : boardHit(event.clientX, event.clientY);
   if (!target) return;
   if (!holeHit(target)) return;
-  const card = target.closest('.handrow .dc');
+  const card = target.closest('.handrow .dc, .champ-stub');
   const unit = target.closest('.row.you .un');
   if (!card && !unit) return;
   const uid = (card ?? unit)?.getAttribute('data-uid') ?? '';
@@ -651,6 +774,12 @@ function explain(drag: Piece, under: Element | null): void {
 }
 
 /** Steps that ask for a drag also accept tap, then tap the target. Reading steps still open the sheet. */
+function hasPlay(uid: string, def: string): boolean {
+  const legal = ui.payload?.legalActions ?? [];
+  if (def.startsWith('champ_') || uid === 'champion') return legal.some((action) => action.type === 'champion');
+  return legal.some((action) => action.type === 'play' && String(action.uid) === uid);
+}
+
 function tapPlays(): boolean {
   if (!ui.payload || !acting(ui.payload)) return false;
   const guide = ui.guide;
@@ -661,6 +790,7 @@ function tapPlays(): boolean {
 
 function finishTap(target: Element | null): boolean {
   if (!target || !ui.payload || ui.busy || !acting(ui.payload)) return false;
+  if (ui.payload.view.phase === 'mulligan') return false;
   if (target.closest('.dc-q')) {
     const def = target.closest('[data-def]')?.getAttribute('data-def');
     if (!def) return false;
@@ -672,7 +802,7 @@ function finishTap(target: Element | null): boolean {
   }
   if (target.closest('.cm-bub, .cm-skip, .skip-box, .confirm-box, button, a')) return false;
   if (restricting() && !holeHit(target)) return false;
-  const card = target.closest('.handrow .dc');
+  const card = target.closest('.handrow .dc, .champ-stub, #spare');
   const mine = target.closest('.row.you .un');
   const source = card ?? mine;
   if (ui.armed && (source || target.closest('.page, .slot, .un'))) {
@@ -698,6 +828,17 @@ function finishTap(target: Element | null): boolean {
     return true;
   }
   if (!tapPlays() || !source) return false;
+  const uid = source.getAttribute('data-uid') ?? '';
+  const def = source.getAttribute('data-def') ?? '';
+  if (card && !hasPlay(uid, def)) {
+    const held = cardOf(uid);
+    if (held) {
+      const toast = playToast(ui.payload, held.name, held.cost, null, null, false);
+      showToast(toast ?? { title: 'No target', body: 'Nothing can take this card.' });
+      armSuppress();
+      return true;
+    }
+  }
   ui.armed = {
     kind: card ? 'card' : 'unit',
     uid: source.getAttribute('data-uid') ?? '',
@@ -813,13 +954,28 @@ function onClick(event: MouseEvent): void {
   }
   if (finishTap(target)) return;
   const card = target.closest('.handrow .dc');
+  if (target.closest('#spare')) {
+    const uid = Number(target.closest('#spare')?.getAttribute('data-uid'));
+    if (uid) void act({ type: 'play', uid });
+    return;
+  }
+  const stub = target.closest('.champ-stub');
+  if (stub) {
+    ui.armed = { kind: 'card', uid: 'champion', def: stub.getAttribute('data-def') ?? '' };
+    ui.sheet = null;
+    paint();
+    return;
+  }
   if (card && ui.payload?.view.phase === 'mulligan') {
     const def = card.getAttribute('data-def');
     if (def === 'spare_ink') {
       showToast({ title: 'Spare Ink stays', body: 'Spare Ink can\'t be swapped in the mulligan.' });
       return;
     }
-    card.classList.toggle('sel');
+    const uid = card.getAttribute('data-uid') ?? '';
+    if (ui.swap.has(uid)) ui.swap.delete(uid);
+    else ui.swap.add(uid);
+    paint();
     return;
   }
   if (card && !ui.drag) {
@@ -865,26 +1021,25 @@ function onClick(event: MouseEvent): void {
     }
     return;
   }
-  if (ui.payload?.view.phase === 'mulligan') {
-    const handCard = target.closest('.handrow .dc');
-    if (handCard) handCard.classList.toggle('sel');
-    if (target.closest('#endturn')) void act({ type: 'mulligan', idx: [] });
-  }
 }
 
 async function endTurn(): Promise<void> {
   const payload = ui.payload;
-  if (!payload || ui.busy || !acting(payload)) return;
+  if (!payload || ui.busy || !acting(payload) || ui.armed) return;
+  if (ui.confirm) {
+    const action = ui.confirm.action;
+    ui.confirm = null;
+    await act(action);
+    return;
+  }
   if (payload.view.phase === 'mulligan') {
-    const idx = Array.from(document.querySelectorAll('.handrow .dc.sel')).flatMap((card) => {
-      const uid = card.getAttribute('data-uid');
-      const index = payload.view.hand.findIndex((entry) => entry.instanceId === uid);
-      return index >= 0 ? [index] : [];
-    });
+    const idx = payload.view.hand.flatMap((card, index) => (ui.swap.has(card.instanceId) ? [index] : []));
+    ui.swap.clear();
     await act({ type: 'mulligan', idx });
     return;
   }
-  if (!payload.tutorial && tipsEnabled()) {
+  const quiet = nothingLeft(payload);
+  if (!payload.tutorial && tipsEnabled() && !quiet) {
     const warn = endTurnWarning(payload);
     if (warn.ink && !tipSeen('ink-end')) {
       ui.confirm = { text: warn.ink, action: { type: 'end' } };
@@ -899,19 +1054,32 @@ async function endTurn(): Promise<void> {
       return;
     }
   }
+  if (!payload.tutorial && payload.view.hand.length >= 10 && !tipSeen('hand-end')) {
+    ui.confirm = { text: 'Your hand is full (10). A draw will burn.', action: { type: 'end' } };
+    markTip('hand-end');
+    paint();
+    return;
+  }
   await act({ type: 'end' });
 }
 
 function onPointerDown(event: PointerEvent): void {
   const target = event.target;
+  ui.longPress = false;
   if (target instanceof Element) {
     const keyword = target.closest('[data-keyword]');
+    const step = ui.guide?.visible(false)?.id;
     if (keyword) {
       window.clearTimeout(ui.holdTimer);
       ui.keywordReady = false;
       ui.holdTimer = window.setTimeout(() => {
         ui.keywordReady = true;
       }, 500);
+    } else if (step !== 6) {
+      window.clearTimeout(ui.holdTimer);
+      ui.holdTimer = window.setTimeout(() => {
+        ui.longPress = true;
+      }, 300);
     }
   }
   beginDrag(event);
@@ -920,7 +1088,21 @@ function onPointerDown(event: PointerEvent): void {
 function onPointerUp(event: PointerEvent): void {
   window.clearTimeout(ui.holdTimer);
   const held = ui.keywordReady;
+  const inspect = ui.longPress && !held;
   ui.keywordReady = false;
+  ui.longPress = false;
+  if (inspect && event.target instanceof Element) {
+    const def = event.target.closest('[data-def]')?.getAttribute('data-def');
+    if (def && window.D13.cards[def] && ui.guide?.visible(false)?.id !== 6) {
+      ui.sheet = def;
+      ui.armed = null;
+      ui.drag = null;
+      document.getElementById('ghost')?.remove();
+      paint();
+      armSuppress();
+      return;
+    }
+  }
   if (held && ui.guide && ui.payload) {
     armSuppress();
     const keyword = event.target instanceof Element ? event.target.closest('[data-keyword]') : null;
@@ -968,6 +1150,7 @@ function maybeTips(): void {
   if (view.events.some((event) => event.text === 'Opening Line.')) once('opening', 'Opening Line', 'Happens when you play it.');
   if (view.events.some((event) => event.text === 'Last Word.')) once('last-word', 'Last Word', 'Happens when it dies.');
   if (view.verse[1] >= 6) once('match-point', 'Match point', TIP_COPY.matchPoint);
+  if (view.yourTurn && view.phase !== 'mulligan' && view.hand.length >= 10) once('hand-cap', 'Hand full', 'Your hand is full (10). A draw will burn.');
   if (view.events.some((event) => event.text.includes('burned'))) once('hand-full', INFO_TOASTS.handFull.title, INFO_TOASTS.handFull.body);
 }
 
@@ -987,25 +1170,33 @@ document.addEventListener(
 );
 
 function onHover(event: PointerEvent): void {
-  if (window.IS_PHONE() || ui.drag) return;
+  if (window.IS_PHONE() || ui.drag || ui.guide?.visible(false)?.id === 6) return;
   const target = event.target;
   if (!(target instanceof Element)) return;
-  const card = target.closest('[data-def]');
+  const card = target.closest('.handrow .dc, .un');
   const def = card?.getAttribute('data-def');
   if (!def || !window.D13.cards[def]) return;
-  const panel = document.getElementById('inspect');
-  if (!panel || panel.dataset.def === def) return;
-  const face = panel.querySelector('.insp-c');
-  const keywords = panel.querySelector('.insp-kw');
-  if (!face || !keywords) return;
-  panel.dataset.def = def;
-  face.innerHTML = window.cardFace(def, { size: 'inspect' });
-  keywords.innerHTML = keywordKeys(def).map((key) => window.kwRow(key, { long: true })).join('');
+  window.clearTimeout(ui.hoverTimer);
+  ui.hoverTimer = window.setTimeout(() => {
+    let pop = document.getElementById('hovercard');
+    if (!pop) {
+      pop = document.createElement('div');
+      pop.id = 'hovercard';
+      document.body.append(pop);
+    }
+    pop.innerHTML = window.cardFace(def, { size: 'inspect' });
+  }, 250);
 }
 
 window.setInterval(() => {
   pumpGuide();
   const payload = ui.payload;
+  const end = document.getElementById('endturn');
+  if (end && payload?.turnDeadline && payload.view.yourTurn && !payload.tutorial) {
+    const left = payload.turnDeadline - Date.now();
+    end.classList.toggle('urgent', left <= 10_000 && left > 0);
+  }
+  if (ui.banner && Date.now() > ui.banner.until) document.getElementById('turn-banner')?.remove();
   if (!payload || ui.drag) return;
   if (!payload.view.yourTurn || payload.opponentThinking || payload.view.winner) void refresh();
 }, 450);
