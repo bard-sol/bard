@@ -148,14 +148,38 @@ function resetCardBox(card: HTMLElement): void {
   card.style.top = '';
   card.style.zIndex = '';
   card.style.margin = '';
+  card.style.width = '';
+  card.style.height = '';
   const spacer = card.previousElementSibling;
   if (spacer?.classList.contains('dc-spacer')) spacer.remove();
 }
 
+/** Keep the held card in the open band under the Pages and the prompt, shrinking only when that band is short. */
+function liftSpot(): { left: number; top: number; width: number; height: number } {
+  const pad = 8;
+  const viewW = window.innerWidth;
+  const viewH = window.innerHeight;
+  const boxes = Array.from(document.querySelectorAll('.page, #tray'))
+    .filter((el): el is HTMLElement => el instanceof HTMLElement)
+    .map((el) => el.getBoundingClientRect())
+    .filter((rect) => rect.width > 2 && rect.height > 2);
+  const floor = boxes.reduce((max, rect) => Math.max(max, rect.bottom), 0);
+  const topLimit = Math.min(viewH - pad, Math.max(pad, floor + pad));
+  const room = viewH - pad - topLimit;
+  const aspect = 148 / 208;
+  let height = Math.min(208, Math.max(0, Math.floor(room)));
+  let width = Math.round(height * aspect);
+  if (width > viewW - pad * 2) {
+    width = viewW - pad * 2;
+    height = Math.round(width / aspect);
+  }
+  const left = Math.max(pad, Math.round((viewW - width) / 2));
+  const top = Math.max(topLimit, viewH - pad - height);
+  return { left, top, width, height };
+}
+
 function liftArmedCard(card: HTMLElement): void {
   card.classList.remove('armed');
-  const box = card.getBoundingClientRect();
-  const handTop = document.getElementById('hand')?.getBoundingClientRect().top ?? box.top;
   if (!card.previousElementSibling?.classList.contains('dc-spacer')) {
     const spacer = document.createElement('div');
     spacer.className = 'dc-spacer';
@@ -163,18 +187,14 @@ function liftArmedCard(card: HTMLElement): void {
     card.before(spacer);
   }
   card.classList.add('armed');
+  const spot = liftSpot();
   card.style.position = 'fixed';
-  card.style.zIndex = '40';
+  card.style.zIndex = '30';
   card.style.margin = '0';
-  const width = 148;
-  const height = 208;
-  const left = Math.min(Math.max(8, box.left), Math.max(8, window.innerWidth - width - 8));
-  let top = handTop - height - 8;
-  if (top < 8) top = 8;
-  const maxTop = window.innerHeight - height - 8;
-  if (top > maxTop) top = Math.max(8, maxTop);
-  card.style.left = `${left}px`;
-  card.style.top = `${top}px`;
+  card.style.left = `${spot.left}px`;
+  card.style.top = `${spot.top}px`;
+  card.style.width = `${spot.width}px`;
+  card.style.height = `${spot.height}px`;
 }
 
 function fitHandName(el: Element | null, armed: boolean): void {
@@ -982,34 +1002,44 @@ function blockedToast(drag: Piece, action: GameAction): ToastCopy | null {
   return null;
 }
 
-function dropAction(drag: Piece, under: Element | null): GameAction | null {
-  const payload = ui.payload;
-  if (!payload || !under) return null;
+function pageIndex(under: Element): 0 | 1 | null {
   const slot = under.closest('.slot');
   const unit = under.closest('.un');
   const pageAttr = slot?.getAttribute('data-page') ?? unit?.closest('.page')?.getAttribute('data-i') ?? under.closest('.page')?.getAttribute('data-i');
-  const page = pageAttr === '0' || pageAttr === '1' ? Number(pageAttr) as 0 | 1 : null;
+  return pageAttr === '0' || pageAttr === '1' ? Number(pageAttr) as 0 | 1 : null;
+}
+
+/** A drop on a unit or anywhere on a Page uses that Page's legal play. Anything else is not sent. */
+function playOnto(card: NonNullable<ReturnType<typeof cardOf>>, under: Element): GameAction | null {
+  const payload = ui.payload;
+  const page = pageIndex(under);
+  if (!payload || page == null) return null;
+  const champ = card.instanceId === 'champion' || card.defId.startsWith('champ_');
+  const uid = Number(card.instanceId);
+  const hit = under.closest('.un');
+  const hitRaw = hit?.getAttribute('data-uid');
+  const hitUid = hitRaw != null && hitRaw !== '' ? Number(hitRaw) : null;
+  if (ui.guide?.visible(false)?.id === 20 && hit && hit.getAttribute('data-def') !== 'c_novice') return null;
+  const matches = payload.legalActions.filter((action) => {
+    const kind = champ ? action.type === 'champion' : action.type === 'play' && action.uid === uid;
+    if (!kind || (action.type !== 'play' && action.type !== 'champion')) return false;
+    if (action.page === page) return true;
+    return action.page == null && action.target != null && unitOf(String(action.target))?.page === page;
+  });
+  if (matches.length === 0) return null;
+  const exact = hitUid == null ? undefined : matches.find((action) => (action.type === 'play' || action.type === 'champion') && action.target === hitUid);
+  return exact ?? matches[0] ?? null;
+}
+
+function dropAction(drag: Piece, under: Element | null): GameAction | null {
+  const payload = ui.payload;
+  if (!payload || !under) return null;
   if (drag.kind === 'card') {
     const card = cardOf(drag.uid);
     if (!card) return null;
-    if (card.instanceId === 'champion' || card.defId.startsWith('champ_')) {
-      if (page == null) return null;
-      return { type: 'champion', page };
-    }
-    const uid = Number(card.instanceId);
-    if (card.type === 'inkwork') {
-      const ally = unit?.closest('.row.you .un');
-      const target = ally?.getAttribute('data-uid');
-      const def = ally?.getAttribute('data-def');
-      if (!target) return null;
-      if (ui.guide?.visible(false)?.id === 20 && def !== 'c_novice') return null;
-      return { type: 'play', uid, target: Number(target) };
-    }
-    if (card.type === 'character' || card.type === 'marginalia') {
-      if (page == null) return null;
-      return { type: 'play', uid, page };
-    }
+    return playOnto(card, under);
   }
+  const page = pageIndex(under);
   const mine = unitOf(drag.uid);
   if (!mine || mine.owner !== payload.view.you) return null;
   const foe = under.closest('.row.rival .un');

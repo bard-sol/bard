@@ -2,6 +2,7 @@ import { mkdirSync } from 'node:fs';
 import { expect, test, type Page } from '@playwright/test';
 
 const SHOTS = process.env.ARTIFACT_DIR ?? '/opt/cursor/artifacts';
+const PACED_URL = process.env.BASE_URL ? new URL('/', process.env.BASE_URL).href : 'http://127.0.0.1:5200/';
 
 interface Board {
   view: {
@@ -37,7 +38,7 @@ test('a sideways swipe scrolls the hand on your turn', async ({ page }) => {
 });
 
 test('a sideways swipe scrolls the hand on the rival turn', async ({ page }) => {
-  await startMatch(page, 'http://127.0.0.1:5200/');
+  await startMatch(page, PACED_URL);
   await growHand(page);
   const before = await resetHand(page);
   await page.locator('#endturn').click({ force: true });
@@ -60,11 +61,59 @@ test('a vertical drag still plays a character', async ({ page }) => {
   await expect.poll(() => page.locator(`.row.you [data-def="${def}"]`).count()).toBeGreaterThan(0);
 });
 
+test('a drop on a unit plays that Page', async ({ page }) => {
+  await startMatch(page, '/');
+  const [first, second] = await twoCharacters(page);
+  await playAt(page, first, await pagePoint(page, 0));
+  await expect.poll(() => page.locator(`.row.you [data-def="${first.def}"]`).count()).toBeGreaterThan(0);
+  const unit = await unitPoint(page, first.def);
+  const before = await page.locator(`.row.you [data-def="${second.def}"]`).count();
+  const legal = await legalPlays(page, second.uid);
+  const posts = trackPlays(page);
+  await playAt(page, second, unit);
+  await expect.poll(() => page.locator(`.row.you [data-def="${second.def}"]`).count()).toBeGreaterThan(before);
+  const sent = posts.at(-1);
+  expect(sent?.page).toBe(unit.page);
+  expect(legal).toContainEqual(sent);
+});
+
+test('a tap on a unit plays that Page', async ({ page }) => {
+  await startMatch(page, '/');
+  const [first, second] = await twoCharacters(page);
+  await playAt(page, first, await pagePoint(page, 0));
+  await expect.poll(() => page.locator(`.row.you [data-def="${first.def}"]`).count()).toBeGreaterThan(0);
+  const unit = await unitPoint(page, first.def);
+  const before = await page.locator(`.row.you [data-def="${second.def}"]`).count();
+  const legal = await legalPlays(page, second.uid);
+  const held = await visibleCard(page, second.uid);
+  await fingerTap(page, held);
+  await expect(page.locator(`.handrow > .dc.armed[data-uid="${second.uid}"]`)).toHaveCount(1);
+  const posts = trackPlays(page);
+  await fingerTap(page, unit);
+  await expect.poll(() => page.locator(`.row.you [data-def="${second.def}"]`).count()).toBeGreaterThan(before);
+  const sent = posts.at(-1);
+  expect(sent?.page).toBe(unit.page);
+  expect(legal).toContainEqual(sent);
+});
+
+test('a drop off a Page sends nothing', async ({ page }) => {
+  await startMatch(page, '/');
+  const def = await playableCharacter(page);
+  const uid = await page.locator(`.handrow > .dc.character.playable[data-def="${def}"]`).first().getAttribute('data-uid');
+  const from = await visibleCard(page, uid ?? '');
+  const away = await center(page, '.rbar');
+  const posts = trackPlays(page);
+  await finger(page, [from, { x: from.x, y: from.y - 48 }, away]);
+  await page.waitForTimeout(400);
+  expect(posts).toEqual([]);
+  await expect(page.locator(`.handrow [data-uid="${uid}"]`)).toHaveCount(1);
+});
+
 for (const size of [
   { width: 390, height: 844 },
   { width: 360, height: 780 },
 ]) {
-  test(`a tapped card lifts above the hand at ${size.width}x${size.height}`, async ({ page }) => {
+  test(`a tapped card lifts clear of the Page at ${size.width}x${size.height}`, async ({ page }) => {
     await page.setViewportSize(size);
     await startMatch(page, '/');
     const play = await visiblePlayable(page);
@@ -83,28 +132,40 @@ for (const size of [
     expect(Math.abs(after.hand.height - before.hand.height)).toBeLessThan(2);
     const lifted = await page.evaluate(() => {
       const card = document.querySelector('.handrow > .dc.armed');
-      const hand = document.getElementById('hand');
-      if (!(card instanceof HTMLElement) || !hand) return null;
+      if (!(card instanceof HTMLElement)) return null;
       const box = card.getBoundingClientRect();
-      const handBox = hand.getBoundingClientRect();
+      const obstacles = Array.from(document.querySelectorAll('.page, #tray')).map((el) => {
+        const rect = el.getBoundingClientRect();
+        return { top: rect.top, right: rect.right, bottom: rect.bottom, left: rect.left, width: rect.width, height: rect.height };
+      });
       return {
         top: box.top,
         right: box.right,
         bottom: box.bottom,
         left: box.left,
-        handTop: handBox.top,
         width: window.innerWidth,
         height: window.innerHeight,
+        obstacles,
       };
     });
     expect(lifted).not.toBeNull();
     if (!lifted) return;
     expect(lifted.top).toBeGreaterThanOrEqual(0);
     expect(lifted.left).toBeGreaterThanOrEqual(0);
-    expect(lifted.right).toBeLessThanOrEqual(lifted.width);
-    expect(lifted.bottom).toBeLessThanOrEqual(lifted.height);
-    expect(lifted.bottom).toBeLessThanOrEqual(lifted.handTop + 1);
+    expect(lifted.right).toBeLessThanOrEqual(lifted.width + 0.5);
+    expect(lifted.bottom).toBeLessThanOrEqual(lifted.height + 0.5);
+    expect(lifted.bottom - lifted.top).toBeGreaterThan(80);
+    for (const obstacle of lifted.obstacles) {
+      if (obstacle.width < 2 || obstacle.height < 2) continue;
+      const clear = lifted.right <= obstacle.left + 1 || lifted.left >= obstacle.right - 1 || lifted.bottom <= obstacle.top + 1 || lifted.top >= obstacle.bottom - 1;
+      expect(clear).toBe(true);
+    }
     await shot(page, `hand-lift-${size.width}.png`);
+    const pageBox = await boxOf(page, '.page[data-i="0"]');
+    const posts = trackPlays(page);
+    await fingerTap(page, { x: pageBox.x + pageBox.width / 2, y: pageBox.y + Math.min(36, pageBox.height / 2) });
+    await expect.poll(() => page.locator(`.row.you [data-def="${def}"]`).count()).toBeGreaterThan(0);
+    expect(posts.at(-1)?.page).toBe(0);
   });
 }
 
@@ -171,6 +232,121 @@ async function endTurn(page: Page): Promise<void> {
     if (!board || board.view.winner != null) return true;
     return board.view.turn[0] > turn && board.view.yourTurn && !board.opponentThinking && board.view.phase !== 'mulligan';
   }, before);
+}
+
+interface HandCard {
+  def: string;
+  uid: string;
+  cost: number;
+}
+
+interface PlayAction {
+  type: string;
+  uid?: number;
+  page?: number;
+  target?: number;
+}
+
+function trackPlays(page: Page): PlayAction[] {
+  const posts: PlayAction[] = [];
+  page.on('request', (req) => {
+    if (req.method() !== 'POST' || !req.url().includes('/actions')) return;
+    try {
+      const data = req.postDataJSON() as { action?: PlayAction };
+      if (data.action?.type === 'play' || data.action?.type === 'champion') posts.push(data.action);
+    } catch {
+      /* A non-JSON post is not a play. */
+    }
+  });
+  return posts;
+}
+
+async function legalPlays(page: Page, uid: string): Promise<PlayAction[]> {
+  return page.evaluate((id) => {
+    const board = window.__duel as { legalActions?: PlayAction[] } | undefined;
+    return (board?.legalActions ?? []).filter((action) => action.type === 'play' && String(action.uid) === id);
+  }, uid);
+}
+
+async function twoCharacters(page: Page): Promise<[HandCard, HandCard]> {
+  for (let turn = 0; turn < 8; turn += 1) {
+    const pair = await page.evaluate(() => {
+      const board = window.__duel as { view?: { ink: number; hand: { instanceId: string; defId: string; type: string; cost: number }[] } } | undefined;
+      const ink = board?.view?.ink ?? 0;
+      const playable = new Set(Array.from(document.querySelectorAll('.handrow > .dc.character.playable')).map((el) => el.getAttribute('data-uid') ?? ''));
+      const cards = (board?.view?.hand ?? []).flatMap((card) => {
+        if (card.type !== 'character' || !playable.has(card.instanceId)) return [];
+        return [{ def: card.defId, uid: card.instanceId, cost: card.cost }];
+      });
+      for (let i = 0; i < cards.length; i += 1) {
+        for (let j = 0; j < cards.length; j += 1) {
+          const left = cards[i];
+          const right = cards[j];
+          if (!left || !right || left.uid === right.uid) continue;
+          if (left.cost + right.cost <= ink) return left.cost <= right.cost ? [left, right] : [right, left];
+        }
+      }
+      return null;
+    });
+    if (pair) return pair as [HandCard, HandCard];
+    await endTurn(page);
+  }
+  throw new Error('need two characters that can both be played');
+}
+
+async function visibleCard(page: Page, uid: string): Promise<{ x: number; y: number }> {
+  const hit = await page.evaluate((id) => {
+    const hand = document.getElementById('hand');
+    const card = document.querySelector(`.handrow > .dc[data-uid="${id}"]`);
+    if (!hand || !(card instanceof HTMLElement)) return null;
+    const show = () => {
+      const box = card.getBoundingClientRect();
+      const handBox = hand.getBoundingClientRect();
+      const x = box.left + box.width / 2;
+      const y = box.top + box.height / 2;
+      if (x < 8 || y < 8 || x > window.innerWidth - 8 || y > window.innerHeight - 8) return null;
+      if (x < handBox.left + 8 || x > handBox.right - 8 || y < handBox.top || y > handBox.bottom) return null;
+      return { x, y };
+    };
+    const ready = show();
+    if (ready) return ready;
+    hand.classList.add('panning');
+    void hand.offsetWidth;
+    const max = hand.scrollWidth - hand.clientWidth;
+    for (let nudge = 0; nudge < 8 && hand.scrollLeft < max - 1; nudge += 1) {
+      hand.scrollLeft = Math.min(max, hand.scrollLeft + 100);
+      const next = show();
+      if (next) return next;
+    }
+    return null;
+  }, uid);
+  if (!hit) throw new Error(`card ${uid} is not in view`);
+  return hit;
+}
+
+async function pagePoint(page: Page, index: number): Promise<{ x: number; y: number }> {
+  const box = await boxOf(page, `.page[data-i="${index}"]`);
+  return { x: box.x + box.width / 2, y: box.y + Math.min(box.height - 12, Math.max(20, box.height * 0.7)) };
+}
+
+async function unitPoint(page: Page, def: string): Promise<{ x: number; y: number; page: number }> {
+  const found = await page.evaluate((id) => {
+    const unit = document.querySelector(`.row.you [data-def="${id}"]`);
+    if (!(unit instanceof HTMLElement)) return null;
+    const box = unit.getBoundingClientRect();
+    return {
+      x: box.left + box.width / 2,
+      y: box.top + box.height / 2,
+      page: Number(unit.closest('.page')?.getAttribute('data-i')),
+    };
+  }, def);
+  if (!found || !Number.isInteger(found.page)) throw new Error(`missing unit ${def}`);
+  return found;
+}
+
+async function playAt(page: Page, card: HandCard, at: { x: number; y: number }): Promise<void> {
+  const from = await visibleCard(page, card.uid);
+  await finger(page, [from, { x: from.x, y: from.y - 48 }, at]);
 }
 
 async function playableCharacter(page: Page): Promise<string> {
