@@ -155,6 +155,16 @@ for (const size of [
     expect(lifted.right).toBeLessThanOrEqual(lifted.width + 0.5);
     expect(lifted.bottom).toBeLessThanOrEqual(lifted.height + 0.5);
     expect(lifted.bottom - lifted.top).toBeGreaterThan(80);
+    const promptClears = await page.evaluate(() => {
+      const tray = document.getElementById('tray')?.getBoundingClientRect();
+      if (!tray) return false;
+      return ['#legend', '#endturn', '#ink'].every((sel) => {
+        const box = document.querySelector(sel)?.getBoundingClientRect();
+        if (!box || box.width < 2 || box.height < 2) return true;
+        return tray.right <= box.left + 1 || tray.left >= box.right - 1 || tray.bottom <= box.top + 1 || tray.top >= box.bottom - 1;
+      });
+    });
+    expect(promptClears).toBe(true);
     for (const obstacle of lifted.obstacles) {
       if (obstacle.width < 2 || obstacle.height < 2) continue;
       const clear = lifted.right <= obstacle.left + 1 || lifted.left >= obstacle.right - 1 || lifted.bottom <= obstacle.top + 1 || lifted.top >= obstacle.bottom - 1;
@@ -312,9 +322,12 @@ async function visibleCard(page: Page, uid: string): Promise<{ x: number; y: num
     if (ready) return ready;
     hand.classList.add('panning');
     void hand.offsetWidth;
-    const max = hand.scrollWidth - hand.clientWidth;
-    for (let nudge = 0; nudge < 8 && hand.scrollLeft < max - 1; nudge += 1) {
-      hand.scrollLeft = Math.min(max, hand.scrollLeft + 100);
+    const max = Math.max(0, hand.scrollWidth - hand.clientWidth);
+    const toward = Math.min(max, Math.max(0, card.offsetLeft - (hand.clientWidth - card.offsetWidth) / 2));
+    const stops = [toward, 0];
+    for (let left = 0; left <= max + 1; left += 80) stops.push(Math.min(max, left));
+    for (const left of stops) {
+      hand.scrollLeft = left;
       const next = show();
       if (next) return next;
     }
@@ -381,9 +394,9 @@ async function visiblePlayable(page: Page): Promise<{ def: string; x: number; y:
       if (ready) return ready;
       hand.classList.add('panning');
       void hand.offsetWidth;
-      const max = hand.scrollWidth - hand.clientWidth;
-      for (let nudge = 0; nudge < 8 && hand.scrollLeft < max - 1; nudge += 1) {
-        hand.scrollLeft = Math.min(max, hand.scrollLeft + 100);
+      const max = Math.max(0, hand.scrollWidth - hand.clientWidth);
+      for (let left = 0; left <= max + 1; left += 80) {
+        hand.scrollLeft = Math.min(max, left);
         const next = find();
         if (next) return next;
       }

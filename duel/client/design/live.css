@@ -212,7 +212,19 @@ html, body { overscroll-behavior: none; }
   .race .verse { padding: 2px 4px; }
   .r-av { width: 28px; height: 28px; }
   .hand-wrap { position: relative; min-width: 0; max-width: 100%; overflow: visible; }
-  .tray { position: absolute; left: 0; right: 0; bottom: calc(100% + 4px); z-index: 6; pointer-events: none; }
+  .hand-wrap:has(.tray) .hand-hd .hint { visibility: hidden; }
+  .tray {
+    position: absolute;
+    left: auto;
+    right: 0;
+    top: 0;
+    bottom: auto;
+    width: auto;
+    max-width: 62%;
+    text-align: right;
+    z-index: 6;
+    pointer-events: none;
+  }
   .dc-spacer { width: 92px; min-width: 92px; height: 128px; flex: none; pointer-events: none; }
   .handrow {
     gap: 8px;
