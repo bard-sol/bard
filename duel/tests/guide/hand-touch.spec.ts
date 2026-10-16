@@ -53,12 +53,13 @@ test('a sideways swipe scrolls the hand on the rival turn', async ({ page }) => 
 
 test('a vertical drag still plays a character', async ({ page }) => {
   await startMatch(page, '/');
-  const def = await playableCharacter(page);
-  const from = await center(page, `.handrow > .dc.character.playable[data-def="${def}"]`);
-  const pageBox = await boxOf(page, '.page[data-i="0"]');
-  const drop = { x: Math.min(Math.max(from.x, pageBox.x + 24), pageBox.x + pageBox.width - 24), y: pageBox.y + Math.min(72, pageBox.height / 2) };
-  await finger(page, [from, { x: from.x, y: from.y - 48 }, drop]);
-  await expect.poll(() => page.locator(`.row.you [data-def="${def}"]`).count()).toBeGreaterThan(0);
+  const card = await oneCharacter(page);
+  const legal = await legalPlays(page, card.uid);
+  const target = legal.find((action) => action.page === 0 || action.page === 1);
+  expect(target?.page === 0 || target?.page === 1).toBe(true);
+  const before = await page.locator(`.row.you [data-def="${card.def}"]`).count();
+  await playAt(page, card, await pagePoint(page, target?.page ?? 0));
+  await expect.poll(() => page.locator(`.row.you [data-def="${card.def}"]`).count()).toBeGreaterThan(before);
 });
 
 test('a drop on a unit plays that Page', async ({ page }) => {
@@ -165,6 +166,24 @@ for (const size of [
       });
     });
     expect(promptClears).toBe(true);
+    const promptInHeader = await page.evaluate(() => {
+      const tray = document.getElementById('tray');
+      const header = document.querySelector('.hand-hd');
+      if (!(tray instanceof HTMLElement) || !(header instanceof HTMLElement)) return false;
+      const trayBox = tray.getBoundingClientRect();
+      const headerBox = header.getBoundingClientRect();
+      if (headerBox.height < 2) return false;
+      const small = tray.querySelector('small')?.getBoundingClientRect();
+      const lineInside = !small || (small.height > 2 && small.top >= headerBox.top - 1 && small.bottom <= headerBox.bottom + 1);
+      const cards = document.querySelector('.handrow > .dc')?.getBoundingClientRect();
+      const aboveCards = !cards || cards.height < 2 || trayBox.bottom <= cards.top + 1;
+      return trayBox.top >= headerBox.top - 1
+        && trayBox.bottom <= headerBox.bottom + 1
+        && lineInside
+        && aboveCards
+        && tray.scrollHeight <= tray.clientHeight + 1;
+    });
+    expect(promptInHeader).toBe(true);
     for (const obstacle of lifted.obstacles) {
       if (obstacle.width < 2 || obstacle.height < 2) continue;
       const clear = lifted.right <= obstacle.left + 1 || lifted.left >= obstacle.right - 1 || lifted.bottom <= obstacle.top + 1 || lifted.top >= obstacle.bottom - 1;
@@ -360,6 +379,19 @@ async function unitPoint(page: Page, def: string): Promise<{ x: number; y: numbe
 async function playAt(page: Page, card: HandCard, at: { x: number; y: number }): Promise<void> {
   const from = await visibleCard(page, card.uid);
   await finger(page, [from, { x: from.x, y: from.y - 48 }, at]);
+}
+
+async function oneCharacter(page: Page): Promise<HandCard> {
+  for (let turn = 0; turn < 6; turn += 1) {
+    const card = await page.evaluate(() => {
+      const el = document.querySelector('.handrow > .dc.character.playable');
+      if (!(el instanceof HTMLElement)) return null;
+      return { def: el.getAttribute('data-def') ?? '', uid: el.getAttribute('data-uid') ?? '', cost: 0 };
+    });
+    if (card?.def && card.uid) return card;
+    await endTurn(page);
+  }
+  throw new Error('no playable character');
 }
 
 async function playableCharacter(page: Page): Promise<string> {
