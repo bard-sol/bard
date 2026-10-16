@@ -50,6 +50,8 @@ interface Drag extends Piece {
   pointer: number;
   /** Horizontal movement scrolls the phone hand instead of starting a play drag. */
   scroll?: boolean;
+  /** Movement while it is not your turn. It must not become a play or a tap. */
+  consumed?: boolean;
   lastX?: number;
 }
 
@@ -145,14 +147,34 @@ function resetCardBox(card: HTMLElement): void {
   card.style.left = '';
   card.style.top = '';
   card.style.zIndex = '';
+  card.style.margin = '';
+  const spacer = card.previousElementSibling;
+  if (spacer?.classList.contains('dc-spacer')) spacer.remove();
 }
 
 function liftArmedCard(card: HTMLElement): void {
+  card.classList.remove('armed');
   const box = card.getBoundingClientRect();
+  const handTop = document.getElementById('hand')?.getBoundingClientRect().top ?? box.top;
+  if (!card.previousElementSibling?.classList.contains('dc-spacer')) {
+    const spacer = document.createElement('div');
+    spacer.className = 'dc-spacer';
+    spacer.setAttribute('aria-hidden', 'true');
+    card.before(spacer);
+  }
+  card.classList.add('armed');
   card.style.position = 'fixed';
   card.style.zIndex = '40';
-  card.style.left = `${Math.max(8, Math.min(box.left, window.innerWidth - 156))}px`;
-  card.style.top = `${Math.max(8, box.bottom - 208)}px`;
+  card.style.margin = '0';
+  const width = 148;
+  const height = 208;
+  const left = Math.min(Math.max(8, box.left), Math.max(8, window.innerWidth - width - 8));
+  let top = handTop - height - 8;
+  if (top < 8) top = 8;
+  const maxTop = window.innerHeight - height - 8;
+  if (top > maxTop) top = Math.max(8, maxTop);
+  card.style.left = `${left}px`;
+  card.style.top = `${top}px`;
 }
 
 function fitHandName(el: Element | null, armed: boolean): void {
@@ -410,7 +432,7 @@ function revealGuideCard(): void {
     .map((sel) => document.querySelector(sel))
     .find((el) => el instanceof HTMLElement && hand.contains(el));
   const card = hole instanceof HTMLElement ? hole.closest('.dc') ?? hole : null;
-  if (!(card instanceof HTMLElement) || !hand.contains(card)) return;
+  if (!(card instanceof HTMLElement) || !hand.contains(card) || card.style.position === 'fixed') return;
   hand.scrollLeft = Math.max(0, card.offsetLeft - (hand.clientWidth - card.offsetWidth) / 2);
 }
 
@@ -754,13 +776,40 @@ function unitOf(uid: string): UnitView | null {
   return null;
 }
 
+function playingNow(): boolean {
+  return Boolean(ui.payload && acting(ui.payload) && ui.payload.view.phase !== 'mulligan');
+}
+
+function captureDrag(event: PointerEvent): void {
+  if (!(app instanceof Element)) return;
+  try {
+    app.setPointerCapture(event.pointerId);
+  } catch {
+    /* The pointer can already be gone on a cancelled touch. */
+  }
+}
+
 function beginDrag(event: PointerEvent): void {
-  if (ui.legendArmed || ui.busy) return;
-  if (!ui.payload || !acting(ui.payload) || ui.payload.view.phase === 'mulligan') return;
+  if (ui.legendArmed || ui.busy || !ui.payload) return;
   const raw = event.target instanceof Element ? event.target : null;
   if (raw?.closest('.cm-bub, .cm-skip, .skip-box, .confirm-box, .sheet-host, .dc-q, button, a')) return;
   const target = raw && !raw.closest('.ovl') ? raw : boardHit(event.clientX, event.clientY);
   if (!target) return;
+  const handCard = target.closest('.handrow > .dc');
+  if (!playingNow()) {
+    if (!(handCard instanceof HTMLElement)) return;
+    ui.drag = {
+      kind: 'card',
+      uid: handCard.getAttribute('data-uid') ?? '',
+      def: handCard.getAttribute('data-def') ?? '',
+      x: event.clientX,
+      y: event.clientY,
+      moved: false,
+      pointer: event.pointerId,
+    };
+    captureDrag(event);
+    return;
+  }
   if (!holeHit(target)) return;
   const card = target.closest('.handrow .dc, .champ-stub');
   const unit = target.closest('.row.you .un');
@@ -768,13 +817,7 @@ function beginDrag(event: PointerEvent): void {
   const uid = (card ?? unit)?.getAttribute('data-uid') ?? '';
   const def = (card ?? unit)?.getAttribute('data-def') ?? '';
   ui.drag = { kind: card ? 'card' : 'unit', uid, def, x: event.clientX, y: event.clientY, moved: false, pointer: event.pointerId };
-  if (app instanceof Element) {
-    try {
-      app.setPointerCapture(event.pointerId);
-    } catch {
-      /* The pointer can already be gone on a cancelled touch. */
-    }
-  }
+  captureDrag(event);
 }
 
 function moveDrag(event: PointerEvent): void {
@@ -782,15 +825,26 @@ function moveDrag(event: PointerEvent): void {
   if (!drag || drag.pointer !== event.pointerId) return;
   const dx = event.clientX - drag.x;
   const dy = event.clientY - drag.y;
-  if (!drag.moved && !drag.scroll && Math.hypot(dx, dy) > 8) {
+  if (!drag.moved && !drag.scroll && !drag.consumed && Math.hypot(dx, dy) > 8) {
     const card = document.querySelector(`.handrow > .dc[data-uid="${CSS.escape(drag.uid)}"]`);
     if (drag.kind === 'card' && window.IS_PHONE() && card && Math.abs(dx) > Math.abs(dy)) drag.scroll = true;
-    else drag.moved = true;
+    else if (playingNow()) drag.moved = true;
+    else drag.consumed = true;
   }
   if (drag.scroll) {
     const hand = document.getElementById('hand');
-    if (hand) hand.scrollLeft -= event.clientX - (drag.lastX ?? drag.x);
+    if (hand) {
+      if (!hand.classList.contains('panning')) {
+        hand.classList.add('panning');
+        void hand.offsetWidth;
+      }
+      hand.scrollLeft -= event.clientX - (drag.lastX ?? drag.x);
+    }
     drag.lastX = event.clientX;
+    if (event.cancelable) event.preventDefault();
+    return;
+  }
+  if (drag.consumed) {
     if (event.cancelable) event.preventDefault();
     return;
   }
@@ -834,7 +888,7 @@ async function loadPreview(uid: number, target: number): Promise<void> {
 function snapHand(): void {
   const hand = document.getElementById('hand');
   if (!hand || window.innerWidth > 600) return;
-  const cards = Array.from(hand.querySelectorAll(':scope > .dc')) as HTMLElement[];
+  const cards = (Array.from(hand.querySelectorAll(':scope > .dc')) as HTMLElement[]).filter((card) => card.style.position !== 'fixed');
   if (cards.length === 0) return;
   const mid = hand.scrollLeft + hand.clientWidth / 2;
   let best = cards[0];
@@ -852,13 +906,25 @@ function snapHand(): void {
   hand.scrollLeft = Math.max(0, best.offsetLeft - (hand.clientWidth - best.offsetWidth) / 2);
 }
 
+function clearPanning(): void {
+  document.getElementById('hand')?.classList.remove('panning');
+}
+
 async function endDrag(event: PointerEvent, held = false): Promise<void> {
   const drag = ui.drag;
   ui.drag = null;
   document.getElementById('ghost')?.remove();
   if (drag?.scroll) {
     snapHand();
+    clearPanning();
     ui.preview = null;
+    armSuppress();
+    return;
+  }
+  clearPanning();
+  if (drag && !playingNow()) {
+    ui.preview = null;
+    if (drag.consumed || drag.moved) armSuppress();
     return;
   }
   if (!drag?.moved || !ui.payload) {
@@ -1323,9 +1389,16 @@ function onPointerUp(event: PointerEvent): void {
 
 function onPointerCancel(event: PointerEvent): void {
   if (!ui.drag || ui.drag.pointer !== event.pointerId) return;
+  const scrolling = Boolean(ui.drag.scroll);
   ui.drag = null;
   ui.preview = null;
   document.getElementById('ghost')?.remove();
+  if (scrolling) {
+    snapHand();
+    clearPanning();
+    return;
+  }
+  clearPanning();
   paint();
 }
 
