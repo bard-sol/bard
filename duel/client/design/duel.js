@@ -221,14 +221,13 @@ window.boardScreen = function (S, o = {}) {
   const ticker = o.ticker ? `<div class="ticker"><span class="now">Now</span>${o.ticker}</div>` : '';
   const phase = S.step === 'Fight' ? 'Fight' : S.step === 'Mulligan' ? '' : 'Play';
   const ribbon = `<div class="ribbon m-only">${turnChip(S.turn, { rival: S.active === 'rival', phase })}${ticker}<button class="ib sm" id="logbtn" aria-label="Move log">${icon('log')}<span>Log</span>${o.logDot ? '<i class="dotn"></i>' : ''}</button></div>`;
-  const pages = pp[0] + ribbon + pp[1];
   const desk = !IS_PHONE();
   return `<div class="app duel ${o.cls || ''}" style="--mine:var(--h-${S.you.house}-a);--rival:var(--h-${S.rival.house}-a)">
   ${statusBar()}
   ${desk ? `<header class="dtop"><div class="brand"><span class="word">Bard</span><span class="mode">${o.mode || 'Card Duel · Guided first match'}</span></div>${turnChip(S.turn, { rival: S.active === 'rival', phase })}<div class="dt-r"><button class="btn ghost" id="help-d">${icon('help')}How to play</button><button class="btn icon secondary" id="settings" aria-label="Settings">${icon('settings')}</button></div></header>` : ''}
   <div class="dmain">
     ${desk ? `<aside class="rail l">${o.leftRail || logPanel(o.log || FIX.mainLog, { right: `Turn ${S.turn}` })}${o.leftBard ? `<div class="panel">${bardSays(o.leftBard)}</div>` : ''}</aside>` : ''}
-    <div class="center">${rivalBar(S, o)}<div class="pages" id="pages">${pages}</div>${youBar(S, o)}${handHTML(S, o)}</div>
+    <div class="center">${rivalBar(S, o)}${ribbon}<div class="pages" id="pages">${pp[0]}${pp[1]}</div>${youBar(S, o)}${handHTML(S, o)}</div>
   </div>
   <div class="ovl" id="ovl">${o.overlay || ''}</div>
 </div>`;

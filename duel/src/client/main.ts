@@ -112,6 +112,120 @@ function markArmed(): void {
   document.querySelectorAll(`.handrow ${sel}, .row.you ${sel}`).forEach((el) => el.classList.add('armed'));
 }
 
+/** Phone hand: 92px fan, a word-bounded ability line, names that wrap or shrink. */
+function fitPhoneHand(): void {
+  if (window.innerWidth > 600) return;
+  const hand = document.getElementById('hand');
+  if (!hand) return;
+  const cards = Array.from(hand.querySelectorAll(':scope > .dc.sz-hand-s')) as HTMLElement[];
+  const cardW = 92;
+  const gap = 6;
+  const fan = Math.max(cardW, hand.clientWidth - 1);
+  const n = cards.length;
+  const flat = n * cardW + Math.max(0, n - 1) * gap;
+  const step = n <= 1 ? cardW : flat <= fan ? cardW + gap : (fan - cardW) / Math.max(1, n - 1);
+  hand.style.setProperty('--fan-step', `${step}px`);
+  hand.style.justifyContent = flat <= fan ? 'center' : 'flex-start';
+  const textW = Math.max(24, Math.min(cardW - 8, step - 8));
+  for (const card of cards) {
+    const armed = card.classList.contains('armed');
+    fitHandName(card.querySelector('.dc-name'), armed ? 132 : textW);
+    fitHandAbility(card.querySelector('.dc-text'), textW, armed);
+    fitHandStats(card.querySelector('.dc-stats'), textW, armed);
+  }
+}
+
+function fitHandName(el: Element | null, width: number): void {
+  if (!(el instanceof HTMLElement)) return;
+  const full = (el.textContent ?? '').trim();
+  el.style.display = 'block';
+  el.style.whiteSpace = 'normal';
+  el.style.overflow = 'visible';
+  el.style.setProperty('-webkit-line-clamp', 'unset');
+  el.style.boxSizing = 'border-box';
+  el.style.paddingRight = '2px';
+  el.style.maxWidth = `${width}px`;
+  el.style.width = `${width}px`;
+  const longest = full.split(/\s+/).reduce((best, word) => (word.length > best.length ? word : best), '');
+  let size = 11;
+  while (size >= 4.5) {
+    el.style.fontSize = `${size}px`;
+    el.style.lineHeight = '1.15';
+    el.style.whiteSpace = 'nowrap';
+    el.textContent = longest;
+    const wordWide = el.scrollWidth > el.clientWidth;
+    el.style.whiteSpace = 'normal';
+    el.textContent = full;
+    const tooTall = el.scrollHeight > size * 1.15 * 2 + 4;
+    if (!wordWide && !tooTall) break;
+    size -= 0.5;
+  }
+}
+
+function fitHandAbility(el: Element | null, width: number, armed: boolean): void {
+  if (!(el instanceof HTMLElement)) return;
+  if (!el.dataset.fullHtml) {
+    el.dataset.fullHtml = el.innerHTML;
+    el.dataset.full = (el.textContent ?? '').replace(/\s+/g, ' ').trim();
+  }
+  if (armed) {
+    el.innerHTML = el.dataset.fullHtml;
+    el.style.whiteSpace = 'normal';
+    el.style.width = 'auto';
+    el.style.maxWidth = 'none';
+    el.style.fontSize = '11px';
+    return;
+  }
+  const words = (el.dataset.full ?? '').split(' ').filter(Boolean);
+  el.style.display = 'block';
+  el.style.whiteSpace = 'nowrap';
+  el.style.width = `${width}px`;
+  el.style.maxWidth = `${width}px`;
+  el.style.fontSize = '11px';
+  let kept = '';
+  for (const word of words) {
+    const next = kept ? `${kept} ${word}` : word;
+    el.textContent = next;
+    if (el.scrollWidth > el.clientWidth - 1 && kept) {
+      el.textContent = kept;
+      break;
+    }
+    kept = next;
+  }
+  if (!kept && words[0]) el.textContent = words[0];
+  let size = 11;
+  while (size > 8 && el.scrollWidth > el.clientWidth - 1) {
+    size -= 0.5;
+    el.style.fontSize = `${size}px`;
+  }
+}
+
+function fitHandStats(el: Element | null, width: number, armed: boolean): void {
+  if (!(el instanceof HTMLElement)) return;
+  el.style.transform = '';
+  if (armed) {
+    el.style.width = 'auto';
+    el.style.maxWidth = 'none';
+    return;
+  }
+  el.style.width = `${width}px`;
+  el.style.maxWidth = `${width}px`;
+  el.style.overflow = 'hidden';
+  el.style.boxSizing = 'border-box';
+  const sts = Array.from(el.querySelectorAll('.st')) as HTMLElement[];
+  let size = 12;
+  for (const st of sts) st.style.fontSize = '';
+  while (sts.length && el.scrollWidth > el.clientWidth + 1 && size > 8) {
+    size -= 0.5;
+    for (const st of sts) st.style.fontSize = `${size}px`;
+  }
+  if (el.scrollWidth > el.clientWidth + 1 && el.scrollWidth > 0) {
+    const scale = el.clientWidth / el.scrollWidth;
+    el.style.transform = `scale(${scale})`;
+    el.style.transformOrigin = 'left bottom';
+  }
+}
+
 /** The guide dim is an SVG. Its mask is visual only, so hit-test past it. */
 function boardHit(x: number, y: number): Element | null {
   for (const el of document.elementsFromPoint(x, y)) {
@@ -228,6 +342,7 @@ function paint(): void {
   maybeTips();
   noteRivalBeat();
   markArmed();
+  fitPhoneHand();
   if (ui.busy) holdControls();
   void aimPreviews();
 }
