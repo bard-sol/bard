@@ -1,7 +1,12 @@
 import { expect, test, type Browser, type Page } from '@playwright/test';
 
-const PASSCODE = 'bard-friend-test';
-const BASE = 'http://127.0.0.1:5201';
+const BASE = process.env.BASE_URL ?? 'http://127.0.0.1:5201';
+/**
+ * Local fixture only. A live run passes the real passcode in PASSCODE.
+ * This default is the dev server's test value and is not a production secret.
+ */
+const LOCAL_PASSCODE = 'bard-friend-test';
+const PASSCODE = process.env.BASE_URL ? (process.env.PASSCODE ?? '') : LOCAL_PASSCODE;
 const SHOTS = process.env.ARTIFACT_DIR ?? '/opt/cursor/artifacts';
 
 interface Board {
@@ -31,6 +36,9 @@ test('two friends play a match, rejoin, and rematch', async ({ page, browser }) 
   await expect(page.locator('#invite-url')).toContainText('/m/');
   await page.screenshot({ path: `${SHOTS}/friend-invite-1440.png` });
   await page.setViewportSize({ width: 390, height: 844 });
+  const label = await page.locator('.title-card .eyebrow').boundingBox();
+  const cancel = await page.locator('#cancel-invite').boundingBox();
+  expect(label && cancel && cancel.y >= label.y + label.height).toBeTruthy();
   await page.screenshot({ path: `${SHOTS}/friend-invite-390.png` });
   await page.setViewportSize({ width: 1440, height: 900 });
   const link = (await page.locator('#invite-url').textContent()) ?? '';
@@ -63,6 +71,8 @@ test('two friends play a match, rejoin, and rematch', async ({ page, browser }) 
   await finish(page, guest);
   await expect(page.locator('.why p')).toBeVisible();
   await expect(guest.locator('.why p')).toBeVisible();
+  await expect(page.locator('.panel.war p')).toHaveText(/You (beat|lost to) .+, \d+\u2013\d+\./);
+  await expect(guest.locator('.panel.war p')).toHaveText(/You (beat|lost to) .+, \d+\u2013\d+\./);
   const hostWon = await page.locator('h1').textContent();
   const guestWon = await guest.locator('h1').textContent();
   expect(hostWon === 'Won' || hostWon === 'Lost').toBe(true);
@@ -74,6 +84,37 @@ test('two friends play a match, rejoin, and rematch', async ({ page, browser }) 
   await expect.poll(() => guest.url()).not.toContain(firstCode);
   await expect(page.locator('#endturn')).toBeVisible();
   await expect(guest.locator('#endturn')).toBeVisible();
+  await guest.close();
+});
+
+test('the first socket delivers the other seat a move', async ({ page, browser }) => {
+  const hostLive = tapLive(page);
+  await page.goto('/');
+  await unlock(page);
+  await page.locator('#play-friend').click();
+  await page.locator('[data-deck="candle"]').click();
+  const link = (await page.locator('#invite-url').textContent()) ?? '';
+  const guest = await guestPage(browser);
+  const guestLive = tapLive(guest);
+  await guest.goto(link);
+  await unlock(guest);
+  await guest.locator('[data-deck="fold"]').click();
+  await expect(page.locator('#endturn')).toBeVisible();
+  await expect(guest.locator('#endturn')).toBeVisible();
+  const hostTurn = await yourTurn(page);
+  const waiter = hostTurn ? guest : page;
+  const actor = hostTurn ? page : guest;
+  const live = hostTurn ? guestLive : hostLive;
+  await waiter.route(/\/api\/matches\/[^/]+$/, (route) => {
+    if (route.request().method() === 'GET') return route.abort();
+    return route.continue();
+  });
+  const before = await generation(waiter);
+  await actIfTurn(actor);
+  await expect.poll(() => generation(waiter), { timeout: 8_000 }).toBeGreaterThan(before);
+  expect(live.urls).toHaveLength(1);
+  expect(live.urls[0]).toMatch(/^wss?:\/\//);
+  expect(live.generations.some((value) => value > before)).toBe(true);
   await guest.close();
 });
 
@@ -149,6 +190,27 @@ async function stampOf(page: Page): Promise<string> {
   });
 }
 
+function tapLive(page: Page): { urls: string[]; generations: number[] } {
+  const tap = { urls: [] as string[], generations: [] as number[] };
+  page.on('websocket', (socket) => {
+    if (!socket.url().includes('/live')) return;
+    tap.urls.push(socket.url());
+    socket.on('framereceived', (frame) => {
+      try {
+        const body = JSON.parse(String(frame.payload)) as { generation?: number };
+        if (typeof body.generation === 'number') tap.generations.push(body.generation);
+      } catch {
+        /* A non-JSON frame is not a match view. */
+      }
+    });
+  });
+  return tap;
+}
+
+async function generation(page: Page): Promise<number> {
+  return page.evaluate(() => (window.__duel as Board | undefined)?.generation ?? -1);
+}
+
 async function actIfTurn(page: Page): Promise<void> {
   const before = await page.evaluate(() => {
     const board = window.__duel as Board | undefined;
@@ -156,12 +218,13 @@ async function actIfTurn(page: Page): Promise<void> {
     return board.generation ?? 0;
   });
   if (before == null) return;
-  if (await page.locator('#confirm-yes').count()) await page.locator('#confirm-yes').click();
-  else {
+  if ((await page.locator('#confirm-yes').count()) === 0) {
     const end = page.locator('#endturn');
     await expect(end).toBeEnabled();
     await end.click({ force: true });
   }
+  const confirm = page.locator('#confirm-yes');
+  if (await confirm.count()) await confirm.click();
   await expect.poll(() => page.evaluate(() => (window.__duel as Board | undefined)?.generation ?? -1), { timeout: 8_000 }).not.toBe(before);
 }
 

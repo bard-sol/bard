@@ -872,7 +872,7 @@ function connectLive(matchId: string): void {
   liveSocket?.close();
   liveId = matchId;
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-  const socket = new WebSocket(`${proto}//${location.host}/api/matches/${matchId}/live`);
+  const socket = new WebSocket(`${proto}://${location.host}/api/matches/${matchId}/live`);
   liveSocket = socket;
   socket.onmessage = (event) => {
     if (ui.drag || ui.busy) return;

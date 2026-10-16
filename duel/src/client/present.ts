@@ -261,6 +261,9 @@ export function endHtml(view: PlayerView, tutorial: boolean, friend = false): st
     : friend
       ? 'Friend match'
       : 'Each win moves your House’s bar in the war.';
+  const warBody = friend
+    ? `<p>${win ? 'You beat' : 'You lost to'} ${escapeHtml(foe)}, ${view.verse[0]}–${view.verse[1]}.</p>`
+    : '';
   const again = friend
     ? '<button class="btn secondary" id="rematch">Rematch</button><a class="btn primary" id="lobby" href="/">Lobby</a>'
     : '<button class="btn secondary" id="rematch">Rematch</button><button class="btn primary" id="play-real">Play for real</button>';
@@ -270,11 +273,15 @@ export function endHtml(view: PlayerView, tutorial: boolean, friend = false): st
         <div class="score"><span class="sc you">You <b>${view.verse[0]}</b></span><span class="dash">–</span><span class="sc them"><b>${view.verse[1]}</b> ${foe}</span></div></div>
       <div class="panel why"><span class="eyebrow">${win ? 'You won because…' : 'You lost because…'}</span><p>${why}</p>${swingLine(view)}</div>
       <div class="panel"><span class="eyebrow">Verses by Page</span>${scoreTable(view)}</div>
-      <div class="panel war"><span class="eyebrow">${war}</span></div>
+      <div class="panel war"><span class="eyebrow">${war}</span>${warBody}</div>
       <div class="end-acts"><button class="btn secondary" id="review-log">Review log</button>${again}</div>
     </div>
     <div class="ovl" id="ovl"></div>
   </div>`;
+}
+
+function escapeHtml(value: string): string {
+  return value.replace(/[&<>"]/g, (ch) => (ch === '&' ? '&amp;' : ch === '<' ? '&lt;' : ch === '>' ? '&gt;' : '&quot;'));
 }
 
 function friendWhy(view: PlayerView, win: boolean, foe: string): string {

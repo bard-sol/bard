@@ -1,7 +1,9 @@
 import { DurableObject, type DurableObjectState } from 'cloudflare:workers';
 import { createEngineAdapter } from '../engine/adapter.js';
 import type { ClientPayload, Deck, FriendBody, GameAction, PlayerId, Stance, TradePreview } from '../types.js';
+import { lobbyDeadline, matchDeadline, nextWake } from '../server/expire.js';
 import { FriendBook, FRIEND_TURN_MS, type FriendResult, type FriendSeed, type Lobby } from '../server/friends.js';
+import { seal } from '../server/seal.js';
 import { parseAction, parseCreate } from '../server/parse.js';
 import { RedactionError } from '../server/redact.js';
 import {
@@ -110,6 +112,7 @@ export class DuelMatch extends DurableObject<Env> {
           clock TEXT
         )`,
       );
+      await this.syncAlarm(this.read()?.clock ?? null);
     });
   }
 
@@ -210,14 +213,22 @@ export class DuelMatch extends DurableObject<Env> {
   async webSocketError(): Promise<void> {}
 
   async alarm(): Promise<void> {
+    const now = Date.now();
+    const lobby = this.readLobby();
+    if (lobby && lobbyDeadline(lobby.createdAt) <= now) this.writeLobby(null);
     const existing = this.read();
-    if (!existing?.clock) return;
-    if (existing.clock.fireAt > Date.now() + 250) {
-      await this.ctx.storage.setAlarm(existing.clock.fireAt);
+    if (existing && matchDeadline(existing.record.createdAt) <= now) {
+      this.dropMatch();
+      await this.syncAlarm(null);
       return;
     }
-    const due = existing.clock;
-    await this.withMatch(existing.record.id, (service) => service.fireClock(existing.record.id, due.kind, due.token), true);
+    const current = this.read();
+    if (current?.clock && current.clock.fireAt <= now + 250) {
+      const due = current.clock;
+      await this.withMatch(current.record.id, (service) => service.fireClock(current.record.id, due.kind, due.token), true);
+      return;
+    }
+    await this.syncAlarm(current?.clock ?? null);
   }
 
   private async run<T>(id: string, fn: (service: MatchService) => Promise<ServiceResult<T>>): Promise<WorkerResult<T>> {
@@ -275,15 +286,16 @@ export class DuelMatch extends DurableObject<Env> {
     if (lobby) book.lobbies.set(lobby.code, lobby);
     const result = await fn(book);
     const record = await repo.get(code);
+    let clock: StoredClock | null = null;
     if (record) {
-      let clock: StoredClock | null = bridge.touched ? bridge.pending : (existing?.clock ?? null);
+      clock = bridge.touched ? bridge.pending : (existing?.clock ?? null);
       this.write(record, service.exportPlan(code), clock);
-      await this.syncAlarm(clock);
       await this.publish(code, service);
+      this.writeLobby(null);
+    } else {
+      this.writeLobby(book.lobbies.get(code) ?? null);
     }
-    const nextLobby = book.lobbies.get(code) ?? null;
-    if (record) this.writeLobby(null);
-    else this.writeLobby(nextLobby);
+    await this.syncAlarm(clock);
     return result;
   }
 
@@ -347,13 +359,35 @@ export class DuelMatch extends DurableObject<Env> {
     );
   }
 
+  private dropMatch(): void {
+    this.ctx.storage.sql.exec('DELETE FROM duel_match WHERE slot = ?', 'match');
+    this.writeLobby(null);
+    for (const socket of this.ctx.getWebSockets()) {
+      try {
+        socket.close(1000, 'expired');
+      } catch {
+        /* The hibernated socket can already be closed. */
+      }
+    }
+  }
+
   private async syncAlarm(clock: StoredClock | null): Promise<void> {
-    if (!clock) {
+    const now = Date.now();
+    const lobby = this.readLobby();
+    const match = this.read();
+    const when = nextWake(
+      [
+        clock?.fireAt ?? null,
+        lobby ? lobbyDeadline(lobby.createdAt) : null,
+        match ? matchDeadline(match.record.createdAt) : null,
+      ],
+      now,
+    );
+    if (when == null) {
       await this.ctx.storage.deleteAlarm();
       return;
     }
-    const when = clock.fireAt < Date.now() ? Date.now() + 10 : clock.fireAt;
-    await this.ctx.storage.setAlarm(when);
+    await this.ctx.storage.setAlarm(when === now ? now + 10 : when);
   }
 }
 
@@ -618,12 +652,6 @@ function json(body: unknown, status: number, extra?: Headers): Response {
   headers.set('content-type', 'application/json; charset=utf-8');
   headers.set('cache-control', 'no-store');
   return new Response(JSON.stringify(body), { status, headers });
-}
-
-function seal(response: Response): Response {
-  const headers = new Headers(response.headers);
-  headers.set('X-Robots-Tag', 'noindex, nofollow, noarchive');
-  return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
 }
 
 function parseMs(value: string | undefined, fallback: number): number {
