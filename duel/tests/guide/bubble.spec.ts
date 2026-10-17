@@ -52,7 +52,7 @@ for (const size of SIZES) {
     await at(page, 9);
     await check(page, size, 9);
     await endTurn(page);
-    await expect.poll(() => step(page), { timeout: 8_000 }).toBe('10');
+    await at(page, 10);
     await check(page, size, 10);
     await at(page, 11);
     await check(page, size, 11);
@@ -80,7 +80,9 @@ for (const size of SIZES) {
     await next(page);
     await at(page, 19);
     await check(page, size, 19);
-    await page.locator('#legend').click({ force: true });
+    const legend = page.locator('#legend');
+    await expect(legend).toBeEnabled({ timeout: 20_000 });
+    await legend.click({ force: true });
     await page.locator('.page[data-i="1"] .row.you [data-def="n_doodle"]').click({ force: true });
     await at(page, 20);
     await check(page, size, 20);
@@ -119,7 +121,9 @@ async function step(page: Page): Promise<string | undefined> {
 }
 
 async function at(page: Page, id: number): Promise<void> {
-  await expect.poll(() => step(page), { timeout: 15_000 }).toBe(String(id));
+  const want = String(id);
+  await expect.poll(() => step(page), { timeout: 20_000 }).toBe(want);
+  await expect.poll(() => page.locator('#bub').getAttribute('data-guide-step'), { timeout: 20_000 }).toBe(want);
 }
 
 async function endTurn(page: Page): Promise<void> {
@@ -162,8 +166,9 @@ async function check(page: Page, size: { width: number; height: number }, id: nu
   if (hover && size.width > 600) {
     await page.evaluate(() => {
       const point = document.querySelector('[data-guide-point]');
-      const card = Array.from(document.querySelectorAll('.handrow .dc')).find((el) => el !== point && !el.contains(point) && !(point && point.contains(el)));
-      card?.dispatchEvent(new PointerEvent('pointerover', { bubbles: true }));
+      const cards = Array.from(document.querySelectorAll('.handrow .dc')).filter((el) => el !== point && !el.contains(point) && !(point && point.contains(el)));
+      cards.sort((a, b) => (b.querySelector('.dc-name')?.textContent?.length ?? 0) - (a.querySelector('.dc-name')?.textContent?.length ?? 0));
+      cards[0]?.dispatchEvent(new PointerEvent('pointerover', { bubbles: true }));
     });
     await page.waitForTimeout(280);
   }
@@ -206,6 +211,15 @@ async function check(page: Page, size: { width: number; height: number }, id: nu
       boardClipped: Boolean(app && hand && pages && hand.height > 2 && (hand.bottom > window.innerHeight + 1 || pages.top < -1 || app.getBoundingClientRect().top < -1)),
       hand: hand && hand.height > 2 ? { top: hand.top, bottom: hand.bottom } : null,
       pages: pages && pages.height > 2 ? { top: pages.top, bottom: pages.bottom } : null,
+      nameOnStats: Array.from(document.querySelectorAll('#hovercard .dc, .sheet .dc.sz-inspect')).some((card) => {
+        const name = card.querySelector('.dc-name');
+        const stats = card.querySelector('.dc-stats');
+        if (!(name instanceof HTMLElement) || !(stats instanceof HTMLElement)) return false;
+        const a = name.getBoundingClientRect();
+        const b = stats.getBoundingClientRect();
+        if (a.height < 2 || b.height < 2) return false;
+        return a.left < b.right - 1 && b.left < a.right - 1 && a.top < b.bottom - 1 && b.top < a.bottom - 1;
+      }),
     };
   });
   expect(report.missing, `step ${id} has no bubble`).toBe(false);
@@ -213,6 +227,7 @@ async function check(page: Page, size: { width: number; height: number }, id: nu
   expect(report.spotlight, `step ${id} bubble covers its spotlight ${JSON.stringify({ union: report.union, point: report.point })}`).toBe(false);
   expect(report.endTurn, `step ${id} bubble covers End Turn`).toBe(false);
   expect(report.inspect, `step ${id} bubble covers the inspect panel`).toBe(false);
+  expect(report.nameOnStats, `step ${id} inspect name covers the stats`).toBe(false);
   expect(report.toast, `step ${id} toast covers the bubble`).toBe(false);
   if (size.width > 600) expect(report.pageScroll, `step ${id} page scrolls`).toBe(false);
   if (size.width > 600 && report.hand && report.pages) {
