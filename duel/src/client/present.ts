@@ -18,7 +18,9 @@ const RIGHT_SLOT = '.page[data-i="1"] .row.you .slot';
 export function coachOpts(step: GuideStep, board: { foeLeft: boolean }): CoachOpts {
   switch (step.id) {
     case 1:
-      return { holes: ['.center'], point: '.pages', next: true };
+      return window.IS_PHONE()
+        ? { holes: ['.pages'], point: '#turn', next: true }
+        : { holes: ['.center'], point: '.pages', next: true };
     case 2:
       return { holes: ['#legend', '.r-av'], point: '#legend', next: true };
     case 3:

@@ -57,6 +57,29 @@ export const GUIDE_STEPS: GuideStep[] = [
   { id: 27, target: 'play', text: 'Ready? <b>Play</b> for real against a rival House.', advance: 'play', chip: 'Play' },
 ];
 
+/** What to do when a tap misses the highlight. The step sentences stay as written. */
+export function guideNudge(step: GuideStep, foeLeft = true): string {
+  switch (step.id) {
+    case 3: return 'Tap Lanternfall.';
+    case 6: return 'Press and hold Kindle.';
+    case 7: return 'Drag the Novice onto Lanternfall.';
+    case 9:
+    case 13:
+    case 17: return 'Press End Turn.';
+    case 10:
+    case 14: return 'Wait for their turn.';
+    case 12: return 'Drag Deckle Doodle onto Port Foxing.';
+    case 15: return 'Drag the Novice onto the enemy.';
+    case 19: return 'Tap Old Wick, then Deckle Doodle.';
+    case 20: return 'Drag Mending Flame onto the Novice.';
+    case 21: return foeLeft ? 'Drag the Novice onto the Deckhand.' : 'Press End Turn.';
+    case 22: return 'Drag your champion onto Lanternfall.';
+    case 25: return 'Finish the match.';
+    case 27: return 'Play for real.';
+    default: return 'Press Next.';
+  }
+}
+
 /** rules-spec v1.3 §3, one sentence per keyword. Keys match the names on the card. */
 export const KEYWORDS: Record<string, string> = {
   Bound: 'When you attack on a Page where the rival has a targetable Bound unit, the target must be a Bound unit. Inkwork and abilities can still choose any target.',

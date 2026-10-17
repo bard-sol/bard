@@ -245,29 +245,104 @@ const ov = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.
 window.coach = function (o) {
   const app = document.querySelector('.app'), W = app.clientWidth, H = app.clientHeight, pad = o.pad ?? 6;
   const holes = o.holes.flatMap((s) => [...document.querySelectorAll(s)]).map((el) => rectOf(el, app)).map((r) => ({ x: r.x - pad, y: r.y - pad, w: r.w + pad * 2, h: r.h + pad * 2 }));
+  const pointed = o.point ? document.querySelector(o.point) : null;
+  const tgt = pointed ? rectOf(pointed, app) : (holes.length ? holes[0] : { x: W / 2, y: H / 2, w: 0, h: 0 });
   const dim = `<svg class="cm-dim" pointer-events="none" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}"><defs><mask id="cm"><rect width="${W}" height="${H}" fill="#fff"/>${holes.map((h) => `<rect x="${h.x}" y="${h.y}" width="${h.w}" height="${h.h}" rx="12" fill="#000"/>`).join('')}</mask></defs>
     <rect width="${W}" height="${H}" fill="rgba(5,7,10,.76)" mask="url(#cm)"/>${holes.map((h) => `<rect class="cm-ring" x="${h.x}" y="${h.y}" width="${h.w}" height="${h.h}" rx="12"/>`).join('')}</svg>`;
   const ovl = document.getElementById('ovl');
-  ovl.innerHTML = dim + `<button class="cm-skip">Skip tutorial</button><div class="cm-bub" id="bub"><div class="cm-tx">${o.text}</div>
+  ovl.innerHTML = dim + `<button class="cm-skip">Skip tutorial</button><div class="cm-bub" id="bub"><div class="cm-tx">${o.text}${o.nudge ? `<span class="cm-nudge">${o.nudge}</span>` : ''}</div>
     <div class="cm-ft"><span class="cm-step">${o.step} / ${o.n}</span>${o.next ? `<button class="btn primary cm-next">Next</button>` : `<span class="cm-act">${icon(o.icon || 'tap')}${o.action}</span>`}</div>
     <span class="cm-bard"><img src="${BARD_IMG}" alt=""></span></div>${o.extra || ''}`;
   ovl.classList.add('on');
   const b = document.getElementById('bub'), bw = b.offsetWidth, bh = b.offsetHeight;
-  const tgt = o.point ? rectOf(document.querySelector(o.point), app) : (holes.length ? holes[0] : { x: W / 2, y: H / 2, w: 0, h: 0 });
-  const free = (r) => r.y >= 8 && r.y + r.h <= H - 8 && !holes.some((h) => ov(r, h));
+  const margin = 8, mascotL = 10, mascotT = 18;
+  const minX = Math.min(margin + mascotL, Math.max(margin, W - bw - margin));
+  const minY = Math.min(margin + mascotT, Math.max(margin, H - bh - margin));
+  const maxX = Math.max(minX, W - bw - margin);
+  const maxY = Math.max(minY, H - bh - margin);
+  const clamp = (p) => ({ x: Math.max(minX, Math.min(maxX, p.x)), y: Math.max(minY, Math.min(maxY, p.y)), w: bw, h: bh });
+  const area = (a, blk) => {
+    const w = Math.max(0, Math.min(a.x + a.w, blk.x + blk.w) - Math.max(a.x, blk.x));
+    const h = Math.max(0, Math.min(a.y + a.h, blk.y + blk.h) - Math.max(a.y, blk.y));
+    return w * h;
+  };
+  const blockers = holes.filter((h) => h.w * h.h < W * H * 0.22);
+  const add = (el, pad = 4) => {
+    if (!el) return;
+    const r = rectOf(el, app);
+    if (r.w < 2 || r.h < 2) return;
+    blockers.push({ x: r.x - pad, y: r.y - pad, w: r.w + pad * 2, h: r.h + pad * 2 });
+  };
+  add(document.querySelector('.dtop'), 0);
+  add(document.querySelector('.cm-skip'), 4);
+  add(document.querySelector('.toast-host'), 8);
+  const end = document.getElementById('endturn');
+  if (end && pointed && pointed !== end && !end.contains(pointed)) add(end, 6);
+  if (!IS_PHONE()) {
+    const cardW = H <= 640 ? 176 : 264;
+    const dockLeft = tgt.x + tgt.w / 2 > W / 2;
+    document.documentElement.dataset.inspectDock = dockLeft ? 'left' : 'right';
+    blockers.push(dockLeft ? { x: 0, y: 0, w: cardW, h: H } : { x: W - cardW, y: 0, w: cardW, h: H });
+  } else delete document.documentElement.dataset.inspectDock;
+  const gapX = 16 + mascotL, gapY = 16 + mascotT;
+  const seen = (spot) => {
+    const box = clamp(spot);
+    return { x: box.x - mascotL, y: box.y - mascotT, w: box.w + mascotL, h: box.h + mascotT, box };
+  };
+  const endRect = end && pointed !== end && !(pointed && end.contains(pointed)) ? rectOf(end, app) : null;
+  const dragRects = (o.drag || []).flatMap((sel) => { const el = document.querySelector(sel); return el ? [rectOf(el, app)] : []; });
+  const toastRect = (() => { const el = document.querySelector('.toast'); if (!el) return null; const r = rectOf(el, app); return r.w > 2 && r.h > 2 ? r : null; })();
+  const forbidden = [tgt, ...dragRects, ...(endRect ? [endRect] : []), ...(toastRect ? [toastRect] : [])];
+  const mustClear = (vis) => {
+    const hit = forbidden.reduce((sum, hole) => sum + area(vis, hole), 0);
+    return (hit > 1 ? 1e7 : 0) + hit;
+  };
+  const raw = [
+    { x: tgt.x + tgt.w / 2 - bw / 2, y: tgt.y - bh - gapY },
+    { x: tgt.x + tgt.w / 2 - bw / 2, y: tgt.y + tgt.h + gapY },
+    { x: tgt.x - bw - gapX, y: tgt.y + tgt.h / 2 - bh / 2 },
+    { x: tgt.x + tgt.w + gapX, y: tgt.y + tgt.h / 2 - bh / 2 },
+    { x: tgt.x - bw - gapX, y: tgt.y + tgt.h + gapY },
+    { x: tgt.x + tgt.w + gapX, y: tgt.y + tgt.h + gapY },
+    { x: minX, y: minY },
+    { x: maxX, y: minY },
+    { x: minX, y: maxY },
+    { x: maxX, y: maxY },
+  ];
   let pos;
   if (IS_PHONE()) {
-    const hw = document.querySelector('.hand-wrap'), hy = hw ? rectOf(hw, app).y : H - 140;
-    const x = Math.max(10, Math.min(W - bw - 10, (W - bw) / 2));
-    pos = { x, y: hy - bh - 12, w: bw, h: bh };
-    if (!free(pos)) { const hit = holes.filter((h) => ov(pos, h)); const top = Math.min(...hit.map((h) => h.y)); pos.y = top - bh - 22; }
-    if (!free(pos)) pos.y = tgt.y + tgt.h + 22;
-    if (o.y != null) pos.y = o.y;
+    const endTop = endRect ? endRect.y : H - 54;
+    const phone = [
+      { x: (W - bw) / 2, y: endTop - bh - gapY },
+      { x: (W - bw) / 2, y: endRect ? endRect.y + endRect.h + 8 : maxY },
+      { x: (W - bw) / 2, y: tgt.y - bh - gapY },
+      { x: (W - bw) / 2, y: tgt.y + tgt.h + gapY },
+      { x: minX, y: minY },
+      { x: minX, y: Math.max(minY, endTop - bh - gapY) },
+    ];
+    pos = phone.map((spot) => {
+      const vis = seen(spot);
+      const cost = mustClear(vis) + blockers.reduce((sum, blk) => sum + area(vis, blk), 0);
+      return { box: vis.box, cost };
+    }).sort((a, b) => a.cost - b.cost)[0].box;
   } else {
-    const c = [ { x: tgt.x + tgt.w / 2 - bw / 2, y: tgt.y - bh - 26 }, { x: tgt.x + tgt.w / 2 - bw / 2, y: tgt.y + tgt.h + 26 },
-      { x: tgt.x + tgt.w + 30, y: tgt.y + tgt.h / 2 - bh / 2 }, { x: tgt.x - bw - 30, y: tgt.y + tgt.h / 2 - bh / 2 } ]
-      .map((p) => ({ x: Math.max(12, Math.min(W - bw - 12, p.x)), y: Math.max(12, Math.min(H - bh - 12, p.y)), w: bw, h: bh }));
-    pos = (o.place != null ? c[o.place] : c.find(free)) || c[0];
+    pos = raw.map((spot) => {
+      const vis = seen(spot);
+      const cost = mustClear(vis) + Math.abs(vis.box.x - spot.x) + Math.abs(vis.box.y - spot.y)
+        + blockers.reduce((sum, blk) => sum + area(vis, blk) * 6, 0)
+        + Math.hypot((vis.box.x + bw / 2) - (tgt.x + tgt.w / 2), (vis.box.y + bh / 2) - (tgt.y + tgt.h / 2)) * 0.15;
+      return { placed: vis.box, cost };
+    }).sort((a, b) => a.cost - b.cost)[0].placed;
+  }
+  const visual = (box) => ({ x: box.x - mascotL, y: box.y - mascotT, w: box.w + mascotL, h: box.h + mascotT });
+  for (let nudge = 0; nudge < 8 && area(visual(pos), tgt) > 1; nudge++) {
+    const vis = visual(pos);
+    const down = vis.y + vis.h - tgt.y;
+    const up = tgt.y + tgt.h - vis.y;
+    const next = up <= down ? { x: pos.x, y: pos.y - up - 4 } : { x: pos.x, y: pos.y + down + 4 };
+    const boxed = clamp(next);
+    if (boxed.x === pos.x && boxed.y === pos.y) break;
+    pos = boxed;
   }
   b.style.left = pos.x + 'px'; b.style.top = pos.y + 'px';
   if (o.arrow !== false && holes.length) { // arrow from the bubble edge facing the target to the target edge

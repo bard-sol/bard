@@ -1,6 +1,6 @@
 import type { ClientPayload, FriendBody, GameAction, Stance, TradePreview, UnitView } from '../types.js';
 import { cancelFriend, createFriend, createMatch, fetchMatch, joinFriend, previewAttack, readFriend, rematchFriend, sendAction } from './api.js';
-import { GuideController, logMetric, markTip, noteRealMatch, setTutorialFlag, tipSeen, tipsEnabled, tutorialFlag } from './guide.js';
+import { GuideController, guideNudge, logMetric, markTip, noteRealMatch, setTutorialFlag, tipSeen, tipsEnabled, tutorialFlag } from './guide.js';
 import { INFO_TOASTS, PLAY_STEP_OVER, TIP_COPY, attackToast, endTurnWarning, legendToast, moveToast, playToast, refused, toastCopy, type ToastCopy } from './illegal.js';
 import { KEYWORDS } from './guide.js';
 import { boardModel, cardSheet, championStub, coachOpts, endHtml, foeOnLeft, howtoHtml, logEntries, spareInHand, toastHtml, tradeHtml } from './present.js';
@@ -79,6 +79,7 @@ const ui = {
   skipAsk: false,
   confirm: null as { text: string; action: GameAction } | null,
   toasts: [] as ToastCopy[],
+  nudge: null as string | null,
   busy: false,
   holdTimer: 0,
   keywordReady: false,
@@ -432,6 +433,8 @@ function trackStep(): void {
   if (ui.stepSeen != null && id !== ui.stepSeen) {
     ui.sheet = null;
     ui.armed = null;
+    ui.nudge = null;
+    document.getElementById('hovercard')?.remove();
   }
   ui.stepSeen = id;
 }
@@ -468,6 +471,7 @@ function paintCoach(): void {
   const payload = ui.payload;
   const ovl = document.getElementById('ovl');
   if (!guide || !payload?.tutorial || guide.done || !ovl) {
+    delete document.documentElement.dataset.inspectDock;
     publish();
     return;
   }
@@ -499,6 +503,7 @@ function paintCoach(): void {
     const bar = document.querySelector('.rbar');
     if (board && bar) y = bar.getBoundingClientRect().top - board.getBoundingClientRect().top;
   }
+  fitShortBoard();
   placeCoach({
     holes,
     point,
@@ -507,50 +512,58 @@ function paintCoach(): void {
     n: 27,
     next: opts.next ? 1 : 0,
     action: opts.action,
+    nudge: ui.nudge ? escapeHtml(ui.nudge) : undefined,
     drag,
     y,
   });
   if (ui.preview) document.getElementById('ovl')?.insertAdjacentHTML('beforeend', tradeMarkup(ui.preview));
   const bub = document.getElementById('bub');
-  if (bub) bub.dataset.guideStep = String(step.id);
+  if (bub) {
+    bub.dataset.guideStep = String(step.id);
+    if (ui.nudge) bub.classList.add('shake');
+  }
+  document.querySelectorAll('[data-guide-point]').forEach((el) => el.removeAttribute('data-guide-point'));
+  const pointed = document.querySelector(point);
+  if (pointed) {
+    pointed.setAttribute('data-guide-point', '1');
+    if (ui.nudge) pointed.classList.add('guide-pulse');
+  }
   document.querySelector('.cm-next')?.setAttribute('data-guide-next', '1');
+  dockInspect();
   publish();
 }
 
-function placeCoach(opts: { holes: string[]; point: string; text: string; step: number; n: number; next: number; action?: string; drag?: [string, string]; y?: number }): void {
+function escapeHtml(value: string): string {
+  return value.replace(/[&<>"]/g, (ch) => (ch === '&' ? '&amp;' : ch === '<' ? '&lt;' : ch === '>' ? '&gt;' : '&quot;'));
+}
+
+/** Shrink a short desktop window so the board stays on one screen. */
+function fitShortBoard(): void {
+  const appEl = document.querySelector('.app.duel');
+  if (!(appEl instanceof HTMLElement)) return;
+  appEl.style.zoom = '';
+  if (appEl.classList.contains('end') || window.innerWidth <= 600 || window.innerHeight >= 760) return;
+  const have = appEl.clientHeight;
+  const need = appEl.scrollHeight;
+  if (need > have + 1) appEl.style.zoom = String(Math.max(0.62, have / need));
+}
+
+function dockInspect(): void {
+  const dock = document.documentElement.dataset.inspectDock;
+  const left = dock === 'left';
+  document.getElementById('hovercard')?.classList.toggle('dock-left', left);
+  document.querySelector('.sheet-host')?.classList.toggle('dock-left', left);
+}
+
+function missGuide(text?: string): void {
+  const step = ui.guide?.visible(Boolean(ui.preview));
+  if (!step) return;
+  ui.nudge = text ?? guideNudge(step, ui.payload ? foeOnLeft(ui.payload.view) : true);
+  paintCoach();
+}
+
+function placeCoach(opts: { holes: string[]; point: string; text: string; step: number; n: number; next: number; action?: string; nudge?: string; drag?: [string, string]; y?: number }): void {
   window.coach(opts);
-  if (window.IS_PHONE()) return;
-  const appEl = document.querySelector('.app');
-  const bub = document.getElementById('bub');
-  if (!appEl || !bub) return;
-  const origin = appEl.getBoundingClientRect();
-  const box = (el: Element) => {
-    const rect = el.getBoundingClientRect();
-    return { x: rect.left - origin.left, y: rect.top - origin.top, w: rect.width, h: rect.height };
-  };
-  const width = appEl.clientWidth;
-  const height = appEl.clientHeight;
-  const pad = 6;
-  const bw = bub.offsetWidth;
-  const bh = bub.offsetHeight;
-  const holes = opts.holes.flatMap((sel) => Array.from(document.querySelectorAll(sel))).map(box).map((rect) => ({ x: rect.x - pad, y: rect.y - pad, w: rect.w + pad * 2, h: rect.h + pad * 2 }));
-  const avoid = [...holes];
-  const header = document.querySelector('.dtop');
-  const skip = document.querySelector('.cm-skip');
-  if (header) avoid.push(box(header));
-  if (skip) avoid.push(box(skip));
-  const pointed = document.querySelector(opts.point);
-  const target = pointed ? box(pointed) : holes[0];
-  if (!target) return;
-  const hits = (a: { x: number; y: number; w: number; h: number }, b: { x: number; y: number; w: number; h: number }) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
-  const spots = [
-    { x: target.x + target.w / 2 - bw / 2, y: target.y - bh - 26 },
-    { x: target.x + target.w / 2 - bw / 2, y: target.y + target.h + 26 },
-    { x: target.x + target.w + 30, y: target.y + target.h / 2 - bh / 2 },
-    { x: target.x - bw - 30, y: target.y + target.h / 2 - bh / 2 },
-  ].map((spot) => ({ x: Math.max(12, Math.min(width - bw - 12, spot.x)), y: Math.max(12, Math.min(height - bh - 12, spot.y)), w: bw, h: bh }));
-  const place = spots.findIndex((spot) => !avoid.some((block) => hits(spot, block)));
-  if (place >= 0) window.coach({ ...opts, place });
 }
 
 function tradeMarkup(preview: TradePreview): string {
@@ -1314,7 +1327,7 @@ function finishTap(target: Element | null): boolean {
       else void act(action);
       return true;
     }
-    if (restricting()) showToast({ title: 'Follow the highlight', body: 'The bubble names the one action that moves the guide on.' });
+    if (restricting()) missGuide();
     else explain(piece, target);
     return true;
   }
@@ -1454,7 +1467,7 @@ function onClick(event: MouseEvent): void {
     return;
   }
   if (!holeHit(target)) {
-    if (restricting()) showToast({ title: 'Follow the highlight', body: 'The bubble names the one action that moves the guide on.' });
+    if (restricting()) missGuide();
     return;
   }
   const keyword = target.closest('[data-keyword]');
@@ -1524,7 +1537,7 @@ function onClick(event: MouseEvent): void {
     const uid = ally.getAttribute('data-uid');
     const def = ally.getAttribute('data-def');
     if (ui.guide?.visible(false)?.id === 19 && def !== 'n_doodle') {
-      showToast({ title: 'Follow the highlight', body: 'Heal your hurt Deckle Doodle.' });
+      missGuide('Tap Old Wick, then Deckle Doodle.');
       return;
     }
     if (uid) void act({ type: 'legend', target: Number(uid) });
@@ -1710,8 +1723,13 @@ function onHover(event: PointerEvent): void {
       document.body.append(pop);
     }
     pop.innerHTML = window.cardFace(def, { size: 'inspect' });
+    dockInspect();
   }, 250);
 }
+
+window.addEventListener('resize', () => {
+  if (ui.payload?.tutorial && ui.guide && !ui.guide.done) paintCoach();
+});
 
 window.setInterval(() => {
   pumpGuide();

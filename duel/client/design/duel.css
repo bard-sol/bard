@@ -357,7 +357,8 @@ button { font-family: inherit; color: inherit; cursor: pointer; }
 @media (min-width: 601px) { .dc.sz-hand .dc-champ { top: 78px; } }
 
 /* ───────── bubble guide v1 (replaces the coach-mark bubble) ───────── */
-.cm-bub { width: min(330px, calc(100% - 20px)); padding: 13px 14px 11px 62px; border-radius: 16px; background: #F1EBDF; color: #14161B; box-shadow: 0 18px 50px -10px rgba(0,0,0,.85), 0 0 0 1px rgba(0,0,0,.2); }
+.cm-bub { width: min(320px, calc(100% - 36px)); padding: 13px 14px 11px 62px; border-radius: 16px; background: #F1EBDF; color: #14161B; box-shadow: 0 18px 50px -10px rgba(0,0,0,.85), 0 0 0 1px rgba(0,0,0,.2); pointer-events: none; }
+.cm-next { pointer-events: auto; }
 .cm-bard { position: absolute; left: -8px; top: -16px; width: 64px; height: 64px; } .cm-bard img { width: 100%; height: 100%; object-fit: contain; filter: drop-shadow(0 4px 6px rgba(0,0,0,.45)); }
 .cm-tx { font: 500 15px/1.35 var(--font-ui); color: #14161B; } .cm-tx b { font-weight: 750; }
 .cm-ft { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
@@ -365,7 +366,7 @@ button { font-family: inherit; color: inherit; cursor: pointer; }
 .cm-next { margin-left: auto; height: 34px; padding: 0 16px; background: #14161B; color: #F1EBDF; box-shadow: none; font-size: 13px; }
 .cm-act { margin-left: auto; height: 30px; background: rgba(20,22,27,.08); box-shadow: none; color: #14161B; font-size: 11.5px; }
 .cm-skip { position: absolute; top: 50px; right: 10px; z-index: 2; pointer-events: auto; }
-@media (min-width: 601px) { .cm-skip { top: 66px; right: 286px; } .cm-bub { width: 340px; } }
+@media (min-width: 601px) { .cm-skip { top: 66px; right: 286px; } .cm-bub { width: min(340px, calc(100% - 36px)); } }
 .cm-arrow, .cm-drag { position: absolute; inset: 0; pointer-events: none; }
 .cm-arrow path { fill: none; stroke: #F1EBDF; stroke-width: 2.5; stroke-linecap: round; filter: drop-shadow(0 1px 3px rgba(0,0,0,.8)); }
 .cm-drag path { fill: none; stroke: rgba(241,235,223,.85); stroke-width: 2; stroke-dasharray: 5 5; }
@@ -386,7 +387,7 @@ button { font-family: inherit; color: inherit; cursor: pointer; }
 @media (min-width: 601px) { .handrow .dc.champ { margin-right: 18px; } }
 .lift { position: absolute; z-index: 20; left: 50%; top: 150px; transform: translateX(-50%); filter: drop-shadow(0 20px 40px rgba(0,0,0,.8)); }
 
-@media (max-width: 600px) { .cm-skip { top: auto; bottom: 8px; right: 50%; transform: translateX(50%); } }
+@media (max-width: 600px) { .cm-skip { top: 8px; bottom: auto; right: 8px; transform: none; } }
 @media (min-width: 601px) { .cm-skip { top: 12px; right: 190px; } }
 /* comp sheet page */
 .sheetp { padding: 20px 24px; display: flex; flex-direction: column; gap: 14px; overflow: hidden; height: 100vh; }
