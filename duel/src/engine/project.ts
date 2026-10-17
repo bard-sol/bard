@@ -39,10 +39,10 @@ export function projectView(state: EngineState, player: PlayerId): PlayerView {
     active: raw.phase === 'mulligan' ? mulliganActor(state) : raw.active,
     phase: raw.phase === 'over' ? 'game_over' : raw.phase,
     yourTurn: actor === player,
-    turn: [turns(log, 0), turns(log, 1)],
-    turnsCompleted: [turns(log, 0), turns(log, 1)],
+    turn: [turns(log, player), turns(log, foe)],
+    turnsCompleted: [turns(log, player), turns(log, foe)],
     maxTurns: 7,
-    verse: [player === 0 ? raw.me.verses : raw.rival.verses, player === 0 ? raw.rival.verses : raw.me.verses],
+    verse: [raw.me.verses, raw.rival.verses],
     verseGoal: state.R.winVerses,
     winner: raw.winner === 0 || raw.winner === 1 ? raw.winner : null,
     winReason: raw.winner === 0 || raw.winner === 1 ? mapReason(raw.reason) : null,
@@ -58,7 +58,7 @@ export function projectView(state: EngineState, player: PlayerId): PlayerView {
     foeInk: raw.rival.maxInk,
     foeMaxInk: raw.rival.maxInk,
     foePowerUsed: raw.rival.legendUsed,
-    events: projectLog(log, foe),
+    events: projectLog(log, state.pages),
   };
 }
 
@@ -131,6 +131,7 @@ function noteFace(
       owner: trap.owner,
       faceDown: true,
       known: false,
+      defId: null,
       name: null,
       text: null,
       glyph: null,
@@ -143,6 +144,7 @@ function noteFace(
     owner: trap.owner,
     faceDown: false,
     known: true,
+    defId: trap.id,
     name: card.name,
     text: card.text,
     glyph: 'note',
@@ -205,15 +207,44 @@ function glyphFor(card: CardData): Glyph {
   return 'shield';
 }
 
-function projectLog(log: LogProjection[], _foe: PlayerId): PublicEvent[] {
+function projectLog(log: LogProjection[], pages: string[]): PublicEvent[] {
   const events: PublicEvent[] = [];
+  let turnPlayer: PlayerId | null = null;
   log.forEach((entry, index) => {
-    const text = eventText(entry);
+    if (entry.e === 'turn' && (entry.p === 0 || entry.p === 1)) turnPlayer = entry.p;
+    const text = eventText(entry, pages);
     if (!text) return;
-    const player = entry.p === 0 || entry.p === 1 ? entry.p : entry.winner === 0 || entry.winner === 1 ? entry.winner : null;
-    events.push({ id: index, kind: eventKind(entry), text, player });
+    const player = entry.p === 0 || entry.p === 1 ? entry.p : entry.winner === 0 || entry.winner === 1 ? entry.winner : turnPlayer;
+    const focusPage = focusPageOf(entry);
+    const focusDef = focusDefOf(entry);
+    const named = focusPage == null ? undefined : pageLabel(pages, focusPage);
+    events.push({
+      id: index,
+      kind: eventKind(entry),
+      text,
+      player,
+      ...(named ? { pageName: named } : {}),
+      ...(focusPage != null ? { focusPage } : {}),
+      ...(focusDef ? { focusDef } : {}),
+    });
   });
   return events;
+}
+
+function focusPageOf(entry: LogProjection): 0 | 1 | undefined {
+  const index = entry.e === 'move' ? entry.to : entry.page;
+  return index === 0 || index === 1 ? index : undefined;
+}
+
+function focusDefOf(entry: LogProjection): string | undefined {
+  if (entry.e !== 'play' || entry.type === 'marginalia' || typeof entry.id !== 'string') return undefined;
+  return entry.id;
+}
+
+function pageLabel(pages: readonly string[], index: unknown): string | null {
+  if (index !== 0 && index !== 1) return null;
+  const id = pages[index];
+  return PAGES.find((page) => page.id === id)?.name ?? null;
 }
 
 function eventKind(entry: LogProjection): PublicEvent['kind'] {
@@ -229,23 +260,30 @@ function eventKind(entry: LogProjection): PublicEvent['kind'] {
   return 'play';
 }
 
-function eventText(entry: LogProjection): string | null {
+function eventText(entry: LogProjection, pages: readonly string[]): string | null {
   switch (entry.e) {
     case 'verse': {
       const n = typeof entry.n === 'number' ? entry.n : 1;
       if (entry.why === 'hold') return `+${n} Hold`;
-      if (entry.why === 'conquer') return `+${n} Conquer`;
+      if (entry.why === 'conquer') return `Conquer +${n} Verses`;
       return `+${n} Verse`;
     }
-    case 'play':
-      if (entry.type === 'marginalia' || !entry.id) return 'A margin note is set.';
-      return `${cardById(entry.id).name} is played.`;
-    case 'trap_set':
-      return 'A margin note is set.';
+    case 'play': {
+      const where = pageLabel(pages, entry.page);
+      if (entry.type === 'marginalia' || !entry.id) return where ? `A margin note is set on ${where}.` : 'A margin note is set.';
+      const name = cardById(entry.id).name;
+      return where ? `${name} is played on ${where}.` : `${name} is played.`;
+    }
+    case 'trap_set': {
+      const where = pageLabel(pages, entry.page);
+      return where ? `A margin note is set on ${where}.` : 'A margin note is set.';
+    }
     case 'trap_reveal':
       return entry.id ? `${cardById(entry.id).name} strikes.` : 'A margin note strikes.';
-    case 'attack':
-      return 'Units trade.';
+    case 'attack': {
+      const where = pageLabel(pages, entry.page);
+      return where ? `Attack on ${where}.` : 'Units trade.';
+    }
     case 'legend':
       return 'A Legend spends Ink.';
     case 'death':
@@ -256,10 +294,18 @@ function eventText(entry: LogProjection): string | null {
       return entry.p === 0 ? 'Your turn.' : 'Rival turn.';
     case 'end':
       return 'The match ends.';
-    case 'move':
-      return 'A unit changes page.';
+    case 'move': {
+      const where = pageLabel(pages, entry.to);
+      return where ? `A unit moves to ${where}.` : 'A unit changes page.';
+    }
     case 'ward':
       return 'Ward fades.';
+    case 'buff':
+      return entry.why === 'port_foxing' ? 'Port Foxing gives +1 attack.' : 'A Page rule fires.';
+    case 'trigger':
+      return entry.t === 'death' ? 'Last Word.' : 'Opening Line.';
+    case 'burn':
+      return 'A draw burned: the hand was full.';
     default:
       return null;
   }

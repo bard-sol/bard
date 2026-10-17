@@ -1,0 +1,358 @@
+{
+ "version": "art-map-v1",
+ "cards": "cards-proto-1.3",
+ "size": [
+  384,
+  384
+ ],
+ "format": "png",
+ "slot": {
+  "fit": "cover",
+  "position": "50% 22%",
+  "fallback": "art/_fallback.png"
+ },
+ "map": {
+  "c_novice": {
+   "name": "Lanternfall Novice",
+   "type": "character",
+   "house": "candle",
+   "path": "art/c_novice.png",
+   "source": "reused",
+   "from": "prototype/v2/units/novice.png",
+   "story": "units-v1 #15"
+  },
+  "c_taper": {
+   "name": "Taper Warden",
+   "type": "character",
+   "house": "candle",
+   "path": "art/c_taper.png",
+   "source": "new"
+  },
+  "c_wren": {
+   "name": "Sister Wren",
+   "type": "character",
+   "house": "candle",
+   "path": "art/c_wren.png",
+   "source": "reused",
+   "from": "prototype/v2/units/wren.png",
+   "story": "units-v1 #14"
+  },
+  "c_trimmer": {
+   "name": "Wick-Trimmer",
+   "type": "character",
+   "house": "candle",
+   "path": "art/c_trimmer.png",
+   "source": "new"
+  },
+  "c_vigil": {
+   "name": "Vigil Keeper",
+   "type": "character",
+   "house": "candle",
+   "path": "art/c_vigil.png",
+   "source": "new"
+  },
+  "c_lamplighter": {
+   "name": "Lamplighter of the Stacks",
+   "type": "character",
+   "house": "candle",
+   "path": "art/c_lamplighter.png",
+   "source": "new"
+  },
+  "c_lamps": {
+   "name": "Light the Lamps",
+   "type": "inkwork",
+   "house": "candle",
+   "path": "art/c_lamps.png",
+   "source": "new"
+  },
+  "c_mend": {
+   "name": "Mending Flame",
+   "type": "inkwork",
+   "house": "candle",
+   "path": "art/c_mend.png",
+   "source": "new"
+  },
+  "c_snuff": {
+   "name": "Snuff the Wick",
+   "type": "inkwork",
+   "house": "candle",
+   "path": "art/c_snuff.png",
+   "source": "new"
+  },
+  "c_watch": {
+   "name": "Lantern Watch",
+   "type": "marginalia",
+   "house": "candle",
+   "path": "art/c_watch.png",
+   "source": "new"
+  },
+  "f_squire": {
+   "name": "Paper Squire",
+   "type": "character",
+   "house": "fold",
+   "path": "art/f_squire.png",
+   "source": "new"
+  },
+  "f_hinge": {
+   "name": "Hinge Duellist",
+   "type": "character",
+   "house": "fold",
+   "path": "art/f_hinge.png",
+   "source": "reused",
+   "from": "prototype/v2/units/duellist.png",
+   "story": "units-v1 #24"
+  },
+  "f_corvin": {
+   "name": "Corvin",
+   "type": "character",
+   "house": "fold",
+   "path": "art/f_corvin.png",
+   "source": "reused",
+   "from": "prototype/v2/units/corvin.png",
+   "story": "units-v1 #23"
+  },
+  "f_adept": {
+   "name": "Twin-Blade Adept",
+   "type": "character",
+   "house": "fold",
+   "path": "art/f_adept.png",
+   "source": "new"
+  },
+  "f_sentinel": {
+   "name": "Crease Sentinel",
+   "type": "character",
+   "house": "fold",
+   "path": "art/f_sentinel.png",
+   "source": "new"
+  },
+  "f_master": {
+   "name": "Fold Duelmaster",
+   "type": "character",
+   "house": "fold",
+   "path": "art/f_master.png",
+   "source": "new"
+  },
+  "f_feint": {
+   "name": "Feint",
+   "type": "inkwork",
+   "house": "fold",
+   "path": "art/f_feint.png",
+   "source": "new"
+  },
+  "f_whirl": {
+   "name": "Whirling Cut",
+   "type": "inkwork",
+   "house": "fold",
+   "path": "art/f_whirl.png",
+   "source": "new"
+  },
+  "f_counter": {
+   "name": "Counter-Stance",
+   "type": "marginalia",
+   "house": "fold",
+   "path": "art/f_counter.png",
+   "source": "new"
+  },
+  "f_closed": {
+   "name": "Closed Hinge",
+   "type": "marginalia",
+   "house": "fold",
+   "path": "art/f_closed.png",
+   "source": "new"
+  },
+  "t_deckhand": {
+   "name": "Running-Sea Deckhand",
+   "type": "character",
+   "house": "tidewrack",
+   "path": "art/t_deckhand.png",
+   "source": "reused",
+   "from": "prototype/v2/units/deckhand.png",
+   "story": "units-v1 #12"
+  },
+  "t_runner": {
+   "name": "Tide Runner",
+   "type": "character",
+   "house": "tidewrack",
+   "path": "art/t_runner.png",
+   "source": "new"
+  },
+  "t_cutpurse": {
+   "name": "Harbour Cutpurse",
+   "type": "character",
+   "house": "tidewrack",
+   "path": "art/t_cutpurse.png",
+   "source": "new"
+  },
+  "t_pip": {
+   "name": "Pip Fennick",
+   "type": "character",
+   "house": "tidewrack",
+   "path": "art/t_pip.png",
+   "source": "reused",
+   "from": "prototype/v2/units/pip.png",
+   "story": "units-v1 #10"
+  },
+  "t_smuggler": {
+   "name": "Lighthouse Smuggler",
+   "type": "character",
+   "house": "tidewrack",
+   "path": "art/t_smuggler.png",
+   "source": "new"
+  },
+  "t_raider": {
+   "name": "Wreck Raider",
+   "type": "character",
+   "house": "tidewrack",
+   "path": "art/t_raider.png",
+   "source": "new"
+  },
+  "t_captain": {
+   "name": "Gull Captain",
+   "type": "character",
+   "house": "tidewrack",
+   "path": "art/t_captain.png",
+   "source": "new"
+  },
+  "t_undertow": {
+   "name": "Undertow",
+   "type": "inkwork",
+   "house": "tidewrack",
+   "path": "art/t_undertow.png",
+   "source": "new"
+  },
+  "t_saltwind": {
+   "name": "Salt Wind",
+   "type": "inkwork",
+   "house": "tidewrack",
+   "path": "art/t_saltwind.png",
+   "source": "new"
+  },
+  "t_riptide": {
+   "name": "Riptide",
+   "type": "marginalia",
+   "house": "tidewrack",
+   "path": "art/t_riptide.png",
+   "source": "new"
+  },
+  "n_blotling": {
+   "name": "The Blotling",
+   "type": "character",
+   "house": "neutral",
+   "path": "art/n_blotling.png",
+   "source": "reused",
+   "from": "prototype/v2/units/blotling.png",
+   "story": "units-v1 #29"
+  },
+  "n_reader": {
+   "name": "The Watching Reader",
+   "type": "character",
+   "house": "neutral",
+   "path": "art/n_reader.png",
+   "source": "reused",
+   "from": "prototype/v2/units/reader.png",
+   "story": "units-v1 #32"
+  },
+  "n_weeping": {
+   "name": "The Weeping Margin",
+   "type": "character",
+   "house": "neutral",
+   "path": "art/n_weeping.png",
+   "source": "reused",
+   "from": "prototype/v2/units/weeping.png",
+   "story": "units-v1 #30"
+  },
+  "n_doodle": {
+   "name": "Deckle Doodle",
+   "type": "character",
+   "house": "neutral",
+   "path": "art/n_doodle.png",
+   "source": "reused",
+   "from": "prototype/v2/units/doodle.png",
+   "story": "units-v1 #31"
+  },
+  "n_wolf": {
+   "name": "The Margin Wolf",
+   "type": "character",
+   "house": "neutral",
+   "path": "art/n_wolf.png",
+   "source": "reused",
+   "from": "prototype/v2/units/wolf.png",
+   "story": "units-v1 #26"
+  },
+  "n_hob": {
+   "name": "Hob the Bookbinder",
+   "type": "character",
+   "house": "neutral",
+   "path": "art/n_hob.png",
+   "source": "reused",
+   "from": "prototype/v2/units/hob.png",
+   "story": "units-v1 #25"
+  },
+  "n_errata": {
+   "name": "Sir Errata",
+   "type": "character",
+   "house": "neutral",
+   "path": "art/n_errata.png",
+   "source": "reused",
+   "from": "prototype/v2/units/errata.png",
+   "story": "units-v1 #27"
+  },
+  "n_colophon": {
+   "name": "The Colophon",
+   "type": "character",
+   "house": "neutral",
+   "path": "art/n_colophon.png",
+   "source": "reused",
+   "from": "prototype/v2/units/colophon.png",
+   "story": "units-v1 #28"
+  },
+  "n_erasure": {
+   "name": "Erasure",
+   "type": "inkwork",
+   "house": "neutral",
+   "path": "art/n_erasure.png",
+   "source": "new"
+  },
+  "n_snare": {
+   "name": "Inkblot Snare",
+   "type": "marginalia",
+   "house": "neutral",
+   "path": "art/n_snare.png",
+   "source": "new"
+  },
+  "champ_old_wick": {
+   "name": "Old Wick, Last Reader",
+   "type": "character",
+   "house": "candle",
+   "path": "art/champ_old_wick.png",
+   "source": "reused",
+   "from": "prototype/v2/units/wick.png",
+   "story": "units-v1 #13"
+  },
+  "champ_ash_ember": {
+   "name": "Ash & Ember, Twin Edge",
+   "type": "character",
+   "house": "fold",
+   "path": "art/champ_ash_ember.png",
+   "source": "reused",
+   "from": "prototype/v2/units/ash_ember.png",
+   "story": "units-v1 #22"
+  },
+  "champ_juniper": {
+   "name": "Juniper, Keybearer",
+   "type": "character",
+   "house": "tidewrack",
+   "path": "art/champ_juniper.png",
+   "source": "reused",
+   "from": "prototype/v2/units/juniper.png",
+   "story": "units-v1 #11"
+  },
+  "spare_ink": {
+   "name": "Spare Ink",
+   "type": "inkwork",
+   "house": "neutral",
+   "path": "art/spare_ink.png",
+   "source": "new"
+  }
+ }
+}

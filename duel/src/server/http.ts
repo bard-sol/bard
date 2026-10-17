@@ -1,37 +1,126 @@
 import express, { type NextFunction, type Request, type Response } from 'express';
-import { practiceDeck } from '../catalog.js';
-import { createEngineAdapter, deckError } from '../engine/adapter.js';
-import type { Deck, GameAction, PlayerId, Stance } from '../types.js';
+import { createEngineAdapter } from '../engine/adapter.js';
+import type { PlayerId } from '../types.js';
+import { FriendBook, FRIEND_TURN_MS, type FriendResult, type FriendSeed } from './friends.js';
+import { parseAction, parseCreate } from './parse.js';
 import { RedactionError } from './redact.js';
 import { MatchService } from './service.js';
+import {
+  FRIEND_CODE,
+  authorized,
+  friendCode,
+  gateHtml,
+  mintWho,
+  passCookie,
+  safeEqual,
+  safeNext,
+  sessionToken,
+  whoCookie,
+  whoToken,
+} from './session.js';
 import { MemoryMatchRepository, type MatchRepository } from './store.js';
 
 export interface AppOptions {
   repo?: MatchRepository;
   turnTimeoutMs?: number;
   aiTurnMs?: number;
+  friendTurnMs?: number;
+  passcode?: string;
 }
 
 export function createApp(options: AppOptions = {}) {
   const repo = options.repo ?? new MemoryMatchRepository();
+  let notify: (id: string) => void = () => {};
   const service = new MatchService(repo, createEngineAdapter(), {
     turnTimeoutMs: options.turnTimeoutMs,
     aiTurnMs: options.aiTurnMs,
+    onChange: (id) => notify(id),
   });
+  const book = new FriendBook(service, options.friendTurnMs ?? FRIEND_TURN_MS);
+  notify = (id) => book.changed(id);
   const app = express();
+  if (options.passcode) mountGate(app, options.passcode);
   app.use(express.json({ limit: '64kb' }));
 
   app.get('/api/health', (_req, res) => {
     res.json({ ok: true, service: 'bard-duel' });
   });
 
+  app.post('/api/metrics', (_req, res) => {
+    res.status(204).end();
+  });
+
   app.post('/api/matches', async (req, res, next) => {
     try {
       const parsed = parseCreate(req.body);
       if (!parsed) return sendError(res, 400, 'bad_request');
-      const created = await service.create({ decks: parsed.decks, stance: parsed.stance });
+      const tutorial = parsed.tutorial === true;
+      const played = tutorial ? 0 : playedCount(req.headers.cookie);
+      const created = await service.create({
+        decks: parsed.decks,
+        stance: parsed.stance,
+        tutorial,
+        matchesPlayed: tutorial ? undefined : played,
+      });
       if (!created.ok) return sendError(res, 400, created.error);
+      if (!tutorial) res.setHeader('Set-Cookie', playedCookie(played + 1));
       res.status(201).json(created.payload);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.post('/api/friends', async (req, res, next) => {
+    try {
+      const who = bindWho(req, res);
+      const deckId = typeof req.body?.deckId === 'string' ? req.body.deckId : null;
+      sendFriend(res, await book.open(who.token, deckId), 201);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.get('/api/friends/:code', async (req, res, next) => {
+    try {
+      const code = friendParam(req);
+      if (!code) return sendError(res, 404, 'not_found');
+      const who = bindWho(req, res);
+      sendFriend(res, await book.read(code, who.token), 200);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.post('/api/friends/:code/join', async (req, res, next) => {
+    try {
+      const code = friendParam(req);
+      if (!code) return sendError(res, 404, 'not_found');
+      const who = bindWho(req, res);
+      const deckId = typeof req.body?.deckId === 'string' ? req.body.deckId : null;
+      sendFriend(res, await book.join(code, who.token, deckId), 200);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.post('/api/friends/:code/cancel', async (req, res, next) => {
+    try {
+      const code = friendParam(req);
+      if (!code) return sendError(res, 404, 'not_found');
+      const who = bindWho(req, res);
+      sendFriend(res, await book.cancel(code, who.token), 200);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.post('/api/friends/:code/rematch', async (req, res, next) => {
+    try {
+      const code = friendParam(req);
+      if (!code) return sendError(res, 404, 'not_found');
+      const who = bindWho(req, res);
+      const result = await book.rematch(code, who.token, (seed) => spawnHere(book, who.token, seed));
+      sendFriend(res, result, 200);
     } catch (error) {
       next(error);
     }
@@ -40,8 +129,10 @@ export function createApp(options: AppOptions = {}) {
   app.get('/api/matches/:id', async (req, res, next) => {
     try {
       if (!allowedViewer(req)) return sendError(res, 403, 'forbidden_view');
-      const result = await service.get(paramId(req));
-      if (!result.ok) return sendError(res, 404, result.error);
+      const seat = await seated(service, req);
+      if (seat === 'forbid') return sendError(res, 403, 'forbidden_view');
+      const result = await service.get(paramId(req), seat === 'ai' ? 0 : seat);
+      if (!result.ok) return sendError(res, result.error === 'forbidden_view' ? 403 : 404, result.error);
       res.json(result.payload);
     } catch (error) {
       next(error);
@@ -53,7 +144,9 @@ export function createApp(options: AppOptions = {}) {
       if (!allowedViewer(req)) return sendError(res, 403, 'forbidden_view');
       const action = parseAction(req.body?.action);
       if (!action) return sendError(res, 400, 'bad_request');
-      const result = await service.act(paramId(req), 0, action);
+      const seat = await seated(service, req);
+      if (seat === 'forbid') return sendError(res, 403, 'forbidden_view');
+      const result = await service.act(paramId(req), seat === 'ai' ? 0 : seat, action);
       if (!result.ok) return sendError(res, result.error === 'not_found' ? 404 : result.error === 'forbidden_view' ? 403 : 400, result.error);
       res.json(result.payload);
     } catch (error) {
@@ -66,7 +159,9 @@ export function createApp(options: AppOptions = {}) {
       if (!allowedViewer(req)) return sendError(res, 403, 'forbidden_view');
       const action = parseAction(req.body?.action);
       if (!action) return sendError(res, 400, 'bad_request');
-      const result = await service.preview(paramId(req), 0, action);
+      const seat = await seated(service, req);
+      if (seat === 'forbid') return sendError(res, 403, 'forbidden_view');
+      const result = await service.preview(paramId(req), seat === 'ai' ? 0 : seat, action);
       if (!result.ok) return sendError(res, result.error === 'not_found' ? 404 : 400, result.error);
       res.json(result.payload);
     } catch (error) {
@@ -98,7 +193,68 @@ export function createApp(options: AppOptions = {}) {
     sendError(res, 500, 'internal');
   });
 
-  return { app, service, repo };
+  return { app, service, repo, book };
+}
+
+async function spawnHere(book: FriendBook, session: string, seed: FriendSeed): Promise<FriendResult> {
+  const code = friendCode();
+  const started = await book.startMatch({ ...seed, code });
+  if (!started.ok) return started;
+  return book.read(code, session);
+}
+
+function mountGate(app: express.Express, passcode: string): void {
+  app.post('/api/unlock', express.urlencoded({ extended: false, limit: '4kb' }), async (req, res) => {
+    const submitted = typeof req.body?.passcode === 'string' ? req.body.passcode : '';
+    const next = safeNext(typeof req.body?.next === 'string' ? req.body.next : null);
+    if (submitted.length === 0 || submitted.length > 200 || !(await safeEqual(submitted, passcode))) {
+      res.status(401).type('html').send(gateHtml(true, next));
+      return;
+    }
+    const secure = req.secure === true;
+    res.append('Set-Cookie', passCookie(await sessionToken(passcode), secure));
+    if (!whoToken(req.headers.cookie)) res.append('Set-Cookie', whoCookie(mintWho(), secure));
+    res.redirect(303, next ?? '/');
+  });
+  app.use(async (req, res, next) => {
+    if (req.path === '/api/health' || req.path === '/api/metrics' || req.path === '/robots.txt') return next();
+    if (await authorized(req.headers.cookie, passcode)) return next();
+    if (req.path.startsWith('/api/')) return sendError(res, 401, 'unauthorized');
+    if (req.method === 'GET' || req.method === 'HEAD') {
+      res.status(req.path === '/api/unlock' ? 401 : 200).type('html').send(gateHtml(false, safeNext(req.path)));
+      return;
+    }
+    return sendError(res, 401, 'unauthorized');
+  });
+}
+
+function bindWho(req: Request, res: Response): { token: string } {
+  const existing = whoToken(req.headers.cookie);
+  if (existing) return { token: existing };
+  const token = mintWho();
+  res.append('Set-Cookie', whoCookie(token, req.secure === true));
+  return { token };
+}
+
+function friendParam(req: Request): string | null {
+  const code = req.params.code;
+  return typeof code === 'string' && FRIEND_CODE.test(code) ? code : null;
+}
+
+function sendFriend(res: Response, result: FriendResult, okStatus: number): void {
+  if (!result.ok) {
+    const status = result.error === 'not_found' ? 404 : result.error === 'forbidden' || result.error === 'cancelled' ? 403 : 400;
+    sendError(res, status, result.error);
+    return;
+  }
+  res.status(okStatus).json(result.body);
+}
+
+async function seated(service: MatchService, req: Request): Promise<PlayerId | 'ai' | 'forbid'> {
+  const id = paramId(req);
+  if (!(await service.isFriend(id))) return 'ai';
+  const seat = await service.seatForId(id, whoToken(req.headers.cookie));
+  return seat ?? 'forbid';
 }
 
 function sendError(res: Response, status: number, error: string) {
@@ -116,100 +272,28 @@ function allowedViewer(req: Request): boolean {
   return requested === '0';
 }
 
-function parseCreate(body: unknown): { decks: [Deck, Deck]; stance: Stance } | null {
-  if (!body || typeof body !== 'object') return null;
-  const record = body as Record<string, unknown>;
-  const stance = parseStance(record.stance);
-  const playerDeck = resolveDeck(record.playerDeck, record.playerDeckId);
-  const opponentDeck = resolveDeck(record.opponentDeck, record.opponentDeckId);
-  if (!stance || !playerDeck || !opponentDeck) return null;
-  if (!copyLimited(playerDeck) || !copyLimited(opponentDeck)) return null;
-  return { decks: [playerDeck, opponentDeck], stance };
+const PLAYED_COOKIE = 'bard_duel_played';
+const PLAYED_MAX_AGE = 2_592_000;
+
+function playedCount(header: string | undefined): number {
+  const raw = readCookie(header, PLAYED_COOKIE);
+  if (!raw || !/^\d+$/.test(raw)) return 0;
+  return Number(raw);
 }
 
-function parseStance(value: unknown): Stance | null {
-  if (value == null) return 'balanced';
-  if (value === 'aggressive' || value === 'balanced' || value === 'patient') return value;
+function playedCookie(next: number): string {
+  return `${PLAYED_COOKIE}=${next}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${PLAYED_MAX_AGE}`;
+}
+
+function readCookie(header: string | undefined, name: string): string | null {
+  if (!header) return null;
+  for (const part of header.split(';')) {
+    const trimmed = part.trim();
+    const eq = trimmed.indexOf('=');
+    if (eq === -1) continue;
+    if (trimmed.slice(0, eq) === name) return trimmed.slice(eq + 1);
+  }
   return null;
-}
-
-function resolveDeck(deck: unknown, deckId: unknown): Deck | null {
-  if (typeof deckId === 'string' && deckId.length > 0) {
-    return practiceDeck(deckId);
-  }
-  if (!deck || typeof deck !== 'object') return null;
-  const record = deck as Record<string, unknown>;
-  if (typeof record.house !== 'string' || record.house.length < 1 || record.house.length > 40) return null;
-  if (typeof record.legendId !== 'string') return null;
-  if (!Array.isArray(record.cards) || record.cards.length !== 20) return null;
-  if (!record.cards.every((id) => typeof id === 'string' && id.length > 0 && id.length < 80)) return null;
-  return { house: record.house, legendId: record.legendId, cards: record.cards as string[] };
-}
-
-function copyLimited(deck: Deck): boolean {
-  return deckError(deck.house, deck.cards) == null;
-}
-
-function parseAction(value: unknown): GameAction | null {
-  if (!value || typeof value !== 'object') return null;
-  const action = value as Record<string, unknown>;
-  switch (action.type) {
-    case 'mulligan': {
-      if (!Array.isArray(action.idx) || action.idx.length > 10) return null;
-      if (!action.idx.every((index) => Number.isInteger(index) && (index as number) >= 0 && (index as number) < 10)) return null;
-      const idx = [...(action.idx as number[])].sort((a, b) => a - b);
-      if (new Set(idx).size !== idx.length) return null;
-      return { type: 'mulligan', idx };
-    }
-    case 'play': {
-      const uid = asUid(action.uid);
-      if (uid == null) return null;
-      const page = action.page == null ? undefined : asPage(action.page);
-      if (action.page != null && page == null) return null;
-      const target = action.target == null ? undefined : asUid(action.target);
-      if (action.target != null && target == null) return null;
-      return { type: 'play', uid, page: page ?? undefined, target };
-    }
-    case 'champion': {
-      const page = action.page == null ? undefined : asPage(action.page);
-      if (action.page != null && page == null) return null;
-      const target = action.target == null ? undefined : asUid(action.target);
-      if (action.target != null && target == null) return null;
-      return { type: 'champion', page: page ?? undefined, target };
-    }
-    case 'legend': {
-      const target = asUid(action.target);
-      if (target == null) return null;
-      const target2 = action.target2 == null ? undefined : asUid(action.target2);
-      if (action.target2 != null && target2 == null) return null;
-      return { type: 'legend', target, target2 };
-    }
-    case 'fight':
-      return { type: 'fight' };
-    case 'attack': {
-      const uid = asUid(action.uid);
-      const target = asUid(action.target);
-      if (uid == null || target == null) return null;
-      return { type: 'attack', uid, target };
-    }
-    case 'move': {
-      const uid = asUid(action.uid);
-      if (uid == null) return null;
-      return { type: 'move', uid };
-    }
-    case 'end':
-      return { type: 'end' };
-    default:
-      return null;
-  }
-}
-
-function asUid(value: unknown): number | undefined {
-  return typeof value === 'number' && Number.isInteger(value) && value > 0 && value < 10_000 ? value : undefined;
-}
-
-function asPage(value: unknown): 0 | 1 | null {
-  return value === 0 || value === 1 ? value : null;
 }
 
 export type { PlayerId };

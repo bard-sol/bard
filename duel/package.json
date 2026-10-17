@@ -8,18 +8,23 @@
     "start": "tsx src/server/index.ts",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "parity": "node engine/parity.mjs"
+    "parity": "node engine/parity.mjs",
+    "build:worker": "vite build --outDir deploy/client --emptyOutDir && node scripts/build-worker.mjs",
+    "test:guide": "playwright test"
   },
   "dependencies": {
     "express": "^4.21.2",
     "pixi.js": "^8.14.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.64.1",
     "@types/express": "^4.17.21",
     "@types/node": "^22.15.3",
+    "esbuild": "^0.25.10",
     "tsx": "^4.20.3",
     "typescript": "^5.9.2",
     "vite": "^6.3.5",
-    "vitest": "^3.2.4"
+    "vitest": "^3.2.4",
+    "wrangler": "^4.45.0"
   }
 }

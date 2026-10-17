@@ -4,7 +4,7 @@ import type { EngineState, MatchSetup } from '../engine/state.js';
 export interface LogEntry {
   index: number;
   actor: PlayerId;
-  source: 'human' | 'pilot' | 'timeout';
+  source: 'human' | 'pilot' | 'timeout' | 'script';
   action: GameAction;
 }
 
@@ -23,6 +23,22 @@ export interface MatchRecord {
   thinking: boolean;
   deadline: number | null;
   createdAt: string;
+  /** Guided first match. The rival's moves are the bubble-guide script, not the pilot. */
+  tutorial?: boolean;
+  /** Human turn length for this match. Mulligan uses its own clock. */
+  humanTurnMs?: number;
+  /** Phase the current human clock was armed for. Leaving mulligan starts a fresh turn clock. */
+  clockPhase?: string;
+  /** Seat the current human clock belongs to. A friend match re-arms when the seat changes. */
+  clockSeat?: PlayerId;
+  /** Two human seats. Absent on AI and tutorial matches. */
+  friend?: {
+    sessions: [string, string];
+    deckIds: [string, string];
+    misses: [number, number];
+    forfeitedBy: PlayerId | null;
+    rematchCode: string | null;
+  };
 }
 
 export interface MatchRepository {
