@@ -162,13 +162,131 @@ async function drag(page: Page, size: { width: number; height: number }, from: L
   await page.mouse.up();
 }
 
+async function inspectFaces(page: Page): Promise<string[]> {
+  return page.evaluate(() => {
+    const w = window as Window & {
+      cardFace: (id: string, options?: { size?: string }) => string;
+      D13: { cards: Record<string, { name?: string }> };
+    };
+    const ids = new Set<string>();
+    for (const el of Array.from(document.querySelectorAll('.handrow [data-def], .un[data-def]'))) {
+      const id = el.getAttribute('data-def');
+      if (id && w.D13.cards[id]) ids.add(id);
+    }
+    for (const extra of ['champ_old_wick', 'c_lamplighter']) if (w.D13.cards[extra]) ids.add(extra);
+
+    const lineHeightOf = (el: HTMLElement): number => {
+      const parsed = parseFloat(getComputedStyle(el).lineHeight);
+      return Number.isFinite(parsed) ? parsed : parseFloat(getComputedStyle(el).fontSize) * 1.2;
+    };
+    const naturalLines = (el: HTMLElement): number => {
+      const cs = getComputedStyle(el);
+      const probe = document.createElement('div');
+      probe.textContent = (el.textContent ?? '').replace(/\s+/g, ' ').trim();
+      probe.style.position = 'absolute';
+      probe.style.left = '-9999px';
+      probe.style.top = '0';
+      probe.style.visibility = 'hidden';
+      probe.style.boxSizing = 'content-box';
+      probe.style.width = `${el.clientWidth}px`;
+      probe.style.fontFamily = cs.fontFamily;
+      probe.style.fontSize = cs.fontSize;
+      probe.style.fontWeight = cs.fontWeight;
+      probe.style.fontStyle = cs.fontStyle;
+      probe.style.fontStretch = cs.fontStretch;
+      probe.style.fontVariationSettings = cs.fontVariationSettings;
+      probe.style.fontFeatureSettings = cs.fontFeatureSettings;
+      probe.style.letterSpacing = cs.letterSpacing;
+      probe.style.whiteSpace = 'normal';
+      probe.style.lineHeight = cs.lineHeight;
+      probe.style.padding = '0';
+      probe.style.margin = '0';
+      document.body.append(probe);
+      const lines = Math.max(1, Math.round(probe.getBoundingClientRect().height / lineHeightOf(el)));
+      probe.remove();
+      return lines;
+    };
+    const overlaps = (a: DOMRect, b: DOMRect): boolean =>
+      a.width > 1 && b.width > 1 && a.height > 1 && b.height > 1 && a.left < b.right - 1 && b.left < a.right - 1 && a.top < b.bottom - 1 && b.top < a.bottom - 1;
+    const inside = (el: HTMLElement, card: HTMLElement): boolean => {
+      const a = el.getBoundingClientRect();
+      const b = card.getBoundingClientRect();
+      return a.height > 1 && a.top >= b.top - 1 && a.bottom <= b.bottom + 1 && a.left >= b.left - 1 && a.right <= b.right + 1;
+    };
+    const onArt = (el: HTMLElement): boolean => el.classList.contains('dc-cost') || el.classList.contains('dc-q') || el.classList.contains('dc-champ');
+    const measure = (card: HTMLElement, id: string): string[] => {
+      const problems: string[] = [];
+      const name = card.querySelector('.dc-name');
+      const text = card.querySelector('.dc-text');
+      const label = `${id} “${name?.textContent?.trim() ?? ''}”`;
+      if (!(name instanceof HTMLElement)) return [`${label} has no name`];
+      const nameLh = lineHeightOf(name);
+      const lines = naturalLines(name);
+      const nameBox = name.getBoundingClientRect();
+      if (nameBox.height + 1 < nameLh * lines) problems.push(`${label} name is ${nameBox.height.toFixed(1)}px, need ${lines} × ${nameLh.toFixed(1)}px`);
+      if (!inside(name, card)) problems.push(`${label} name is clipped by the card`);
+      if (!(text instanceof HTMLElement)) problems.push(`${label} has no rules text`);
+      else {
+        const textCs = getComputedStyle(text);
+        const font = parseFloat(textCs.fontSize);
+        const textLh = lineHeightOf(text);
+        const textBox = text.getBoundingClientRect();
+        const canScroll = (textCs.overflowY === 'auto' || textCs.overflowY === 'scroll') && text.scrollHeight > text.clientHeight + 1;
+        if (!(font >= 10.8)) problems.push(`${label} rules text is ${font}px`);
+        if (textBox.height + 1 < textLh * 2 && !canScroll) problems.push(`${label} rules text is ${textBox.height.toFixed(1)}px tall and does not scroll`);
+        if (!inside(text, card)) problems.push(`${label} rules text is clipped by the card`);
+      }
+      const stats = card.querySelector('.dc-stats');
+      if (stats instanceof HTMLElement && !inside(stats, card)) problems.push(`${label} stats are clipped by the card`);
+      const parts = ['.dc-name', '.dc-type', '.kw-chips', '.dc-text', '.dc-stats', '.dc-champ', '.dc-cost', '.dc-q'].flatMap((sel) => {
+        const el = card.querySelector(sel);
+        return el instanceof HTMLElement ? [el] : [];
+      });
+      for (let i = 0; i < parts.length; i += 1) {
+        for (let j = i + 1; j < parts.length; j += 1) {
+          const a = parts[i];
+          const b = parts[j];
+          if (!a || !b || (onArt(a) && onArt(b))) continue;
+          if (overlaps(a.getBoundingClientRect(), b.getBoundingClientRect())) problems.push(`${label} ${a.className} overlaps ${b.className}`);
+        }
+      }
+      return problems;
+    };
+
+    let pop = document.getElementById('hovercard');
+    const existed = Boolean(pop);
+    const previous = pop?.innerHTML ?? '';
+    if (!pop) {
+      pop = document.createElement('div');
+      pop.id = 'hovercard';
+      document.body.append(pop);
+    }
+    pop.classList.toggle('dock-left', document.documentElement.dataset.inspectDock === 'left');
+    const problems: string[] = [];
+    for (const id of ids) {
+      pop.innerHTML = w.cardFace(id, { size: 'inspect' });
+      const card = pop.querySelector('.dc');
+      if (card instanceof HTMLElement) problems.push(...measure(card, id));
+    }
+    for (const card of Array.from(document.querySelectorAll('.sheet .dc.sz-inspect, #lift .dc.sz-inspect'))) {
+      if (card instanceof HTMLElement) problems.push(...measure(card, card.querySelector('.dc-name')?.textContent?.trim() || 'open'));
+    }
+    if (existed) pop.innerHTML = previous;
+    else pop.remove();
+    return problems;
+  });
+}
+
 async function check(page: Page, size: { width: number; height: number }, id: number, hover = true): Promise<void> {
+  const faces = await inspectFaces(page);
+  expect(faces, `step ${id} inspect card\n${faces.join('\n')}`).toEqual([]);
   if (hover && size.width > 600) {
     await page.evaluate(() => {
       const point = document.querySelector('[data-guide-point]');
       const cards = Array.from(document.querySelectorAll('.handrow .dc')).filter((el) => el !== point && !el.contains(point) && !(point && point.contains(el)));
       cards.sort((a, b) => (b.querySelector('.dc-name')?.textContent?.length ?? 0) - (a.querySelector('.dc-name')?.textContent?.length ?? 0));
-      cards[0]?.dispatchEvent(new PointerEvent('pointerover', { bubbles: true }));
+      const champ = cards.find((el) => el.classList.contains('champ'));
+      (champ ?? cards[0])?.dispatchEvent(new PointerEvent('pointerover', { bubbles: true }));
     });
     await page.waitForTimeout(280);
   }
@@ -211,15 +329,6 @@ async function check(page: Page, size: { width: number; height: number }, id: nu
       boardClipped: Boolean(app && hand && pages && hand.height > 2 && (hand.bottom > window.innerHeight + 1 || pages.top < -1 || app.getBoundingClientRect().top < -1)),
       hand: hand && hand.height > 2 ? { top: hand.top, bottom: hand.bottom } : null,
       pages: pages && pages.height > 2 ? { top: pages.top, bottom: pages.bottom } : null,
-      nameOnStats: Array.from(document.querySelectorAll('#hovercard .dc, .sheet .dc.sz-inspect')).some((card) => {
-        const name = card.querySelector('.dc-name');
-        const stats = card.querySelector('.dc-stats');
-        if (!(name instanceof HTMLElement) || !(stats instanceof HTMLElement)) return false;
-        const a = name.getBoundingClientRect();
-        const b = stats.getBoundingClientRect();
-        if (a.height < 2 || b.height < 2) return false;
-        return a.left < b.right - 1 && b.left < a.right - 1 && a.top < b.bottom - 1 && b.top < a.bottom - 1;
-      }),
     };
   });
   expect(report.missing, `step ${id} has no bubble`).toBe(false);
@@ -227,7 +336,6 @@ async function check(page: Page, size: { width: number; height: number }, id: nu
   expect(report.spotlight, `step ${id} bubble covers its spotlight ${JSON.stringify({ union: report.union, point: report.point })}`).toBe(false);
   expect(report.endTurn, `step ${id} bubble covers End Turn`).toBe(false);
   expect(report.inspect, `step ${id} bubble covers the inspect panel`).toBe(false);
-  expect(report.nameOnStats, `step ${id} inspect name covers the stats`).toBe(false);
   expect(report.toast, `step ${id} toast covers the bubble`).toBe(false);
   if (size.width > 600) expect(report.pageScroll, `step ${id} page scrolls`).toBe(false);
   if (size.width > 600 && report.hand && report.pages) {

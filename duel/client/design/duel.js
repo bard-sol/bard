@@ -74,7 +74,9 @@ window.cardFace = function (id, o = {}) {
       <span class="dc-ti">${icon(TYPEI[c.type])}</span>${id.startsWith('champ_') ? '<span class="dc-champ">Champion</span>' : ''}
       <div class="dc-body"><div class="dc-name">${c.mini}</div>${k.length ? `<div class="dc-kwi">${k.slice(0, 3).map((x) => icon(KWI[x])).join('')}</div>` : ''}<p class="dc-text">${abil(c.text)}</p></div>${foot}</div>`;
   }
-  return `<div class="${cls}" style="${hv(c.house)}">${artHTML(c)}${costHTML(c, o)}${id.startsWith('champ_') ? '<span class="dc-champ">Champion · once per match</span>' : ''}<button class="dc-q" aria-label="Card details">${icon('help')}</button>
+  const champHtml = id.startsWith('champ_') ? '<span class="dc-champ">Champion · once per match</span>' : '';
+  const art = size === 'inspect' ? `<div class="dc-art-wrap">${artHTML(c)}${champHtml}</div>` : `${artHTML(c)}${champHtml}`;
+  return `<div class="${cls}" style="${hv(c.house)}">${art}${costHTML(c, o)}<button class="dc-q" aria-label="Card details">${icon('help')}</button>
     <div class="dc-body"><div class="dc-name">${c.name}</div>${typeLine(c)}
       ${size === 'inspect' ? kwChips(c) : ''}<p class="dc-text">${abil(c.text, size === 'hand')}</p></div>${foot}</div>`;
 };

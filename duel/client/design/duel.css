@@ -66,9 +66,14 @@ button { font-family: inherit; color: inherit; cursor: pointer; }
 
 /* sizes */
 .dc.sz-inspect { width: 240px; height: 352px; border-radius: 14px; }
-.dc.sz-inspect .dc-art { height: 150px; } .dc.sz-inspect .dc-name { font-size: 20px; } .dc.sz-inspect .dc-type { font-size: 10px; margin-top: 6px; }
-.dc.sz-inspect .dc-text { font-size: 13.5px; line-height: 1.4; color: var(--text-1); margin-top: 9px; }
-.dc.sz-inspect .dc-stats { padding: 8px 12px 12px; } .dc.sz-inspect .st { font-size: 22px; } .dc.sz-inspect .st .ico { width: 18px; height: 18px; }
+.dc.sz-inspect .dc-art-wrap { position: relative; flex: 1 100 150px; min-height: 40px; max-height: 150px; display: flex; flex-direction: column; }
+.dc.sz-inspect .dc-art-wrap .dc-art { flex: 1 1 auto; height: auto; min-height: 0; }
+.dc.sz-inspect .dc-art-wrap .dc-champ { top: auto; bottom: 6px; }
+.dc.sz-inspect .dc-art { height: 150px; } .dc.sz-inspect .dc-name { flex-shrink: 0; font-size: 20px; } .dc.sz-inspect .dc-type { flex-shrink: 0; font-size: 10px; margin-top: 6px; }
+.dc.sz-inspect .kw-chips { flex-shrink: 0; }
+.dc.sz-inspect .dc-body { flex: 1 1 auto; min-height: min-content; overflow: hidden; }
+.dc.sz-inspect .dc-text { flex: 1 1 auto; min-height: 2lh; overflow-x: hidden; overflow-y: auto; font-size: 13.5px; line-height: 1.4; color: var(--text-1); margin-top: 9px; }
+.dc.sz-inspect .dc-stats { flex-shrink: 0; padding: 8px 12px 12px; } .dc.sz-inspect .st { font-size: 22px; } .dc.sz-inspect .st .ico { width: 18px; height: 18px; }
 .dc.sz-inspect .dc-cost { width: 38px; height: 44px; top: 9px; left: 9px; } .dc.sz-inspect .dc-cost b { font-size: 19px; top: 4px; }
 .dc.sz-inspect .dc-q { width: 30px; height: 30px; top: 9px; right: 9px; } .dc.sz-inspect .dc-q .ico { width: 21px; height: 21px; }
 .dc.sz-inspect .dc-body { padding: 9px 12px 0; } .dc.sz-inspect .dc-stats .hint { font-size: 11.5px; color: var(--text-2); }
