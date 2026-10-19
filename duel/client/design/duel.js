@@ -45,7 +45,7 @@ function abil(text, mark) {
 function kwOf(c) { return (c.kw || []).filter((k) => KW13[k]); }
 function costHTML(c, o = {}) { return `<span class="dc-cost ${o.cant ? 'cant' : ''}" title="${c.cost} Ink">${icon('ink_f', 'drop')}<b>${c.cost}</b></span>`; }
 function artHTML(c, o = {}) {
-  if (c.art && !(o.cssPh && c.artSource === 'placeholder')) return `<div class="dc-art ${c.artSource === 'placeholder' ? 'pending' : ''}"><img src="${c.art}" alt="" style="object-position:${o.pos || '50% 22%'}"></div>`;
+  if (c.art && !(o.cssPh && c.artSource === 'placeholder')) return `<div class="dc-art ${c.artSource === 'placeholder' ? 'pending' : ''}"><img src="${c.art}" alt="" style="object-position:${o.pos || '50% 30%'}"></div>`;
   const g = c.type === 'character' ? 'house_' + c.house : TYPEI[c.type];
   return `<div class="dc-art ph ph-${c.type}"><span class="ph-g">${icon(g)}</span>${o.noTag ? '' : `<span class="ph-tag">${c.type === 'character' ? 'Sketch' : TYPE_NAME[c.type]}</span>`}</div>`;
 }

@@ -238,6 +238,12 @@ async function inspectFaces(page: Page): Promise<string[]> {
       }
       const stats = card.querySelector('.dc-stats');
       if (stats instanceof HTMLElement && !inside(stats, card)) problems.push(`${label} stats are clipped by the card`);
+      const art = card.querySelector('.dc-art');
+      if (art instanceof HTMLElement) {
+        const box = art.getBoundingClientRect();
+        const ratio = box.height > 1 ? box.width / box.height : 0;
+        if (box.width >= 8 && box.height >= 8 && (ratio < 0.95 || ratio > 1.05)) problems.push(`${label} art is ${box.width.toFixed(1)}×${box.height.toFixed(1)}`);
+      }
       const parts = ['.dc-name', '.dc-type', '.kw-chips', '.dc-text', '.dc-stats', '.dc-champ', '.dc-cost', '.dc-q'].flatMap((sel) => {
         const el = card.querySelector(sel);
         return el instanceof HTMLElement ? [el] : [];
@@ -329,6 +335,15 @@ async function check(page: Page, size: { width: number; height: number }, id: nu
       boardClipped: Boolean(app && hand && pages && hand.height > 2 && (hand.bottom > window.innerHeight + 1 || pages.top < -1 || app.getBoundingClientRect().top < -1)),
       hand: hand && hand.height > 2 ? { top: hand.top, bottom: hand.bottom } : null,
       pages: pages && pages.height > 2 ? { top: pages.top, bottom: pages.bottom } : null,
+      art: Array.from(document.querySelectorAll('.dc-art, .sh-art')).flatMap((el) => {
+        if (!(el instanceof HTMLElement)) return [];
+        const box = el.getBoundingClientRect();
+        if (box.width < 8 || box.height < 8) return [];
+        const ratio = box.width / box.height;
+        if (ratio >= 0.95 && ratio <= 1.05) return [];
+        const where = el.closest('.un, .dc, .sh-card, .sheet')?.className ?? el.className;
+        return [`${where} art ${box.width.toFixed(1)}×${box.height.toFixed(1)}`];
+      }),
     };
   });
   expect(report.missing, `step ${id} has no bubble`).toBe(false);
@@ -337,6 +352,7 @@ async function check(page: Page, size: { width: number; height: number }, id: nu
   expect(report.endTurn, `step ${id} bubble covers End Turn`).toBe(false);
   expect(report.inspect, `step ${id} bubble covers the inspect panel`).toBe(false);
   expect(report.toast, `step ${id} toast covers the bubble`).toBe(false);
+  expect(report.art, `step ${id} art is not square\n${report.art.join('\n')}`).toEqual([]);
   if (size.width > 600) expect(report.pageScroll, `step ${id} page scrolls`).toBe(false);
   if (size.width > 600 && report.hand && report.pages) {
     expect(report.boardClipped, `step ${id} board is clipped`).toBe(false);

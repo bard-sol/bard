@@ -22,7 +22,7 @@ button { font-family: inherit; color: inherit; cursor: pointer; }
 .dc::before { content: ""; position: absolute; inset: 0 0 auto 0; height: 3px; background: var(--house); z-index: 4; }
 .dc-art { position: relative; flex: none; overflow: hidden; background: var(--paper);
   -webkit-mask: url(/design/deckle-bottom.svg) 0 0 / 100% 100% no-repeat; mask: url(/design/deckle-bottom.svg) 0 0 / 100% 100% no-repeat; }
-.dc-art img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 50% 22%; display: block; }
+.dc-art img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 50% 30%; display: block; }
 .dc-art::after { content: ""; position: absolute; inset: 0; background: linear-gradient(to top, color-mix(in srgb, var(--house) 24%, transparent), transparent 30%); }
 /* placeholder art = bare pencil sketch ("unwritten" regions are pencil in the art bible) */
 .dc-art.ph { background: repeating-linear-gradient(135deg, rgba(34,32,28,.06) 0 1px, transparent 1px 7px), var(--paper-2); display: grid; place-items: center; }
@@ -65,23 +65,23 @@ button { font-family: inherit; color: inherit; cursor: pointer; }
 .dc.playable { box-shadow: 0 0 0 1.5px rgba(241,235,223,.55), var(--e-2); }
 
 /* sizes */
-.dc.sz-inspect { width: 240px; height: 352px; border-radius: 14px; }
-.dc.sz-inspect .dc-art-wrap { position: relative; flex: 1 100 150px; min-height: 40px; max-height: 150px; display: flex; flex-direction: column; }
-.dc.sz-inspect .dc-art-wrap .dc-art { flex: 1 1 auto; height: auto; min-height: 0; }
+.dc.sz-inspect { --art: 168px; width: 240px; height: auto; border-radius: 14px; }
+.dc.sz-inspect .dc-art-wrap { position: relative; flex: none; align-self: center; width: min(100%, var(--art)); aspect-ratio: 1 / 1; height: auto; max-height: none; min-height: 0; display: flex; }
+.dc.sz-inspect .dc-art-wrap .dc-art { flex: none; width: 100%; height: 100%; aspect-ratio: 1 / 1; min-height: 0; }
 .dc.sz-inspect .dc-art-wrap .dc-champ { top: auto; bottom: 6px; }
-.dc.sz-inspect .dc-art { height: 150px; } .dc.sz-inspect .dc-name { flex-shrink: 0; font-size: 20px; } .dc.sz-inspect .dc-type { flex-shrink: 0; font-size: 10px; margin-top: 6px; }
+.dc.sz-inspect .dc-name { flex-shrink: 0; font-size: 20px; } .dc.sz-inspect .dc-type { flex-shrink: 0; font-size: 10px; margin-top: 6px; }
 .dc.sz-inspect .kw-chips { flex-shrink: 0; }
-.dc.sz-inspect .dc-body { flex: 1 1 auto; min-height: min-content; overflow: hidden; }
+.dc.sz-inspect .dc-body { flex: 1 1 auto; min-height: 0; overflow: hidden; }
 .dc.sz-inspect .dc-text { flex: 1 1 auto; min-height: 2lh; overflow-x: hidden; overflow-y: auto; font-size: 13.5px; line-height: 1.4; color: var(--text-1); margin-top: 9px; }
 .dc.sz-inspect .dc-stats { flex-shrink: 0; padding: 8px 12px 12px; } .dc.sz-inspect .st { font-size: 22px; } .dc.sz-inspect .st .ico { width: 18px; height: 18px; }
 .dc.sz-inspect .dc-cost { width: 38px; height: 44px; top: 9px; left: 9px; } .dc.sz-inspect .dc-cost b { font-size: 19px; top: 4px; }
 .dc.sz-inspect .dc-q { width: 30px; height: 30px; top: 9px; right: 9px; } .dc.sz-inspect .dc-q .ico { width: 21px; height: 21px; }
 .dc.sz-inspect .dc-body { padding: 9px 12px 0; } .dc.sz-inspect .dc-stats .hint { font-size: 11.5px; color: var(--text-2); }
-.dc.sz-hand { width: 150px; height: 216px; } .dc.sz-hand .dc-art { height: 84px; }
+.dc.sz-hand { --art: 92px; width: 150px; height: 216px; }
+.dc.sz-hand .dc-art, .dc.sz-hand-s .dc-art, .dc > .dc-art { width: min(100%, var(--art)); height: auto; aspect-ratio: 1 / 1; align-self: center; flex: none; max-height: none; }
 .dc.sz-hand .dc-text { display: -webkit-box; -webkit-line-clamp: 5; -webkit-box-orient: vertical; overflow: hidden; }
 /* phone hand: art, cost, type icon, short name, keyword icons, stats. Full text = tap → lifted inspect card + sheet. */
-.dc.sz-hand-s { width: 68px; height: 104px; border-radius: 8px; }
-.dc.sz-hand-s .dc-art { height: 50px; }
+.dc.sz-hand-s { --art: 40px; width: 68px; height: 104px; border-radius: 8px; }
 .dc.sz-hand-s .dc-cost { width: 22px; height: 25px; top: 4px; left: 4px; } .dc.sz-hand-s .dc-cost b { font-size: 12px; top: 2px; }
 .dc.sz-hand-s .dc-cost .drop path { stroke-width: 1.8; }
 .dc-ti { position: absolute; z-index: 5; top: 5px; right: 4px; width: 18px; height: 18px; border-radius: 5px; display: grid; place-items: center; background: rgba(15,18,24,.74); box-shadow: 0 0 0 1px rgba(241,235,223,.18); }
@@ -97,8 +97,8 @@ button { font-family: inherit; color: inherit; cursor: pointer; }
 .un { --house: var(--h-neutral-a); position: relative; width: var(--un-w); height: var(--un-h); flex: none; border-radius: 8px; background: var(--ink-800); overflow: visible;
   box-shadow: var(--e-1), 0 0 0 1px var(--line-2); display: flex; flex-direction: column; }
 .un::before { content: ""; position: absolute; inset: 0 0 auto 0; height: 3px; border-radius: 8px 8px 0 0; background: var(--house); z-index: 4; }
-.un .dc-art { height: var(--un-art); border-radius: 8px 8px 0 0; }
-.un .dc-art img { object-position: 50% 22%; }
+.un .dc-art { width: min(100%, var(--un-art)); height: auto; aspect-ratio: 1 / 1; align-self: center; flex: none; border-radius: 8px 8px 0 0; }
+.un .dc-art img { object-position: 50% 30%; }
 .un-kw { position: absolute; z-index: 5; left: 3px; top: calc(var(--un-art) - 19px); display: flex; gap: 2px; }
 .un-kw i { width: 17px; height: 17px; border-radius: 5px; display: grid; place-items: center; background: rgba(15,18,24,.84); box-shadow: 0 0 0 1px rgba(241,235,223,.2); }
 .un-kw i .ico { width: 11px; height: 11px; }
@@ -403,8 +403,8 @@ button { font-family: inherit; color: inherit; cursor: pointer; }
 .gl-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 18px; }
 @media (max-width: 600px) { .gl-grid { grid-template-columns: 1fr; } }
 .sh-card { display: flex; gap: 12px; padding: 4px 16px 12px; border-bottom: 1px solid var(--line); }
-.sh-card .sh-art { width: 84px; height: 104px; border-radius: 10px; overflow: hidden; flex: none; background: var(--paper); box-shadow: 0 0 0 1px var(--line-2); }
-.sh-card .sh-art img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 22%; }
+.sh-card .sh-art { width: 84px; height: 84px; aspect-ratio: 1 / 1; border-radius: 10px; overflow: hidden; flex: none; background: var(--paper); box-shadow: 0 0 0 1px var(--line-2); }
+.sh-card .sh-art img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 30%; }
 .sh-card h4 { margin: 2px 0 0; font: 600 21px/1.1 var(--font-display); } .sh-card .dc-type { margin-top: 7px; }
 .sh-card .row2 { display: flex; gap: 16px; margin-top: 10px; align-items: center; } .sh-card .st { font-size: 21px; } .sh-card .st .ico { width: 16px; height: 16px; }
 .sh-card .cost { display: inline-flex; align-items: center; gap: 4px; font: 800 17px/1 var(--font-ui); } .sh-card .cost .ico { width: 15px; height: 15px; }

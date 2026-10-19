@@ -212,6 +212,13 @@ async function layoutProblems(page: Page): Promise<string[]> {
       const box = handEl.getBoundingClientRect();
       if (box.bottom > window.innerHeight + 2) problems.push('hand runs off the screen');
     }
+    for (const art of Array.from(document.querySelectorAll('.dc-art, .sh-art'))) {
+      if (!(art instanceof HTMLElement)) continue;
+      const box = art.getBoundingClientRect();
+      if (box.width < 8 || box.height < 8) continue;
+      const ratio = box.width / box.height;
+      if (ratio < 0.95 || ratio > 1.05) problems.push(`art ${Math.round(box.width)}×${Math.round(box.height)}`);
+    }
     const root = document.documentElement;
     if (root.scrollWidth > root.clientWidth + 1) problems.push(`horizontal scroll ${root.scrollWidth}>${root.clientWidth}`);
     if (document.body.scrollWidth > document.body.clientWidth + 1) problems.push(`body scroll ${document.body.scrollWidth}>${document.body.clientWidth}`);
