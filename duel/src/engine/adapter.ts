@@ -1,4 +1,21 @@
 import {
+  apply as applyV1,
+  ENGINE_VERSION as ENGINE_V1,
+  legalActions as legalV1,
+  replay as replayV1,
+  stateHash as hashV1,
+} from '../../engine/v1/engine.mjs';
+import { makeSmart as makeSmartV1, PILOT_VERSION as PILOT_V1 } from '../../engine/v1/pilots.mjs';
+import {
+  apply as applyV11,
+  ENGINE_VERSION as ENGINE_V11,
+  legalActions as legalV11,
+  replay as replayV11,
+  stateHash as hashV11,
+} from '../../engine/v1.1/engine.mjs';
+import { makeSmart as makeSmartV11, PILOT_VERSION as PILOT_V11 } from '../../engine/v1.1/pilots.mjs';
+import {
+  AI_SLIP,
   apply as engineApply,
   CARDS_VERSION,
   DEFAULT_RULES,
@@ -12,9 +29,9 @@ import {
   validateDeck,
   newMatch,
 } from '../../engine/active.mjs';
-import type { Deck, EngineAdapter, GameAction, PlayerId, Stance } from '../types.js';
-import { projectView } from './project.js';
-import type { EngineRules, EngineState, MatchSetup } from './state.js';
+import type { Deck, EngineAdapter, GameAction, PlayerId, Stance, TradePreview } from '../types.js';
+import { cardFace, projectView } from './project.js';
+import type { EngineRules, EngineState, EngineUnit, MatchSetup } from './state.js';
 
 export class IllegalActionError extends Error {
   readonly code = 'illegal_action' as const;
@@ -24,12 +41,93 @@ export class IllegalActionError extends Error {
   }
 }
 
-const PILOT_SLIP = 300;
+const PILOT_SLIP_V1 = 300;
 const PILOT_SALT = 99;
 
+/** Frozen stamps for engine v1. The v1 manifest reads the cards file with node:fs, so the worker must not import it. */
+const CARDS_V1 = 'cards-proto-1';
+const RULES_V1 = 'rules-1.0.0';
+const CARDS_V11 = 'cards-proto-1.1';
+const RULES_V11 = 'rules-1.1.0';
+
+interface RecordedBundle {
+  engineVersion: string;
+  cardsVersion: string;
+  aiVersion: string;
+  rulesVersion: string;
+  secondInkTurns: number;
+  secondVerse: number;
+  slip: number;
+  apply: typeof engineApply;
+  legal: typeof engineLegal;
+  replay: typeof engineReplay;
+  hash: typeof engineHash;
+  pilot: typeof makeSmart;
+}
+
+/** Versions and functions for a match recorded under v1 or the live pin. */
+export function recordedBundle(engineVersion: string): RecordedBundle | null {
+  if (engineVersion === ENGINE_V1) {
+    return {
+      engineVersion: ENGINE_V1,
+      cardsVersion: CARDS_V1,
+      aiVersion: PILOT_V1,
+      rulesVersion: RULES_V1,
+      secondInkTurns: 1,
+      secondVerse: 0,
+      slip: PILOT_SLIP_V1,
+      apply: applyV1,
+      legal: legalV1,
+      replay: replayV1,
+      hash: hashV1,
+      pilot: makeSmartV1,
+    };
+  }
+  if (engineVersion === ENGINE_V11) {
+    return {
+      engineVersion: ENGINE_V11,
+      cardsVersion: CARDS_V11,
+      aiVersion: PILOT_V11,
+      rulesVersion: RULES_V11,
+      secondInkTurns: 1,
+      secondVerse: 0,
+      slip: PILOT_SLIP_V1,
+      apply: applyV11,
+      legal: legalV11,
+      replay: replayV11,
+      hash: hashV11,
+      pilot: makeSmartV11,
+    };
+  }
+  if (engineVersion === ENGINE_VERSION) {
+    return {
+      engineVersion: ENGINE_VERSION,
+      cardsVersion: CARDS_VERSION,
+      aiVersion: PILOT_VERSION,
+      rulesVersion: RULES_VERSION,
+      secondInkTurns: DEFAULT_RULES.secondInkTurns,
+      secondVerse: DEFAULT_RULES.secondVerse,
+      slip: AI_SLIP,
+      apply: engineApply,
+      legal: engineLegal,
+      replay: engineReplay,
+      hash: engineHash,
+      pilot: makeSmart,
+    };
+  }
+  return null;
+}
+
+function bundleForState(state: EngineState): RecordedBundle {
+  const found = recordedBundle(state.v);
+  if (!found) throw new Error(`unknown engine ${state.v}`);
+  return found;
+}
+
 /**
- * Live adapter over duel-engine v1. `apply` clones. `view` is the only projection
- * that may leave the server. The pilot never receives the match seed.
+ * Live adapter over the pin in engine/active.mjs. Stored v1 matches replay
+ * through engine/v1. `apply` clones. `view` is the only projection that may
+ * leave the server. The pilot never receives the match seed.
  */
 export function createEngineAdapter(): EngineAdapter {
   const rules: EngineRules = { ...DEFAULT_RULES };
@@ -44,27 +142,147 @@ export function createEngineAdapter(): EngineAdapter {
     },
     legalActions(state, player) {
       if (actorOf(state) !== player) return [];
-      return engineLegal(state).map(asAction);
+      return bundleForState(state).legal(state).map(asAction);
     },
     apply(state, action) {
-      try {
-        return engineApply(state, action);
-      } catch (error) {
-        if (error instanceof Error && error.message.startsWith('illegal')) throw new IllegalActionError();
-        throw error;
-      }
+      return applyBundle(state, action);
+    },
+    previewAction(state, player, action) {
+      return previewAction(state, player, action);
     },
     view: projectView,
     pilot(state, stance) {
       const actor = actorOf(state);
       if (actor == null) throw new Error('pilot called with no actor');
-      const choose = makeSmart({ stance, slip: PILOT_SLIP, salt: PILOT_SALT });
+      const bundle = bundleForState(state);
+      const choose = bundle.pilot({ stance, slip: bundle.slip, salt: PILOT_SALT });
       return asAction(choose(state, actor));
     },
     replay(setup, actions) {
-      return engineReplay(setup, actions);
+      const found = recordedBundle(setup.engineVersion);
+      if (!found) throw new Error(`unknown engine ${setup.engineVersion}`);
+      return found.replay(setup, actions);
     },
-    stateHash: engineHash,
+    stateHash(state) {
+      return bundleForState(state).hash(state);
+    },
+  };
+}
+
+function applyBundle(state: EngineState, action: GameAction): EngineState {
+  try {
+    return bundleForState(state).apply(state, action);
+  } catch (error) {
+    if (error instanceof Error && error.message.startsWith('illegal')) throw new IllegalActionError();
+    throw error;
+  }
+}
+
+function unitsOf(state: EngineState): EngineUnit[] {
+  const units: EngineUnit[] = [];
+  for (const page of state.board) for (const side of page) for (const unit of side) units.push(unit);
+  return units;
+}
+
+function unitById(state: EngineState, uid: number): EngineUnit | null {
+  return unitsOf(state).find((unit) => unit.uid === uid) ?? null;
+}
+
+function touchedPage(state: EngineState, action: GameAction): number | null {
+  if (action.type === 'attack') return unitById(state, action.uid)?.page ?? null;
+  if (action.type === 'move') {
+    const page = unitById(state, action.uid)?.page;
+    return page == null ? null : page === 0 ? 1 : 0;
+  }
+  if ((action.type === 'play' || action.type === 'champion') && (action.page === 0 || action.page === 1)) return action.page;
+  if (action.type === 'play' && action.target != null) return unitById(state, action.target)?.page ?? null;
+  if (action.type === 'legend') return unitById(state, action.target)?.page ?? null;
+  return null;
+}
+
+function gainedConquer(before: EngineState, after: EngineState, player: PlayerId): boolean {
+  return after.log.slice(before.log.length).some((entry) => entry.e === 'verse' && entry.why === 'conquer' && entry.p === player);
+}
+
+function healNote(before: EngineState, after: EngineState): string | null {
+  const later = new Map(unitsOf(after).map((unit) => [unit.uid, unit]));
+  let lantern = false;
+  let changed = false;
+  for (const unit of unitsOf(before)) {
+    const next = later.get(unit.uid);
+    const beforeHp = unit.hp > 0 ? unit.hp : 0;
+    const afterHp = next && next.hp > 0 ? next.hp : 0;
+    if (beforeHp === afterHp) continue;
+    changed = true;
+    if (before.pages[unit.page] === 'lanternfall') lantern = true;
+  }
+  if (!changed) return null;
+  const kindle = after.log.slice(before.log.length).some((entry) => entry.e === 'kindle');
+  const parts: string[] = [];
+  if (lantern) parts.push('Lanternfall heals 1 at end of turn');
+  if (kindle) parts.push('Kindle heals at end of turn');
+  if (parts.length === 0) parts.push('Heals at end of turn');
+  return parts.join('. ');
+}
+
+/**
+ * Applies `action` on a clone. Rival traps are taken off first, so a hidden note never fires and its identity never leaves this function.
+ * Badge numbers are the health straight after the action. A second `end` on another clone answers Conquer and the heal footnote.
+ */
+export function previewAction(state: EngineState, player: PlayerId, action: GameAction): TradePreview {
+  if (actorOf(state) !== player) throw new IllegalActionError();
+  const page = touchedPage(state, action);
+  const noteMayFire = page != null && state.traps.some((trap) => trap.owner !== player && trap.page === page);
+  const quiet = structuredClone(state);
+  quiet.traps = quiet.traps.filter((trap) => trap.owner === player);
+  const after = applyBundle(quiet, action);
+  const units = unitsOf(state).map((unit) => {
+    const next = unitById(after, unit.uid);
+    const healthAfter = next?.hp ?? 0;
+    return {
+      instanceId: String(unit.uid),
+      damage: Math.max(0, unit.hp - healthAfter),
+      healthBefore: unit.hp,
+      healthAfter,
+      dies: !next || next.hp <= 0,
+    };
+  });
+  let conquer = false;
+  let footnote: string | null = null;
+  if (action.type === 'end') {
+    conquer = gainedConquer(state, after, player);
+    footnote = healNote(state, after);
+  } else if (after.phase !== 'over' && actorOf(after) === player) {
+    try {
+      const closed = applyBundle(structuredClone(after), { type: 'end' });
+      conquer = gainedConquer(after, closed, player);
+      footnote = healNote(after, closed);
+    } catch (error) {
+      if (!(error instanceof IllegalActionError)) throw error;
+    }
+  }
+  const attacker = action.type === 'attack' ? unitById(state, action.uid) : null;
+  const defender = action.type === 'attack' ? unitById(state, action.target) : null;
+  const attackerAfter = attacker ? unitById(after, attacker.uid) : null;
+  const defenderAfter = defender ? unitById(after, defender.uid) : null;
+  return {
+    attackerId: attacker ? String(attacker.uid) : '',
+    defenderId: defender ? String(defender.uid) : '',
+    attackerName: attacker ? cardFace(attacker.id, String(attacker.uid)).name : '',
+    defenderName: defender ? cardFace(defender.id, String(defender.uid)).name : '',
+    attackerHealthBefore: attacker?.hp ?? 0,
+    defenderHealthBefore: defender?.hp ?? 0,
+    attackerHealthAfter: attackerAfter?.hp ?? 0,
+    defenderHealthAfter: defenderAfter?.hp ?? 0,
+    attackerDies: Boolean(attacker) && !attackerAfter,
+    defenderDies: Boolean(defender) && !defenderAfter,
+    verseGain: after.players[player].verses - state.players[player].verses,
+    marginNoteStrikes: false,
+    units,
+    deaths: units.filter((unit) => unit.dies).map((unit) => unit.instanceId),
+    conquer,
+    noteMayFire,
+    footnote,
   };
 }
 

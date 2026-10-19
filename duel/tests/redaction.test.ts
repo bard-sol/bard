@@ -21,7 +21,7 @@ describe('redaction', () => {
   });
 
   it('hides the foe hand, both deck orders, and a face-down marginalia identity', () => {
-    const seed = 0x51eed;
+    const seed = 65545;
     let state = adapter.initialState([candleDeck(), foldDeck()], seed);
     let raw = JSON.stringify(adapter.view(state, 0));
     expect(raw).not.toContain('"seed"');
@@ -75,9 +75,11 @@ describe('redaction', () => {
     expect(match!.setup.seed).not.toBe(planted);
     expect(typeof match!.setup.seed).toBe('number');
     expect(match!.setup.rules.secondInkTurns).toBe(1);
-    expect(match!.setup.engineVersion).toBe('duel-engine-1.0.0');
-    expect(match!.setup.cardsVersion).toBe('cards-proto-1');
-    expect(match!.setup.aiVersion).toBe('pilot-1.0.0');
+    expect(match!.setup.engineVersion).toBe('duel-engine-1.3.0');
+    expect(match!.setup.cardsVersion).toBe('cards-proto-1.3');
+    expect(match!.setup.aiVersion).toBe('pilot-1.3.0');
+    expect(match!.setup.rulesVersion).toBe('rules-1.3.0');
+    expect(match!.setup.rules.secondVerse).toBe(1);
 
     const bodies: unknown[] = [created.body];
     const denied = await getJson(`${server.url}/api/matches/${created.body.matchId}?player=1`);
@@ -89,7 +91,7 @@ describe('redaction', () => {
     bodies.push(again.body);
 
     const illegal = await postJson(`${server.url}/api/matches/${created.body.matchId}/actions`, {
-      action: { type: 'end' },
+      action: { type: 'play', uid: 1, page: 0 },
     });
     expect(illegal.status).toBe(400);
     bodies.push(illegal.body);

@@ -1,0 +1,28 @@
+# Private duel test. This is not the site worker (noisysurg11).
+# PASSCODE is a secret binding (`wrangler secret put PASSCODE`), not a var.
+name = "bard-duel"
+main = "deploy/index.js"
+compatibility_date = "2026-10-15"
+
+[observability]
+enabled = true
+
+[observability.traces]
+enabled = true
+
+[vars]
+DUEL_TURN_TIMEOUT_MS = "35000"
+DUEL_AI_TURN_MS = "5000"
+
+[assets]
+directory = "deploy/client"
+binding = "ASSETS"
+run_worker_first = true
+
+[[durable_objects.bindings]]
+name = "DUEL_MATCH"
+class_name = "DuelMatch"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["DuelMatch"]

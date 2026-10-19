@@ -51,6 +51,12 @@ export interface EngineRules {
   winVerses: number;
   /** Turns on which the second player gains +1 max Ink. 1 means their first turn starts at 2. */
   secondInkTurns: number;
+  /** v1.1: `alone` scores 1 Verse for an empty rival Page. Absent on v1 records. */
+  holdMode?: string;
+  /** v1.1: Verses for a Conquer. The Spine adds one more when `spineMode` is `conquer`. */
+  conquerVerses?: number;
+  /** v1.1: `conquer` adds the Spine bonus on a Conquer. `hold` adds it on a hold. */
+  spineMode?: string;
 }
 
 export interface EngineLogEntry {

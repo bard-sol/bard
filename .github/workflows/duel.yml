@@ -19,11 +19,21 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Engine parity
+      - name: Engine parity (v1, v1.1, and v1.3 goldens)
         run: node engine/parity.mjs
+      - name: Gameplay v1.1 parity
+        run: node engine/v1.1/parity.mjs
+      - name: Gameplay v1.3 parity
+        run: node engine/v1.3/parity.mjs
       - name: Install
         run: npm ci
       - name: Test
         run: npm test
       - name: Typecheck
         run: npm run typecheck
+      - name: Install Playwright
+        run: npx playwright install --with-deps chromium
+      - name: Guided match
+        run: npm run test:guide
+      - name: Build worker
+        run: npm run build:worker

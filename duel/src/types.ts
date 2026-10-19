@@ -12,7 +12,7 @@ export type Glyph = 'flame' | 'lamp' | 'shield' | 'spark' | 'note' | 'blade' | '
 
 export type Phase = 'mulligan' | 'main' | 'fight' | 'game_over';
 
-export type WinReason = 'verse' | 'health' | 'tiebreak';
+export type WinReason = 'verse' | 'health' | 'tiebreak' | 'forfeit';
 
 export interface CardEffect {
   kind: 'damage' | 'ink' | 'trap';
@@ -103,6 +103,16 @@ export interface PublicEvent {
   kind: 'hold' | 'conquer' | 'play' | 'attack' | 'power' | 'trap' | 'draw' | 'mulligan' | 'win' | 'move';
   text: string;
   player: PlayerId | null;
+  /** Public page name for a hold, conquer, or board action. */
+  pageName?: string;
+  /** Turn number of the player who scored, when this is a hold or conquer. */
+  turn?: number;
+  /** Verses gained, when this is a hold or conquer. */
+  amount?: number;
+  /** Page index of the action to highlight. Omitted for face-down notes' card ids. */
+  focusPage?: 0 | 1;
+  /** Face-up card id to highlight. Never a face-down Marginalia. */
+  focusDef?: string;
 }
 
 /**
@@ -182,6 +192,8 @@ export interface MarginaliaView {
   owner: PlayerId;
   faceDown: boolean;
   known: boolean;
+  /** Card id when the viewer knows the note. Sealed notes omit it. */
+  defId?: string | null;
   name: string | null;
   text: string | null;
   glyph: Glyph | null;
@@ -246,8 +258,37 @@ export interface ClientPayload {
   aiVersion: string;
   /** Second player's opening max Ink is 2 when this is 1. Public rule, not a secret. */
   secondInkTurns: number;
+  /** Verses the second player holds when the match opens. Public rule, not a secret. */
+  secondVerse: number;
   stance: Stance;
   status: 'playing' | 'complete';
+  /** Guided first match. The rival follows the bubble-guide script. */
+  tutorial: boolean;
+  /** Human versus human. The rival is the other seated player. */
+  friend?: boolean;
+  /** A rematch is waiting at `/m/<code>`. */
+  rematchCode?: string | null;
+  /** Monotonic match revision. A live update older than this is ignored. */
+  generation?: number;
+}
+
+/** Lobby or seated view for a friend match. Card lists stay on the server. */
+export interface FriendBody {
+  kind: 'lobby' | 'match';
+  code: string;
+  path: string;
+  role: 'host' | 'guest' | 'open';
+  cancelled: boolean;
+  decks: Array<{ id: string; name: string }>;
+  payload: ClientPayload | null;
+}
+
+export interface UnitPreview {
+  instanceId: string;
+  damage: number;
+  healthBefore: number;
+  healthAfter: number;
+  dies: boolean;
 }
 
 export interface TradePreview {
@@ -263,6 +304,15 @@ export interface TradePreview {
   defenderDies: boolean;
   verseGain: number;
   marginNoteStrikes: boolean;
+  /** Health immediately after the action, before end-of-turn heals. */
+  units?: UnitPreview[];
+  deaths?: string[];
+  /** True when ending the turn from this position would score a Conquer. */
+  conquer?: boolean;
+  /** A face-down rival note sits on the page this action touches. The id stays on the server. */
+  noteMayFire?: boolean;
+  /** Set only when an end-of-turn heal changes survival or the health a unit ends on. */
+  footnote?: string | null;
 }
 
 export interface EngineAdapter {
@@ -271,10 +321,23 @@ export interface EngineAdapter {
   readonly rulesVersion: string;
   readonly aiVersion: string;
   /** Pinned opening rules. `secondInkTurns: 1` is the second player's first-turn max of 2 Ink. */
-  readonly rules: { secondVerse: number; holdAtEnd: boolean; winVerses: number; secondInkTurns: number };
+  readonly rules: {
+    secondVerse: number;
+    holdAtEnd: boolean;
+    winVerses: number;
+    secondInkTurns: number;
+    holdMode?: string;
+    conquerVerses?: number;
+    spineMode?: string;
+  };
   initialState(decks: readonly [Deck, Deck], seed: number): EngineState;
   legalActions(state: EngineState, player: PlayerId): GameAction[];
   apply(state: EngineState, action: GameAction): EngineState;
+  /**
+   * Outcome of `action` for `player`, from `apply` on a clone.
+   * Hidden traps are removed first, so the result is deterministic and names no face-down card.
+   */
+  previewAction(state: EngineState, player: PlayerId, action: GameAction): TradePreview;
   view(state: EngineState, player: PlayerId): PlayerView;
   /** Must not read the match seed. The pilot derives its own salt from public state. */
   pilot(state: EngineState, stance: Stance): GameAction;

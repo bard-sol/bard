@@ -4,14 +4,20 @@ export const ENGINE_VERSION: string;
 export const CARDS_VERSION: string;
 export const RULES_VERSION: string;
 export const PILOT_VERSION: string;
+export const AI_SLIP: number;
 export const MAX_TURNS: number;
 export const WIN_VERSES: number;
 export const FIXTURES: URL;
+export const FIXTURES_V1: URL;
+export const FIXTURES_V11: URL;
 export const DEFAULT_RULES: {
   secondVerse: number;
   holdAtEnd: boolean;
   winVerses: number;
   secondInkTurns: number;
+  holdMode: string;
+  conquerVerses: number;
+  spineMode: string;
 };
 
 export interface CardData {
@@ -81,6 +87,7 @@ export function stateHash(state: EngineState): string;
 export function fnv(value: string): string;
 export function clientView(state: EngineState, player: number): ClientProjection;
 export function clientLog(state: EngineState, player: number): LogProjection[];
+export function holdValue(state: EngineState, player: number, page: number): number;
 export function makeSmart(options?: { stance?: string; slip?: number; trapAware?: boolean; salt?: number }): (state: EngineState, me: number) => EngineAction;
 
 export interface EngineAction {
