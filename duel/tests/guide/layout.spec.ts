@@ -21,6 +21,11 @@ for (const size of [
     for (let attempt = 0; attempt < 4 && !ready; attempt++) {
       await page.goto('/');
       await page.locator('#play-title').click();
+      if (attempt === 0) {
+        await expect(page.locator('#turn-banner')).toBeAttached();
+        await page.waitForTimeout(1500);
+        await expect(page.locator('#turn-banner'), 'Your turn banner stays after 1.5s').toHaveCount(0);
+      }
       await settle(page);
       if ((await phase(page)) === 'mulligan') {
         await page.locator('#endturn').click({ force: true });
@@ -105,6 +110,11 @@ async function layoutProblems(page: Page): Promise<string[]> {
         if (token.left < box.left - 1 || token.right > box.right + 1 || token.top < box.top - 1 || token.bottom > box.bottom + 1) {
           problems.push('unit sits outside its page');
         }
+        const unitArt = unit.querySelector('.dc-art');
+        if (unitArt instanceof HTMLElement) {
+          const artBox = unitArt.getBoundingClientRect();
+          if (artBox.width > 8 && artBox.height < 52) problems.push(`board art ${Math.round(artBox.width)}×${Math.round(artBox.height)}`);
+        }
       }
     }
     for (const name of Array.from(document.querySelectorAll('.pb-name'))) {
@@ -129,8 +139,14 @@ async function layoutProblems(page: Page): Promise<string[]> {
     cards.forEach((card, index) => {
       const cardBox = card.getBoundingClientRect();
       cardBoxes.push(cardBox);
+      if (cardBox.top < -1 || cardBox.bottom > window.innerHeight + 1) problems.push(`card ${index} leaves the viewport`);
+      if (!card.classList.contains('armed') && (cardBox.width < 104 || cardBox.height < 164)) problems.push(`card ${index} is ${Math.round(cardBox.width)}×${Math.round(cardBox.height)}`);
       if (cardBox.width < 44) problems.push(`card ${index} tap ${Math.round(cardBox.width)}`);
-      if (cardBox.width < 88) problems.push(`card ${index} width ${Math.round(cardBox.width)}`);
+      const art = card.querySelector('.dc-art');
+      if (!card.classList.contains('armed') && art instanceof HTMLElement) {
+        const artBox = art.getBoundingClientRect();
+        if (artBox.width < 80 || artBox.height < 80) problems.push(`card ${index} art ${Math.round(artBox.width)}×${Math.round(artBox.height)}`);
+      }
       const text = card.querySelector('.dc-text');
       if (!(text instanceof HTMLElement)) {
         problems.push(`card ${index} has no ability`);
@@ -211,6 +227,8 @@ async function layoutProblems(page: Page): Promise<string[]> {
     if (handEl) {
       const box = handEl.getBoundingClientRect();
       if (box.bottom > window.innerHeight + 2) problems.push('hand runs off the screen');
+      const lowest = cardBoxes.reduce((max, rect) => Math.max(max, rect.bottom), 0);
+      if (cardBoxes.length && window.innerHeight - lowest > 16) problems.push(`hand floats ${Math.round(window.innerHeight - lowest)}px`);
     }
     for (const art of Array.from(document.querySelectorAll('.dc-art, .sh-art'))) {
       if (!(art instanceof HTMLElement)) continue;

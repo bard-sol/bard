@@ -25,6 +25,9 @@ for (const size of SIZES) {
       localStorage.setItem('bard-duel-tutorial', 'due');
     });
     await page.goto('/');
+    await expect(page.locator('#turn-banner')).toBeAttached();
+    await page.waitForTimeout(1500);
+    await expect(page.locator('#turn-banner'), 'Your turn banner stays after 1.5s').toHaveCount(0);
     await at(page, 1);
     await check(page, size, 1);
     await next(page);
@@ -335,6 +338,24 @@ async function check(page: Page, size: { width: number; height: number }, id: nu
       boardClipped: Boolean(app && hand && pages && hand.height > 2 && (hand.bottom > window.innerHeight + 1 || pages.top < -1 || app.getBoundingClientRect().top < -1)),
       hand: hand && hand.height > 2 ? { top: hand.top, bottom: hand.bottom } : null,
       pages: pages && pages.height > 2 ? { top: pages.top, bottom: pages.bottom } : null,
+      handOff: Array.from(document.querySelectorAll('.handrow > .dc')).flatMap((el) => {
+        if (!(el instanceof HTMLElement)) return [];
+        const box = el.getBoundingClientRect();
+        if (box.width < 2 || box.height < 2) return [];
+        const text = el.querySelector('.dc-text');
+        const textBox = text instanceof HTMLElement ? text.getBoundingClientRect() : null;
+        const problems: string[] = [];
+        if (box.top < -1 || box.bottom > window.innerHeight + 1) problems.push(`${el.getAttribute('data-def') ?? 'card'} ${box.top.toFixed(0)}–${box.bottom.toFixed(0)}`);
+        if (textBox && textBox.height > 2 && (textBox.top < -1 || textBox.bottom > window.innerHeight + 1)) problems.push(`${el.getAttribute('data-def') ?? 'card'} text ${textBox.top.toFixed(0)}–${textBox.bottom.toFixed(0)}`);
+        return problems;
+      }),
+      handGap: (() => {
+        if (window.innerWidth <= 600 || window.innerHeight <= 800) return 0;
+        const bar = document.querySelector('.ybar')?.getBoundingClientRect();
+        const card = document.querySelector('.handrow > .dc')?.getBoundingClientRect();
+        if (!bar || !card || card.height < 2) return 0;
+        return card.top - bar.bottom;
+      })(),
       art: Array.from(document.querySelectorAll('.dc-art, .sh-art')).flatMap((el) => {
         if (!(el instanceof HTMLElement)) return [];
         const box = el.getBoundingClientRect();
@@ -353,6 +374,8 @@ async function check(page: Page, size: { width: number; height: number }, id: nu
   expect(report.inspect, `step ${id} bubble covers the inspect panel`).toBe(false);
   expect(report.toast, `step ${id} toast covers the bubble`).toBe(false);
   expect(report.art, `step ${id} art is not square\n${report.art.join('\n')}`).toEqual([]);
+  expect(report.handOff, `step ${id} hand card leaves the viewport\n${report.handOff.join('\n')}`).toEqual([]);
+  if (size.width > 600 && size.height > 800) expect(report.handGap, `step ${id} hand sits ${report.handGap}px below End Turn`).toBeLessThan(56);
   if (size.width > 600) expect(report.pageScroll, `step ${id} page scrolls`).toBe(false);
   if (size.width > 600 && report.hand && report.pages) {
     expect(report.boardClipped, `step ${id} board is clipped`).toBe(false);

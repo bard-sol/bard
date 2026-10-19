@@ -128,7 +128,7 @@ function markArmed(): void {
   document.querySelectorAll(`.handrow ${sel}, .row.you ${sel}`).forEach((el) => el.classList.add('armed'));
 }
 
-/** Phone hand: full 92px cards in a sideways row. Ability text stays at 10.5px across up to three lines. */
+/** Phone hand: 110×170 cards in a sideways row. Ability text stays at 10.5px across up to three lines. */
 function fitPhoneHand(): void {
   if (window.innerWidth > 600) return;
   const hand = document.getElementById('hand');
@@ -189,8 +189,8 @@ function liftArmedCard(card: HTMLElement): void {
     card.before(spacer);
   }
   card.classList.add('armed');
-  const spot = liftSpot();
   card.style.position = 'fixed';
+  const spot = liftSpot();
   card.style.zIndex = '30';
   card.style.margin = '0';
   card.style.left = `${spot.left}px`;
@@ -579,10 +579,45 @@ function nothingLeft(payload: ClientPayload): boolean {
   return !payload.legalActions.some((action) => action.type === 'play' || action.type === 'champion' || action.type === 'legend' || action.type === 'attack');
 }
 
+let bannerTimer = 0;
+let bannerToken = 0;
+
 function paintBanner(): void {
   const banner = ui.banner;
-  if (!banner || Date.now() > banner.until) return;
-  document.querySelector('.app')?.insertAdjacentHTML('beforeend', `<div class="turn-banner" id="turn-banner">${banner.text}</div>`);
+  if (!banner || Date.now() >= banner.until) {
+    window.clearTimeout(bannerTimer);
+    bannerTimer = 0;
+    bannerToken = 0;
+    ui.banner = null;
+    document.getElementById('turn-banner')?.remove();
+    return;
+  }
+  const appEl = document.querySelector('.app');
+  if (!appEl) return;
+  let node = document.getElementById('turn-banner');
+  if (!node) {
+    appEl.insertAdjacentHTML('beforeend', `<div class="turn-banner" id="turn-banner">${escapeHtml(banner.text)}</div>`);
+    node = document.getElementById('turn-banner');
+    const token = banner.until;
+    node?.addEventListener('animationend', () => {
+      if (ui.banner?.until !== token) return;
+      window.clearTimeout(bannerTimer);
+      bannerTimer = 0;
+      bannerToken = 0;
+      ui.banner = null;
+      document.getElementById('turn-banner')?.remove();
+    }, { once: true });
+  }
+  if (bannerToken === banner.until) return;
+  bannerToken = banner.until;
+  window.clearTimeout(bannerTimer);
+  const token = banner.until;
+  bannerTimer = window.setTimeout(() => {
+    bannerTimer = 0;
+    bannerToken = 0;
+    if (ui.banner?.until === token) ui.banner = null;
+    document.getElementById('turn-banner')?.remove();
+  }, Math.max(0, token - Date.now()));
 }
 
 function paintTray(): void {
@@ -1739,7 +1774,10 @@ window.setInterval(() => {
     const left = payload.turnDeadline - Date.now();
     end.classList.toggle('urgent', left <= 10_000 && left > 0);
   }
-  if (ui.banner && Date.now() > ui.banner.until) document.getElementById('turn-banner')?.remove();
+  if (ui.banner && Date.now() >= ui.banner.until) {
+    ui.banner = null;
+    document.getElementById('turn-banner')?.remove();
+  }
   if (ui.invite && !ui.payload) void pollInvite();
   if (!payload || ui.drag) return;
   const clockUp = Boolean(payload.friend && payload.turnDeadline && payload.turnDeadline < Date.now() - 200);
