@@ -91,3 +91,97 @@ export function collectTreasuryLamports(tx, { treasury, payer }) {
   }
   return total;
 }
+
+const ED25519_P = (1n << 255n) - 19n;
+const ED25519_D = 0x52036cee2b6ffe738cc740797779e89800700a4d4141d8ab75eb4dca135978a3n;
+const ED25519_SQRT_M1 = 19681161376707505956807079304988542015446066515923890162744021073123829784752n;
+
+function modP(n) {
+  const r = n % ED25519_P;
+  return r >= 0n ? r : r + ED25519_P;
+}
+
+function modPow(base, exp) {
+  let result = 1n;
+  let b = modP(base);
+  let e = exp;
+  while (e > 0n) {
+    if (e & 1n) result = modP(result * b);
+    b = modP(b * b);
+    e >>= 1n;
+  }
+  return result;
+}
+
+function uvRatio(u, v) {
+  const v3 = modP(v * v * v);
+  const v7 = modP(v3 * v3 * v);
+  const pow = modPow(modP(u * v7), (ED25519_P - 5n) / 8n);
+  let x = modP(u * v3 * pow);
+  const vx2 = modP(v * x * x);
+  const useRoot1 = vx2 === u;
+  const useRoot2 = vx2 === modP(-u);
+  if (useRoot2) x = modP(x * ED25519_SQRT_M1);
+  if ((x & 1n) === 1n) x = modP(-x);
+  return { isValid: useRoot1 || useRoot2, value: x };
+}
+
+export function isOnCurve(bytes) {
+  if (!(bytes instanceof Uint8Array) || bytes.length !== 32) return false;
+  const normed = new Uint8Array(bytes);
+  const sign = (normed[31] & 0x80) !== 0;
+  normed[31] &= 0x7f;
+  let y = 0n;
+  for (let i = 0; i < 32; i++) y |= BigInt(normed[i]) << (8n * BigInt(i));
+  if (y >= ED25519_P) return false;
+  const y2 = modP(y * y);
+  const u = modP(y2 - 1n);
+  const v = modP(ED25519_D * y2 + 1n);
+  const ratio = uvRatio(u, v);
+  if (!ratio.isValid) return false;
+  if (ratio.value === 0n && sign) return false;
+  return true;
+}
+
+function concatBytes(parts) {
+  let len = 0;
+  for (const part of parts) len += part.length;
+  const out = new Uint8Array(len);
+  let offset = 0;
+  for (const part of parts) {
+    out.set(part, offset);
+    offset += part.length;
+  }
+  return out;
+}
+
+const PDA_MARKER = new TextEncoder().encode('ProgramDerivedAddress');
+
+export async function findProgramAddress(seeds, programId) {
+  const program = typeof programId === 'string' ? bs58.decode(programId) : programId;
+  if (program.length !== 32) throw new Error('invalid program id');
+  for (let bump = 255; bump > 0; bump--) {
+    const hash = new Uint8Array(await crypto.subtle.digest('SHA-256', concatBytes([
+      ...seeds,
+      Uint8Array.of(bump),
+      program,
+      PDA_MARKER,
+    ])));
+    if (!isOnCurve(hash)) return { address: bs58.encode(hash), bump };
+  }
+  throw new Error('no program address');
+}
+
+export async function squadsVaultAddress(multisig, index = 0) {
+  if (!Number.isInteger(index) || index < 0 || index > 255) throw new Error('invalid vault index');
+  const key = bs58.decode(multisig);
+  if (key.length !== 32) throw new Error('invalid multisig');
+  const text = new TextEncoder();
+  const found = await findProgramAddress([
+    text.encode('multisig'),
+    key,
+    text.encode('vault'),
+    Uint8Array.of(index),
+  ], SQUADS_PROGRAM);
+  return found.address;
+}

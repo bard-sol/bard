@@ -17,6 +17,7 @@ import {
   sameMemberSet,
   decodeBase64,
   collectTreasuryLamports,
+  squadsVaultAddress,
 } from './chain.js';
 
 const FEES_ENABLED = false;
@@ -302,6 +303,8 @@ async function handleLinkVault(request, env, projectId) {
   if (!parsed || parsed.threshold !== 2 || !sameMemberSet(parsed.members, [admin.project.admin_wallet, signer])) {
     return json({ error: 'vault must be 2-of-2 with the project admin and the Bard signer' }, 400);
   }
+  const vault = await squadsVaultAddress(multisig);
+  if (address !== vault) return json({ error: 'deposit address is not the Squads vault' }, 400);
   const updated = await patch(env, 'projects', 'id=eq.' + encodeURIComponent(projectId), {
     vault_address: address,
     vault_multisig: multisig,
@@ -326,7 +329,17 @@ async function handleFeeConfirm(request, env) {
     return json({ error: 'invalid signature' }, 400);
   }
   const projectId = body.projectId || null;
-  if (projectId) {
+  let campaignProjectId = null;
+  if (kind === 'campaign') {
+    if (!body.campaignId) return json({ error: 'campaign is required' }, 400);
+    const rows = await select(env, 'campaigns', 'id=eq.' + encodeURIComponent(body.campaignId) + '&select=id,project_id');
+    const campaign = Array.isArray(rows) ? rows[0] : null;
+    if (!campaign) return json({ error: 'campaign not found' }, 404);
+    const admin = await projectForAdmin(env, campaign.project_id, session.wallet);
+    if (admin.error) return admin.error;
+    if (projectId && projectId !== campaign.project_id) return json({ error: 'campaign is not in that project' }, 400);
+    campaignProjectId = campaign.project_id;
+  } else if (projectId) {
     const admin = await projectForAdmin(env, projectId, session.wallet);
     if (admin.error) return admin.error;
   }
@@ -344,7 +357,7 @@ async function handleFeeConfirm(request, env) {
       payer_wallet: session.wallet,
       tx_signature: signature,
       status: 'confirmed',
-      project_id: projectId,
+      project_id: campaignProjectId || projectId,
       campaign_id: body.campaignId || null,
       claim_id: body.claimId || null,
       confirmed_at: new Date().toISOString(),
@@ -364,7 +377,7 @@ async function handleFeeConfirm(request, env) {
     }
     await patch(env, 'projects', 'id=eq.' + encodeURIComponent(projectId), row);
   }
-  if (body.campaignId && kind === 'campaign') {
+  if (campaignProjectId) {
     await patch(env, 'campaigns', 'id=eq.' + encodeURIComponent(body.campaignId), {
       fee_paid: true,
       fee_tx: signature,
@@ -467,6 +480,8 @@ async function handleTeamSign(request, env, settlementId) {
   const admin = await projectForAdmin(env, current.project_id, session.wallet);
   if (admin.error) return admin.error;
   if (current.status === 'executed' || current.status === 'cancelled') return json({ error: 'settlement is closed' }, 400);
+  const linkedMultisig = admin.project.vault_multisig || '';
+  if (!isBase58Address(linkedMultisig)) return json({ error: 'project vault is not linked' }, 400);
   const status = current.bard_signed ? 'both_signed' : 'awaiting_bard';
   const updated = await patch(env, 'vault_settlements', 'id=eq.' + encodeURIComponent(settlementId), {
     team_signed: true,
@@ -475,7 +490,7 @@ async function handleTeamSign(request, env, settlementId) {
     cosigned_wallet: session.wallet,
     cosign_sig: body.sig || null,
     tx_index: body.txIndex == null ? current.tx_index : String(body.txIndex),
-    vault_multisig: body.multisig || current.vault_multisig,
+    vault_multisig: linkedMultisig,
   });
   const settlement = Array.isArray(updated) ? updated[0] : updated;
   return json({ settlement });

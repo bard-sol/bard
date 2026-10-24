@@ -11,6 +11,7 @@ import {
   parseSquadsMultisig,
   sameMemberSet,
   squadsMultisigDiscriminator,
+  squadsVaultAddress,
 } from '../../server/chain.js';
 
 const SECRET = 'test-secret-test-secret-test-secret';
@@ -185,8 +186,9 @@ test('privileged writes require the project admin session', { timeout: 30000 }, 
   const walletB = keypair();
   const holder = keypair();
   const signer = keypair();
-  const vaultAddress = keypair().publicKey;
   const multisig = keypair().publicKey;
+  const vaultAddress = await squadsVaultAddress(multisig);
+  const wrongVault = keypair().publicKey;
   const other = keypair().publicKey;
   const mintA = keypair().publicKey;
   const mintB = keypair().publicKey;
@@ -194,6 +196,7 @@ test('privileged writes require the project admin session', { timeout: 30000 }, 
   const shortSig = '2'.repeat(87);
   const wrongPayerSig = '3'.repeat(87);
   const deadSig = '4'.repeat(87);
+  const campaignSig = '6'.repeat(87);
   const goodAccount = await craftMultisig(2, [walletA.publicKey, signer.publicKey]);
   const wrongMembers = await craftMultisig(2, [walletA.publicKey, other]);
   const lowThreshold = await craftMultisig(1, [walletA.publicKey, signer.publicKey]);
@@ -210,6 +213,7 @@ test('privileged writes require the project admin session', { timeout: 30000 }, 
       [shortSig]: transferTx(walletA.publicKey, 1000),
       [wrongPayerSig]: transferTx(walletB.publicKey, 1_000_000_000),
       [deadSig]: { meta: { err: 'failed' }, transaction: { message: { instructions: [] } } },
+      [campaignSig]: transferTx(walletA.publicKey, 250_000_000),
     },
   });
   const tokenA = (await signJwt(SECRET, walletA.publicKey)).token;
@@ -319,12 +323,43 @@ test('privileged writes require the project admin session', { timeout: 30000 }, 
     }, tokenB);
     assert.equal(bFee.status, 403);
 
+    tables.campaigns[0].fee_paid = false;
+    tables.campaigns[0].fee_tx = null;
+    const omitted = await call(env, 'POST', '/api/fees/confirm', {
+      kind: 'campaign', signature: campaignSig, campaignId: raid.data.campaign.id,
+    }, tokenB);
+    assert.equal(omitted.status, 403);
+    assert.equal(tables.campaigns[0].fee_paid, false);
+    assert.equal(tables.fee_payments.length, 1);
+    const otherProject = await call(env, 'POST', '/api/fees/confirm', {
+      kind: 'campaign',
+      signature: campaignSig,
+      campaignId: raid.data.campaign.id,
+      projectId: own.data.project.id,
+    }, tokenB);
+    assert.equal(otherProject.status, 403);
+    assert.equal(tables.campaigns[0].fee_paid, false);
+    const campaignFee = await call(env, 'POST', '/api/fees/confirm', {
+      kind: 'campaign', signature: campaignSig, campaignId: raid.data.campaign.id,
+    }, tokenA);
+    assert.equal(campaignFee.status, 200, JSON.stringify(campaignFee.data));
+    assert.equal(tables.campaigns[0].fee_paid, true);
+    assert.equal(tables.campaigns[0].fee_tx, campaignSig);
+    assert.equal(campaignFee.data.fee.project_id, project.id);
+
     const linked = await call(env, 'POST', '/api/projects/' + project.id + '/vault', {
       address: vaultAddress, multisig, mint: mintA,
     }, tokenA);
     assert.equal(linked.status, 200, JSON.stringify(linked.data));
     assert.equal(linked.data.project.vault_status, 'linked');
     assert.equal(linked.data.project.vault_multisig, multisig);
+    assert.equal(linked.data.project.vault_address, vaultAddress);
+    const notVault = await call(env, 'POST', '/api/projects/' + project.id + '/vault', {
+      address: wrongVault, multisig,
+    }, tokenA);
+    assert.equal(notVault.status, 400);
+    assert.match(notVault.data.error, /Squads vault/);
+    assert.equal(tables.projects[0].vault_address, vaultAddress);
     const wrong = await call(env, 'POST', '/api/projects/' + project.id + '/vault', {
       address: vaultAddress, multisig: other,
     }, tokenA);
@@ -403,16 +438,25 @@ test('privileged writes require the project admin session', { timeout: 30000 }, 
       bard_signed: false,
       team_signed: false,
       tx_index: null,
-      vault_multisig: multisig,
+      vault_multisig: other,
     });
-    const bSign = await call(env, 'POST', '/api/settlements/' + settlementId + '/team-sign', { sig: 'sig' }, tokenB);
+    const bSign = await call(env, 'POST', '/api/settlements/' + settlementId + '/team-sign', { sig: 'sig', multisig: other }, tokenB);
     assert.equal(bSign.status, 403);
     assert.equal(tables.vault_settlements[0].team_signed, false);
-    const team = await call(env, 'POST', '/api/settlements/' + settlementId + '/team-sign', { sig: 'sig' }, tokenA);
+    const savedMultisig = tables.projects[0].vault_multisig;
+    tables.projects[0].vault_multisig = null;
+    const unlinked = await call(env, 'POST', '/api/settlements/' + settlementId + '/team-sign', { sig: 'sig', multisig: other }, tokenA);
+    assert.equal(unlinked.status, 400);
+    assert.match(unlinked.data.error, /not linked/);
+    assert.equal(tables.vault_settlements[0].team_signed, false);
+    assert.equal(tables.vault_settlements[0].vault_multisig, other);
+    tables.projects[0].vault_multisig = savedMultisig;
+    const team = await call(env, 'POST', '/api/settlements/' + settlementId + '/team-sign', { sig: 'sig', multisig: other }, tokenA);
     assert.equal(team.status, 200, JSON.stringify(team.data));
     assert.equal(team.data.settlement.team_signed, true);
     assert.equal(team.data.settlement.status, 'awaiting_bard');
     assert.equal(team.data.settlement.cosigned_wallet, walletA.publicKey);
+    assert.equal(team.data.settlement.vault_multisig, multisig);
     tables.vault_settlements[0].bard_signed = true;
     const both = await call(env, 'POST', '/api/settlements/' + settlementId + '/team-sign', { sig: 'sig2' }, tokenA);
     assert.equal(both.status, 200);

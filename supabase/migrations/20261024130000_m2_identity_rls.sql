@@ -131,6 +131,7 @@ AS $$
 DECLARE
   access text;
   roster text;
+  campaign_project uuid;
 BEGIN
   IF public.is_service_role() THEN
     RETURN NEW;
@@ -139,7 +140,14 @@ BEGIN
     NEW.qualified := false;
     NEW.qualified_at := NULL;
     NEW.progress := 0;
-    SELECT c.access_mode INTO access FROM public.campaigns c WHERE c.id = NEW.campaign_id;
+    -- The campaign owns the project. A client-supplied project_id must not
+    -- pick another roster or hide the handle from this project's admin.
+    SELECT c.access_mode, c.project_id INTO access, campaign_project
+      FROM public.campaigns c WHERE c.id = NEW.campaign_id;
+    IF campaign_project IS NULL THEN
+      RAISE EXCEPTION 'campaign not found';
+    END IF;
+    NEW.project_id := campaign_project;
     SELECT r.role INTO roster FROM public.project_roster r
       WHERE r.project_id = NEW.project_id AND r.wallet = NEW.wallet;
     IF roster = 'blocked' THEN
@@ -263,6 +271,8 @@ BEGIN
     NEW.tx_signature := NULL;
     NEW.executed_at := NULL;
     NEW.cosign_sig := NULL;
+    NEW.payout_hash := NULL;
+    NEW.vault_multisig := NULL;
     RETURN NEW;
   END IF;
   NEW.team_signed := OLD.team_signed;
@@ -273,6 +283,8 @@ BEGIN
   NEW.tx_signature := OLD.tx_signature;
   NEW.executed_at := OLD.executed_at;
   NEW.cosign_sig := OLD.cosign_sig;
+  NEW.payout_hash := OLD.payout_hash;
+  NEW.vault_multisig := OLD.vault_multisig;
   RETURN NEW;
 END;
 $$;
@@ -369,10 +381,10 @@ GRANT INSERT (project_id, campaign_id, amount, status) ON public.vault_reservati
 GRANT UPDATE (amount, status) ON public.vault_reservations TO authenticated;
 
 GRANT INSERT (
-  project_id, campaign_id, payouts, total, unit, payout_hash, vault_multisig
+  project_id, campaign_id, payouts, total, unit
 ) ON public.vault_settlements TO authenticated;
 GRANT UPDATE (
-  payouts, total, unit, payout_hash, vault_multisig, tx_index, cosigned_wallet
+  payouts, total, unit, tx_index, cosigned_wallet
 ) ON public.vault_settlements TO authenticated;
 
 -- Holder writes: own profile and own join, never the review columns.

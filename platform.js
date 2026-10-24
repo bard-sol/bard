@@ -589,15 +589,15 @@
       campaign_id: campaignId,
       payouts: built.payouts,
       total: built.total,
-      unit: built.unit,
-      payout_hash: built.hash,
-      vault_multisig: (campaign && (campaign.vaultMultisig || '')) || null
+      unit: built.unit
     };
     if (mode === 'supabase' && sb) {
       var res = await sb.from('vault_settlements').insert(row).select('*').single();
       if (res.error) throw res.error;
       return res.data;
     }
+    row.payout_hash = built.hash;
+    row.vault_multisig = (campaign && (campaign.vaultMultisig || '')) || null;
     row.id = 'set_' + Date.now();
     row.proposed_at = new Date().toISOString();
     var state = localTeam();
@@ -626,7 +626,6 @@
     var signed = await apiPost('/api/settlements/' + encodeURIComponent(settlementId) + '/team-sign', {
       sig: extra && extra.sig,
       txIndex: extra && extra.txIndex,
-      multisig: extra && extra.multisig,
       wallet: extra && extra.wallet
     });
     return signed.settlement;
