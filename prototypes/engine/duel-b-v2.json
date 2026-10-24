@@ -1,0 +1,698 @@
+{
+ "version": "s0-duel-b-v2",
+ "rules": {
+  "turns": 6,
+  "deck_size": 12,
+  "opening_hand": 3,
+  "max_hand": 7,
+  "lane_slots": 4,
+  "reveal_locations_on_turns": [
+   1,
+   2,
+   3
+  ],
+  "stake_start": 1,
+  "stake_max": 8,
+  "marrow_cap": 8,
+  "hither_cap": 5
+ },
+ "cards": [
+  {
+   "id": "sump_brawler",
+   "name": "Sump Brawler",
+   "house": "The Pit",
+   "cost": 1,
+   "power": 2,
+   "kind": "afterlife",
+   "ability_text": "Afterlife: when destroyed, your other cards here get +2.",
+   "keywords": [
+    "Afterlife",
+    "Destroy"
+   ],
+   "fx": {
+    "afterlife": "buff_here_2"
+   }
+  },
+  {
+   "id": "kesh",
+   "name": "Kesh Varrow, the Ledger-Lord",
+   "house": "The Pit",
+   "cost": 3,
+   "power": 2,
+   "kind": "reveal",
+   "ability_text": "On reveal: destroy your weakest other card here; gain twice its power.",
+   "keywords": [
+    "On reveal",
+    "Destroy"
+   ],
+   "fx": {
+    "reveal": "kesh"
+   }
+  },
+  {
+   "id": "grenna",
+   "name": "Grenna Ironvow",
+   "house": "The Pit",
+   "cost": 4,
+   "power": 4,
+   "kind": "ongoing",
+   "ability_text": "Ongoing: +1 power for each card destroyed this game (both sides).",
+   "keywords": [
+    "Ongoing",
+    "Destroy"
+   ],
+   "fx": {
+    "ongoing": "grenna"
+   }
+  },
+  {
+   "id": "copyist",
+   "name": "Palimpsest Copyist",
+   "house": "The Scriptorium",
+   "cost": 2,
+   "power": 2,
+   "kind": "reveal",
+   "ability_text": "On reveal: discard your costliest card in hand; gain its cost as power.",
+   "keywords": [
+    "On reveal",
+    "Discard"
+   ],
+   "fx": {
+    "reveal": "copyist"
+   }
+  },
+  {
+   "id": "index",
+   "name": "Old Mother Index",
+   "house": "The Scriptorium",
+   "cost": 3,
+   "power": 3,
+   "kind": "ongoing",
+   "ability_text": "Ongoing: enemy cards here lose their Ongoing abilities.",
+   "keywords": [
+    "Ongoing",
+    "Counter"
+   ],
+   "fx": {
+    "ongoing": "index"
+   }
+  },
+  {
+   "id": "silas",
+   "name": "Silas Quill",
+   "house": "The Scriptorium",
+   "cost": 5,
+   "power": 5,
+   "kind": "reveal",
+   "ability_text": "On reveal: move the strongest enemy card here to another lane.",
+   "keywords": [
+    "On reveal",
+    "Move"
+   ],
+   "fx": {
+    "reveal": "silas"
+   }
+  },
+  {
+   "id": "portrait",
+   "name": "Breathing Portrait",
+   "house": "The Gilt",
+   "cost": 1,
+   "power": 1,
+   "kind": "reveal",
+   "ability_text": "On reveal: +2 power for each card you played here before it.",
+   "keywords": [
+    "On reveal"
+   ],
+   "fx": {
+    "reveal": "portrait"
+   }
+  },
+  {
+   "id": "croak",
+   "name": "Baron Croak",
+   "house": "The Gilt",
+   "cost": 2,
+   "power": 1,
+   "kind": "reveal",
+   "ability_text": "On reveal: leap to the lane you're losing by most, then +2 power.",
+   "keywords": [
+    "On reveal",
+    "Move"
+   ],
+   "fx": {
+    "reveal": "croak"
+   }
+  },
+  {
+   "id": "marrow",
+   "name": "Lady Marrow",
+   "house": "The Gilt",
+   "cost": 5,
+   "power": 3,
+   "kind": "ongoing",
+   "ability_text": "Ongoing: +2 for each of your cards destroyed or discarded (max +8).",
+   "keywords": [
+    "Ongoing",
+    "Destroy",
+    "Discard"
+   ],
+   "fx": {
+    "ongoing": "marrow"
+   }
+  },
+  {
+   "id": "deckhand",
+   "name": "Running-Sea Deckhand",
+   "house": "The Tidewrack",
+   "cost": 2,
+   "power": 3,
+   "kind": "arrive",
+   "ability_text": "Arrive: each time this moves, it gets +2 power.",
+   "keywords": [
+    "Arrive",
+    "Move"
+   ],
+   "fx": {
+    "arrive": 2
+   }
+  },
+  {
+   "id": "juniper",
+   "name": "Juniper",
+   "house": "The Tidewrack",
+   "cost": 2,
+   "power": 2,
+   "kind": "reveal",
+   "ability_text": "On reveal: +1 for each card costing 4+ in the enemy's hand (you see it).",
+   "keywords": [
+    "On reveal",
+    "Info"
+   ],
+   "fx": {
+    "reveal": "juniper"
+   }
+  },
+  {
+   "id": "pip",
+   "name": "Pip Fennick",
+   "house": "The Tidewrack",
+   "cost": 3,
+   "power": 1,
+   "kind": "reveal",
+   "ability_text": "On reveal: flip the Crown Coin: +4 power or nothing (seeded).",
+   "keywords": [
+    "On reveal",
+    "Coin"
+   ],
+   "fx": {
+    "reveal": "pip",
+    "n": 4
+   }
+  },
+  {
+   "id": "novice",
+   "name": "Lanternfall Novice",
+   "house": "The Candle",
+   "cost": 1,
+   "power": 1,
+   "kind": "reveal",
+   "ability_text": "On reveal: the next card you play here gets +3 power.",
+   "keywords": [
+    "On reveal"
+   ],
+   "fx": {
+    "reveal": "novice",
+    "n": 3
+   }
+  },
+  {
+   "id": "wren",
+   "name": "Sister Wren",
+   "house": "The Candle",
+   "cost": 3,
+   "power": 3,
+   "kind": "ongoing",
+   "ability_text": "Ongoing: your other cards here can't lose power or be destroyed.",
+   "keywords": [
+    "Ongoing",
+    "Protect"
+   ],
+   "fx": {
+    "ongoing": "wren"
+   }
+  },
+  {
+   "id": "wick",
+   "name": "Old Wick",
+   "house": "The Candle",
+   "cost": 4,
+   "power": 4,
+   "kind": "reveal",
+   "ability_text": "On reveal: +4 power if you played a card here last turn.",
+   "keywords": [
+    "On reveal"
+   ],
+   "fx": {
+    "reveal": "wick"
+   }
+  },
+  {
+   "id": "drummer",
+   "name": "Muster Drummer",
+   "house": "The Standard",
+   "cost": 1,
+   "power": 1,
+   "kind": "ongoing",
+   "ability_text": "Ongoing: your other cards here get +1 power.",
+   "keywords": [
+    "Ongoing"
+   ],
+   "fx": {
+    "ongoing": "drummer"
+   }
+  },
+  {
+   "id": "footnote",
+   "name": "Sir Footnote",
+   "house": "The Standard",
+   "cost": 2,
+   "power": 2,
+   "kind": "reveal",
+   "ability_text": "On reveal: +3 power if an enemy card here has more power.",
+   "keywords": [
+    "On reveal"
+   ],
+   "fx": {
+    "reveal": "footnote"
+   }
+  },
+  {
+   "id": "vey",
+   "name": "Captain Vey",
+   "house": "The Standard",
+   "cost": 4,
+   "power": 4,
+   "kind": "ongoing",
+   "ability_text": "Ongoing: your 1- and 2-cost cards in every lane get +1 power.",
+   "keywords": [
+    "Ongoing"
+   ],
+   "fx": {
+    "ongoing": "vey"
+   }
+  },
+  {
+   "id": "hunter",
+   "name": "Deckle Hunter",
+   "house": "The Torn Margin",
+   "cost": 1,
+   "power": 1,
+   "kind": "reveal",
+   "ability_text": "On reveal: +2 power if an enemy card is already here.",
+   "keywords": [
+    "On reveal"
+   ],
+   "fx": {
+    "reveal": "hunter"
+   }
+  },
+  {
+   "id": "grub",
+   "name": "Grub",
+   "house": "The Torn Margin",
+   "cost": 3,
+   "power": 4,
+   "kind": "ongoing",
+   "ability_text": "Ongoing: can't be moved or destroyed.",
+   "keywords": [
+    "Ongoing",
+    "Protect"
+   ],
+   "fx": {
+    "ongoing": "grub"
+   }
+  },
+  {
+   "id": "thorn",
+   "name": "Thorn",
+   "house": "The Torn Margin",
+   "cost": 3,
+   "power": 2,
+   "kind": "reveal",
+   "ability_text": "On reveal: +4 power if Thorn is your only card here.",
+   "keywords": [
+    "On reveal"
+   ],
+   "fx": {
+    "reveal": "thorn"
+   }
+  },
+  {
+   "id": "duellist",
+   "name": "Hinge Duellist",
+   "house": "The Fold",
+   "cost": 2,
+   "power": 1,
+   "kind": "ongoing",
+   "ability_text": "Ongoing: +1 power for each enemy card here.",
+   "keywords": [
+    "Ongoing"
+   ],
+   "fx": {
+    "ongoing": "duellist"
+   }
+  },
+  {
+   "id": "corvin",
+   "name": "Corvin",
+   "house": "The Fold",
+   "cost": 2,
+   "power": 1,
+   "kind": "reveal",
+   "ability_text": "On reveal: draw 1; move your weakest other card here one lane right.",
+   "keywords": [
+    "On reveal",
+    "Draw",
+    "Move"
+   ],
+   "fx": {
+    "reveal": "corvin"
+   }
+  },
+  {
+   "id": "ash_ember",
+   "name": "Ash & Ember",
+   "house": "The Fold",
+   "cost": 6,
+   "power": 5,
+   "kind": "reveal",
+   "ability_text": "On reveal: Ember (4 power) joins another lane of yours.",
+   "keywords": [
+    "On reveal",
+    "Summon"
+   ],
+   "fx": {
+    "reveal": "ash_ember"
+   }
+  },
+  {
+   "id": "blotling",
+   "name": "The Blotling",
+   "house": "Neutral",
+   "cost": 1,
+   "power": 1,
+   "kind": "reveal",
+   "ability_text": "On reveal: add a 1-power Ink Drop to each of your other lanes.",
+   "keywords": [
+    "On reveal",
+    "Summon"
+   ],
+   "fx": {
+    "reveal": "blotling"
+   }
+  },
+  {
+   "id": "doodle",
+   "name": "Deckle Doodle",
+   "house": "Neutral",
+   "cost": 2,
+   "power": 2,
+   "kind": "afterlife",
+   "ability_text": "Afterlife: when destroyed or discarded, a 3-power Scribble replaces it.",
+   "keywords": [
+    "Afterlife",
+    "Discard",
+    "Summon"
+   ],
+   "fx": {
+    "afterlife": "scribble"
+   }
+  },
+  {
+   "id": "hob",
+   "name": "Hob the Bookbinder",
+   "house": "Neutral",
+   "cost": 3,
+   "power": 3,
+   "kind": "ongoing",
+   "ability_text": "Ongoing: the first of your other cards destroyed here comes back.",
+   "keywords": [
+    "Ongoing",
+    "Destroy"
+   ],
+   "fx": {
+    "ongoing": "hob"
+   }
+  },
+  {
+   "id": "wolf",
+   "name": "The Margin Wolf",
+   "house": "Neutral",
+   "cost": 3,
+   "power": 3,
+   "kind": "reveal",
+   "ability_text": "On reveal: +3 power if you're losing this lane.",
+   "keywords": [
+    "On reveal"
+   ],
+   "fx": {
+    "reveal": "wolf"
+   }
+  },
+  {
+   "id": "weeping",
+   "name": "The Weeping Margin",
+   "house": "Neutral",
+   "cost": 4,
+   "power": 4,
+   "kind": "ongoing",
+   "ability_text": "Ongoing: enemy cards here get -1 power.",
+   "keywords": [
+    "Ongoing",
+    "Counter"
+   ],
+   "fx": {
+    "ongoing": "weeping"
+   }
+  },
+  {
+   "id": "reader",
+   "name": "The Watching Reader",
+   "house": "Neutral",
+   "cost": 4,
+   "power": 3,
+   "kind": "ongoing",
+   "ability_text": "Ongoing: your cards in the adjacent lanes get +1 power.",
+   "keywords": [
+    "Ongoing"
+   ],
+   "fx": {
+    "ongoing": "reader"
+   }
+  },
+  {
+   "id": "errata",
+   "name": "Sir Errata",
+   "house": "Neutral",
+   "cost": 6,
+   "power": 7,
+   "kind": "reveal",
+   "ability_text": "On reveal: destroy the weakest enemy here; enemy discards its costliest.",
+   "keywords": [
+    "On reveal",
+    "Destroy",
+    "Discard"
+   ],
+   "fx": {
+    "reveal": "errata"
+   }
+  },
+  {
+   "id": "colophon",
+   "name": "The Colophon",
+   "house": "Neutral",
+   "cost": 6,
+   "power": 12,
+   "kind": "reveal",
+   "ability_text": "On reveal: destroy your other cards here.",
+   "keywords": [
+    "On reveal",
+    "Destroy"
+   ],
+   "fx": {
+    "reveal": "colophon"
+   }
+  }
+ ],
+ "tokens": {
+  "ink_drop": {
+   "name": "Ink Drop [PLACEHOLDER]",
+   "power": 1
+  },
+  "ember": {
+   "name": "Ember",
+   "power": 4
+  },
+  "scribble": {
+   "name": "Scribble [PLACEHOLDER]",
+   "power": 3
+  }
+ },
+ "locations": [
+  {
+   "id": "fort_crease",
+   "name": "Fort Crease",
+   "house": "The Standard",
+   "text": "Cards here can't be moved or destroyed.",
+   "keywords": [
+    "Protect"
+   ]
+  },
+  {
+   "id": "port_foxing",
+   "name": "Port Foxing",
+   "house": "The Tidewrack",
+   "text": "A card that moves here gets +2 power.",
+   "keywords": [
+    "Move"
+   ]
+  },
+  {
+   "id": "salon",
+   "name": "The Salon",
+   "house": "The Gilt",
+   "text": "1- and 2-cost cards here get +2 power.",
+   "keywords": []
+  },
+  {
+   "id": "pit",
+   "name": "The Pit",
+   "house": "The Pit",
+   "text": "When a card here is destroyed, its owner's other cards here get +2.",
+   "keywords": [
+    "Destroy"
+   ]
+  },
+  {
+   "id": "scriptorium",
+   "name": "The Scriptorium",
+   "house": "The Scriptorium",
+   "text": "On-reveal abilities here happen twice.",
+   "keywords": [
+    "On reveal"
+   ]
+  },
+  {
+   "id": "candle_stacks",
+   "name": "The Candle Stacks",
+   "house": "The Candle",
+   "text": "Cards here are played face-up: no hiding.",
+   "keywords": [
+    "Info"
+   ]
+  },
+  {
+   "id": "gutter_fields",
+   "name": "The Gutter Fields",
+   "house": "The Standard",
+   "text": "On turn 6, cards here get +3 power.",
+   "keywords": []
+  },
+  {
+   "id": "moot_rings",
+   "name": "The Moot-Rings",
+   "house": "Neutral",
+   "text": "No abilities work here.",
+   "keywords": [
+    "Counter"
+   ]
+  },
+  {
+   "id": "torn_margin",
+   "name": "The Torn Margin",
+   "house": "The Torn Margin",
+   "text": "Only 2 cards per side.",
+   "keywords": []
+  },
+  {
+   "id": "hither_yon",
+   "name": "Hither & Yon",
+   "house": "The Fold",
+   "text": "Neither side's total here can exceed the other's by more than 5.",
+   "keywords": []
+  },
+  {
+   "id": "lanternfall",
+   "name": "Lanternfall",
+   "house": "The Candle",
+   "text": "At the end of each turn, cards here get +1 power.",
+   "keywords": []
+  },
+  {
+   "id": "spine",
+   "name": "The Spine",
+   "house": "Neutral",
+   "text": "Your cards here get +1 power for each other lane you're winning.",
+   "keywords": []
+  }
+ ],
+ "starter_decks": {
+  "Ranks Close": [
+   "drummer",
+   "novice",
+   "hunter",
+   "footnote",
+   "deckhand",
+   "wren",
+   "grub",
+   "reader",
+   "hob",
+   "vey",
+   "wick",
+   "errata"
+  ],
+  "Rewrite": [
+   "copyist",
+   "portrait",
+   "juniper",
+   "footnote",
+   "index",
+   "wolf",
+   "corvin",
+   "weeping",
+   "silas",
+   "marrow",
+   "doodle",
+   "colophon"
+  ],
+  "Coin and Fang": [
+   "hunter",
+   "croak",
+   "deckhand",
+   "corvin",
+   "juniper",
+   "pip",
+   "thorn",
+   "wolf",
+   "duellist",
+   "grub",
+   "silas",
+   "ash_ember"
+  ],
+  "Ink Tide": [
+   "sump_brawler",
+   "blotling",
+   "doodle",
+   "copyist",
+   "kesh",
+   "portrait",
+   "grenna",
+   "hob",
+   "weeping",
+   "marrow",
+   "errata",
+   "colophon"
+  ]
+ }
+}
