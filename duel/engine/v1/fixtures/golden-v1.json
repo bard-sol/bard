@@ -1,0 +1,2140 @@
+{
+ "engine": "duel-engine-1.0.0",
+ "fixtures": [
+  {
+   "name": "candle-v-fold-s11",
+   "setup": {
+    "houseA": "candle",
+    "deckA": [
+     "c_novice",
+     "c_novice",
+     "c_taper",
+     "c_taper",
+     "c_wren",
+     "c_wren",
+     "c_trimmer",
+     "c_trimmer",
+     "c_vigil",
+     "c_lamplighter",
+     "c_lamps",
+     "c_mend",
+     "c_snuff",
+     "c_watch",
+     "n_weeping",
+     "n_weeping",
+     "n_hob",
+     "n_hob",
+     "n_reader",
+     "n_errata"
+    ],
+    "houseB": "fold",
+    "deckB": [
+     "f_squire",
+     "f_squire",
+     "f_hinge",
+     "f_hinge",
+     "f_corvin",
+     "f_corvin",
+     "f_adept",
+     "f_adept",
+     "f_sentinel",
+     "f_master",
+     "f_feint",
+     "f_whirl",
+     "f_whirl",
+     "f_counter",
+     "f_closed",
+     "n_doodle",
+     "n_doodle",
+     "n_wolf",
+     "n_erasure",
+     "n_snare"
+    ],
+    "seed": 11,
+    "aiVersion": "pilot-1.0.0"
+   },
+   "actions": [
+    {
+     "type": "mulligan",
+     "idx": [
+      3
+     ]
+    },
+    {
+     "type": "mulligan",
+     "idx": [
+      0,
+      3
+     ]
+    },
+    {
+     "type": "play",
+     "uid": 22,
+     "page": 0
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "play",
+     "uid": 3,
+     "page": 0
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "play",
+     "uid": 23,
+     "page": 0,
+     "target": 43
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "play",
+     "uid": 2,
+     "page": 1
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "play",
+     "uid": 29,
+     "page": 1
+    },
+    {
+     "type": "attack",
+     "uid": 44,
+     "target": 43
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "play",
+     "uid": 9,
+     "target": 44
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "champion",
+     "page": 0
+    },
+    {
+     "type": "attack",
+     "uid": 46,
+     "target": 45
+    },
+    {
+     "type": "attack",
+     "uid": 47,
+     "target": 43
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "play",
+     "uid": 6,
+     "page": 1,
+     "target": 43
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "play",
+     "uid": 30,
+     "page": 0
+    },
+    {
+     "type": "play",
+     "uid": 31,
+     "page": 0
+    },
+    {
+     "type": "attack",
+     "uid": 47,
+     "target": 43
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "champion",
+     "page": 0
+    },
+    {
+     "type": "attack",
+     "uid": 48,
+     "target": 46
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "play",
+     "uid": 26,
+     "page": 1
+    },
+    {
+     "type": "play",
+     "uid": 28,
+     "target": 51
+    },
+    {
+     "type": "attack",
+     "uid": 47,
+     "target": 43
+    },
+    {
+     "type": "attack",
+     "uid": 49,
+     "target": 43
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "play",
+     "uid": 13,
+     "page": 0
+    },
+    {
+     "type": "attack",
+     "uid": 48,
+     "target": 52
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "move",
+     "uid": 47
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "play",
+     "uid": 8,
+     "page": 0
+    },
+    {
+     "type": "play",
+     "uid": 14,
+     "page": 0
+    },
+    {
+     "type": "attack",
+     "uid": 53,
+     "target": 49
+    },
+    {
+     "type": "end"
+    }
+   ],
+   "expect": {
+    "winner": 0,
+    "reason": "verses_after_7",
+    "verses": [
+     3,
+     2
+    ],
+    "stateHash": "d43bef33",
+    "logHash": "9ee3287a",
+    "logLen": 184
+   }
+  },
+  {
+   "name": "fold-v-tidewrack-s22",
+   "setup": {
+    "houseA": "fold",
+    "deckA": [
+     "f_squire",
+     "f_squire",
+     "f_hinge",
+     "f_hinge",
+     "f_corvin",
+     "f_corvin",
+     "f_adept",
+     "f_adept",
+     "f_sentinel",
+     "f_master",
+     "f_feint",
+     "f_whirl",
+     "f_whirl",
+     "f_counter",
+     "f_closed",
+     "n_doodle",
+     "n_doodle",
+     "n_wolf",
+     "n_erasure",
+     "n_snare"
+    ],
+    "houseB": "tidewrack",
+    "deckB": [
+     "t_deckhand",
+     "t_deckhand",
+     "t_runner",
+     "t_runner",
+     "t_cutpurse",
+     "t_cutpurse",
+     "t_pip",
+     "t_pip",
+     "t_smuggler",
+     "t_raider",
+     "t_captain",
+     "t_undertow",
+     "t_undertow",
+     "t_saltwind",
+     "t_saltwind",
+     "t_riptide",
+     "n_blotling",
+     "n_blotling",
+     "n_doodle",
+     "n_doodle"
+    ],
+    "seed": 22,
+    "aiVersion": "pilot-1.0.0"
+   },
+   "actions": [
+    {
+     "type": "mulligan",
+     "idx": []
+    },
+    {
+     "type": "mulligan",
+     "idx": []
+    },
+    {
+     "type": "play",
+     "uid": 26,
+     "page": 0
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "play",
+     "uid": 1,
+     "page": 1
+    },
+    {
+     "type": "play",
+     "uid": 21
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "play",
+     "uid": 24,
+     "page": 1
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "play",
+     "uid": 4,
+     "page": 0
+    },
+    {
+     "type": "attack",
+     "uid": 43,
+     "target": 44
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "play",
+     "uid": 22,
+     "page": 1
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "play",
+     "uid": 3,
+     "page": 1
+    },
+    {
+     "type": "attack",
+     "uid": 45,
+     "target": 42
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "champion",
+     "page": 0,
+     "target": 45
+    },
+    {
+     "type": "attack",
+     "uid": 46,
+     "target": 45
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "play",
+     "uid": 2,
+     "page": 0
+    },
+    {
+     "type": "play",
+     "uid": 7,
+     "target": 48
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "play",
+     "uid": 27,
+     "page": 1
+    },
+    {
+     "type": "play",
+     "uid": 25,
+     "page": 0
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "play",
+     "uid": 9,
+     "page": 0
+    },
+    {
+     "type": "play",
+     "uid": 6,
+     "page": 1
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "play",
+     "uid": 29,
+     "page": 0
+    },
+    {
+     "type": "attack",
+     "uid": 47,
+     "target": 51
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "play",
+     "uid": 11,
+     "page": 1
+    },
+    {
+     "type": "play",
+     "uid": 10,
+     "page": 1,
+     "target": 49
+    },
+    {
+     "type": "play",
+     "uid": 8,
+     "target": 47
+    },
+    {
+     "type": "attack",
+     "uid": 48,
+     "target": 47
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "play",
+     "uid": 32,
+     "page": 0
+    },
+    {
+     "type": "legend",
+     "target": 52,
+     "target2": 54
+    },
+    {
+     "type": "attack",
+     "uid": 52,
+     "target": 53
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "champion",
+     "page": 1
+    },
+    {
+     "type": "play",
+     "uid": 12,
+     "page": 1
+    },
+    {
+     "type": "legend",
+     "target": 57
+    },
+    {
+     "type": "attack",
+     "uid": 48,
+     "target": 55
+    },
+    {
+     "type": "attack",
+     "uid": 56,
+     "target": 52
+    },
+    {
+     "type": "end"
+    }
+   ],
+   "expect": {
+    "winner": 1,
+    "reason": "verses_after_7",
+    "verses": [
+     3,
+     6
+    ],
+    "stateHash": "99e2e9d5",
+    "logHash": "c240dced",
+    "logLen": 198
+   }
+  },
+  {
+   "name": "tidewrack-v-candle-s33",
+   "setup": {
+    "houseA": "tidewrack",
+    "deckA": [
+     "t_deckhand",
+     "t_deckhand",
+     "t_runner",
+     "t_runner",
+     "t_cutpurse",
+     "t_cutpurse",
+     "t_pip",
+     "t_pip",
+     "t_smuggler",
+     "t_raider",
+     "t_captain",
+     "t_undertow",
+     "t_undertow",
+     "t_saltwind",
+     "t_saltwind",
+     "t_riptide",
+     "n_blotling",
+     "n_blotling",
+     "n_doodle",
+     "n_doodle"
+    ],
+    "houseB": "candle",
+    "deckB": [
+     "c_novice",
+     "c_novice",
+     "c_taper",
+     "c_taper",
+     "c_wren",
+     "c_wren",
+     "c_trimmer",
+     "c_trimmer",
+     "c_vigil",
+     "c_lamplighter",
+     "c_lamps",
+     "c_mend",
+     "c_snuff",
+     "c_watch",
+     "n_weeping",
+     "n_weeping",
+     "n_hob",
+     "n_hob",
+     "n_reader",
+     "n_errata"
+    ],
+    "seed": 33,
+    "aiVersion": "pilot-1.0.0"
+   },
+   "actions": [
+    {
+     "type": "mulligan",
+     "idx": [
+      1
+     ]
+    },
+    {
+     "type": "mulligan",
+     "idx": []
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "play",
+     "uid": 2,
+     "page": 0
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "play",
+     "uid": 26,
+     "page": 0
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "play",
+     "uid": 7,
+     "page": 1
+    },
+    {
+     "type": "play",
+     "uid": 3,
+     "page": 0
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "play",
+     "uid": 22,
+     "page": 1
+    },
+    {
+     "type": "play",
+     "uid": 28,
+     "page": 1
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "play",
+     "uid": 5,
+     "page": 0
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "play",
+     "uid": 30,
+     "target": 44
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "champion",
+     "page": 1,
+     "target": 46
+    },
+    {
+     "type": "move",
+     "uid": 48
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "champion",
+     "page": 1
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "play",
+     "uid": 6,
+     "page": 0
+    },
+    {
+     "type": "play",
+     "uid": 4,
+     "target": 50
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "play",
+     "uid": 32,
+     "page": 1
+    },
+    {
+     "type": "play",
+     "uid": 31,
+     "page": 0,
+     "target": 46
+    },
+    {
+     "type": "attack",
+     "uid": 50,
+     "target": 42
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "play",
+     "uid": 11,
+     "page": 0
+    },
+    {
+     "type": "play",
+     "uid": 8,
+     "page": 0
+    },
+    {
+     "type": "move",
+     "uid": 51
+    },
+    {
+     "type": "attack",
+     "uid": 51,
+     "target": 50
+    },
+    {
+     "type": "move",
+     "uid": 48
+    },
+    {
+     "type": "attack",
+     "uid": 48,
+     "target": 46
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "play",
+     "uid": 25,
+     "page": 0,
+     "target": 53
+    },
+    {
+     "type": "play",
+     "uid": 33,
+     "page": 0,
+     "target": 53
+    },
+    {
+     "type": "attack",
+     "uid": 53,
+     "target": 55
+    },
+    {
+     "type": "attack",
+     "uid": 52,
+     "target": 51
+    },
+    {
+     "type": "attack",
+     "uid": 43,
+     "target": 55
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "legend",
+     "target": 48,
+     "target2": 52
+    },
+    {
+     "type": "attack",
+     "uid": 54,
+     "target": 43
+    },
+    {
+     "type": "move",
+     "uid": 48
+    },
+    {
+     "type": "attack",
+     "uid": 48,
+     "target": 53
+    },
+    {
+     "type": "move",
+     "uid": 51
+    },
+    {
+     "type": "attack",
+     "uid": 51,
+     "target": 56
+    },
+    {
+     "type": "end"
+    }
+   ],
+   "expect": {
+    "winner": 0,
+    "reason": "verses_after_7",
+    "verses": [
+     3,
+     1
+    ],
+    "stateHash": "0c825eef",
+    "logHash": "afae0138",
+    "logLen": 210
+   }
+  },
+  {
+   "name": "candle-v-candle-s44",
+   "setup": {
+    "houseA": "candle",
+    "deckA": [
+     "c_novice",
+     "c_novice",
+     "c_taper",
+     "c_taper",
+     "c_wren",
+     "c_wren",
+     "c_trimmer",
+     "c_trimmer",
+     "c_vigil",
+     "c_lamplighter",
+     "c_lamps",
+     "c_mend",
+     "c_snuff",
+     "c_watch",
+     "n_weeping",
+     "n_weeping",
+     "n_hob",
+     "n_hob",
+     "n_reader",
+     "n_errata"
+    ],
+    "houseB": "candle",
+    "deckB": [
+     "c_novice",
+     "c_novice",
+     "c_taper",
+     "c_taper",
+     "c_wren",
+     "c_wren",
+     "c_trimmer",
+     "c_trimmer",
+     "c_vigil",
+     "c_lamplighter",
+     "c_lamps",
+     "c_mend",
+     "c_snuff",
+     "c_watch",
+     "n_weeping",
+     "n_weeping",
+     "n_hob",
+     "n_hob",
+     "n_reader",
+     "n_errata"
+    ],
+    "seed": 44,
+    "aiVersion": "pilot-1.0.0"
+   },
+   "actions": [
+    {
+     "type": "mulligan",
+     "idx": []
+    },
+    {
+     "type": "mulligan",
+     "idx": []
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "play",
+     "uid": 21,
+     "page": 0
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "play",
+     "uid": 4,
+     "page": 1
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "play",
+     "uid": 27,
+     "page": 1
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "play",
+     "uid": 2,
+     "page": 0
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "play",
+     "uid": 23,
+     "page": 0,
+     "target": 42
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "play",
+     "uid": 5,
+     "page": 0
+    },
+    {
+     "type": "attack",
+     "uid": 44,
+     "target": 42
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "play",
+     "uid": 29,
+     "page": 0,
+     "target": 45
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "play",
+     "uid": 9,
+     "page": 0,
+     "target": 47
+    },
+    {
+     "type": "attack",
+     "uid": 44,
+     "target": 42
+    },
+    {
+     "type": "attack",
+     "uid": 46,
+     "target": 42
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "champion",
+     "page": 1
+    },
+    {
+     "type": "move",
+     "uid": 43
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "play",
+     "uid": 7,
+     "target": 43
+    },
+    {
+     "type": "legend",
+     "target": 48
+    },
+    {
+     "type": "attack",
+     "uid": 44,
+     "target": 43
+    },
+    {
+     "type": "attack",
+     "uid": 46,
+     "target": 43
+    },
+    {
+     "type": "attack",
+     "uid": 48,
+     "target": 45
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "play",
+     "uid": 26,
+     "page": 0
+    },
+    {
+     "type": "play",
+     "uid": 24,
+     "target": 44
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "legend",
+     "target": 46
+    },
+    {
+     "type": "play",
+     "uid": 3,
+     "page": 1
+    },
+    {
+     "type": "play",
+     "uid": 11,
+     "page": 1
+    },
+    {
+     "type": "attack",
+     "uid": 46,
+     "target": 47
+    },
+    {
+     "type": "attack",
+     "uid": 48,
+     "target": 47
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "play",
+     "uid": 32,
+     "page": 0,
+     "target": 45
+    },
+    {
+     "type": "play",
+     "uid": 22,
+     "page": 0
+    },
+    {
+     "type": "play",
+     "uid": 28,
+     "page": 0
+    },
+    {
+     "type": "attack",
+     "uid": 49,
+     "target": 52
+    },
+    {
+     "type": "attack",
+     "uid": 45,
+     "target": 46
+    },
+    {
+     "type": "attack",
+     "uid": 50,
+     "target": 46
+    },
+    {
+     "type": "end"
+    }
+   ],
+   "expect": {
+    "winner": 1,
+    "reason": "verses_after_7",
+    "verses": [
+     0,
+     6
+    ],
+    "stateHash": "655eb43b",
+    "logHash": "1d65447e",
+    "logLen": 203
+   }
+  },
+  {
+   "name": "tidewrack-v-tidewrack-s55",
+   "setup": {
+    "houseA": "tidewrack",
+    "deckA": [
+     "t_deckhand",
+     "t_deckhand",
+     "t_runner",
+     "t_runner",
+     "t_cutpurse",
+     "t_cutpurse",
+     "t_pip",
+     "t_pip",
+     "t_smuggler",
+     "t_raider",
+     "t_captain",
+     "t_undertow",
+     "t_undertow",
+     "t_saltwind",
+     "t_saltwind",
+     "t_riptide",
+     "n_blotling",
+     "n_blotling",
+     "n_doodle",
+     "n_doodle"
+    ],
+    "houseB": "tidewrack",
+    "deckB": [
+     "t_deckhand",
+     "t_deckhand",
+     "t_runner",
+     "t_runner",
+     "t_cutpurse",
+     "t_cutpurse",
+     "t_pip",
+     "t_pip",
+     "t_smuggler",
+     "t_raider",
+     "t_captain",
+     "t_undertow",
+     "t_undertow",
+     "t_saltwind",
+     "t_saltwind",
+     "t_riptide",
+     "n_blotling",
+     "n_blotling",
+     "n_doodle",
+     "n_doodle"
+    ],
+    "seed": 55,
+    "aiVersion": "pilot-1.0.0"
+   },
+   "actions": [
+    {
+     "type": "mulligan",
+     "idx": []
+    },
+    {
+     "type": "mulligan",
+     "idx": [
+      2
+     ]
+    },
+    {
+     "type": "play",
+     "uid": 24,
+     "page": 0
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "play",
+     "uid": 6,
+     "page": 0
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "play",
+     "uid": 27,
+     "page": 1
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "attack",
+     "uid": 43,
+     "target": 42
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "legend",
+     "target": 44,
+     "target2": 43
+    },
+    {
+     "type": "play",
+     "uid": 23,
+     "page": 1
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "play",
+     "uid": 1,
+     "page": 0
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "play",
+     "uid": 25,
+     "page": 1
+    },
+    {
+     "type": "play",
+     "uid": 26,
+     "page": 1
+    },
+    {
+     "type": "attack",
+     "uid": 44,
+     "target": 46
+    },
+    {
+     "type": "move",
+     "uid": 45
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "champion",
+     "page": 0,
+     "target": 45
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "champion",
+     "page": 0
+    },
+    {
+     "type": "play",
+     "uid": 28,
+     "page": 1
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "play",
+     "uid": 5,
+     "page": 1
+    },
+    {
+     "type": "play",
+     "uid": 10,
+     "page": 1
+    },
+    {
+     "type": "play",
+     "uid": 2,
+     "page": 1
+    },
+    {
+     "type": "attack",
+     "uid": 52,
+     "target": 45
+    },
+    {
+     "type": "attack",
+     "uid": 53,
+     "target": 51
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "play",
+     "uid": 30,
+     "page": 0
+    },
+    {
+     "type": "legend",
+     "target": 50,
+     "target2": 52
+    },
+    {
+     "type": "attack",
+     "uid": 50,
+     "target": 54
+    },
+    {
+     "type": "attack",
+     "uid": 47,
+     "target": 53
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "play",
+     "uid": 12,
+     "page": 1
+    },
+    {
+     "type": "play",
+     "uid": 4,
+     "page": 1
+    },
+    {
+     "type": "play",
+     "uid": 11,
+     "target": 56
+    },
+    {
+     "type": "legend",
+     "target": 49,
+     "target2": 47
+    },
+    {
+     "type": "attack",
+     "uid": 49,
+     "target": 50
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "play",
+     "uid": 31,
+     "target": 56
+    },
+    {
+     "type": "play",
+     "uid": 32,
+     "page": 1
+    },
+    {
+     "type": "play",
+     "uid": 29,
+     "page": 1
+    },
+    {
+     "type": "attack",
+     "uid": 51,
+     "target": 49
+    },
+    {
+     "type": "attack",
+     "uid": 48,
+     "target": 57
+    },
+    {
+     "type": "end"
+    }
+   ],
+   "expect": {
+    "winner": 1,
+    "reason": "verses",
+    "verses": [
+     2,
+     8
+    ],
+    "stateHash": "024e38bf",
+    "logHash": "d5b6ccad",
+    "logLen": 199
+   }
+  },
+  {
+   "name": "fold-v-fold-s66",
+   "setup": {
+    "houseA": "fold",
+    "deckA": [
+     "f_squire",
+     "f_squire",
+     "f_hinge",
+     "f_hinge",
+     "f_corvin",
+     "f_corvin",
+     "f_adept",
+     "f_adept",
+     "f_sentinel",
+     "f_master",
+     "f_feint",
+     "f_whirl",
+     "f_whirl",
+     "f_counter",
+     "f_closed",
+     "n_doodle",
+     "n_doodle",
+     "n_wolf",
+     "n_erasure",
+     "n_snare"
+    ],
+    "houseB": "fold",
+    "deckB": [
+     "f_squire",
+     "f_squire",
+     "f_hinge",
+     "f_hinge",
+     "f_corvin",
+     "f_corvin",
+     "f_adept",
+     "f_adept",
+     "f_sentinel",
+     "f_master",
+     "f_feint",
+     "f_whirl",
+     "f_whirl",
+     "f_counter",
+     "f_closed",
+     "n_doodle",
+     "n_doodle",
+     "n_wolf",
+     "n_erasure",
+     "n_snare"
+    ],
+    "seed": 66,
+    "aiVersion": "pilot-1.0.0"
+   },
+   "actions": [
+    {
+     "type": "mulligan",
+     "idx": []
+    },
+    {
+     "type": "mulligan",
+     "idx": []
+    },
+    {
+     "type": "play",
+     "uid": 22,
+     "page": 0
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "play",
+     "uid": 4,
+     "page": 1
+    },
+    {
+     "type": "play",
+     "uid": 21
+    },
+    {
+     "type": "play",
+     "uid": 2,
+     "target": 43
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "play",
+     "uid": 25,
+     "page": 1
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "play",
+     "uid": 7,
+     "page": 0
+    },
+    {
+     "type": "attack",
+     "uid": 43,
+     "target": 44
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "play",
+     "uid": 23,
+     "page": 1
+    },
+    {
+     "type": "play",
+     "uid": 24,
+     "page": 1
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "play",
+     "uid": 1,
+     "page": 1
+    },
+    {
+     "type": "attack",
+     "uid": 45,
+     "target": 42
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "play",
+     "uid": 26,
+     "page": 0,
+     "target": 45
+    },
+    {
+     "type": "legend",
+     "target": 46
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "play",
+     "uid": 8,
+     "page": 1,
+     "target": 46
+    },
+    {
+     "type": "play",
+     "uid": 9,
+     "page": 1
+    },
+    {
+     "type": "attack",
+     "uid": 49,
+     "target": 46
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "play",
+     "uid": 28,
+     "page": 0
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "champion",
+     "page": 1
+    },
+    {
+     "type": "play",
+     "uid": 10,
+     "page": 0
+    },
+    {
+     "type": "attack",
+     "uid": 50,
+     "target": 46
+    },
+    {
+     "type": "attack",
+     "uid": 52,
+     "target": 46
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "champion",
+     "page": 1
+    },
+    {
+     "type": "legend",
+     "target": 48
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "play",
+     "uid": 5,
+     "page": 0
+    },
+    {
+     "type": "play",
+     "uid": 3,
+     "page": 1
+    },
+    {
+     "type": "attack",
+     "uid": 52,
+     "target": 54
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "play",
+     "uid": 29,
+     "page": 1
+    },
+    {
+     "type": "attack",
+     "uid": 51,
+     "target": 55
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "play",
+     "uid": 11,
+     "page": 0
+    },
+    {
+     "type": "play",
+     "uid": 12,
+     "page": 0
+    },
+    {
+     "type": "play",
+     "uid": 6,
+     "page": 1
+    },
+    {
+     "type": "attack",
+     "uid": 57,
+     "target": 51
+    },
+    {
+     "type": "attack",
+     "uid": 52,
+     "target": 54
+    },
+    {
+     "type": "end"
+    }
+   ],
+   "expect": {
+    "winner": 1,
+    "reason": "verses_after_7",
+    "verses": [
+     2,
+     6
+    ],
+    "stateHash": "8a8cd5b2",
+    "logHash": "9cd388ff",
+    "logLen": 212
+   }
+  },
+  {
+   "name": "fold-v-candle-s77",
+   "setup": {
+    "houseA": "fold",
+    "deckA": [
+     "f_squire",
+     "f_squire",
+     "f_hinge",
+     "f_hinge",
+     "f_corvin",
+     "f_corvin",
+     "f_adept",
+     "f_adept",
+     "f_sentinel",
+     "f_master",
+     "f_feint",
+     "f_whirl",
+     "f_whirl",
+     "f_counter",
+     "f_closed",
+     "n_doodle",
+     "n_doodle",
+     "n_wolf",
+     "n_erasure",
+     "n_snare"
+    ],
+    "houseB": "candle",
+    "deckB": [
+     "c_novice",
+     "c_novice",
+     "c_taper",
+     "c_taper",
+     "c_wren",
+     "c_wren",
+     "c_trimmer",
+     "c_trimmer",
+     "c_vigil",
+     "c_lamplighter",
+     "c_lamps",
+     "c_mend",
+     "c_snuff",
+     "c_watch",
+     "n_weeping",
+     "n_weeping",
+     "n_hob",
+     "n_hob",
+     "n_reader",
+     "n_errata"
+    ],
+    "seed": 77,
+    "aiVersion": "pilot-1.0.0"
+   },
+   "actions": [
+    {
+     "type": "mulligan",
+     "idx": []
+    },
+    {
+     "type": "mulligan",
+     "idx": [
+      0
+     ]
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "play",
+     "uid": 6,
+     "page": 0
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "play",
+     "uid": 7,
+     "page": 1
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "play",
+     "uid": 24,
+     "page": 0
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "play",
+     "uid": 4,
+     "page": 0
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "play",
+     "uid": 25,
+     "page": 1
+    },
+    {
+     "type": "attack",
+     "uid": 44,
+     "target": 45
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "champion",
+     "page": 0
+    },
+    {
+     "type": "attack",
+     "uid": 47,
+     "target": 44
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "champion",
+     "page": 0
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "play",
+     "uid": 9,
+     "page": 0
+    },
+    {
+     "type": "play",
+     "uid": 10,
+     "page": 0
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "play",
+     "uid": 31,
+     "page": 1
+    },
+    {
+     "type": "attack",
+     "uid": 46,
+     "target": 43
+    },
+    {
+     "type": "attack",
+     "uid": 48,
+     "target": 42
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "play",
+     "uid": 11,
+     "page": 1
+    },
+    {
+     "type": "play",
+     "uid": 5,
+     "target": 51
+    },
+    {
+     "type": "attack",
+     "uid": 49,
+     "target": 48
+    },
+    {
+     "type": "attack",
+     "uid": 47,
+     "target": 48
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "play",
+     "uid": 28,
+     "page": 0
+    },
+    {
+     "type": "play",
+     "uid": 32,
+     "target": 52
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "attack",
+     "uid": 49,
+     "target": 53
+    },
+    {
+     "type": "end"
+    }
+   ],
+   "expect": {
+    "winner": 0,
+    "reason": "verses_after_7",
+    "verses": [
+     6,
+     2
+    ],
+    "stateHash": "6130a2b0",
+    "logHash": "de15f024",
+    "logLen": 157
+   }
+  },
+  {
+   "name": "tidewrack-v-fold-s88",
+   "setup": {
+    "houseA": "tidewrack",
+    "deckA": [
+     "t_deckhand",
+     "t_deckhand",
+     "t_runner",
+     "t_runner",
+     "t_cutpurse",
+     "t_cutpurse",
+     "t_pip",
+     "t_pip",
+     "t_smuggler",
+     "t_raider",
+     "t_captain",
+     "t_undertow",
+     "t_undertow",
+     "t_saltwind",
+     "t_saltwind",
+     "t_riptide",
+     "n_blotling",
+     "n_blotling",
+     "n_doodle",
+     "n_doodle"
+    ],
+    "houseB": "fold",
+    "deckB": [
+     "f_squire",
+     "f_squire",
+     "f_hinge",
+     "f_hinge",
+     "f_corvin",
+     "f_corvin",
+     "f_adept",
+     "f_adept",
+     "f_sentinel",
+     "f_master",
+     "f_feint",
+     "f_whirl",
+     "f_whirl",
+     "f_counter",
+     "f_closed",
+     "n_doodle",
+     "n_doodle",
+     "n_wolf",
+     "n_erasure",
+     "n_snare"
+    ],
+    "seed": 88,
+    "aiVersion": "pilot-1.0.0"
+   },
+   "actions": [
+    {
+     "type": "mulligan",
+     "idx": []
+    },
+    {
+     "type": "mulligan",
+     "idx": [
+      3
+     ]
+    },
+    {
+     "type": "play",
+     "uid": 2,
+     "page": 1
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "play",
+     "uid": 22,
+     "page": 1
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "play",
+     "uid": 5,
+     "page": 0
+    },
+    {
+     "type": "play",
+     "uid": 4,
+     "target": 43
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "play",
+     "uid": 23,
+     "page": 1
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "play",
+     "uid": 1,
+     "page": 1
+    },
+    {
+     "type": "play",
+     "uid": 6,
+     "target": 45
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "play",
+     "uid": 26,
+     "page": 1
+    },
+    {
+     "type": "move",
+     "uid": 45
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "champion",
+     "page": 1,
+     "target": 47
+    },
+    {
+     "type": "attack",
+     "uid": 42,
+     "target": 45
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "champion",
+     "page": 1
+    },
+    {
+     "type": "attack",
+     "uid": 49,
+     "target": 46
+    },
+    {
+     "type": "move",
+     "uid": 43
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "play",
+     "uid": 8,
+     "page": 1
+    },
+    {
+     "type": "play",
+     "uid": 3,
+     "target": 50
+    },
+    {
+     "type": "attack",
+     "uid": 50,
+     "target": 47
+    },
+    {
+     "type": "attack",
+     "uid": 48,
+     "target": 43
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "play",
+     "uid": 28,
+     "page": 0
+    },
+    {
+     "type": "move",
+     "uid": 47
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "play",
+     "uid": 9,
+     "page": 0
+    },
+    {
+     "type": "play",
+     "uid": 10,
+     "page": 1
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "play",
+     "uid": 32,
+     "page": 0
+    },
+    {
+     "type": "attack",
+     "uid": 51,
+     "target": 52
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "play",
+     "uid": 11,
+     "page": 0
+    },
+    {
+     "type": "play",
+     "uid": 7,
+     "target": 55
+    },
+    {
+     "type": "legend",
+     "target": 53,
+     "target2": 54
+    },
+    {
+     "type": "attack",
+     "uid": 52,
+     "target": 54
+    },
+    {
+     "type": "attack",
+     "uid": 53,
+     "target": 54
+    },
+    {
+     "type": "attack",
+     "uid": 55,
+     "target": 51
+    },
+    {
+     "type": "end"
+    },
+    {
+     "type": "play",
+     "uid": 21,
+     "page": 0
+    },
+    {
+     "type": "play",
+     "uid": 29,
+     "page": 0
+    },
+    {
+     "type": "play",
+     "uid": 30,
+     "page": 1
+    },
+    {
+     "type": "play",
+     "uid": 33,
+     "page": 0
+    },
+    {
+     "type": "move",
+     "uid": 54
+    },
+    {
+     "type": "end"
+    }
+   ],
+   "expect": {
+    "winner": 1,
+    "reason": "verses_after_7",
+    "verses": [
+     3,
+     7
+    ],
+    "stateHash": "203ae25b",
+    "logHash": "6cff82a0",
+    "logLen": 206
+   }
+  }
+ ]
+}
