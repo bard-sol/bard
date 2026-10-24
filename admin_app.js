@@ -328,24 +328,46 @@ function renderDrawBox(p,c,joins){
   wrap.style.borderTop='1px solid rgba(244,244,245,.08)';
   var winners=c.drawWinners||[];
   if(c.drawSeed){
+    var verdict='';
+    try{
+      var check=BardPlatform.verifyDraw(c, joins);
+      if(check && check.ok===false) verdict='<p class="muted" style="margin:6px 0 0;font-size:.86rem">Stored winners do not match the public seed.</p>';
+    }catch(e){}
     wrap.innerHTML='<strong style="font-variation-settings:\'wght\' 620">Airdrop draw</strong>'+
       '<p class="muted" style="margin:6px 0 8px;font-size:.86rem">Provable. Seed is public. Same seed always yields the same order.</p>'+
       '<p class="num" style="font-size:.78rem;word-break:break-all;color:var(--muted)">'+BardPlatform.escapeHtml(c.drawSeed)+'</p>'+
+      (c.drawSlot?'<p class="muted" style="margin:0 0 8px;font-size:.78rem">Committed slot '+BardPlatform.escapeHtml(String(c.drawSlot))+(c.drawSeedSlot?' · block '+BardPlatform.escapeHtml(String(c.drawSeedSlot)):'')+'</p>':'')+
       '<table class="table"><thead><tr><th>#</th><th>Wallet</th></tr></thead><tbody>'+
       winners.map(function(w,i){ return '<tr><td class="num">'+(i+1)+'</td><td class="num">'+BardPlatform.escapeHtml(shortAddr(w.wallet||w))+'</td></tr>'; }).join('')+
-      '</tbody></table>';
+      '</tbody></table>'+verdict;
     host.appendChild(wrap);
     return;
   }
+  if(c.drawSlot){
+    wrap.innerHTML='<strong style="font-variation-settings:\'wght\' 620">Airdrop draw</strong>'+
+      '<p class="muted" style="margin:6px 0 10px;font-size:.86rem">Committed to slot '+BardPlatform.escapeHtml(String(c.drawSlot))+'. Reveal runs once that slot is final. The seed is that blockhash.</p>'+
+      '<button type="button" class="btn btn--ghost btn--sm" id="btn-draw-final">Reveal winners</button>';
+    host.appendChild(wrap);
+    var fin=document.getElementById('btn-draw-final');
+    if(fin) fin.onclick=async function(){
+      try{
+        await BardPlatform.finalizeDraw(c.id);
+        toast('Draw locked. Holders can verify the seed.','ok');
+        await refreshState();
+        openCampaign(c.id);
+      }catch(e){ toast((e&&e.message)||'Draw failed','err'); }
+    };
+    return;
+  }
   wrap.innerHTML='<strong style="font-variation-settings:\'wght\' 620">Airdrop draw</strong>'+
-    '<p class="muted" style="margin:6px 0 10px;font-size:.86rem">Set the rules, we draw. Seed uses a Solana blockhash so nobody can pick the order.</p>'+
-    '<button type="button" class="btn btn--ghost btn--sm" id="btn-draw">Draw now</button>';
+    '<p class="muted" style="margin:6px 0 10px;font-size:.86rem">Commit to a future Solana slot first. Nobody can pick the order after that.</p>'+
+    '<button type="button" class="btn btn--ghost btn--sm" id="btn-draw">Commit draw slot</button>';
   host.appendChild(wrap);
   var btn=document.getElementById('btn-draw');
   if(btn) btn.onclick=async function(){
     try{
-      await BardPlatform.drawAirdrop(c.id, 0);
-      toast('Draw locked. Holders can verify the seed.','ok');
+      await BardPlatform.commitDraw(c.id, 0);
+      toast('Slot committed. Reveal after it is final.','ok');
       await refreshState();
       openCampaign(c.id);
     }catch(e){ toast((e&&e.message)||'Draw failed','err'); }
@@ -608,15 +630,15 @@ document.getElementById('form-campaign').addEventListener('submit',async functio
     }
     if(type==='raid'&&targets)config.targetList=targets.split(/[\n,]+/).map(function(s){return s.trim();}).filter(Boolean);var btn=document.getElementById('btn-submit-campaign');btn.disabled=true;btn.textContent='Creating…';try{var camp=await BardPlatform.createCampaign(currentProjectId,{title:title,type:type,rule:rule,reward:reward,unit:unit,pool:pool,days:days,accessMode:accessMode,raidMode:raidMode,rewardMode:rewardMode,postUrl:postUrl||null,targets:targets||null,bonusHandle:bonusHandle||null,config:config});
       var lockVault=document.getElementById('c-lock-vault')&&document.getElementById('c-lock-vault').checked;
-      var lockAmt=parseFloat(pool||reward||'0');
+      var lockAmt=String(pool||reward||'').trim();
       if(rewardMode==='growing'){
-        var cap=parseFloat(document.getElementById('c-grow-cap').value);
-        var st=parseFloat(document.getElementById('c-grow-start').value);
-        lockAmt=(cap>0)?cap:(st||0);
+        var capStr=document.getElementById('c-grow-cap').value.trim();
+        var stStr=document.getElementById('c-grow-start').value.trim();
+        lockAmt=capStr||stStr;
       }
       if(lockVault){
         if(!p.vaultAddress){toast('Link a vault on the Vault tab first','err');}
-        else if(!(lockAmt>0)){toast('Set a pool amount to lock','err');}
+        else if(!lockAmt||Number(lockAmt)<=0){toast('Set a pool amount to lock','err');}
         else {
           try{await BardPlatform.reserveVault(p.id,camp.id,lockAmt);toast('Prize reserved in vault','ok');}
           catch(re){toast((re&&re.message)||'Campaign live — vault reserve failed','err');}

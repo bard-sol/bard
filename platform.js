@@ -33,7 +33,7 @@
 
   var TEAM_KEY = 'bard_team_v1';
   var HOLDER_KEY = 'bard_holder_v1';
-  var RPC = 'https://solana-rpc.publicnode.com';
+  var RPC = 'https://api.devnet.solana.com';
   var SUPABASE_SCRIPT = '/vendor/supabase/supabase.js';
   var LOCAL_MODE_MSG = 'NOT SAVED — local demo mode. Nothing you do here is stored on Bard.';
 
@@ -172,7 +172,7 @@
         raw = String(parsed.info.tokenAmount.amount || '0');
         decimals = parsed.info.tokenAmount.decimals || 0;
         source = 'token-account';
-        return { address: address, mint: parsed.info.mint || mint || null, uiAmount: uiAmount, raw: raw, decimals: decimals, source: source, solscan: 'https://solscan.io/account/' + address };
+        return { address: address, mint: parsed.info.mint || mint || null, uiAmount: uiAmount, raw: raw, decimals: decimals, source: source, solscan: 'https://solscan.io/account/' + address + '?cluster=devnet' };
       }
     } catch (e) {}
     var filter = mint && isBase58Addr(mint) ? { mint: new PublicKey(mint) } : { programId: TOKEN_PROGRAM };
@@ -196,7 +196,7 @@
         source = 'sol';
       } catch (e3) {}
     }
-    return { address: address, mint: mint || null, uiAmount: uiAmount, raw: String(raw), decimals: decimals, source: source, solscan: 'https://solscan.io/account/' + address };
+    return { address: address, mint: mint || null, uiAmount: uiAmount, raw: String(raw), decimals: decimals, source: source, solscan: 'https://solscan.io/account/' + address + '?cluster=devnet' };
   }
 
 
@@ -223,10 +223,14 @@
       createdAt: c.created_at, accessMode: c.access_mode || 'open', raidMode: c.raid_mode || null,
       rewardMode: c.reward_mode || 'fixed', postUrl: c.post_url || '', targets: c.targets || '',
       bonusHandle: c.bonus_handle || '', config: (function(cfg){ if (!cfg) return {}; if (typeof cfg === 'string') { try { return JSON.parse(cfg); } catch (e) { return {}; } } return cfg; })(c.config),
-      vaultReserved: Number(c.vault_reserved || 0),
+      vaultReserved: c.vault_reserved != null ? c.vault_reserved : (c.vaultReserved || 0),
       drawSeed: c.draw_seed || c.drawSeed || null,
       drawAt: c.draw_at || c.drawAt || null,
-      drawWinners: c.draw_winners || c.drawWinners || null
+      drawWinners: c.draw_winners || c.drawWinners || null,
+      drawSlot: c.draw_slot || c.drawSlot || null,
+      drawSeedSlot: c.draw_seed_slot || c.drawSeedSlot || null,
+      drawCount: c.draw_count != null ? c.draw_count : (c.drawCount != null ? c.drawCount : 0),
+      drawCommittedAt: c.draw_committed_at || c.drawCommittedAt || null
     };
     return camp;
   }
@@ -333,33 +337,32 @@
   async function reserveVault(projectId, campaignId, amount) {
     await init();
     refuseLocalTeamWrite();
-    var n = Number(amount);
-    if (!(n > 0)) throw new Error('Reserve amount must be greater than 0');
     if (mode === 'supabase' && sb) {
       var proj = await sb.from('projects').select('*').eq('id', projectId).maybeSingle();
       if (proj.error) throw proj.error;
       if (!proj.data) throw new Error('Project not found');
       if (!proj.data.vault_address) throw new Error('Link a vault first');
-      var current = Number(proj.data.vault_reserved || 0);
-      var next = current + n;
-      var up = await sb.from('projects').update({ vault_reserved: next }).eq('id', projectId).select('*').single();
+      var mint = proj.data.vault_mint || proj.data.mint;
+      if (!mint) throw new Error('Vault mint is missing');
+      var campReserved = 0;
+      if (campaignId) {
+        var camp = await sb.from('campaigns').select('vault_reserved').eq('id', campaignId).maybeSingle();
+        if (camp.error) throw camp.error;
+        campReserved = camp.data && camp.data.vault_reserved != null ? camp.data.vault_reserved : 0;
+      }
+      var bal = await readVaultTokenRaw(proj.data.vault_address, mint);
+      var plan = planReservation(proj.data.vault_reserved || 0, campReserved, amount, bal.raw, bal.decimals);
+      var up = await sb.from('projects').update({ vault_reserved: plan.projectReserved }).eq('id', projectId).select('*').single();
       if (up.error) throw up.error;
       if (campaignId) {
-        await sb.from('campaigns').update({ vault_reserved: n }).eq('id', campaignId);
+        await sb.from('campaigns').update({ vault_reserved: plan.campaignReserved }).eq('id', campaignId);
         await sb.from('vault_reservations').insert({
-          project_id: projectId, campaign_id: campaignId, amount: n, status: 'reserved'
+          project_id: projectId, campaign_id: campaignId, amount: plan.added, status: 'reserved'
         });
       }
-      return { reserved: next, added: n };
+      return { reserved: plan.projectReserved, added: plan.added, campaignReserved: plan.campaignReserved };
     }
-    var state = localTeam();
-    var p = state.projects.find(function (x) { return x.id === projectId; });
-    if (!p) throw new Error('Project not found');
-    if (!p.vaultAddress) throw new Error('Link a vault first');
-    p.vaultReserved = Number(p.vaultReserved || 0) + n;
-    (p.campaigns || []).forEach(function (c) { if (c.id === campaignId) c.vaultReserved = n; });
-    saveLocalTeam(state);
-    return { reserved: p.vaultReserved, added: n };
+    throw new Error(LOCAL_MODE_MSG);
   }
 
   async function setProjectPlan(projectId, plan) {
@@ -416,63 +419,300 @@
     };
   }
 
-  function roundAmt(n) {
-    return Math.round(Number(n) * 1e6) / 1e6;
+  var SHA256_K = new Uint32Array([
+    0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
+    0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
+    0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
+    0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
+    0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
+    0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
+    0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+    0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2
+  ]);
+
+  function rotr32(x, n) { return (x >>> n) | (x << (32 - n)); }
+
+  function sha256Hex(str) {
+    var bytes = new TextEncoder().encode(String(str));
+    var bitLen = bytes.length * 8;
+    var withPad = new Uint8Array(((bytes.length + 9 + 63) >> 6) << 6);
+    withPad.set(bytes);
+    withPad[bytes.length] = 0x80;
+    var view = new DataView(withPad.buffer);
+    view.setUint32(withPad.length - 8, Math.floor(bitLen / 0x100000000));
+    view.setUint32(withPad.length - 4, bitLen >>> 0);
+    var H = new Uint32Array([0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19]);
+    var w = new Uint32Array(64);
+    for (var off = 0; off < withPad.length; off += 64) {
+      for (var i = 0; i < 16; i++) w[i] = view.getUint32(off + i * 4);
+      for (var j = 16; j < 64; j++) {
+        var s0 = rotr32(w[j - 15], 7) ^ rotr32(w[j - 15], 18) ^ (w[j - 15] >>> 3);
+        var s1 = rotr32(w[j - 2], 17) ^ rotr32(w[j - 2], 19) ^ (w[j - 2] >>> 10);
+        w[j] = (w[j - 16] + s0 + w[j - 7] + s1) >>> 0;
+      }
+      var a = H[0], b = H[1], c = H[2], d = H[3], e = H[4], f = H[5], g = H[6], h = H[7];
+      for (var k = 0; k < 64; k++) {
+        var S1 = rotr32(e, 6) ^ rotr32(e, 11) ^ rotr32(e, 25);
+        var ch = (e & f) ^ (~e & g);
+        var t1 = (h + S1 + ch + SHA256_K[k] + w[k]) >>> 0;
+        var S0 = rotr32(a, 2) ^ rotr32(a, 13) ^ rotr32(a, 22);
+        var maj = (a & b) ^ (a & c) ^ (b & c);
+        var t2 = (S0 + maj) >>> 0;
+        h = g; g = f; f = e; e = (d + t1) >>> 0; d = c; c = b; b = a; a = (t1 + t2) >>> 0;
+      }
+      H[0] = (H[0] + a) >>> 0; H[1] = (H[1] + b) >>> 0; H[2] = (H[2] + c) >>> 0; H[3] = (H[3] + d) >>> 0;
+      H[4] = (H[4] + e) >>> 0; H[5] = (H[5] + f) >>> 0; H[6] = (H[6] + g) >>> 0; H[7] = (H[7] + h) >>> 0;
+    }
+    var hex = '';
+    for (var n = 0; n < 8; n++) hex += ('00000000' + H[n].toString(16)).slice(-8);
+    return hex;
+  }
+
+  function decimalToRaw(value, decimals) {
+    var d = Number(decimals);
+    if (!Number.isInteger(d) || d < 0 || d > 18) throw new Error('Bad mint decimals');
+    var s;
+    if (typeof value === 'number') {
+      if (!Number.isFinite(value) || Math.floor(value) !== value) throw new Error('Fractional amounts must be decimal strings');
+      s = String(value);
+    } else {
+      s = String(value == null ? '' : value).trim();
+    }
+    if (!/^\d+(\.\d+)?$/.test(s)) throw new Error('Bad amount');
+    var parts = s.split('.');
+    var frac = parts[1] || '';
+    if (frac.length > d) throw new Error('Amount has more decimals than the mint');
+    while (frac.length < d) frac += '0';
+    return BigInt(d === 0 ? parts[0] : parts[0] + frac);
+  }
+
+  function rawToDecimal(raw, decimals) {
+    var d = Number(decimals);
+    var neg = raw < 0n;
+    var v = neg ? -raw : raw;
+    var s = v.toString();
+    if (d === 0) return (neg ? '-' : '') + s;
+    while (s.length <= d) s = '0' + s;
+    var whole = s.slice(0, s.length - d);
+    var frac = s.slice(s.length - d).replace(/0+$/, '');
+    return (neg ? '-' : '') + whole + (frac ? '.' + frac : '');
+  }
+
+  function scaledParts(value) {
+    var s = String(value == null ? '0' : value).trim();
+    var neg = s.charAt(0) === '-';
+    if (neg) s = s.slice(1);
+    if (!/^\d+(\.\d+)?$/.test(s)) throw new Error('Bad amount');
+    var parts = s.split('.');
+    var whole = parts[0].replace(/^0+(?=\d)/, '');
+    var frac = parts[1] || '';
+    return { neg: neg, scale: frac.length, n: BigInt((whole + frac) || '0') };
+  }
+
+  function formatScaled(n, scale) {
+    var neg = n < 0n;
+    var v = neg ? -n : n;
+    var s = v.toString();
+    if (scale === 0) return (neg ? '-' : '') + s;
+    while (s.length <= scale) s = '0' + s;
+    var whole = s.slice(0, s.length - scale) || '0';
+    var frac = s.slice(s.length - scale).replace(/0+$/, '');
+    return (neg ? '-' : '') + whole + (frac ? '.' + frac : '');
+  }
+
+  function alignDecimals(a, b) {
+    var A = scaledParts(a);
+    var B = scaledParts(b);
+    var scale = A.scale > B.scale ? A.scale : B.scale;
+    var na = A.n * (10n ** BigInt(scale - A.scale));
+    var nb = B.n * (10n ** BigInt(scale - B.scale));
+    if (A.neg) na = -na;
+    if (B.neg) nb = -nb;
+    return { na: na, nb: nb, scale: scale };
+  }
+
+  function subDecimal(a, b) {
+    var x = alignDecimals(a, b);
+    var n = x.na - x.nb;
+    if (n < 0n) n = 0n;
+    return formatScaled(n, x.scale);
+  }
+
+  function wholeNumber(value, fallback) {
+    var s = String(value == null || value === '' ? fallback : value).trim();
+    if (!/^\d+$/.test(s)) throw new Error('Expected a whole number');
+    return BigInt(s);
+  }
+
+  function canonicalPayoutText(payouts) {
+    return (payouts || []).slice().sort(function (a, b) {
+      if (a.wallet < b.wallet) return -1;
+      if (a.wallet > b.wallet) return 1;
+      return 0;
+    }).map(function (p) {
+      return String(p.wallet) + ':' + String(p.amountRaw);
+    }).join('\n');
   }
 
   function payoutHash(payouts) {
-    var s = (payouts || []).map(function (x) { return String(x.wallet) + ':' + String(x.amount); }).join('|');
-    var h = 0;
-    for (var i = 0; i < s.length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0;
-    return 'b' + (h >>> 0).toString(16);
+    return sha256Hex(canonicalPayoutText(payouts));
   }
 
-  function computePayouts(campaign, joins) {
+  function planReservation(projectReserved, campaignReserved, addAmount, balanceRaw, decimals) {
+    var addRaw = decimalToRaw(addAmount, decimals);
+    if (addRaw <= 0n) throw new Error('Reserve amount must be greater than 0');
+    var projRaw = decimalToRaw(projectReserved || 0, decimals);
+    var campRaw = decimalToRaw(campaignReserved || 0, decimals);
+    var balance = BigInt(String(balanceRaw));
+    if (projRaw + addRaw > balance) throw new Error('Reservation exceeds vault token balance');
+    return {
+      projectReserved: rawToDecimal(projRaw + addRaw, decimals),
+      campaignReserved: rawToDecimal(campRaw + addRaw, decimals),
+      added: rawToDecimal(addRaw, decimals)
+    };
+  }
+
+  function campaignConfig(campaign) {
+    var cfg = campaign && campaign.config ? campaign.config : {};
+    if (typeof cfg === 'string') { try { cfg = JSON.parse(cfg); } catch (e) { cfg = {}; } }
+    return cfg;
+  }
+
+  function growingRaw(campaign, decimals) {
+    var cfg = campaignConfig(campaign);
+    var start = decimalToRaw(cfg.growStart != null && cfg.growStart !== '' ? cfg.growStart : (campaign && (campaign.pool || campaign.reward)) || 0, decimals);
+    var add = decimalToRaw(cfg.growAdd || 0, decimals);
+    var cap = cfg.growCap ? decimalToRaw(cfg.growCap, decimals) : 0n;
+    var created = campaign && campaign.createdAt ? new Date(campaign.createdAt).getTime() : Date.now();
+    var ms = cfg.growEvery === 'day' ? 86400000 : 7 * 86400000;
+    var periods = BigInt(Math.max(0, Math.floor((Date.now() - created) / ms)));
+    var now = start + add * periods;
+    if (cap > 0n && now > cap) now = cap;
+    return now;
+  }
+
+  function payoutRow(wallet, raw, decimals, progress) {
+    return { wallet: wallet, amount: rawToDecimal(raw, decimals), amountRaw: raw.toString(), progress: progress || 0 };
+  }
+
+  function computePayouts(campaign, joins, decimals) {
+    var d = decimals == null ? 0 : decimals;
     var rows = (joins || []).filter(function (j) {
       if (j.status === 'rejected') return false;
       return !!(j.qualified || (j.status === 'approved' && (j.progress || 0) > 0));
     }).slice().sort(function (a, b) {
       if (!!b.qualified !== !!a.qualified) return b.qualified ? 1 : -1;
-      return (b.progress || 0) - (a.progress || 0);
+      var progress = (b.progress || 0) - (a.progress || 0);
+      if (progress) return progress;
+      if (a.wallet < b.wallet) return -1;
+      if (a.wallet > b.wallet) return 1;
+      return 0;
     });
     if (!rows.length) throw new Error('No qualified or scored holders to pay');
-    var mode = campaign.rewardMode || campaign.reward_mode || 'fixed';
+    var rewardMode = campaign.rewardMode || campaign.reward_mode || 'fixed';
     var unit = campaign.unit || 'TOKEN';
-    var pool = Number(campaign.vaultReserved || campaign.pool || campaign.reward || 0);
-    var fixed = Number(campaign.reward || 0);
+    var poolSource = campaign.vaultReserved || campaign.pool || campaign.reward || 0;
     var payouts = [];
-    if (mode === 'fixed') {
-      var each = fixed > 0 ? fixed : (pool > 0 ? roundAmt(pool / rows.length) : 0);
-      if (!(each > 0)) throw new Error('Set a reward amount or pool first');
-      payouts = rows.map(function (j) { return { wallet: j.wallet, amount: each, progress: j.progress || 0 }; });
-    } else if (mode === 'top3' || mode === 'topn') {
+    if (rewardMode === 'fixed') {
+      var fixedRaw = 0n;
+      if (campaign.reward != null && String(campaign.reward).trim() !== '') fixedRaw = decimalToRaw(campaign.reward, d);
+      if (fixedRaw <= 0n) {
+        var poolRawFixed = decimalToRaw(poolSource || 0, d);
+        if (poolRawFixed <= 0n) throw new Error('Set a reward amount or pool first');
+        fixedRaw = poolRawFixed / BigInt(rows.length);
+      }
+      if (fixedRaw <= 0n) throw new Error('Set a reward amount or pool first');
+      payouts = rows.map(function (j) { return payoutRow(j.wallet, fixedRaw, d, j.progress); });
+    } else if (rewardMode === 'top3' || rewardMode === 'topn') {
+      var poolRawTop = decimalToRaw(campaign.pool || campaign.vaultReserved || 0, d);
+      if (poolRawTop <= 0n) throw new Error('Top N needs a pool size');
       var top = rows.slice(0, 3);
-      var cfg = campaign.config || {};
+      var cfg = campaignConfig(campaign);
       var parts = [
-        Number(cfg.top3First != null ? cfg.top3First : 50) / 100,
-        Number(cfg.top3Second != null ? cfg.top3Second : 30) / 100,
-        Number(cfg.top3Third != null ? cfg.top3Third : 20) / 100
+        wholeNumber(cfg.top3First != null ? cfg.top3First : 50, 50),
+        wholeNumber(cfg.top3Second != null ? cfg.top3Second : 30, 30),
+        wholeNumber(cfg.top3Third != null ? cfg.top3Third : 20, 20)
       ];
-      if (!(pool > 0)) throw new Error('Top N needs a pool size');
-      payouts = top.map(function (j, i) { return { wallet: j.wallet, amount: roundAmt(pool * (parts[i] || 0)), progress: j.progress || 0 }; });
-    } else if (mode === 'growing') {
-      pool = Number(growingNow(campaign) || pool);
-      if (!(pool > 0)) throw new Error('Growing pool needs a starting size');
-      payouts = [{ wallet: rows[0].wallet, amount: pool, progress: rows[0].progress || 0 }];
+      payouts = top.map(function (j, i) {
+        return payoutRow(j.wallet, poolRawTop * parts[i] / 100n, d, j.progress);
+      });
+    } else if (rewardMode === 'growing') {
+      var grow = growingRaw(campaign, d);
+      if (grow <= 0n) throw new Error('Growing pool needs a starting size');
+      payouts = [payoutRow(rows[0].wallet, grow, d, rows[0].progress)];
     } else {
-      if (!(pool > 0)) throw new Error('Shared pool needs a pool size');
-      var slice = roundAmt(pool / rows.length);
-      payouts = rows.map(function (j) { return { wallet: j.wallet, amount: slice, progress: j.progress || 0 }; });
+      var poolRaw = decimalToRaw(campaign.pool || campaign.vaultReserved || campaign.reward || 0, d);
+      if (poolRaw <= 0n) throw new Error('Shared pool needs a pool size');
+      var each = poolRaw / BigInt(rows.length);
+      var rem = poolRaw % BigInt(rows.length);
+      payouts = rows.map(function (j, i) {
+        return payoutRow(j.wallet, each + (BigInt(i) < rem ? 1n : 0n), d, j.progress);
+      });
     }
-    payouts = payouts.filter(function (x) { return x.amount > 0 && x.wallet; });
-    var total = roundAmt(payouts.reduce(function (s, x) { return s + Number(x.amount); }, 0));
-    return { payouts: payouts, total: total, unit: unit, hash: payoutHash(payouts) };
+    payouts = payouts.filter(function (x) { return x.amountRaw !== '0' && x.wallet; });
+    var totalRaw = payouts.reduce(function (s, x) { return s + BigInt(x.amountRaw); }, 0n);
+    return { payouts: payouts, total: rawToDecimal(totalRaw, d), totalRaw: totalRaw.toString(), unit: unit, hash: payoutHash(payouts) };
+  }
+
+  var TOKEN_CLASSIC = 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA';
+  var TOKEN_2022 = 'TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb';
+
+  async function readVaultTokenRaw(address, mint) {
+    if (!isBase58Addr(address) || !isBase58Addr(mint)) throw new Error('Vault address or mint looks invalid');
+    if (!global.solanaWeb3) throw new Error('Solana web3 not loaded');
+    var Connection = global.solanaWeb3.Connection;
+    var PublicKey = global.solanaWeb3.PublicKey;
+    var conn = new Connection(RPC, 'confirmed');
+    var mintPk = new PublicKey(mint);
+    var info = await conn.getAccountInfo(mintPk, 'confirmed');
+    if (!info) throw new Error('Mint account not found');
+    var owner = info.owner.toBase58();
+    if (owner !== TOKEN_CLASSIC && owner !== TOKEN_2022) throw new Error('Mint owner is not SPL Token or Token-2022');
+    var data = info.data;
+    var decimals = typeof data.readUInt8 === 'function' ? data.readUInt8(44) : data[44];
+    var raw = 0n;
+    var accs = await conn.getParsedTokenAccountsByOwner(new PublicKey(address), { programId: new PublicKey(owner) }, 'confirmed');
+    (accs.value || []).forEach(function (a) {
+      var parsed = a.account.data.parsed && a.account.data.parsed.info;
+      if (!parsed || parsed.mint !== mint || !parsed.tokenAmount) return;
+      raw += BigInt(parsed.tokenAmount.amount || '0');
+      if (parsed.tokenAmount.decimals != null) decimals = parsed.tokenAmount.decimals;
+    });
+    return { raw: raw.toString(), decimals: decimals, tokenProgram: owner };
+  }
+
+  async function loadCampaignRow(campaignId) {
+    if (!(mode === 'supabase' && sb)) throw new Error('Campaign storage is unavailable');
+    var res = await sb.from('campaigns').select('*').eq('id', campaignId).maybeSingle();
+    if (res.error) throw res.error;
+    if (!res.data) throw new Error('Campaign not found');
+    var camp = mapCampaignRow(res.data);
+    camp.projectId = res.data.project_id;
+    var proj = await sb.from('projects').select('mint,vault_mint,vault_address,vault_multisig').eq('id', res.data.project_id).maybeSingle();
+    if (proj.error) throw proj.error;
+    if (proj.data) {
+      camp.mint = proj.data.vault_mint || proj.data.mint || '';
+      camp.vaultAddress = proj.data.vault_address || '';
+      if (!camp.vaultMultisig) camp.vaultMultisig = proj.data.vault_multisig || '';
+    }
+    return camp;
   }
 
   async function proposeSettlement(projectId, campaignId, campaign, joins) {
     await init();
     refuseLocalTeamWrite();
-    var built = computePayouts(campaign, joins);
+    void joins;
+    var stored = await loadCampaignRow(campaignId);
+    if (campaign && campaign.vaultMultisig) stored.vaultMultisig = campaign.vaultMultisig;
+    var joinsFromDb = await listJoinsForCampaign(campaignId);
+    var decimals = 0;
+    if (stored.mint) {
+      var bal = await readVaultTokenRaw(stored.vaultAddress, stored.mint);
+      decimals = bal.decimals;
+    } else if (String(stored.unit || '').toUpperCase() === 'SOL') {
+      decimals = 9;
+    }
+    var built = computePayouts(stored, joinsFromDb, decimals);
     var row = {
       project_id: projectId,
       campaign_id: campaignId,
@@ -607,8 +847,8 @@
           await sb.from('vault_reservations').update({ status: 'settled' }).eq('campaign_id', s.campaign_id).eq('status', 'reserved');
           if (projectId && s.total) {
             var proj = await sb.from('projects').select('vault_reserved').eq('id', projectId).maybeSingle();
-            var cur = Number((proj.data && proj.data.vault_reserved) || 0);
-            await sb.from('projects').update({ vault_reserved: Math.max(0, cur - Number(s.total)) }).eq('id', projectId);
+            var cur = (proj.data && proj.data.vault_reserved) || 0;
+            await sb.from('projects').update({ vault_reserved: subDecimal(cur, s.total) }).eq('id', projectId);
           }
         } catch (e2) { console.warn('[Bard] release reserve', e2); }
       }
@@ -894,62 +1134,145 @@
     return true;
   }
 
-  function mulberry32(a) {
-    return function () {
-      a |= 0; a = a + 0x6D2B79F5 | 0;
-      var t = Math.imul(a ^ a >>> 15, 1 | a);
-      t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
-      return ((t ^ t >>> 14) >>> 0) / 4294967296;
-    };
+  var DRAW_SLOT_OFFSET = 150;
+
+  function eligibleDrawRows(joins) {
+    return (joins || []).filter(function (j) {
+      return j && j.status !== 'rejected' && (j.qualified || j.status === 'approved');
+    }).map(function (j) {
+      return { wallet: String(j.wallet), x_handle: j.x_handle || null };
+    }).sort(function (a, b) {
+      if (a.wallet < b.wallet) return -1;
+      if (a.wallet > b.wallet) return 1;
+      return 0;
+    });
   }
-  function seedToInt(s) {
-    var h = 2166136261;
-    s = String(s || '');
-    for (var i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619);
-    return h >>> 0;
-  }
+
+  /**
+   * Draw rule:
+   * Step 1 stores a future slot S = finalized slot + 150.
+   * Step 2 runs only after S is final. The seed is the blockhash of S.
+   * If S was skipped, the seed is the blockhash of the smallest later slot
+   * that produced a block (walk at most 512 slots). That slot is stored as
+   * draw_seed_slot. Eligible wallets are qualified, or approved and not
+   * rejected, sorted by wallet, then shuffled with Fisher-Yates. For i from
+   * n-1 down to 1, j is the first 4 bytes of SHA-256(seed + ':' + i) as a
+   * big-endian uint32, modulo (i+1). draw_count 0 keeps the full order.
+   * A second commit or a second finalize is refused here and by the
+   * campaigns_draw_once trigger.
+   */
   function shuffleSeeded(list, seed) {
-    var rng = mulberry32(seedToInt(seed));
     var a = list.slice();
     for (var i = a.length - 1; i > 0; i--) {
-      var j = Math.floor(rng() * (i + 1));
+      var hex = sha256Hex(String(seed) + ':' + String(i));
+      var j = parseInt(hex.slice(0, 8), 16) % (i + 1);
       var t = a[i]; a[i] = a[j]; a[j] = t;
     }
     return a;
   }
 
+  function deriveWinners(joins, seed, topN) {
+    var rows = eligibleDrawRows(joins);
+    var shuffled = shuffleSeeded(rows, seed);
+    var n = parseInt(topN, 10);
+    if (isNaN(n) || n <= 0 || n > shuffled.length) n = shuffled.length;
+    return shuffled.slice(0, n);
+  }
+
+  function verifyDraw(campaign, joins) {
+    var rows = joins || (campaign && campaign.joins) || [];
+    if (!campaign || !campaign.drawSeed) return { ok: false, reason: 'no seed', winners: [], seed: null };
+    var winners = deriveWinners(rows, campaign.drawSeed, campaign.drawCount || 0);
+    var actual = campaign.drawWinners || [];
+    var ok = winners.length === actual.length && winners.every(function (w, i) {
+      var got = actual[i] && (actual[i].wallet || actual[i]);
+      return w.wallet === got;
+    });
+    return {
+      ok: ok,
+      winners: winners,
+      seed: campaign.drawSeed,
+      slot: campaign.drawSlot || null,
+      seedSlot: campaign.drawSeedSlot || null
+    };
+  }
+
+  function assertDrawStep(campaign, step) {
+    var winners = campaign && campaign.drawWinners;
+    if ((winners && winners.length) || (campaign && campaign.drawSeed)) throw new Error('Draw already finalized');
+    if (step === 'commit' && campaign && campaign.drawSlot) throw new Error('Draw slot already committed');
+    if (step === 'finalize' && !(campaign && campaign.drawSlot)) throw new Error('Commit a future slot first');
+  }
+
+  function isSkippedSlot(err) {
+    var msg = String(err && (err.message || err) || '');
+    return /skipped/i.test(msg) || /32007/.test(msg) || /32009/.test(msg);
+  }
+
+  async function blockhashAtOrAfter(conn, slot) {
+    for (var i = 0; i < 512; i++) {
+      var target = slot + i;
+      try {
+        var block = await conn.getBlock(target, {
+          commitment: 'finalized',
+          transactionDetails: 'none',
+          rewards: false,
+          maxSupportedTransactionVersion: 0
+        });
+        if (block && block.blockhash) return { slot: target, blockhash: block.blockhash };
+      } catch (e) {
+        if (isSkippedSlot(e)) continue;
+        throw e;
+      }
+    }
+    throw new Error('No block found at or after slot ' + slot);
+  }
+
+  async function commitDraw(campaignId, topN) {
+    await init();
+    refuseLocalTeamWrite();
+    var camp = await loadCampaignRow(campaignId);
+    assertDrawStep(camp, 'commit');
+    if (!global.solanaWeb3) throw new Error('Solana web3 not loaded');
+    var conn = new global.solanaWeb3.Connection(RPC, 'finalized');
+    var current = await conn.getSlot('finalized');
+    var slot = current + DRAW_SLOT_OFFSET;
+    var count = parseInt(topN, 10);
+    if (isNaN(count) || count < 0) count = 0;
+    var payload = { draw_slot: slot, draw_count: count, draw_committed_at: new Date().toISOString() };
+    var res = await sb.from('campaigns').update(payload).eq('id', campaignId).select('*').single();
+    if (res.error) throw res.error;
+    return mapCampaignRow(res.data);
+  }
+
+  async function finalizeDraw(campaignId) {
+    await init();
+    refuseLocalTeamWrite();
+    var camp = await loadCampaignRow(campaignId);
+    assertDrawStep(camp, 'finalize');
+    if (!global.solanaWeb3) throw new Error('Solana web3 not loaded');
+    var conn = new global.solanaWeb3.Connection(RPC, 'finalized');
+    var slot = Number(camp.drawSlot);
+    var current = await conn.getSlot('finalized');
+    if (!(current >= slot)) throw new Error('Slot ' + slot + ' is not final yet');
+    var found = await blockhashAtOrAfter(conn, slot);
+    var joins = await listJoinsForCampaign(campaignId);
+    var winners = deriveWinners(joins, found.blockhash, camp.drawCount || 0);
+    var payload = {
+      draw_seed: found.blockhash,
+      draw_seed_slot: found.slot,
+      draw_at: new Date().toISOString(),
+      draw_winners: winners
+    };
+    var res = await sb.from('campaigns').update(payload).eq('id', campaignId).select('*').single();
+    if (res.error) throw res.error;
+    return mapCampaignRow(res.data);
+  }
+
   async function drawAirdrop(campaignId, topN) {
     await init();
     refuseLocalTeamWrite();
-    var joins = await listJoinsForCampaign(campaignId);
-    var pool = joins.filter(function (j) { return j.status !== 'rejected' && (j.qualified || j.status === 'approved'); });
-    if (!pool.length) throw new Error('No eligible holders to draw');
-    var entropy = String(Date.now());
-    try {
-      if (global.solanaWeb3) {
-        var conn = new global.solanaWeb3.Connection(RPC, 'confirmed');
-        var bh = await conn.getLatestBlockhash('finalized');
-        if (bh && bh.blockhash) entropy = bh.blockhash;
-      }
-    } catch (e) {}
-    var seed = String(campaignId) + '::' + entropy;
-    var shuffled = shuffleSeeded(pool.map(function (j) { return { wallet: j.wallet, x_handle: j.x_handle, progress: j.progress || 0 }; }), seed);
-    var n = Math.max(1, parseInt(topN, 10) || shuffled.length);
-    var winners = shuffled.slice(0, n);
-    var payload = { draw_seed: seed, draw_at: new Date().toISOString(), draw_winners: winners };
-    if (mode === 'supabase' && sb) {
-      var res = await sb.from('campaigns').update(payload).eq('id', campaignId).select('*').single();
-      if (res.error) throw res.error;
-      return mapCampaignRow(res.data);
-    }
-    var state = localTeam();
-    state.projects.forEach(function (p) {
-      (p.campaigns || []).forEach(function (c) {
-        if (c.id === campaignId) { c.drawSeed = seed; c.drawAt = payload.draw_at; c.drawWinners = winners; }
-      });
-    });
-    saveLocalTeam(state);
-    return { id: campaignId, drawSeed: seed, drawAt: payload.draw_at, drawWinners: winners };
+    return commitDraw(campaignId, topN);
   }
 
   async function listJoinsForWallet(wallet) {
@@ -1003,6 +1326,14 @@
     listJoinsForCampaign: listJoinsForCampaign, setJoinStatus: setJoinStatus, setJoinProgress: setJoinProgress,
     listRoster: listRoster, upsertRoster: upsertRoster, removeRoster: removeRoster,
     drawAirdrop: drawAirdrop,
+    commitDraw: commitDraw,
+    finalizeDraw: finalizeDraw,
+    deriveWinners: deriveWinners,
+    verifyDraw: verifyDraw,
+    assertDrawStep: assertDrawStep,
+    canonicalPayoutText: canonicalPayoutText,
+    payoutHash: payoutHash,
+    planReservation: planReservation,
     markQualified: markQualified, settleClaim: settleClaim,
     listJoinsForWallet: listJoinsForWallet, listClaimsForWallet: listClaimsForWallet,
     localHolder: localHolder, saveLocalHolder: saveLocalHolder,

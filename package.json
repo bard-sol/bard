@@ -3,8 +3,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test tests/unit/platform.test.js",
-    "e2e": "playwright install chromium && playwright test"
+    "test": "node --test tests/unit/platform.test.js tests/unit/rpc-guard.test.js",
+    "e2e": "playwright install chromium && playwright test",
+    "devnet:e2e": "node vault-src/scripts/devnet-e2e.mjs",
+    "build:vault": "npm --prefix vault-src run build"
   },
   "devDependencies": {
     "@playwright/test": "^1.55.0",

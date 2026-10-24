@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { readFileSync, existsSync } from 'node:fs';
 import { test } from 'node:test';
 import vm from 'node:vm';
@@ -24,6 +25,12 @@ function loadPlatform() {
     Promise,
     encodeURIComponent,
     isNaN,
+    BigInt,
+    parseInt,
+    Uint8Array,
+    Uint32Array,
+    DataView,
+    TextEncoder,
   };
   sandbox.window = sandbox;
   sandbox.globalThis = sandbox;
@@ -87,13 +94,13 @@ test('computePayouts fixed, top3, growing, and shared pool', () => {
   ];
   const fixed = BP.computePayouts({ rewardMode: 'fixed', reward: 2, unit: 'SOL' }, joins);
   assert.equal(fixed.payouts.length, 3);
-  assert.equal(fixed.total, 6);
-  assert.ok(fixed.payouts.every((row) => row.amount === 2));
+  assert.equal(fixed.total, '6');
+  assert.ok(fixed.payouts.every((row) => row.amount === '2' && row.amountRaw === '2'));
 
   const top = BP.computePayouts({ rewardMode: 'top3', pool: 100, unit: 'TOKEN', config: {} }, joins);
   assert.deepEqual(top.payouts.map((row) => row.wallet), ['high', 'mid', 'low']);
-  assert.deepEqual(top.payouts.map((row) => row.amount), [50, 30, 20]);
-  assert.equal(top.total, 100);
+  assert.deepEqual(top.payouts.map((row) => row.amount), ['50', '30', '20']);
+  assert.equal(top.total, '100');
 
   const now = Date.now();
   const growing = BP.computePayouts({
@@ -104,12 +111,12 @@ test('computePayouts fixed, top3, growing, and shared pool', () => {
   }, joins);
   assert.equal(growing.payouts.length, 1);
   assert.equal(growing.payouts[0].wallet, 'high');
-  assert.equal(growing.payouts[0].amount, 12);
+  assert.equal(growing.payouts[0].amount, '12');
 
   const shared = BP.computePayouts({ rewardMode: 'pool', pool: 9, unit: 'SOL' }, joins);
   assert.equal(shared.payouts.length, 3);
-  assert.ok(shared.payouts.every((row) => row.amount === 3));
-  assert.equal(shared.total, 9);
+  assert.ok(shared.payouts.every((row) => row.amount === '3'));
+  assert.equal(shared.total, '9');
 });
 
 test('plan gating', () => {
@@ -148,7 +155,7 @@ test('team writes refuse local mode', () => {
   const names = [
     'createProject', 'createCampaign', 'updateProjectVault', 'reserveVault', 'setProjectPlan',
     'updateCampaignStatus', 'proposeSettlement', 'signSettlement', 'cosignSettlement', 'executeSettlement',
-    'upsertRoster', 'removeRoster', 'drawAirdrop', 'recordFee', 'markFeeConfirmed', 'markFeeFailed',
+    'upsertRoster', 'removeRoster', 'drawAirdrop', 'commitDraw', 'finalizeDraw', 'recordFee', 'markFeeConfirmed', 'markFeeFailed',
     'payFee', 'setJoinStatus', 'setJoinProgress', 'markQualified',
   ];
   for (const name of names) {
@@ -157,4 +164,49 @@ test('team writes refuse local mode', () => {
     const slice = src.slice(at, at + 400);
     assert.match(slice, /refuseLocalTeamWrite\(\)/, name);
   }
+});
+
+test('payout hash is sha256 of sorted raw wallet lines', () => {
+  const joins = [
+    { wallet: 'WalletB', qualified: true, status: 'approved', progress: 1 },
+    { wallet: 'WalletA', qualified: true, status: 'approved', progress: 2 },
+  ];
+  const forward = BP.computePayouts({ rewardMode: 'fixed', reward: '1.5', unit: 'TOKEN' }, joins, 6);
+  const backward = BP.computePayouts({ rewardMode: 'fixed', reward: '1.5', unit: 'TOKEN' }, joins.slice().reverse(), 6);
+  assert.equal(forward.payouts[0].amountRaw, '1500000');
+  assert.equal(forward.hash, backward.hash);
+  assert.equal(forward.hash, createHash('sha256').update(BP.canonicalPayoutText(forward.payouts), 'utf8').digest('hex'));
+  assert.equal(BP.canonicalPayoutText(forward.payouts), 'WalletA:1500000\nWalletB:1500000');
+  const shifted = BP.computePayouts({ rewardMode: 'fixed', reward: '1.500001', unit: 'TOKEN' }, joins, 6);
+  assert.equal(shifted.payouts[0].amountRaw, '1500001');
+  assert.notEqual(shifted.hash, forward.hash);
+  assert.match(forward.hash, /^[0-9a-f]{64}$/);
+});
+
+test('reservation refuses an over-balance and accumulates the campaign', () => {
+  assert.throws(
+    () => BP.planReservation('5', '1', '6', '10', 0),
+    /exceeds vault token balance/
+  );
+  const next = BP.planReservation('2', '2', '3', '100', 0);
+  assert.equal(next.projectReserved, '5');
+  assert.equal(next.campaignReserved, '5');
+  assert.notEqual(next.campaignReserved, '3');
+});
+
+test('draw winners are deterministic and a second draw is refused', () => {
+  const joins = [
+    { wallet: 'C', qualified: true, status: 'approved' },
+    { wallet: 'A', status: 'approved' },
+    { wallet: 'B', qualified: false, status: 'rejected' },
+  ];
+  const first = BP.deriveWinners(joins, 'FutureBlockhash111', 0);
+  const second = BP.deriveWinners(joins.slice().reverse(), 'FutureBlockhash111', 0);
+  assert.deepEqual(first.map((row) => row.wallet), second.map((row) => row.wallet));
+  assert.deepEqual(first.map((row) => row.wallet).sort(), ['A', 'C']);
+  const campaign = { drawSeed: 'FutureBlockhash111', drawCount: 0, drawWinners: first, drawSlot: 150 };
+  assert.equal(BP.verifyDraw(campaign, joins).ok, true);
+  assert.equal(BP.verifyDraw({ ...campaign, drawWinners: first.slice().reverse() }, joins).ok, false);
+  assert.throws(() => BP.assertDrawStep({ drawSlot: 10 }, 'commit'), /already committed/);
+  assert.throws(() => BP.assertDrawStep({ drawSeed: 'x', drawWinners: first }, 'finalize'), /already finalized/);
 });
