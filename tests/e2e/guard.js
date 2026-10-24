@@ -60,7 +60,7 @@ export async function mockSupabase(page, tables) {
       return;
     }
     const parts = url.pathname.split('/').filter(Boolean);
-    const table = parts[parts.length - 1];
+    const table = parts[parts.length - 1] === 'campaign_join_feed' ? 'campaign_joins' : parts[parts.length - 1];
     const rows = Object.prototype.hasOwnProperty.call(tables, table) ? tables[table] : [];
     await route.fulfill({
       status: 200,

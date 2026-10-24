@@ -3,11 +3,17 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test tests/unit/platform.test.js",
+    "test": "node --test tests/unit/*.test.js",
     "e2e": "playwright install chromium && playwright test"
   },
+  "dependencies": {
+    "bs58": "^6.0.0",
+    "tweetnacl": "^1.0.3"
+  },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.3.14",
     "@playwright/test": "^1.55.0",
+    "ignore": "^7.0.5",
     "wrangler": "^4.42.0"
   }
 }

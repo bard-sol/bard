@@ -5,6 +5,8 @@ wrangler.toml
 .claude/
 .wrangler/
 /supabase/
+/server/
+/scripts/
 README.md
 .github/
 index_preview.html

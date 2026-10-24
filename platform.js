@@ -40,6 +40,10 @@
   var sb = null;
   var mode = 'local';
   var ready = null;
+  var sessionToken = null;
+  var sessionWallet = null;
+  var bardSignerPubkey = '';
+  var B58 = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
 
   function escapeHtml(s) {
     if (s == null) return '';
@@ -83,6 +87,98 @@
     throw new Error(LOCAL_MODE_MSG);
   }
 
+  function b58encode(bytes) {
+    var u8 = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes || []);
+    var digits = [0];
+    for (var i = 0; i < u8.length; i++) {
+      var carry = u8[i];
+      for (var j = 0; j < digits.length; j++) {
+        carry += digits[j] << 8;
+        digits[j] = carry % 58;
+        carry = (carry / 58) | 0;
+      }
+      while (carry) { digits.push(carry % 58); carry = (carry / 58) | 0; }
+    }
+    var out = '';
+    for (var z = 0; z < u8.length && u8[z] === 0; z++) out += '1';
+    for (var k = digits.length - 1; k >= 0; k--) out += B58[digits[k]];
+    return out;
+  }
+
+  function restoreSession() {
+    try {
+      if (typeof sessionStorage === 'undefined') return;
+      var raw = sessionStorage.getItem('bard_session');
+      if (!raw) return;
+      var saved = JSON.parse(raw);
+      if (!saved || !saved.token || !saved.wallet) return;
+      if (saved.exp && Number(saved.exp) <= Math.floor(Date.now() / 1000)) {
+        sessionStorage.removeItem('bard_session');
+        return;
+      }
+      sessionToken = saved.token;
+      sessionWallet = saved.wallet;
+    } catch (e) {}
+  }
+
+  function apiHeaders() {
+    var headers = { 'content-type': 'application/json' };
+    if (sessionToken) headers.authorization = 'Bearer ' + sessionToken;
+    return headers;
+  }
+
+  async function apiPost(path, body) {
+    var res = await fetch(path, { method: 'POST', headers: apiHeaders(), body: JSON.stringify(body || {}) });
+    var data = {};
+    try { data = await res.json(); } catch (e) { data = {}; }
+    if (!res.ok) throw new Error((data && data.error) || 'request failed');
+    return data;
+  }
+
+  function authedFetch(input, options) {
+    if (!sessionToken) return fetch(input, options);
+    var headers = new Headers((options && options.headers) || {});
+    headers.set('Authorization', 'Bearer ' + sessionToken);
+    var opts = Object.assign({}, options || {}, { headers: headers });
+    return fetch(input, opts);
+  }
+
+  async function signIn(provider) {
+    await init();
+    if (!provider || typeof provider.signMessage !== 'function') throw new Error('Wallet cannot sign');
+    var pk = provider.publicKey;
+    if (!pk && typeof provider.connect === 'function') {
+      var resp = await provider.connect();
+      pk = (resp && resp.publicKey) || provider.publicKey;
+    }
+    if (!pk) throw new Error('Could not read wallet address');
+    var wallet = pk.toString();
+    var issued = await apiPost('/api/auth/nonce', { wallet: wallet });
+    var signed = await provider.signMessage(new TextEncoder().encode(issued.message), 'utf8');
+    var sigBytes = signed && signed.signature ? signed.signature : signed;
+    var verified = await apiPost('/api/auth/verify', {
+      wallet: wallet,
+      nonce: issued.nonce,
+      issuedAt: issued.issuedAt,
+      signature: b58encode(sigBytes),
+      domain: issued.domain
+    });
+    sessionToken = verified.token;
+    sessionWallet = verified.wallet || wallet;
+    try {
+      sessionStorage.setItem('bard_session', JSON.stringify({
+        token: sessionToken, wallet: sessionWallet, exp: verified.expiresAt
+      }));
+    } catch (e) {}
+    return { wallet: sessionWallet, token: sessionToken };
+  }
+
+  function signOut() {
+    sessionToken = null;
+    sessionWallet = null;
+    try { if (typeof sessionStorage !== 'undefined') sessionStorage.removeItem('bard_session'); } catch (e) {}
+  }
+
   function loadScript(src) {
     return new Promise(function (resolve, reject) {
       if (document.querySelector('script[src="' + src + '"]')) { resolve(); return; }
@@ -99,14 +195,24 @@
   function init() {
     if (ready) return ready;
     ready = (async function () {
+      restoreSession();
       try {
         await loadScript(SUPABASE_SCRIPT);
         if (!global.supabase || !global.supabase.createClient) throw new Error('supabase missing');
-        sb = global.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+        sb = global.supabase.createClient(SUPABASE_URL, SUPABASE_ANON, {
+          global: { fetch: authedFetch }
+        });
         var probe = await sb.from('projects').select('id').limit(1);
         if (probe.error) { console.warn('[Bard] localStorage', probe.error.message); mode = 'local'; sb = null; }
         else { mode = 'supabase'; console.info('[Bard] Connected to Supabase'); }
       } catch (e) { console.warn('[Bard] localStorage', e); mode = 'local'; sb = null; }
+      try {
+        var cfgRes = await fetch('/api/config');
+        if (cfgRes && cfgRes.ok) {
+          var cfg = await cfgRes.json();
+          bardSignerPubkey = (cfg && cfg.bardSignerPubkey) || '';
+        }
+      } catch (cfgErr) {}
       if (mode === 'local') showLocalBanner();
       return { mode: mode, sb: sb };
     })();
@@ -124,8 +230,8 @@
   }
   function saveLocalHolder(h) { localStorage.setItem(HOLDER_KEY, JSON.stringify(h)); }
 
-  /** Bard's member of every Phase-1 Squads 2-of-2. Same key as fee treasury for now. */
-  function getVaultBardMember() { return FEE_TREASURY; }
+  /** Bard's Squads signer. Loaded from GET /api/config, never the fee treasury. */
+  function getVaultBardMember() { return bardSignerPubkey; }
 
   function parseTweetId(url) {
     if (!url) return null;
@@ -234,10 +340,13 @@
     return { id: j.id, project_id: j.project_id, campaign_id: j.campaign_id, wallet: j.wallet, x_handle: j.x_handle || null, qualified: !!j.qualified, qualified_at: j.qualified_at || null, joined_at: j.joined_at, status: j.status || 'approved', progress: j.progress || 0, note: j.note || null };
   }
 
-  async function listProjects() {
+  async function listProjects(opts) {
     await init();
+    opts = opts || {};
     if (mode === 'supabase' && sb) {
-      var pr = await sb.from('projects').select('*').order('created_at', { ascending: false });
+      var prQuery = sb.from('projects').select('*').order('created_at', { ascending: false });
+      if (opts.admin) prQuery = prQuery.eq('admin_wallet', sessionWallet || '1');
+      var pr = await prQuery;
       if (pr.error) throw pr.error;
       var cr = await sb.from('campaigns').select('*').order('created_at', { ascending: false });
       if (cr.error) throw cr.error;
@@ -254,9 +363,11 @@
     var paid = !FEES_ENABLED;
     var payload = { name: input.name, ticker: input.ticker, mint: input.mint, chain: input.chain || 'solana', admin_wallet: input.admin || null, created_by: input.createdBy || input.admin || null, fee_paid: paid, fee_amount_sol: FEES.onboard, plan: input.plan || 'starter' };
     if (mode === 'supabase' && sb) {
-      var res = await sb.from('projects').insert(payload).select('*').single();
-      if (res.error) throw res.error;
-      return mapProjectRow(res.data, []);
+      if (!sessionToken) throw new Error('Sign in with your wallet first');
+      var created = await apiPost('/api/projects', {
+        name: input.name, ticker: input.ticker, mint: input.mint, chain: input.chain || 'solana', plan: input.plan || 'starter'
+      });
+      return mapProjectRow(created.project, []);
     }
     var state = localTeam();
     var project = { id: 'id_' + Math.random().toString(36).slice(2, 10), name: payload.name, ticker: payload.ticker, mint: payload.mint, admin: payload.admin_wallet || '', chain: payload.chain, feePaid: paid, createdAt: new Date().toISOString(), campaigns: [], plan: payload.plan || 'starter' };
@@ -282,15 +393,15 @@
       throw new Error('Premium (4 SOL) unlocks holds, boards, growing pools, and airdrops. Starter is raids with a fixed payout.');
     }
     if (mode === 'supabase' && sb) {
-      var res = await sb.from('campaigns').insert({
-        project_id: projectId, title: input.title, type: input.type, rule_text: input.rule,
-        reward: input.reward || null, reward_unit: input.unit || 'SOL', pool_size: input.pool || null,
-        duration_days: (input.days === 0 || input.days === '0') ? 0 : (parseInt(input.days, 10) || 7), status: 'active', fee_paid: !FEES_ENABLED, fee_amount_sol: FEES.campaign,
-        access_mode: input.accessMode || 'open', raid_mode: input.raidMode || null, reward_mode: input.rewardMode || 'fixed',
-        post_url: input.postUrl || null, targets: input.targets || null, bonus_handle: input.bonusHandle || null, config: input.config || {}
-      }).select('*').single();
-      if (res.error) throw res.error;
-      return mapCampaignRow(res.data);
+      if (!sessionToken) throw new Error('Sign in with your wallet first');
+      var createdCamp = await apiPost('/api/campaigns', {
+        projectId: projectId, title: input.title, type: input.type, rule: input.rule,
+        reward: input.reward || null, unit: input.unit || 'SOL', pool: input.pool || null,
+        days: (input.days === 0 || input.days === '0') ? 0 : (parseInt(input.days, 10) || 7),
+        accessMode: input.accessMode || 'open', raidMode: input.raidMode || null, rewardMode: input.rewardMode || 'fixed',
+        postUrl: input.postUrl || null, targets: input.targets || null, bonusHandle: input.bonusHandle || null, config: input.config || {}
+      });
+      return mapCampaignRow(createdCamp.campaign);
     }
     var state = localTeam();
     var p = state.projects.find(function (x) { return x.id === projectId; });
@@ -314,9 +425,10 @@
       vault_multisig: (input && input.multisig) ? String(input.multisig).trim() : null
     };
     if (mode === 'supabase' && sb) {
-      var res = await sb.from('projects').update(payload).eq('id', projectId).select('*').single();
-      if (res.error) throw res.error;
-      return mapProjectRow(res.data, []);
+      var linked = await apiPost('/api/projects/' + encodeURIComponent(projectId) + '/vault', {
+        address: addr, mint: mint, multisig: payload.vault_multisig
+      });
+      return mapProjectRow(linked.project, []);
     }
     var state = localTeam();
     var p = state.projects.find(function (x) { return x.id === projectId; });
@@ -369,9 +481,8 @@
     var payload = { plan: plan };
     if (plan !== 'free') payload.plan_paid_at = new Date().toISOString();
     if (mode === 'supabase' && sb) {
-      var res = await sb.from('projects').update(payload).eq('id', projectId).select('*').single();
-      if (res.error) throw res.error;
-      return mapProjectRow(res.data, []);
+      var planned = await apiPost('/api/projects/' + encodeURIComponent(projectId) + '/plan', { plan: plan });
+      return mapProjectRow(planned.project, []);
     }
     var state = localTeam();
     var p = state.projects.find(function (x) { return x.id === projectId; });
@@ -480,9 +591,6 @@
       total: built.total,
       unit: built.unit,
       payout_hash: built.hash,
-      status: 'proposed',
-      team_signed: false,
-      bard_signed: false,
       vault_multisig: (campaign && (campaign.vaultMultisig || '')) || null
     };
     if (mode === 'supabase' && sb) {
@@ -512,38 +620,16 @@
   async function signSettlement(settlementId, who, extra) {
     await init();
     refuseLocalTeamWrite();
-    var payload = {};
-    if (who === 'team') {
-      payload.team_signed = true;
-      payload.team_signed_at = new Date().toISOString();
-      payload.cosigned_wallet = extra && extra.wallet;
-      payload.cosign_sig = extra && extra.sig;
-    }
     if (who === 'bard') {
-      payload.bard_signed = true;
-      payload.bard_signed_at = new Date().toISOString();
+      return apiPost('/api/vault/bard-sign', { settlementId: settlementId });
     }
-    if (extra && extra.txIndex) payload.tx_index = extra.txIndex;
-    if (extra && extra.multisig) payload.vault_multisig = extra.multisig;
-    if (mode === 'supabase' && sb) {
-      var cur = await sb.from('vault_settlements').select('*').eq('id', settlementId).maybeSingle();
-      if (cur.error) throw cur.error;
-      var row = Object.assign({}, cur.data || {}, payload);
-      var team = !!(row.team_signed);
-      var bard = !!(row.bard_signed);
-      payload.status = team && bard ? 'both_signed' : (team ? 'awaiting_bard' : (bard ? 'awaiting_team' : 'proposed'));
-      var res = await sb.from('vault_settlements').update(payload).eq('id', settlementId).select('*').single();
-      if (res.error) throw res.error;
-      return res.data;
-    }
-    var state = localTeam();
-    (state.settlements || []).forEach(function (s) {
-      if (s.id !== settlementId) return;
-      Object.assign(s, payload);
-      s.status = (s.team_signed && s.bard_signed) ? 'both_signed' : (s.team_signed ? 'awaiting_bard' : (s.bard_signed ? 'awaiting_team' : 'proposed'));
+    var signed = await apiPost('/api/settlements/' + encodeURIComponent(settlementId) + '/team-sign', {
+      sig: extra && extra.sig,
+      txIndex: extra && extra.txIndex,
+      multisig: extra && extra.multisig,
+      wallet: extra && extra.wallet
     });
-    saveLocalTeam(state);
-    return (state.settlements || []).find(function (s) { return s.id === settlementId; });
+    return signed.settlement;
   }
 
   function getRpc() { return RPC; }
@@ -561,63 +647,13 @@
   async function cosignSettlement(settlementId, wallet, sig) {
     await init();
     refuseLocalTeamWrite();
-    var payload = {
-      status: 'cosigned',
-      cosigned_wallet: wallet,
-      cosigned_at: new Date().toISOString(),
-      cosign_sig: sig || null
-    };
-    if (mode === 'supabase' && sb) {
-      var res = await sb.from('vault_settlements').update(payload).eq('id', settlementId).select('*').single();
-      if (res.error) throw res.error;
-      return res.data;
-    }
-    var state = localTeam();
-    (state.settlements || []).forEach(function (s) { if (s.id === settlementId) Object.assign(s, payload); });
-    saveLocalTeam(state);
-    return Object.assign({ id: settlementId }, payload);
+    return signSettlement(settlementId, 'team', { wallet: wallet, sig: sig || null });
   }
 
   async function executeSettlement(settlementId, txSignature, projectId) {
     await init();
     refuseLocalTeamWrite();
-    var payload = {
-      status: 'executed',
-      tx_signature: txSignature || null,
-      executed_at: new Date().toISOString()
-    };
-    if (mode === 'supabase' && sb) {
-      var res = await sb.from('vault_settlements').update(payload).eq('id', settlementId).select('*').single();
-      if (res.error) throw res.error;
-      var s = res.data;
-      if (s && s.campaign_id && Array.isArray(s.payouts)) {
-        for (var i = 0; i < s.payouts.length; i++) {
-          var w = s.payouts[i];
-          try {
-            await sb.from('campaign_joins').update({ qualified: true, qualified_at: new Date().toISOString() })
-              .eq('campaign_id', s.campaign_id).eq('wallet', w.wallet);
-            await sb.from('platform_claims').upsert({
-              project_id: s.project_id, campaign_id: s.campaign_id, wallet: w.wallet,
-              amount: String(w.amount), unit: s.unit, settled: true, settled_at: new Date().toISOString(),
-              fee_paid: !FEES_ENABLED, fee_amount_sol: FEES.claim
-            }, { onConflict: 'campaign_id,wallet' });
-          } catch (e) { console.warn('[Bard] settle winner', e); }
-        }
-        try {
-          await sb.from('vault_reservations').update({ status: 'settled' }).eq('campaign_id', s.campaign_id).eq('status', 'reserved');
-          if (projectId && s.total) {
-            var proj = await sb.from('projects').select('vault_reserved').eq('id', projectId).maybeSingle();
-            var cur = Number((proj.data && proj.data.vault_reserved) || 0);
-            await sb.from('projects').update({ vault_reserved: Math.max(0, cur - Number(s.total)) }).eq('id', projectId);
-          }
-        } catch (e2) { console.warn('[Bard] release reserve', e2); }
-      }
-      return s;
-    }
-    var state = localTeam();
-    (state.settlements || []).forEach(function (x) { if (x.id === settlementId) Object.assign(x, payload); });
-    saveLocalTeam(state);
-    return Object.assign({ id: settlementId }, payload);
+    throw new Error('Release payment without an on-chain transaction is not available');
   }
 
   async function updateCampaignStatus(campaignId, status) {
@@ -650,7 +686,7 @@
     var amount = FEES[kind];
     if (amount == null) throw new Error('Unknown fee kind');
     var row = { kind: kind, amount_sol: amount, payer_wallet: payerWallet, status: 'pending', project_id: (refs && refs.projectId) || null, campaign_id: (refs && refs.campaignId) || null, claim_id: (refs && refs.claimId) || null, meta: refs && refs.meta ? refs.meta : {} };
-    if (mode === 'supabase' && sb) { var res = await sb.from('fee_payments').insert(row).select('*').single(); if (res.error) throw res.error; return res.data; }
+    if (mode === 'supabase' && sb) return Object.assign({ id: null, skipped: true }, row);
     return Object.assign({ id: 'local_fee_' + Date.now() }, row);
   }
 
@@ -658,15 +694,14 @@
     await init();
     refuseLocalTeamWrite();
     if (mode === 'supabase' && sb) {
-      await sb.from('fee_payments').update({ status: 'confirmed', tx_signature: txSignature, confirmed_at: new Date().toISOString() }).eq('id', feeId);
-      if (kind === 'onboard' && refs && refs.projectId) await sb.from('projects').update({ fee_paid: true, fee_tx: txSignature }).eq('id', refs.projectId);
-      if ((kind === 'starter' || kind === 'pro') && refs && refs.projectId) {
-        await sb.from('projects').update({
-          fee_paid: true, fee_tx: txSignature, plan: kind, plan_tx: txSignature, plan_paid_at: new Date().toISOString()
-        }).eq('id', refs.projectId);
+      if (txSignature && txSignature !== 'fees-disabled') {
+        await apiPost('/api/fees/confirm', {
+          kind: kind, signature: txSignature,
+          projectId: refs && refs.projectId, campaignId: refs && refs.campaignId, claimId: refs && refs.claimId
+        });
+      } else if ((kind === 'starter' || kind === 'pro' || kind === 'onboard') && refs && refs.projectId) {
+        await apiPost('/api/projects/' + encodeURIComponent(refs.projectId) + '/plan', { plan: kind === 'pro' ? 'pro' : 'starter' });
       }
-      if (kind === 'campaign' && refs && refs.campaignId) await sb.from('campaigns').update({ fee_paid: true, fee_tx: txSignature }).eq('id', refs.campaignId);
-      if (kind === 'claim' && refs && refs.claimId) await sb.from('platform_claims').update({ fee_paid: true, fee_tx: txSignature, settled: true, settled_at: new Date().toISOString() }).eq('id', refs.claimId);
     } else if (kind === 'onboard' && refs && refs.projectId) {
       var state = localTeam(); state.projects.forEach(function (p) { if (p.id === refs.projectId) { p.feePaid = true; p.feeTx = txSignature; } }); saveLocalTeam(state);
     } else if (kind === 'campaign' && refs && refs.campaignId) {
@@ -678,7 +713,7 @@
     await init();
     refuseLocalTeamWrite();
     if (mode === 'supabase' && sb && feeId) {
-      try { await sb.from('fee_payments').update({ status: 'failed', meta: { error: String(reason || 'failed') } }).eq('id', feeId); } catch (e) { console.warn('[Bard] markFeeFailed', e); }
+      console.warn('[Bard] markFeeFailed', reason || 'failed');
     }
   }
 
@@ -753,8 +788,9 @@
     await init();
     if (mode === 'supabase' && sb && wallet) {
       var existing = await sb.from('holders').select('*').eq('wallet', wallet).maybeSingle();
-      var row = { wallet: wallet, x_handle: xHandle || null, x_linked_at: xHandle ? new Date().toISOString() : null, x_via: xVia || null };
-      if (existing.data) await sb.from('holders').update(row).eq('wallet', wallet); else await sb.from('holders').insert(row);
+      var row = { x_handle: xHandle || null, x_linked_at: xHandle ? new Date().toISOString() : null, x_via: xVia || null };
+      if (existing.data) await sb.from('holders').update(row).eq('wallet', wallet);
+      else await sb.from('holders').insert(Object.assign({ wallet: wallet }, row));
     }
     var h = localHolder(); if (xHandle) h.xHandle = xHandle; saveLocalHolder(h);
   }
@@ -771,11 +807,16 @@
       var campRes = await sb.from('campaigns').select('id, access_mode, type').eq('id', campaignId).maybeSingle();
       if (campRes.error) throw campRes.error;
       if (!campRes.data) throw new Error('Campaign not found');
-      var needsApproval = (campRes.data.access_mode || 'open') === 'approval';
-      var auto = rosterRole === 'trusted' || rosterRole === 'whale';
-      var joinStatus = auto ? 'approved' : (needsApproval ? 'pending' : 'approved');
-      var res = await sb.from('campaign_joins').upsert({ project_id: projectId, campaign_id: campaignId, wallet: wallet, x_handle: xHandle || null, qualified: false, joined_at: new Date().toISOString(), status: joinStatus, progress: 0 }, { onConflict: 'campaign_id,wallet' }).select('*').single();
-      if (res.error) throw res.error; return mapJoinRow(res.data);
+      var existingJoin = await sb.from('campaign_joins').select('id').eq('campaign_id', campaignId).eq('wallet', wallet).maybeSingle();
+      if (existingJoin.error) throw existingJoin.error;
+      var write = existingJoin.data
+        ? sb.from('campaign_joins').update({ x_handle: xHandle || null }).eq('campaign_id', campaignId).eq('wallet', wallet)
+        : sb.from('campaign_joins').insert({ project_id: projectId, campaign_id: campaignId, wallet: wallet, x_handle: xHandle || null, joined_at: new Date().toISOString() });
+      var res = await write.select('id, project_id, campaign_id, wallet, qualified, qualified_at, joined_at, status, progress, note').single();
+      if (res.error) throw res.error;
+      var joined = mapJoinRow(res.data);
+      if (!joined.x_handle) joined.x_handle = xHandle || null;
+      return joined;
     }
     var h = localHolder(); var key = projectId + '::' + campaignId; var localCamp = null;
     (localTeam().projects || []).forEach(function (pr) { (pr.campaigns || []).forEach(function (c) { if (c.id === campaignId) localCamp = c; }); });
@@ -788,7 +829,7 @@
   async function listJoinsForCampaign(campaignId) {
     await init();
     if (mode === 'supabase' && sb && campaignId) {
-      var res = await sb.from('campaign_joins').select('*').eq('campaign_id', campaignId).order('joined_at', { ascending: false });
+      var res = await sb.from('campaign_join_feed').select('*').eq('campaign_id', campaignId).order('joined_at', { ascending: false });
       if (res.error) throw res.error; return (res.data || []).map(mapJoinRow);
     }
     return [];
@@ -799,8 +840,8 @@
     refuseLocalTeamWrite();
     if (!status || ['pending', 'approved', 'rejected'].indexOf(status) < 0) throw new Error('Invalid join status');
     if (mode === 'supabase' && sb) {
-      var res = await sb.from('campaign_joins').update({ status: status }).eq('campaign_id', campaignId).eq('wallet', wallet).select('*').single();
-      if (res.error) throw res.error; return mapJoinRow(res.data);
+      var updated = await apiPost('/api/joins/status', { campaignId: campaignId, wallet: wallet, status: status });
+      return mapJoinRow(updated.join);
     }
     return { campaign_id: campaignId, wallet: wallet, status: status };
   }
@@ -810,9 +851,8 @@
     refuseLocalTeamWrite();
     var n = Math.max(0, parseInt(progress, 10) || 0);
     if (mode === 'supabase' && sb) {
-      var payload = { progress: n }; if (note != null) payload.note = String(note);
-      var res = await sb.from('campaign_joins').update(payload).eq('campaign_id', campaignId).eq('wallet', wallet).select('*').single();
-      if (res.error) throw res.error; return mapJoinRow(res.data);
+      var progressed = await apiPost('/api/joins/progress', { campaignId: campaignId, wallet: wallet, progress: n, note: note });
+      return mapJoinRow(progressed.join);
     }
     return { campaign_id: campaignId, wallet: wallet, progress: n, note: note || null };
   }
@@ -821,8 +861,8 @@
     await init();
     refuseLocalTeamWrite();
     if (mode === 'supabase' && sb) {
-      var res = await sb.from('campaign_joins').update({ qualified: true, qualified_at: new Date().toISOString() }).eq('campaign_id', campaignId).eq('wallet', wallet).select('*').single();
-      if (res.error) throw res.error; return res.data;
+      var qualified = await apiPost('/api/joins/qualify', { campaignId: campaignId, wallet: wallet });
+      return qualified.join;
     }
     var h = localHolder(); var key = projectId + '::' + campaignId;
     if (h.joined[key]) { h.joined[key].qualified = true; saveLocalHolder(h); }
@@ -831,12 +871,10 @@
   async function settleClaim(projectId, campaignId, wallet, xHandle, amount, unit) {
     await init();
     if (mode === 'supabase' && sb) {
-      var res = await sb.from('platform_claims').upsert({ project_id: projectId, campaign_id: campaignId, wallet: wallet, x_handle: xHandle || null, amount: amount || null, unit: unit || 'SOL', settled: true, settled_at: new Date().toISOString(), fee_paid: !FEES_ENABLED, fee_amount_sol: FEES.claim }, { onConflict: 'campaign_id,wallet' }).select('*').single();
-      if (res.error) throw res.error;
-      var camp = await sb.from('campaigns').select('settled_count').eq('id', campaignId).single();
-      var n = (camp.data && camp.data.settled_count) || 0;
-      await sb.from('campaigns').update({ settled_count: n + 1 }).eq('id', campaignId);
-      return res.data;
+      var claimed = await apiPost('/api/claims', {
+        projectId: projectId, campaignId: campaignId, wallet: wallet, xHandle: xHandle || null, amount: amount, unit: unit || 'SOL'
+      });
+      return claimed.claim;
     }
     var h = localHolder(); var key = projectId + '::' + campaignId;
     h.claims[key] = { settled: true, at: new Date().toISOString(), wallet: wallet, xHandle: xHandle };
@@ -864,9 +902,11 @@
     if (!wallet) throw new Error('Wallet required');
     if (['trusted', 'whale', 'blocked'].indexOf(role) < 0) throw new Error('Role must be trusted, whale, or blocked');
     if (mode === 'supabase' && sb) {
-      var res = await sb.from('project_roster').upsert({
-        project_id: projectId, wallet: wallet, role: role, note: note || null
-      }, { onConflict: 'project_id,wallet' }).select('*').single();
+      var existingRoster = await sb.from('project_roster').select('id').eq('project_id', projectId).eq('wallet', wallet).maybeSingle();
+      if (existingRoster.error) throw existingRoster.error;
+      var res = existingRoster.data
+        ? await sb.from('project_roster').update({ role: role, note: note || null }).eq('project_id', projectId).eq('wallet', wallet).select('*').single()
+        : await sb.from('project_roster').insert({ project_id: projectId, wallet: wallet, role: role, note: note || null }).select('*').single();
       if (res.error) throw res.error;
       return mapRosterRow(res.data);
     }
@@ -955,7 +995,7 @@
   async function listJoinsForWallet(wallet) {
     await init();
     if (mode === 'supabase' && sb && wallet) {
-      var res = await sb.from('campaign_joins').select('*').eq('wallet', wallet);
+      var res = await sb.from('campaign_join_feed').select('*').eq('wallet', wallet);
       if (res.error) throw res.error; return (res.data || []).map(mapJoinRow);
     }
     var h = localHolder(); var out = [];
@@ -985,7 +1025,9 @@
   global.BardPlatform = {
     init: init, FEES: FEES,
     feesEnabled: function () { return FEES_ENABLED; },
-    setFeesEnabled: function (on) { FEES_ENABLED = !!on; },
+    signIn: signIn,
+    signOut: signOut,
+    getSessionWallet: function () { return sessionWallet; },
     isPremiumType: isPremiumType,
     isPremiumReward: isPremiumReward,
     isPremiumPlan: isPremiumPlan,

@@ -143,6 +143,17 @@ test('restore workflow is gone and escapeHtml is shared', () => {
   assert.match(platform, /\/vendor\/supabase\/supabase\.js/);
 });
 
+test('sign-in is required and the treasury is not the vault signer', () => {
+  const src = readFileSync(path.join(root, 'platform.js'), 'utf8');
+  const admin = readFileSync(path.join(root, 'admin_app.js'), 'utf8');
+  assert.equal(src.includes('setFeesEnabled'), false);
+  assert.match(src, /function getVaultBardMember\(\) \{ return bardSignerPubkey; \}/);
+  assert.equal(admin.includes('Release payment'), false);
+  assert.equal(admin.includes("tx='released'"), false);
+  assert.match(src, /eq\('admin_wallet', sessionWallet \|\| '1'\)/);
+  assert.match(src, /Sign in with your wallet first/);
+});
+
 test('team writes refuse local mode', () => {
   const src = readFileSync(path.join(root, 'platform.js'), 'utf8');
   const names = [

@@ -525,6 +525,7 @@ h1{
       browseOnly = false;
       localStorage.setItem('bard_holder_wallet', wallet);
       if (window.BardPlatform) {
+        if (BardPlatform.signIn) await BardPlatform.signIn(provider);
         await BardPlatform.upsertHolder(wallet, xHandle, null);
       }
       toast('Wallet connected', 'ok');

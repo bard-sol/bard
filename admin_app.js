@@ -29,10 +29,10 @@ function planLabel(p){return isPremium(p)?'Premium':'Starter';}
 
 function findCampaign(pid,cid){var p=findProject(pid);if(!p)return null;return(p.campaigns||[]).find(function(c){return c.id===cid;});}
 function activeCount(p){return(p.campaigns||[]).filter(function(c){return c.status==='active';}).length;}
-function updateWalletUI(){var btn=document.getElementById('btn-wallet');if(wallet){btn.textContent=shortAddr(wallet);btn.classList.add('is-on');}else{btn.textContent='Connect wallet';btn.classList.remove('is-on');}var hint=document.getElementById('onboard-wallet-hint');if(hint){if(BardPlatform.feesEnabled&&BardPlatform.feesEnabled()){hint.textContent=wallet?'You will sign a 0.25 SOL transfer from '+shortAddr(wallet)+' to the platform treasury.':'Connect a wallet in the header first.';}else{hint.textContent='Fees are off for testing — create freely. Wallet optional.';}}}
-async function connectWallet(){try{var p=(window.phantom&&window.phantom.solana)||window.solflare||window.solana;if(!p){toast('No Solana wallet found. Install Phantom or Solflare.','err');return;}var resp=await p.connect();wallet=(resp.publicKey&&resp.publicKey.toString())||(p.publicKey&&p.publicKey.toString());if(!wallet){toast('Could not read wallet address','err');return;}provider=p;localStorage.setItem('bard_team_wallet',wallet);updateWalletUI();toast('Wallet connected','ok');}catch(e){console.error(e);toast('Connection cancelled or failed','err');}}
-function disconnectWallet(){wallet=null;provider=null;localStorage.removeItem('bard_team_wallet');updateWalletUI();}
-async function refreshState(){if(window.BardPlatform){await BardPlatform.init();dataMode=BardPlatform.getMode();state.projects=await BardPlatform.listProjects();var badge=document.getElementById('data-mode');if(badge)badge.textContent=dataMode==='supabase'?'· Live DB':'· Local only';}}
+function updateWalletUI(){var btn=document.getElementById('btn-wallet');if(wallet){btn.textContent=shortAddr(wallet);btn.classList.add('is-on');}else{btn.textContent='Connect wallet';btn.classList.remove('is-on');}var hint=document.getElementById('onboard-wallet-hint');if(hint){if(BardPlatform.feesEnabled&&BardPlatform.feesEnabled()){hint.textContent=wallet?'You will sign a 0.25 SOL transfer from '+shortAddr(wallet)+' to the platform treasury.':'Connect a wallet in the header first.';}else{hint.textContent='Fees are off for testing. Live projects need a signed-in wallet.';}}}
+async function connectWallet(){try{var p=(window.phantom&&window.phantom.solana)||window.solflare||window.solana;if(!p){toast('No Solana wallet found. Install Phantom or Solflare.','err');return;}var resp=await p.connect();wallet=(resp.publicKey&&resp.publicKey.toString())||(p.publicKey&&p.publicKey.toString());if(!wallet){toast('Could not read wallet address','err');return;}provider=p;localStorage.setItem('bard_team_wallet',wallet);if(window.BardPlatform&&BardPlatform.signIn)await BardPlatform.signIn(p);updateWalletUI();toast('Wallet connected','ok');await refreshState();renderHome();}catch(e){console.error(e);toast((e&&e.message)||'Connection cancelled or failed','err');}}
+function disconnectWallet(){wallet=null;provider=null;localStorage.removeItem('bard_team_wallet');if(window.BardPlatform&&BardPlatform.signOut)BardPlatform.signOut();updateWalletUI();}
+async function refreshState(){if(window.BardPlatform){await BardPlatform.init();dataMode=BardPlatform.getMode();state.projects=await BardPlatform.listProjects({admin:true});var badge=document.getElementById('data-mode');if(badge)badge.textContent=dataMode==='supabase'?'· Live DB':'· Local only';}}
 function renderHome(){var list=document.getElementById('project-list');var totalCamps=0;state.projects.forEach(function(p){totalCamps+=activeCount(p);});document.getElementById('stat-projects').textContent=state.projects.length;document.getElementById('stat-campaigns').textContent=totalCamps;renderInbox();if(!state.projects.length){list.innerHTML='<div class="empty"><h3>No projects yet</h3><p>Onboard your first token to start running campaigns.</p><button class="btn btn--solid" id="empty-onboard">Onboard a project</button></div>';document.getElementById('empty-onboard').onclick=function(){show('onboard');};return;}list.innerHTML=state.projects.map(function(p){var n=(p.campaigns||[]).length;var a=activeCount(p);var feePill=p.feePaid?'<span class="pill pill--paid">Fee paid</span>':'<span class="pill pill--pending">Fee pending</span>';
     var vaultPill=p.vaultAddress?'<span class="pill pill--paid">Vault locked</span>':'';
     var planPill='<span class="pill '+(isPremium(p)?'pill--live':'pill--draft')+'">'+planLabel(p)+'</span>';return'<div class="card card--hover" data-open-project="'+BardPlatform.escapeHtml(p.id)+'"><div class="item" style="padding:0;border:none"><span class="item__ava">'+BardPlatform.escapeHtml(initials(p.ticker||p.name))+'</span><div class="item__body"><div class="item__title">'+BardPlatform.escapeHtml(p.name)+' <span class="muted">· $'+BardPlatform.escapeHtml(p.ticker)+'</span></div><div class="item__sub">'+BardPlatform.escapeHtml(shortMint(p.mint))+' · '+n+' campaign'+(n===1?'':'s')+'</div></div><div class="item__right" style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">'+(a?'<span class="pill pill--live">'+a+' active</span>':'<span class="pill pill--draft">No live</span>')+planPill+vaultPill+feePill+'</div></div></div>';}).join('');list.querySelectorAll('[data-open-project]').forEach(function(el){el.addEventListener('click',function(){openProject(el.getAttribute('data-open-project'));});});}
@@ -376,7 +376,7 @@ function renderSettleBox(p,c,joins,sets){
   } else if(!bard){
     actions='<p class="muted" style="margin:0;font-size:.88rem">You signed. Waiting for Bard to sign the other key.</p>';
   } else {
-    actions='<button class="btn btn--solid" type="button" id="btn-exec-settle">Release payment</button>';
+    actions='<p class="muted" style="margin:0;font-size:.88rem">Both keys are on. Payment releases on-chain.</p>';
   }
   box.innerHTML='<p style="margin:0 0 8px;font-size:.92rem">Airdrop · <b class="num">'+BardPlatform.escapeHtml(fmtAmt(live.total))+' $'+BardPlatform.escapeHtml(p.ticker)+'</b> to '+(live.payouts||[]).length+' holders</p>'+
     '<div class="signers"><div class="signer '+(team?'is-yes':'is-wait')+'"><b>You</b><span>'+(team?'Signed':'Needs your signature')+'</span></div><div class="signer '+(bard?'is-yes':'is-wait')+'"><b>Bard</b><span>'+(bard?'Signed':'Waiting')+'</span></div></div>'+
@@ -384,17 +384,12 @@ function renderSettleBox(p,c,joins,sets){
     '<div style="margin-top:12px">'+actions+'</div>';
   var cs=document.getElementById('btn-cosign');
   if(cs) cs.onclick=function(){ cosignCurrent(p,c,live); };
-  var ex=document.getElementById('btn-exec-settle');
-  if(ex) ex.onclick=function(){ executeCurrent(p,c,live); };
 }
 async function pingBardSign(live){
   try{
     var res=await fetch('/api/vault/bard-sign',{ method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify({ settlementId: live.id, multisig: live.vault_multisig, txIndex: live.tx_index }) });
     var data=await res.json();
-    if(data && data.ok){
-      await BardPlatform.signSettlement(live.id,'bard',{});
-      return true;
-    }
+    if(data && data.ok) return true;
   }catch(e){}
   return false;
 }
@@ -427,18 +422,6 @@ async function cosignCurrent(p,c,live){
     if(/rejected|denied|cancel/i.test(String(e&&e.message))) toast('Signature cancelled','err');
     else toast((e&&e.message)||'Sign failed','err');
   }
-}
-async function executeCurrent(p,c,live){
-  try{
-    var tx='released';
-    if(window.BardVault && BardVault.executePayout && (p.vaultMultisig||live.vault_multisig) && live.tx_index && wallet && provider){
-      tx=await BardVault.executePayout(BardPlatform.getRpc(), provider, wallet, p.vaultMultisig||live.vault_multisig, live.tx_index);
-    }
-    await BardPlatform.executeSettlement(live.id, tx, p.id);
-    toast('Paid. Holders settled.','ok');
-    await refreshState();
-    openCampaign(c.id);
-  }catch(e){ toast((e&&e.message)||'Could not release payment','err'); }
 }
 function setChoiceGroup(selector,attr,value,hiddenId){document.querySelectorAll(selector).forEach(function(btn){btn.classList.toggle('is-on',btn.getAttribute(attr)===value);});if(hiddenId)document.getElementById(hiddenId).value=value;}
 function syncTop3Total(){
@@ -581,7 +564,7 @@ document.getElementById('back-from-detail').onclick=function(){openProject(curre
 document.querySelectorAll('#page-project .tab').forEach(function(t){t.addEventListener('click',function(){renderProjectTabs(t.getAttribute('data-tab'));});});
 document.getElementById('form-onboard').addEventListener('submit',async function(e){e.preventDefault();var name=document.getElementById('p-name').value.trim();var ticker=document.getElementById('p-ticker').value.trim().replace(/^\$/,'').toUpperCase();var mint=document.getElementById('p-mint').value.trim();var plan=(document.getElementById('p-plan')&&document.getElementById('p-plan').value)||'starter';
     if(plan!=='pro') plan='starter';
-    if(!name||!ticker||!mint){toast('Fill in name, ticker, and mint','err');return;}var feesOn=BardPlatform.feesEnabled&&BardPlatform.feesEnabled();if(feesOn&&(!wallet||!provider)){toast('Connect a wallet first','err');await connectWallet();return;}var btn=document.getElementById('btn-submit-onboard');btn.disabled=true;btn.textContent='Creating…';try{var project=await BardPlatform.createProject({name:name,ticker:ticker,mint:mint,admin:wallet||null,plan:plan});if(feesOn&&wallet&&provider){var feeKind=plan==='pro'?'pro':'starter';btn.textContent=plan==='pro'?'Confirm 4 SOL in wallet…':'Confirm 1 SOL in wallet…';var result=await BardPlatform.payFee(feeKind,wallet,provider,{projectId:project.id});await BardPlatform.setProjectPlan(project.id,plan);await refreshState();toast(result.ok?(plan==='pro'?'Premium live · 4 SOL paid':'Starter live · 1 SOL paid'):'Project created · payment pending','ok');}else{await refreshState();toast(plan==='pro'?'Premium unlocked (testing)':'Starter unlocked (testing)','ok');}document.getElementById('form-onboard').reset();if(document.getElementById('p-plan'))document.getElementById('p-plan').value='starter';openProject(project.id);}catch(err){console.error(err);toast((err&&err.message)||'Failed to create project','err');}finally{btn.disabled=false;btn.textContent='Create project';}});
+    if(!name||!ticker||!mint){toast('Fill in name, ticker, and mint','err');return;}var feesOn=BardPlatform.feesEnabled&&BardPlatform.feesEnabled();if(BardPlatform.getMode&&BardPlatform.getMode()==='supabase'&&!(BardPlatform.getSessionWallet&&BardPlatform.getSessionWallet())){toast('Connect and sign in with your wallet first','err');await connectWallet();if(!(BardPlatform.getSessionWallet&&BardPlatform.getSessionWallet()))return;}if(feesOn&&(!wallet||!provider)){toast('Connect a wallet first','err');await connectWallet();return;}var btn=document.getElementById('btn-submit-onboard');btn.disabled=true;btn.textContent='Creating…';try{var project=await BardPlatform.createProject({name:name,ticker:ticker,mint:mint,admin:wallet||null,plan:plan});if(feesOn&&wallet&&provider){var feeKind=plan==='pro'?'pro':'starter';btn.textContent=plan==='pro'?'Confirm 4 SOL in wallet…':'Confirm 1 SOL in wallet…';var result=await BardPlatform.payFee(feeKind,wallet,provider,{projectId:project.id});await BardPlatform.setProjectPlan(project.id,plan);await refreshState();toast(result.ok?(plan==='pro'?'Premium live · 4 SOL paid':'Starter live · 1 SOL paid'):'Project created · payment pending','ok');}else{await refreshState();toast(plan==='pro'?'Premium unlocked (testing)':'Starter unlocked (testing)','ok');}document.getElementById('form-onboard').reset();if(document.getElementById('p-plan'))document.getElementById('p-plan').value='starter';openProject(project.id);}catch(err){console.error(err);toast((err&&err.message)||'Failed to create project','err');}finally{btn.disabled=false;btn.textContent='Create project';}});
 document.getElementById('form-campaign').addEventListener('submit',async function(e){e.preventDefault();var p=findProject(currentProjectId);if(!p)return;var title=document.getElementById('c-title').value.trim();var type=document.getElementById('c-type').value;var rule=document.getElementById('c-rule').value.trim();var reward=document.getElementById('c-reward').value.trim();var unit=document.getElementById('c-unit').value;var pool=document.getElementById('c-pool').value.trim();var days=parseInt(document.getElementById('c-days').value,10)||7;var accessMode=document.getElementById('c-access').value||'open';var rewardMode=document.getElementById('c-reward-mode').value||'fixed';var raidMode=type==='raid'?(document.getElementById('c-raid-mode').value||'open'):null;var postUrl=document.getElementById('c-post-url').value.trim();var targets=document.getElementById('c-targets').value.trim();var bonusHandle=document.getElementById('c-bonus').value.trim().replace(/^@/,'');if(bonusHandle)bonusHandle='@'+bonusHandle;var minBal=document.getElementById('c-min-bal').value.trim();var holdDays=document.getElementById('c-hold-days').value.trim();var t1=document.getElementById('c-top3-1');var t2=document.getElementById('c-top3-2');var t3=document.getElementById('c-top3-3');
     if(!title||!rule){toast('Add a name and rule','err');return;}
     var needPrem=(BardPlatform.isPremiumType&&BardPlatform.isPremiumType(type))||(BardPlatform.isPremiumReward&&BardPlatform.isPremiumReward(rewardMode));
