@@ -4,7 +4,7 @@ wrangler.toml
 .git/
 .claude/
 .wrangler/
-supabase/
+/supabase/
 README.md
 .github/
 index_preview.html
