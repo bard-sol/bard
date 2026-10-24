@@ -408,11 +408,6 @@ h1{
     clearTimeout(toast._t);
     toast._t = setTimeout(function(){ el.className = 'toast'; }, 2800);
   }
-  function escapeHtml(s){
-    return String(s == null ? '' : s)
-      .replace(/&/g,'&').replace(/</g,'<').replace(/>/g,'>')
-      .replace(/"/g,'"');
-  }
   function shortAddr(a){
     if(!a) return '—';
     if(a.length < 10) return a;
@@ -456,7 +451,7 @@ h1{
     var el = document.getElementById('side-x');
     var btn = document.getElementById('btn-link-x');
     if(xHandle){
-      el.innerHTML = '<span class="dot"></span>' + escapeHtml(xHandle);
+      el.innerHTML = '<span class="dot"></span>' + BardPlatform.escapeHtml(xHandle);
       btn.textContent = 'Change';
     } else {
       el.innerHTML = '<span class="dot off"></span>Not linked';
@@ -608,13 +603,13 @@ h1{
     var xBadge = needsX(c.type) ? ' · needs X' : '';
 
     return (
-      '<div class="card card--hover" data-open="' + escapeHtml(x.projectId) + '|' + escapeHtml(c.id) + '">' +
+      '<div class="card card--hover" data-open="' + BardPlatform.escapeHtml(x.projectId) + '|' + BardPlatform.escapeHtml(c.id) + '">' +
         '<div class="item">' +
-          '<span class="item__ava">' + initials(x.ticker || x.projectName) + '</span>' +
+          '<span class="item__ava">' + BardPlatform.escapeHtml(initials(x.ticker || x.projectName)) + '</span>' +
           '<div class="item__body">' +
-            '<div class="item__title">' + escapeHtml(c.title) +
-              ' <span class="muted">· $' + escapeHtml(x.ticker) + '</span></div>' +
-            '<div class="item__sub">' + escapeHtml(c.type) + xBadge + ' · ' + escapeHtml((c.rule || '').slice(0,56)) +
+            '<div class="item__title">' + BardPlatform.escapeHtml(c.title) +
+              ' <span class="muted">· $' + BardPlatform.escapeHtml(x.ticker) + '</span></div>' +
+            '<div class="item__sub">' + BardPlatform.escapeHtml(c.type) + xBadge + ' · ' + BardPlatform.escapeHtml((c.rule || '').slice(0,56)) +
               ((c.rule || '').length > 56 ? '…' : '') + '</div>' +
           '</div>' +
           '<div class="item__right">' + pill + '</div>' +
@@ -703,7 +698,7 @@ h1{
       list.innerHTML =
         '<div class="empty">' +
           '<h3>No claims yet</h3>' +
-          '<p>Join a campaign and mark yourself qualified from the campaign page to test the claim flow.</p>' +
+          '<p>Join a campaign. Qualified rewards show up here after the team marks you.</p>' +
         '</div>';
       return;
     }
@@ -713,10 +708,10 @@ h1{
       if(r.settled){
         return (
           '<div class="card"><div class="item">' +
-            '<span class="item__ava">' + initials(r.x.ticker) + '</span>' +
+            '<span class="item__ava">' + BardPlatform.escapeHtml(initials(r.x.ticker)) + '</span>' +
             '<div class="item__body">' +
-              '<div class="item__title">' + escapeHtml(c.title) + '</div>' +
-              '<div class="item__sub">$' + escapeHtml(r.x.ticker) + ' · ' + escapeHtml(reward) + '</div>' +
+              '<div class="item__title">' + BardPlatform.escapeHtml(c.title) + '</div>' +
+              '<div class="item__sub">$' + BardPlatform.escapeHtml(r.x.ticker) + ' · ' + BardPlatform.escapeHtml(reward) + '</div>' +
             '</div>' +
             '<div class="item__right"><span class="pill pill--done">Settled <img class="stamp" src="/transparentbardsmile.png" alt=""></span></div>' +
           '</div></div>'
@@ -724,13 +719,13 @@ h1{
       }
       return (
         '<div class="card"><div class="item" style="flex-wrap:wrap">' +
-          '<span class="item__ava">' + initials(r.x.ticker) + '</span>' +
+          '<span class="item__ava">' + BardPlatform.escapeHtml(initials(r.x.ticker)) + '</span>' +
           '<div class="item__body">' +
-            '<div class="item__title">' + escapeHtml(c.title) + '</div>' +
-            '<div class="item__sub">$' + escapeHtml(r.x.ticker) + ' · ' + escapeHtml(reward) + ' · fee 0.1 SOL</div>' +
+            '<div class="item__title">' + BardPlatform.escapeHtml(c.title) + '</div>' +
+            '<div class="item__sub">$' + BardPlatform.escapeHtml(r.x.ticker) + ' · ' + BardPlatform.escapeHtml(reward) + ' · fee 0.1 SOL</div>' +
           '</div>' +
           '<div class="item__right">' +
-            '<button class="btn btn--solid btn--sm" data-claim="' + escapeHtml(r.x.projectId) + '|' + escapeHtml(c.id) + '">Claim</button>' +
+            '<button class="btn btn--solid btn--sm" data-claim="' + BardPlatform.escapeHtml(r.x.projectId) + '|' + BardPlatform.escapeHtml(c.id) + '">Claim</button>' +
           '</div>' +
         '</div></div>'
       );
@@ -820,12 +815,19 @@ h1{
     var v = match.vault || {};
     if (vbox) {
       if (v.address) {
-        vbox.innerHTML =
+        var solHref = BardPlatform.safeHttpUrl('https://solscan.io/account/' + encodeURIComponent(v.address));
+        vbox.innerHTML = solHref ? (
           '<div class="vault-badge">' +
             '<img src="/transparentbardsmile.png" alt="">' +
             '<div><strong>Locked in 2-of-2 vault — no single party can withdraw.</strong>' +
-            '<p>Rewards for this campaign sit in a Squads vault. <a href="https://solscan.io/account/' +
-            encodeURIComponent(v.address) + '" target="_blank" rel="noopener" style="color:var(--purple)">Verify on Solscan</a>.</p></div></div>';
+            '<p>Rewards for this campaign sit in a Squads vault. <a href="' + BardPlatform.escapeHtml(solHref) +
+            '" target="_blank" rel="noopener" style="color:var(--purple)">Verify on Solscan</a>.</p></div></div>'
+        ) : (
+          '<div class="vault-badge">' +
+            '<img src="/transparentbardsmile.png" alt="">' +
+            '<div><strong>Locked in 2-of-2 vault — no single party can withdraw.</strong>' +
+            '<p>Rewards for this campaign sit in a Squads vault.</p></div></div>'
+        );
         if (settled) {
           vbox.innerHTML += '<p class="muted" style="margin-top:-6px;margin-bottom:14px;font-size:.82rem">Payout recorded from the vault.</p>';
         }
@@ -852,31 +854,11 @@ h1{
       joinBtn.onclick = function(){ showPage('claims'); renderClaims(); };
       hint.textContent = 'You’re marked qualified. Claim from the Claims tab.';
     } else if(joined){
-      joinBtn.style.display = '';
-      joinBtn.textContent = 'Mark qualified (demo)';
-      joinBtn.onclick = async function(){
-        if(!wallet){ toast('Connect a wallet first', 'err'); return; }
-        if(xRequired && !xHandle){
-          pendingJoin = { projectId: projectId, campaignId: campaignId };
-          openXModal();
-          return;
-        }
-        try {
-          if (window.BardPlatform) {
-            await BardPlatform.markQualified(projectId, campaignId, wallet);
-          }
-          toast('Marked qualified — claim when ready', 'ok');
-          await refreshCampaignCache();
-          openDetail(projectId, campaignId);
-          renderAll();
-        } catch(e) {
-          console.error(e);
-          toast('Failed', 'err');
-        }
-      };
+      joinBtn.style.display = 'none';
+      joinBtn.onclick = null;
       hint.textContent = xRequired
-        ? 'Raid/post campaigns will later score linked X activity automatically. Demo: mark qualified by hand.'
-        : 'Demo path: mark qualified to unlock the claim flow. Hold rules will check the mint on-chain.';
+        ? 'You are in. The team qualifies holders. Smash links open the post on X.'
+        : 'You are in. The team qualifies holders from the admin.';
     } else {
       joinBtn.style.display = '';
       joinBtn.textContent = xRequired && !xHandle ? 'Link X to join' : 'Join campaign';
@@ -908,7 +890,9 @@ h1{
         html += '<div class="smash-row">';
         acts.forEach(function(a){
           var done = hasSmashed(c.id, wallet, a[0]);
-          html += '<a class="smash-btn'+(done?' is-done':'')+'" data-smash="'+a[0]+'" href="'+a[2]+'" target="_blank" rel="noopener">'+(done?'Done · ':'')+a[1]+'</a>';
+          var href = BardPlatform.safeHttpUrl(a[2]);
+          if (!href) return;
+          html += '<a class="smash-btn'+(done?' is-done':'')+'" data-smash="'+a[0]+'" href="'+BardPlatform.escapeHtml(href)+'" target="_blank" rel="noopener">'+(done?'Done · ':'')+a[1]+'</a>';
         });
         html += '</div>';
       } else {
@@ -922,9 +906,10 @@ h1{
       var meta = (mode==='growing' && window.BardPlatform && BardPlatform.growingMeta) ? BardPlatform.growingMeta(c) : null;
       var pot = meta ? meta.now : (c.pool || c.reward || c.vaultReserved || '—');
       html += '<div class="card" style="margin-bottom:12px"><div style="font-variation-settings:\'wght\' 600">'+(mode==='growing'?'The pot is accumulating':'Reward pool')+'</div>';
-      html += '<div class="stat__val p num" style="margin-top:8px">'+escapeHtml(String(pot))+' '+unit+'</div>';
+      html += '<div class="stat__val p num" style="margin-top:8px">'+BardPlatform.escapeHtml(String(pot))+' '+BardPlatform.escapeHtml(String(unit))+'</div>';
       if (mode==='growing') {
-        html += '<p class="muted" style="margin:6px 0 0;font-size:.86rem">'+(meta?meta.line:'This pool grows on a schedule until someone wins it, or the team ends it. No 7-day timer.')+'</p>';
+        var growLine = meta ? meta.line : 'This pool grows on a schedule until someone wins it, or the team ends it. No 7-day timer.';
+        html += '<p class="muted" style="margin:6px 0 0;font-size:.86rem">'+BardPlatform.escapeHtml(growLine)+'</p>';
         html += '<p class="muted" style="margin:6px 0 0;font-size:.78rem">First to lock the claim takes the current pot.</p>';
       } else if (mode==='vested') {
         html += '<p class="muted" style="margin:6px 0 0;font-size:.86rem">Unlocks over the window. Weekly vest.</p>';
@@ -941,9 +926,9 @@ h1{
         html += '<p class="muted" style="margin:6px 0 8px;font-size:.86rem">Locked. Same seed always yields this order — nobody picked names in a back room.</p>';
         html += winners.map(function(w,i){
           var you = wallet && String(w.wallet) === String(wallet);
-          return '<div class="item" style="padding:8px 0"><span class="muted num" style="width:24px">'+(i+1)+'</span><div class="item__body"><div class="item__title" style="font-size:.94rem">'+(you?'You · ':'')+escapeHtml(shortAddr(w.wallet||w))+'</div></div></div>';
+          return '<div class="item" style="padding:8px 0"><span class="muted num" style="width:24px">'+(i+1)+'</span><div class="item__body"><div class="item__title" style="font-size:.94rem">'+(you?'You · ':'')+BardPlatform.escapeHtml(shortAddr(w.wallet||w))+'</div></div></div>';
         }).join('');
-        html += '<div class="draw-seed">Seed '+escapeHtml(c.drawSeed)+'</div>';
+        html += '<div class="draw-seed">Seed '+BardPlatform.escapeHtml(c.drawSeed)+'</div>';
       } else {
         html += '<p class="muted" style="margin:6px 0 0;font-size:.86rem">Team hits Draw. A Solana blockhash seeds the shuffle. You see the seed here.</p>';
       }
@@ -957,13 +942,6 @@ h1{
         markSmashed(c.id, wallet, act);
         a.classList.add('is-done');
         if (!a.textContent.match(/^Done/)) a.textContent = 'Done · ' + a.textContent;
-        if (joined && wallet && window.BardPlatform && BardPlatform.setJoinProgress) {
-          BardPlatform.listJoinsForCampaign(c.id).then(function(rows){
-            var me = (rows||[]).find(function(r){ return r.wallet === wallet; });
-            var n = (me && me.progress) || 0;
-            return BardPlatform.setJoinProgress(c.id, wallet, n + 1);
-          }).catch(function(){});
-        }
       });
     });
   }
@@ -984,14 +962,16 @@ h1{
     }
     el.innerHTML = rows.map(function(j, i){
       var you = wallet && j.wallet === wallet;
-      var label = you ? (xHandle || shortAddr(j.wallet)) + ' (you)' : shortAddr(j.wallet);
+      var who = j.x_handle || shortAddr(j.wallet);
+      var label = (you ? 'You · ' : '') + who;
+      if (j.note) label += ' · ' + j.note;
       var st = j.qualified ? 'Qualified' : (j.status === 'pending' ? 'Waiting on team' : 'In');
       return (
         '<div class="item" style="padding:10px 0;border-bottom:1px solid var(--line)">' +
           '<span class="muted num" style="width:24px">' + (i+1) + '</span>' +
           '<div class="item__body">' +
-            '<div class="item__title" style="font-size:.94rem">' + escapeHtml(label) + '</div>' +
-            '<div class="item__sub">score ' + (j.progress||0) + ' · ' + st + '</div>' +
+            '<div class="item__title" style="font-size:.94rem">' + BardPlatform.escapeHtml(label) + '</div>' +
+            '<div class="item__sub">score ' + BardPlatform.escapeHtml(j.progress || 0) + ' · ' + BardPlatform.escapeHtml(st) + '</div>' +
           '</div>' +
           (j.qualified ? '<span class="pill pill--live">In</span>' : '<span class="pill pill--muted">…</span>') +
         '</div>'

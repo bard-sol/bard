@@ -3,7 +3,6 @@ var state={projects:[]},currentProjectId=null,currentCampaignId=null,dataMode='l
 function toast(msg,kind){var el=document.getElementById('toast');el.textContent=msg;el.className='toast is-on'+(kind?' '+kind:'');clearTimeout(toast._t);toast._t=setTimeout(function(){el.className='toast';},3200);}
 function show(name){document.querySelectorAll('.page').forEach(function(p){p.classList.remove('is-on');});var page=document.getElementById('page-'+name);if(page)page.classList.add('is-on');window.scrollTo(0,0);}
 function initials(s){s=(s||'?').trim();return s.slice(0,2).toUpperCase();}
-function escapeHtml(s){return String(s==null?'':s).replace(/&/g,'&').replace(/</g,'<').replace(/>/g,'>').replace(/"/g,'"');}
 function shortMint(m){if(!m||m.length<10)return m||'—';return m.slice(0,4)+'…'+m.slice(-4);}
 function shortAddr(a){if(!a)return'—';if(a.length<10)return a;return a.slice(0,4)+'…'+a.slice(-4);}
 function vaultErr(e, addr){
@@ -36,7 +35,7 @@ function disconnectWallet(){wallet=null;provider=null;localStorage.removeItem('b
 async function refreshState(){if(window.BardPlatform){await BardPlatform.init();dataMode=BardPlatform.getMode();state.projects=await BardPlatform.listProjects();var badge=document.getElementById('data-mode');if(badge)badge.textContent=dataMode==='supabase'?'· Live DB':'· Local only';}}
 function renderHome(){var list=document.getElementById('project-list');var totalCamps=0;state.projects.forEach(function(p){totalCamps+=activeCount(p);});document.getElementById('stat-projects').textContent=state.projects.length;document.getElementById('stat-campaigns').textContent=totalCamps;renderInbox();if(!state.projects.length){list.innerHTML='<div class="empty"><h3>No projects yet</h3><p>Onboard your first token to start running campaigns.</p><button class="btn btn--solid" id="empty-onboard">Onboard a project</button></div>';document.getElementById('empty-onboard').onclick=function(){show('onboard');};return;}list.innerHTML=state.projects.map(function(p){var n=(p.campaigns||[]).length;var a=activeCount(p);var feePill=p.feePaid?'<span class="pill pill--paid">Fee paid</span>':'<span class="pill pill--pending">Fee pending</span>';
     var vaultPill=p.vaultAddress?'<span class="pill pill--paid">Vault locked</span>':'';
-    var planPill='<span class="pill '+(isPremium(p)?'pill--live':'pill--draft')+'">'+planLabel(p)+'</span>';return'<div class="card card--hover" data-open-project="'+p.id+'"><div class="item" style="padding:0;border:none"><span class="item__ava">'+initials(p.ticker||p.name)+'</span><div class="item__body"><div class="item__title">'+escapeHtml(p.name)+' <span class="muted">· $'+escapeHtml(p.ticker)+'</span></div><div class="item__sub">'+escapeHtml(shortMint(p.mint))+' · '+n+' campaign'+(n===1?'':'s')+'</div></div><div class="item__right" style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">'+(a?'<span class="pill pill--live">'+a+' active</span>':'<span class="pill pill--draft">No live</span>')+planPill+vaultPill+feePill+'</div></div></div>';}).join('');list.querySelectorAll('[data-open-project]').forEach(function(el){el.addEventListener('click',function(){openProject(el.getAttribute('data-open-project'));});});}
+    var planPill='<span class="pill '+(isPremium(p)?'pill--live':'pill--draft')+'">'+planLabel(p)+'</span>';return'<div class="card card--hover" data-open-project="'+BardPlatform.escapeHtml(p.id)+'"><div class="item" style="padding:0;border:none"><span class="item__ava">'+BardPlatform.escapeHtml(initials(p.ticker||p.name))+'</span><div class="item__body"><div class="item__title">'+BardPlatform.escapeHtml(p.name)+' <span class="muted">· $'+BardPlatform.escapeHtml(p.ticker)+'</span></div><div class="item__sub">'+BardPlatform.escapeHtml(shortMint(p.mint))+' · '+n+' campaign'+(n===1?'':'s')+'</div></div><div class="item__right" style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">'+(a?'<span class="pill pill--live">'+a+' active</span>':'<span class="pill pill--draft">No live</span>')+planPill+vaultPill+feePill+'</div></div></div>';}).join('');list.querySelectorAll('[data-open-project]').forEach(function(el){el.addEventListener('click',function(){openProject(el.getAttribute('data-open-project'));});});}
 async function renderInbox(){
   var box=document.getElementById('home-inbox');
   if(!box) return;
@@ -57,9 +56,9 @@ async function renderInbox(){
     var line=needTeam
       ? 'Sign to release this airdrop. Bard signs the other key.'
       : (bard ? 'Both signed — paying.' : 'You signed. Waiting for Bard to sign.');
-    var btn=needTeam?'<button class="btn btn--solid btn--sm" data-open-settle="'+s.campaign_id+'" data-open-project-id="'+s.project_id+'">Sign now</button>'
-      : '<button class="btn btn--ghost btn--sm" data-open-settle="'+s.campaign_id+'" data-open-project-id="'+s.project_id+'">View</button>';
-    return '<div class="notify"><h3>Airdrop ready · '+escapeHtml(title)+'</h3><p>'+escapeHtml(fmtAmt(s.total))+' $'+escapeHtml(ticker)+' to '+n+' holder'+(n===1?'':'s')+'. '+line+'</p><div class="signers" style="margin-top:0;margin-bottom:12px"><div class="signer '+(team?'is-yes':'is-wait')+'"><b>You</b><span>'+(team?'Signed':'Needs your signature')+'</span></div><div class="signer '+(bard?'is-yes':'is-wait')+'"><b>Bard</b><span>'+(bard?'Signed':'Waiting')+'</span></div></div>'+btn+'</div>';
+    var btn=needTeam?'<button class="btn btn--solid btn--sm" data-open-settle="'+BardPlatform.escapeHtml(s.campaign_id)+'" data-open-project-id="'+BardPlatform.escapeHtml(s.project_id)+'">Sign now</button>'
+      : '<button class="btn btn--ghost btn--sm" data-open-settle="'+BardPlatform.escapeHtml(s.campaign_id)+'" data-open-project-id="'+BardPlatform.escapeHtml(s.project_id)+'">View</button>';
+    return '<div class="notify"><h3>Airdrop ready · '+BardPlatform.escapeHtml(title)+'</h3><p>'+BardPlatform.escapeHtml(fmtAmt(s.total))+' $'+BardPlatform.escapeHtml(ticker)+' to '+n+' holder'+(n===1?'':'s')+'. '+line+'</p><div class="signers" style="margin-top:0;margin-bottom:12px"><div class="signer '+(team?'is-yes':'is-wait')+'"><b>You</b><span>'+(team?'Signed':'Needs your signature')+'</span></div><div class="signer '+(bard?'is-yes':'is-wait')+'"><b>Bard</b><span>'+(bard?'Signed':'Waiting')+'</span></div></div>'+btn+'</div>';
   }).join('');
   box.querySelectorAll('[data-open-settle]').forEach(function(btn){
     btn.addEventListener('click',function(){
@@ -77,8 +76,9 @@ function vaultBadgeHtml(p, extra){
   var title=locked?'Locked in 2-of-2 vault — no single party can withdraw.':'Lock rewards where holders can see them.';
   var body=locked
     ? 'Squads 2-of-2 (your key + Bard). Balance is on-chain — holders can verify on Solscan.'
-    : 'Deposit once. Neither you nor Bard can move funds alone. Example: lock 10M $'+escapeHtml(p.ticker||'TOKEN')+' before the board goes live.';
-  var link=addr?'<a class="btn btn--ghost btn--sm" href="https://solscan.io/account/'+encodeURIComponent(addr)+'" target="_blank" rel="noopener">View on Solscan</a>':'';
+    : 'Deposit once. Neither you nor Bard can move funds alone. Example: lock 10M $'+BardPlatform.escapeHtml(p.ticker||'TOKEN')+' before the board goes live.';
+  var solHref=addr?BardPlatform.safeHttpUrl('https://solscan.io/account/'+encodeURIComponent(addr)):'';
+  var link=solHref?'<a class="btn btn--ghost btn--sm" href="'+BardPlatform.escapeHtml(solHref)+'" target="_blank" rel="noopener">View on Solscan</a>':'';
   return '<div class="vault-badge"><div class="vault-badge__mark"><img src="/transparentbardsmile.png" alt=""></div><div style="flex:1;min-width:0"><strong>'+title+'</strong><p>'+body+'</p>'+(extra||'')+'</div>'+link+'</div>';
 }
 function fmtAmt(n){if(n==null||n===''||isNaN(Number(n)))return'—';var x=Number(n);if(x>=1e6)return(x/1e6).toFixed(2)+'M';if(x>=1e3)return(x/1e3).toFixed(2)+'k';return String(x);}
@@ -92,18 +92,18 @@ async function renderVaultPanel(p){
   var starter=isPremium(p);
   el.innerHTML=vaultBadgeHtml(p)+
     '<div class="card" style="margin-bottom:12px"><p class="kicker">How it works</p>'+
-    '<p style="margin:0;color:var(--body)">You and Bard each hold one key. Threshold 2. Example: lock 10M $'+escapeHtml(p.ticker)+'. When an airdrop is ready, you get a sign notice. You sign. Bard signs. Then it pays. Neither of us can move funds alone.</p></div>'+
+    '<p style="margin:0;color:var(--body)">You and Bard each hold one key. Threshold 2. Example: lock 10M $'+BardPlatform.escapeHtml(p.ticker)+'. When an airdrop is ready, you get a sign notice. You sign. Bard signs. Then it pays. Neither of us can move funds alone.</p></div>'+
     ((starter||addr)?'':'<div class="plan-lock" style="margin-bottom:12px">Premium (4 SOL) unlocks the vault and airdrops. Starter is raids only. <button type="button" class="btn btn--solid btn--sm" id="vault-go-starter">Upgrade to Premium</button></div>')+
     '<div class="card" style="margin-bottom:12px"><div class="form">'+
     (addr?'':'<button type="button" class="btn btn--solid" id="btn-create-vault"'+(starter?'':' disabled')+'>Create 2-of-2 vault</button><span class="hint" id="vault-create-hint">One Phantom signature. Your connected wallet pays ~0.05 SOL of rent (not the prize). We add your wallet + Bard as the two members.</span><p class="hint" id="vault-sol-line" style="margin-top:8px">Checking SOL in the connected wallet…</p>')+
-    (addr?'<p class="muted" style="margin:0 0 12px;font-size:.88rem">Vault is live. Deposit $'+escapeHtml(p.ticker)+' to this address. Holders can verify on Solscan.</p>':'')+
-    '<div class="field"><label>Vault address</label><div class="copy-row"><input class="inp num" id="vault-addr" value="'+escapeHtml(addr)+'" placeholder="Created here, or paste a Squads vault"><button type="button" class="btn btn--ghost btn--sm" id="btn-save-vault">Save</button></div></div>'+
-    '<div class="field"><label>Token mint</label><input class="inp num" id="vault-mint" value="'+escapeHtml(mint)+'"></div>'+
-    '<div class="field"><label>Bard key (second signer)</label><input class="inp num" id="vault-bard-key" readonly value="'+escapeHtml(bard)+'"></div>'+
+    (addr?'<p class="muted" style="margin:0 0 12px;font-size:.88rem">Vault is live. Deposit $'+BardPlatform.escapeHtml(p.ticker)+' to this address. Holders can verify on Solscan.</p>':'')+
+    '<div class="field"><label>Vault address</label><div class="copy-row"><input class="inp num" id="vault-addr" value="'+BardPlatform.escapeHtml(addr)+'" placeholder="Created here, or paste a Squads vault"><button type="button" class="btn btn--ghost btn--sm" id="btn-save-vault">Save</button></div></div>'+
+    '<div class="field"><label>Token mint</label><input class="inp num" id="vault-mint" value="'+BardPlatform.escapeHtml(mint)+'"></div>'+
+    '<div class="field"><label>Bard key (second signer)</label><input class="inp num" id="vault-bard-key" readonly value="'+BardPlatform.escapeHtml(bard)+'"></div>'+
     '</div></div>'+
     '<div class="grid-2" id="vault-stats">'+
     '<div class="stat"><div class="stat__lbl">On-chain balance</div><div class="stat__val p num" id="vault-bal">…</div></div>'+
-    '<div class="stat"><div class="stat__lbl">Reserved for campaigns</div><div class="stat__val num" id="vault-res">'+escapeHtml(fmtAmt(reserved))+'</div></div>'+
+    '<div class="stat"><div class="stat__lbl">Reserved for campaigns</div><div class="stat__val num" id="vault-res">'+BardPlatform.escapeHtml(fmtAmt(reserved))+'</div></div>'+
     '</div>'+
     '<p class="muted" style="margin:12px 0 0;font-size:.82rem" id="vault-bal-meta">Reading chain…</p>';
   var goS=document.getElementById('vault-go-starter');
@@ -115,7 +115,7 @@ async function renderVaultPanel(p){
     if(!wallet){ line.textContent='Connect the team wallet in the header first. That wallet pays the ~0.05 SOL rent.'; return; }
     walletSol(wallet).then(function(sol){
       if(sol==null){ line.textContent='Could not read SOL for '+shortAddr(wallet)+'.'; return; }
-      if(sol<0.05) line.innerHTML='Connected wallet '+escapeHtml(shortAddr(wallet))+' has <b>'+sol.toFixed(4)+' SOL</b>. Send ~0.05 SOL there before creating. This is rent, not the prize.';
+      if(sol<0.05) line.innerHTML='Connected wallet '+BardPlatform.escapeHtml(shortAddr(wallet))+' has <b>'+sol.toFixed(4)+' SOL</b>. Send ~0.05 SOL there before creating. This is rent, not the prize.';
       else line.textContent='Connected wallet '+shortAddr(wallet)+' · '+sol.toFixed(4)+' SOL. Ready to create.';
     });
   })();
@@ -130,7 +130,7 @@ var createBtn=document.getElementById('btn-create-vault');
       var line=document.getElementById('vault-sol-line');
       if(line){
         if(sol==null) line.textContent='Could not read SOL. Check the RPC and try again.';
-        else if(sol<0.05) line.innerHTML='Connected wallet '+escapeHtml(shortAddr(wallet))+' has <b>'+sol.toFixed(4)+' SOL</b>. Need ~0.05 SOL of rent. Send SOL to that wallet, then retry.';
+        else if(sol<0.05) line.innerHTML='Connected wallet '+BardPlatform.escapeHtml(shortAddr(wallet))+' has <b>'+sol.toFixed(4)+' SOL</b>. Need ~0.05 SOL of rent. Send SOL to that wallet, then retry.';
         else line.textContent='Connected wallet '+shortAddr(wallet)+' · '+sol.toFixed(4)+' SOL. Enough to create.';
       }
       if(sol!=null && sol<0.05){
@@ -165,7 +165,7 @@ var createBtn=document.getElementById('btn-create-vault');
     BardPlatform.fetchVaultOnchain(addr, mint).then(function(info){
       var avail=Math.max(0, Number(info.uiAmount||0)-reserved);
       document.getElementById('vault-bal').textContent=fmtAmt(info.uiAmount)+' $'+p.ticker;
-      document.getElementById('vault-bal-meta').innerHTML='Available ~ '+fmtAmt(avail)+' · <a href="'+escapeHtml(info.solscan)+'" target="_blank" rel="noopener" style="color:var(--purple)">Solscan</a>';
+      var solHref=BardPlatform.safeHttpUrl(info.solscan);document.getElementById('vault-bal-meta').innerHTML=solHref?('Available ~ '+BardPlatform.escapeHtml(fmtAmt(avail))+' \u00b7 <a href="'+BardPlatform.escapeHtml(solHref)+'" target="_blank" rel="noopener" style="color:var(--purple)">Solscan</a>'):('Available ~ '+BardPlatform.escapeHtml(fmtAmt(avail)));
     }).catch(function(e){
       document.getElementById('vault-bal').textContent='—';
       document.getElementById('vault-bal-meta').textContent=(e&&e.message)||'Could not read on-chain balance';
@@ -204,7 +204,7 @@ async function renderRosterPanel(p){
   box.innerHTML='<div class="card" style="padding:0 8px"><table class="table"><thead><tr><th>Wallet</th><th>Role</th><th>Note</th><th></th></tr></thead><tbody>'+
     rows.map(function(r){
       var pill=r.role==='blocked'?'pill--ended':(r.role==='whale'?'pill--live':'pill--paid');
-      return '<tr><td class="num">'+escapeHtml(shortAddr(r.wallet))+'</td><td><span class="pill '+pill+'">'+escapeHtml(r.role)+'</span></td><td>'+escapeHtml(r.note||'—')+'</td><td><button class="btn btn--ghost btn--sm" data-drop="'+escapeHtml(r.wallet)+'">Remove</button></td></tr>';
+      return '<tr><td class="num">'+BardPlatform.escapeHtml(shortAddr(r.wallet))+'</td><td><span class="pill '+pill+'">'+BardPlatform.escapeHtml(r.role)+'</span></td><td>'+BardPlatform.escapeHtml(r.note||'—')+'</td><td><button class="btn btn--ghost btn--sm" data-drop="'+BardPlatform.escapeHtml(r.wallet)+'">Remove</button></td></tr>';
     }).join('')+'</tbody></table></div>';
   box.querySelectorAll('[data-drop]').forEach(function(btn){
     btn.onclick=async function(){
@@ -228,9 +228,9 @@ function renderSettingsPanel(p){
   }
   setEl.innerHTML=
     '<div class="card" style="margin-bottom:12px"><p class="kicker">Project</p>'+
-    '<div class="form"><div class="field"><label>Name</label><div>'+escapeHtml(p.name)+'</div></div>'+
-    '<div class="field"><label>Ticker</label><div>$'+escapeHtml(p.ticker)+'</div></div>'+
-    '<div class="field"><label>Mint</label><div class="num" style="word-break:break-all">'+escapeHtml(p.mint)+'</div></div>'+
+    '<div class="form"><div class="field"><label>Name</label><div>'+BardPlatform.escapeHtml(p.name)+'</div></div>'+
+    '<div class="field"><label>Ticker</label><div>$'+BardPlatform.escapeHtml(p.ticker)+'</div></div>'+
+    '<div class="field"><label>Mint</label><div class="num" style="word-break:break-all">'+BardPlatform.escapeHtml(p.mint)+'</div></div>'+
     '<div class="field"><label>Onboard fee</label><div>'+feeStatus+'</div></div></div></div>'+
     '<div class="card"><p class="kicker">Plan</p>'+
     '<p style="margin:0 0 14px;color:var(--body);font-size:.92rem">There is no free tier. Starter is raids. Premium adds the vault, airdrops, and accumulating pools.</p>'+
@@ -257,7 +257,7 @@ function renderSettingsPanel(p){
     };
   });
 }
-function renderProjectTabs(tab){var p=findProject(currentProjectId);if(!p)return;document.querySelectorAll('#page-project .tab').forEach(function(t){t.classList.toggle('is-on',t.getAttribute('data-tab')===tab);});var campsEl=document.getElementById('proj-campaigns');var setEl=document.getElementById('proj-settings');var vaultEl=document.getElementById('proj-vault');var rosterEl=document.getElementById('proj-roster');if(tab==='roster'){campsEl.style.display='none';if(setEl)setEl.style.display='none';if(vaultEl)vaultEl.style.display='none';if(rosterEl){rosterEl.style.display='block';renderRosterPanel(p);}return;}if(tab==='vault'){campsEl.style.display='none';setEl.style.display='none';vaultEl.style.display='block';renderVaultPanel(p);return;}if(tab==='settings'){campsEl.style.display='none';if(vaultEl)vaultEl.style.display='none';if(rosterEl)rosterEl.style.display='none';setEl.style.display='block';renderSettingsPanel(p);return;}if(vaultEl)vaultEl.style.display='none';if(rosterEl)rosterEl.style.display='none';setEl.style.display='none';campsEl.style.display='block';var camps=p.campaigns||[];if(!camps.length){campsEl.innerHTML='<div class="empty"><h3>No campaigns yet</h3><p>Create a hold, raid, refer, or custom campaign for $'+escapeHtml(p.ticker)+'.</p><button class="btn btn--solid" id="empty-camp">New campaign</button></div>';document.getElementById('empty-camp').onclick=function(){resetCampaignBuilder();show('new-campaign');};return;}campsEl.innerHTML=camps.slice().reverse().map(function(c){var pill=c.status==='active'?'pill--live':(c.status==='ended'?'pill--ended':'pill--draft');var fee=c.feePaid?'<span class="pill pill--paid">fee paid</span>':'<span class="pill pill--pending">fee pending</span>';var sub=[c.type,(c.accessMode||c.access_mode)==='approval'?'approval':'open',c.rewardMode||c.reward_mode||'fixed',(c.rule||'').slice(0,48)].filter(Boolean).join(' · ');return'<div class="card card--hover" data-open-camp="'+c.id+'"><div class="item" style="padding:0;border:none"><div class="item__body"><div class="item__title">'+escapeHtml(c.title)+'</div><div class="item__sub">'+escapeHtml(sub)+((c.rule||'').length>48?'…':'')+'</div></div><div class="item__right" style="display:flex;flex-direction:column;align-items:flex-end;gap:6px"><span class="pill '+pill+'">'+escapeHtml(c.status)+'</span>'+fee+'</div></div></div>';}).join('');campsEl.querySelectorAll('[data-open-camp]').forEach(function(el){el.addEventListener('click',function(){openCampaign(el.getAttribute('data-open-camp'));});});}
+function renderProjectTabs(tab){var p=findProject(currentProjectId);if(!p)return;document.querySelectorAll('#page-project .tab').forEach(function(t){t.classList.toggle('is-on',t.getAttribute('data-tab')===tab);});var campsEl=document.getElementById('proj-campaigns');var setEl=document.getElementById('proj-settings');var vaultEl=document.getElementById('proj-vault');var rosterEl=document.getElementById('proj-roster');if(tab==='roster'){campsEl.style.display='none';if(setEl)setEl.style.display='none';if(vaultEl)vaultEl.style.display='none';if(rosterEl){rosterEl.style.display='block';renderRosterPanel(p);}return;}if(tab==='vault'){campsEl.style.display='none';setEl.style.display='none';vaultEl.style.display='block';renderVaultPanel(p);return;}if(tab==='settings'){campsEl.style.display='none';if(vaultEl)vaultEl.style.display='none';if(rosterEl)rosterEl.style.display='none';setEl.style.display='block';renderSettingsPanel(p);return;}if(vaultEl)vaultEl.style.display='none';if(rosterEl)rosterEl.style.display='none';setEl.style.display='none';campsEl.style.display='block';var camps=p.campaigns||[];if(!camps.length){campsEl.innerHTML='<div class="empty"><h3>No campaigns yet</h3><p>Create a hold, raid, refer, or custom campaign for $'+BardPlatform.escapeHtml(p.ticker)+'.</p><button class="btn btn--solid" id="empty-camp">New campaign</button></div>';document.getElementById('empty-camp').onclick=function(){resetCampaignBuilder();show('new-campaign');};return;}campsEl.innerHTML=camps.slice().reverse().map(function(c){var pill=c.status==='active'?'pill--live':(c.status==='ended'?'pill--ended':'pill--draft');var fee=c.feePaid?'<span class="pill pill--paid">fee paid</span>':'<span class="pill pill--pending">fee pending</span>';var sub=[c.type,(c.accessMode||c.access_mode)==='approval'?'approval':'open',c.rewardMode||c.reward_mode||'fixed',(c.rule||'').slice(0,48)].filter(Boolean).join(' · ');return'<div class="card card--hover" data-open-camp="'+BardPlatform.escapeHtml(c.id)+'"><div class="item" style="padding:0;border:none"><div class="item__body"><div class="item__title">'+BardPlatform.escapeHtml(c.title)+'</div><div class="item__sub">'+BardPlatform.escapeHtml(sub)+((c.rule||'').length>48?'…':'')+'</div></div><div class="item__right" style="display:flex;flex-direction:column;align-items:flex-end;gap:6px"><span class="pill '+pill+'">'+BardPlatform.escapeHtml(c.status)+'</span>'+fee+'</div></div></div>';}).join('');campsEl.querySelectorAll('[data-open-camp]').forEach(function(el){el.addEventListener('click',function(){openCampaign(el.getAttribute('data-open-camp'));});});}
 function openCampaign(cid){var c=findCampaign(currentProjectId,cid);var p=findProject(currentProjectId);if(!c||!p)return;currentCampaignId=cid;document.getElementById('camp-kicker').textContent=p.name+' · $'+p.ticker;document.getElementById('camp-title').textContent=c.title;document.getElementById('camp-rule').textContent=c.rule;var st=document.getElementById('camp-status');st.textContent=c.status;st.className='pill '+(c.status==='active'?'pill--live':'pill--ended');var access=c.accessMode||c.access_mode||'open';var rewardMode=c.rewardMode||c.reward_mode||'fixed';var raidMode=c.raidMode||c.raid_mode||null;document.getElementById('camp-access-pill').textContent=access==='approval'?'Approval required':'Open join';document.getElementById('camp-reward-pill').textContent=({fixed:'Fixed payout',top3:'Top 3',pool:'Shared pool',growing:'Growing pool'})[rewardMode]||rewardMode;var raidPill=document.getElementById('camp-raid-pill');if(c.type==='raid'&&raidMode){raidPill.style.display='';raidPill.textContent=({open:'Open raid',post:'Specific post',kol_list:'KOL targets'})[raidMode]||raidMode;}else{raidPill.style.display='none';}var poolLabel=(c.pool||'—')+(c.unit?' '+c.unit:'');if(c.reward)poolLabel=(c.reward+' '+(c.unit||'')+' · pool '+poolLabel).trim();
     var poolLblEl=document.getElementById('camp-pool').parentElement.querySelector('.stat__lbl');
     if((c.rewardMode||c.reward_mode)==='growing' && BardPlatform.growingMeta){
@@ -270,7 +270,7 @@ function openCampaign(cid){var c=findCampaign(currentProjectId,cid);var p=findPr
     if(badge){
       if(p.vaultAddress){
         var locked=Number(c.vaultReserved||0);
-        badge.innerHTML=vaultBadgeHtml(p, locked?('<p style="margin-top:8px">This campaign has <b class="num">'+escapeHtml(fmtAmt(locked))+' $'+escapeHtml(p.ticker)+'</b> reserved from the vault.</p>'):'');
+        badge.innerHTML=vaultBadgeHtml(p, locked?('<p style="margin-top:8px">This campaign has <b class="num">'+BardPlatform.escapeHtml(fmtAmt(locked))+' $'+BardPlatform.escapeHtml(p.ticker)+'</b> reserved from the vault.</p>'):'');
         badge.style.display='block';
       } else { badge.innerHTML=''; badge.style.display='none'; }
     }
@@ -290,11 +290,11 @@ async function loadCampaignOps(p,c){
       var st=j.qualified?'Qualified':(j.status||'approved');
       var pill=j.qualified?'pill--paid':(j.status==='pending'?'pill--pending':(j.status==='rejected'?'pill--ended':'pill--live'));
       var acts='';
-      if(j.status==='pending') acts+='<button class="btn btn--ghost btn--sm" data-js="approve" data-w="'+escapeHtml(j.wallet)+'">Approve</button> <button class="btn btn--ghost btn--sm" data-js="reject" data-w="'+escapeHtml(j.wallet)+'">Reject</button> ';
-      if(j.status==='approved'||j.qualified) acts+='<button class="btn btn--ghost btn--sm" data-js="plus" data-w="'+escapeHtml(j.wallet)+'" data-p="'+(j.progress||0)+'">+1</button> <button class="btn btn--ghost btn--sm" data-js="minus" data-w="'+escapeHtml(j.wallet)+'" data-p="'+(j.progress||0)+'">−1</button> ';
-      if(!j.qualified && j.status!=='rejected') acts+='<button class="btn btn--solid btn--sm" data-js="qual" data-w="'+escapeHtml(j.wallet)+'">Qualify</button> ';
-      acts+='<button class="btn btn--ghost btn--sm" data-js="trust" data-w="'+escapeHtml(j.wallet)+'">Remember</button> <button class="btn btn--ghost btn--sm" data-js="whale" data-w="'+escapeHtml(j.wallet)+'">Whale</button> <button class="btn btn--ghost btn--sm" data-js="block" data-w="'+escapeHtml(j.wallet)+'">Block</button>';
-      return '<tr><td class="num">'+escapeHtml(shortAddr(j.wallet))+'</td><td>'+escapeHtml(j.x_handle||'—')+'</td><td class="num">'+(j.progress||0)+'</td><td><span class="pill '+pill+'">'+escapeHtml(st)+'</span></td><td style="white-space:nowrap">'+acts+'</td></tr>';
+      if(j.status==='pending') acts+='<button class="btn btn--ghost btn--sm" data-js="approve" data-w="'+BardPlatform.escapeHtml(j.wallet)+'">Approve</button> <button class="btn btn--ghost btn--sm" data-js="reject" data-w="'+BardPlatform.escapeHtml(j.wallet)+'">Reject</button> ';
+      if(j.status==='approved'||j.qualified) acts+='<button class="btn btn--ghost btn--sm" data-js="plus" data-w="'+BardPlatform.escapeHtml(j.wallet)+'" data-p="'+BardPlatform.escapeHtml(j.progress||0)+'">+1</button> <button class="btn btn--ghost btn--sm" data-js="minus" data-w="'+BardPlatform.escapeHtml(j.wallet)+'" data-p="'+BardPlatform.escapeHtml(j.progress||0)+'">−1</button> ';
+      if(!j.qualified && j.status!=='rejected') acts+='<button class="btn btn--solid btn--sm" data-js="qual" data-w="'+BardPlatform.escapeHtml(j.wallet)+'">Qualify</button> ';
+      acts+='<button class="btn btn--ghost btn--sm" data-js="trust" data-w="'+BardPlatform.escapeHtml(j.wallet)+'">Remember</button> <button class="btn btn--ghost btn--sm" data-js="whale" data-w="'+BardPlatform.escapeHtml(j.wallet)+'">Whale</button> <button class="btn btn--ghost btn--sm" data-js="block" data-w="'+BardPlatform.escapeHtml(j.wallet)+'">Block</button>';
+      return '<tr><td class="num">'+BardPlatform.escapeHtml(shortAddr(j.wallet))+'</td><td>'+(function(){var h=BardPlatform.escapeHtml(j.x_handle||'—');if(j.note)h+='<div class="muted">'+BardPlatform.escapeHtml(j.note)+'</div>';return h;})()+'</td><td class="num">'+BardPlatform.escapeHtml(j.progress||0)+'</td><td><span class="pill '+pill+'">'+BardPlatform.escapeHtml(st)+'</span></td><td style="white-space:nowrap">'+acts+'</td></tr>';
     }).join('');
     tbody.querySelectorAll('[data-js]').forEach(function(btn){
       btn.addEventListener('click', async function(){
@@ -330,9 +330,9 @@ function renderDrawBox(p,c,joins){
   if(c.drawSeed){
     wrap.innerHTML='<strong style="font-variation-settings:\'wght\' 620">Airdrop draw</strong>'+
       '<p class="muted" style="margin:6px 0 8px;font-size:.86rem">Provable. Seed is public. Same seed always yields the same order.</p>'+
-      '<p class="num" style="font-size:.78rem;word-break:break-all;color:var(--muted)">'+escapeHtml(c.drawSeed)+'</p>'+
+      '<p class="num" style="font-size:.78rem;word-break:break-all;color:var(--muted)">'+BardPlatform.escapeHtml(c.drawSeed)+'</p>'+
       '<table class="table"><thead><tr><th>#</th><th>Wallet</th></tr></thead><tbody>'+
-      winners.map(function(w,i){ return '<tr><td class="num">'+(i+1)+'</td><td class="num">'+escapeHtml(shortAddr(w.wallet||w))+'</td></tr>'; }).join('')+
+      winners.map(function(w,i){ return '<tr><td class="num">'+(i+1)+'</td><td class="num">'+BardPlatform.escapeHtml(shortAddr(w.wallet||w))+'</td></tr>'; }).join('')+
       '</tbody></table>';
     host.appendChild(wrap);
     return;
@@ -357,7 +357,7 @@ function renderSettleBox(p,c,joins,sets){
   var live=sets.filter(function(s){ return s.status!=='cancelled' && s.status!=='executed'; })[0];
   var done=sets.filter(function(s){ return s.status==='executed'; })[0];
   if(done && !live){
-    box.innerHTML='<div class="signers"><div class="signer is-yes"><b>You</b><span>Signed</span></div><div class="signer is-yes"><b>Bard</b><span>Signed</span></div></div><p class="muted" style="margin:0">Paid'+(done.tx_signature?' · <a href="https://solscan.io/tx/'+encodeURIComponent(done.tx_signature)+'" target="_blank" rel="noopener" style="color:var(--purple)">tx</a>':'')+'.</p>';
+    box.innerHTML='<div class="signers"><div class="signer is-yes"><b>You</b><span>Signed</span></div><div class="signer is-yes"><b>Bard</b><span>Signed</span></div></div><p class="muted" style="margin:0">Paid'+((function(){var txHref=done.tx_signature?BardPlatform.safeHttpUrl('https://solscan.io/tx/'+encodeURIComponent(done.tx_signature)):'';return txHref?(' · <a href="'+BardPlatform.escapeHtml(txHref)+'" target="_blank" rel="noopener" style="color:var(--purple)">tx</a>'):'';})())+'.</p>';
     return;
   }
   if(!live){
@@ -368,7 +368,7 @@ function renderSettleBox(p,c,joins,sets){
   var team=!!live.team_signed;
   var bard=!!live.bard_signed;
   var rows=(live.payouts||[]).map(function(x,i){
-    return '<tr><td class="num">'+(i+1)+'</td><td class="num">'+escapeHtml(shortAddr(x.wallet))+'</td><td class="num">'+escapeHtml(String(x.amount))+' $'+escapeHtml(p.ticker)+'</td></tr>';
+    return '<tr><td class="num">'+(i+1)+'</td><td class="num">'+BardPlatform.escapeHtml(shortAddr(x.wallet))+'</td><td class="num">'+BardPlatform.escapeHtml(String(x.amount))+' $'+BardPlatform.escapeHtml(p.ticker)+'</td></tr>';
   }).join('');
   var actions='';
   if(!team){
@@ -378,7 +378,7 @@ function renderSettleBox(p,c,joins,sets){
   } else {
     actions='<button class="btn btn--solid" type="button" id="btn-exec-settle">Release payment</button>';
   }
-  box.innerHTML='<p style="margin:0 0 8px;font-size:.92rem">Airdrop · <b class="num">'+escapeHtml(fmtAmt(live.total))+' $'+escapeHtml(p.ticker)+'</b> to '+(live.payouts||[]).length+' holders</p>'+
+  box.innerHTML='<p style="margin:0 0 8px;font-size:.92rem">Airdrop · <b class="num">'+BardPlatform.escapeHtml(fmtAmt(live.total))+' $'+BardPlatform.escapeHtml(p.ticker)+'</b> to '+(live.payouts||[]).length+' holders</p>'+
     '<div class="signers"><div class="signer '+(team?'is-yes':'is-wait')+'"><b>You</b><span>'+(team?'Signed':'Needs your signature')+'</span></div><div class="signer '+(bard?'is-yes':'is-wait')+'"><b>Bard</b><span>'+(bard?'Signed':'Waiting')+'</span></div></div>'+
     '<div style="overflow-x:auto"><table class="table"><thead><tr><th>#</th><th>Wallet</th><th>Amount</th></tr></thead><tbody>'+rows+'</tbody></table></div>'+
     '<div style="margin-top:12px">'+actions+'</div>';

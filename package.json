@@ -1,0 +1,13 @@
+{
+  "name": "bard",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test tests/unit/platform.test.js",
+    "e2e": "playwright install chromium && playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.55.0",
+    "wrangler": "^4.42.0"
+  }
+}

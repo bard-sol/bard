@@ -34,18 +34,64 @@
   var TEAM_KEY = 'bard_team_v1';
   var HOLDER_KEY = 'bard_holder_v1';
   var RPC = 'https://solana-rpc.publicnode.com';
+  var SUPABASE_SCRIPT = '/vendor/supabase/supabase.js';
+  var LOCAL_MODE_MSG = 'NOT SAVED — local demo mode. Nothing you do here is stored on Bard.';
 
   var sb = null;
   var mode = 'local';
   var ready = null;
 
+  function escapeHtml(s) {
+    if (s == null) return '';
+    return String(s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  function safeHttpUrl(url) {
+    if (url == null) return '';
+    var raw = String(url).trim();
+    if (!raw) return '';
+    try {
+      var parsed = new URL(raw);
+      if (parsed.protocol === 'https:' || parsed.protocol === 'http:') return parsed.href;
+    } catch (e) {}
+    return '';
+  }
+
+  function showLocalBanner() {
+    if (typeof document === 'undefined' || mode !== 'local') return;
+    if (document.getElementById('bard-local-banner')) return;
+    var bar = document.createElement('div');
+    bar.id = 'bard-local-banner';
+    bar.setAttribute('role', 'status');
+    bar.textContent = LOCAL_MODE_MSG;
+    bar.style.cssText = 'box-sizing:border-box;display:block;width:100%;margin:0;padding:12px 16px;background:#6b1d1d;color:#fff;text-align:center;font:600 15px/1.35 system-ui,Segoe UI,sans-serif;position:relative;z-index:100000;';
+    var mount = function () {
+      if (!document.body || document.getElementById('bard-local-banner')) return;
+      document.body.insertBefore(bar, document.body.firstChild);
+    };
+    if (document.body) mount();
+    else document.addEventListener('DOMContentLoaded', mount);
+  }
+
+  function refuseLocalTeamWrite() {
+    if (mode === 'supabase' && sb) return;
+    throw new Error(LOCAL_MODE_MSG);
+  }
+
   function loadScript(src) {
     return new Promise(function (resolve, reject) {
       if (document.querySelector('script[src="' + src + '"]')) { resolve(); return; }
       var s = document.createElement('script');
-      s.src = src; s.async = true;
+      s.src = src;
+      s.async = true;
+      s.crossOrigin = 'anonymous';
       s.onload = function () { resolve(); };
-      s.onerror = reject;
+      s.onerror = function () { reject(new Error('script failed: ' + src)); };
       document.head.appendChild(s);
     });
   }
@@ -54,13 +100,14 @@
     if (ready) return ready;
     ready = (async function () {
       try {
-        await loadScript('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2');
-        if (!global.supabase) throw new Error('supabase missing');
+        await loadScript(SUPABASE_SCRIPT);
+        if (!global.supabase || !global.supabase.createClient) throw new Error('supabase missing');
         sb = global.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
         var probe = await sb.from('projects').select('id').limit(1);
-        if (probe.error) { console.warn('[Bard] localStorage', probe.error.message); mode = 'local'; }
+        if (probe.error) { console.warn('[Bard] localStorage', probe.error.message); mode = 'local'; sb = null; }
         else { mode = 'supabase'; console.info('[Bard] Connected to Supabase'); }
       } catch (e) { console.warn('[Bard] localStorage', e); mode = 'local'; sb = null; }
+      if (mode === 'local') showLocalBanner();
       return { mode: mode, sb: sb };
     })();
     return ready;
@@ -203,6 +250,7 @@
 
   async function createProject(input) {
     await init();
+    refuseLocalTeamWrite();
     var paid = !FEES_ENABLED;
     var payload = { name: input.name, ticker: input.ticker, mint: input.mint, chain: input.chain || 'solana', admin_wallet: input.admin || null, created_by: input.createdBy || input.admin || null, fee_paid: paid, fee_amount_sol: FEES.onboard, plan: input.plan || 'starter' };
     if (mode === 'supabase' && sb) {
@@ -217,6 +265,7 @@
 
   async function createCampaign(projectId, input) {
     await init();
+    refuseLocalTeamWrite();
     var plan = 'free';
     if (mode === 'supabase' && sb) {
       var proj = await sb.from('projects').select('id, fee_paid, plan').eq('id', projectId).maybeSingle();
@@ -252,6 +301,7 @@
 
   async function updateProjectVault(projectId, input) {
     await init();
+    refuseLocalTeamWrite();
     var addr = (input && input.address) ? String(input.address).trim() : '';
     if (addr && !isBase58Addr(addr)) throw new Error('Vault address looks invalid');
     var mint = (input && input.mint) ? String(input.mint).trim() : null;
@@ -282,6 +332,7 @@
 
   async function reserveVault(projectId, campaignId, amount) {
     await init();
+    refuseLocalTeamWrite();
     var n = Number(amount);
     if (!(n > 0)) throw new Error('Reserve amount must be greater than 0');
     if (mode === 'supabase' && sb) {
@@ -313,6 +364,7 @@
 
   async function setProjectPlan(projectId, plan) {
     await init();
+    refuseLocalTeamWrite();
     if (plan !== 'free' && plan !== 'starter' && plan !== 'pro') throw new Error('Unknown plan');
     var payload = { plan: plan };
     if (plan !== 'free') payload.plan_paid_at = new Date().toISOString();
@@ -419,6 +471,7 @@
 
   async function proposeSettlement(projectId, campaignId, campaign, joins) {
     await init();
+    refuseLocalTeamWrite();
     var built = computePayouts(campaign, joins);
     var row = {
       project_id: projectId,
@@ -458,6 +511,7 @@
 
   async function signSettlement(settlementId, who, extra) {
     await init();
+    refuseLocalTeamWrite();
     var payload = {};
     if (who === 'team') {
       payload.team_signed = true;
@@ -506,6 +560,7 @@
 
   async function cosignSettlement(settlementId, wallet, sig) {
     await init();
+    refuseLocalTeamWrite();
     var payload = {
       status: 'cosigned',
       cosigned_wallet: wallet,
@@ -525,6 +580,7 @@
 
   async function executeSettlement(settlementId, txSignature, projectId) {
     await init();
+    refuseLocalTeamWrite();
     var payload = {
       status: 'executed',
       tx_signature: txSignature || null,
@@ -566,6 +622,7 @@
 
   async function updateCampaignStatus(campaignId, status) {
     await init();
+    refuseLocalTeamWrite();
     if (mode === 'supabase' && sb) {
       var res = await sb.from('campaigns').update({ status: status }).eq('id', campaignId).select('*').single();
       if (res.error) throw res.error; return mapCampaignRow(res.data);
@@ -589,6 +646,7 @@
 
   async function recordFee(kind, payerWallet, refs) {
     await init();
+    refuseLocalTeamWrite();
     var amount = FEES[kind];
     if (amount == null) throw new Error('Unknown fee kind');
     var row = { kind: kind, amount_sol: amount, payer_wallet: payerWallet, status: 'pending', project_id: (refs && refs.projectId) || null, campaign_id: (refs && refs.campaignId) || null, claim_id: (refs && refs.claimId) || null, meta: refs && refs.meta ? refs.meta : {} };
@@ -598,6 +656,7 @@
 
   async function markFeeConfirmed(feeId, txSignature, kind, refs) {
     await init();
+    refuseLocalTeamWrite();
     if (mode === 'supabase' && sb) {
       await sb.from('fee_payments').update({ status: 'confirmed', tx_signature: txSignature, confirmed_at: new Date().toISOString() }).eq('id', feeId);
       if (kind === 'onboard' && refs && refs.projectId) await sb.from('projects').update({ fee_paid: true, fee_tx: txSignature }).eq('id', refs.projectId);
@@ -617,6 +676,7 @@
 
   async function markFeeFailed(feeId, reason) {
     await init();
+    refuseLocalTeamWrite();
     if (mode === 'supabase' && sb && feeId) {
       try { await sb.from('fee_payments').update({ status: 'failed', meta: { error: String(reason || 'failed') } }).eq('id', feeId); } catch (e) { console.warn('[Bard] markFeeFailed', e); }
     }
@@ -624,6 +684,7 @@
 
   async function payFee(kind, payerWallet, provider, refs) {
     await init();
+    refuseLocalTeamWrite();
     if (!FEES_ENABLED) {
       var freeRow = await recordFee(kind, payerWallet, refs || {});
       await markFeeConfirmed(freeRow && freeRow.id, 'fees-disabled', kind, refs || {});
@@ -735,6 +796,7 @@
 
   async function setJoinStatus(campaignId, wallet, status) {
     await init();
+    refuseLocalTeamWrite();
     if (!status || ['pending', 'approved', 'rejected'].indexOf(status) < 0) throw new Error('Invalid join status');
     if (mode === 'supabase' && sb) {
       var res = await sb.from('campaign_joins').update({ status: status }).eq('campaign_id', campaignId).eq('wallet', wallet).select('*').single();
@@ -745,6 +807,7 @@
 
   async function setJoinProgress(campaignId, wallet, progress, note) {
     await init();
+    refuseLocalTeamWrite();
     var n = Math.max(0, parseInt(progress, 10) || 0);
     if (mode === 'supabase' && sb) {
       var payload = { progress: n }; if (note != null) payload.note = String(note);
@@ -756,6 +819,7 @@
 
   async function markQualified(projectId, campaignId, wallet) {
     await init();
+    refuseLocalTeamWrite();
     if (mode === 'supabase' && sb) {
       var res = await sb.from('campaign_joins').update({ qualified: true, qualified_at: new Date().toISOString() }).eq('campaign_id', campaignId).eq('wallet', wallet).select('*').single();
       if (res.error) throw res.error; return res.data;
@@ -796,6 +860,7 @@
 
   async function upsertRoster(projectId, wallet, role, note) {
     await init();
+    refuseLocalTeamWrite();
     if (!wallet) throw new Error('Wallet required');
     if (['trusted', 'whale', 'blocked'].indexOf(role) < 0) throw new Error('Role must be trusted, whale, or blocked');
     if (mode === 'supabase' && sb) {
@@ -816,6 +881,7 @@
 
   async function removeRoster(projectId, wallet) {
     await init();
+    refuseLocalTeamWrite();
     if (mode === 'supabase' && sb) {
       var res = await sb.from('project_roster').delete().eq('project_id', projectId).eq('wallet', wallet);
       if (res.error) throw res.error;
@@ -854,6 +920,7 @@
 
   async function drawAirdrop(campaignId, topN) {
     await init();
+    refuseLocalTeamWrite();
     var joins = await listJoinsForCampaign(campaignId);
     var pool = joins.filter(function (j) { return j.status !== 'rejected' && (j.qualified || j.status === 'approved'); });
     if (!pool.length) throw new Error('No eligible holders to draw');
@@ -951,6 +1018,8 @@
     signSettlement: signSettlement,
     cosignSettlement: cosignSettlement,
     executeSettlement: executeSettlement,
-    getRpc: getRpc
+    getRpc: getRpc,
+    escapeHtml: escapeHtml,
+    safeHttpUrl: safeHttpUrl
   };
 })(typeof window !== 'undefined' ? window : globalThis);

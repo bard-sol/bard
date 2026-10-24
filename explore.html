@@ -157,11 +157,6 @@ h1{
 (function(){
   var all = [];
 
-  function escapeHtml(s){
-    return String(s == null ? '' : s)
-      .replace(/&/g,'&').replace(/</g,'<').replace(/>/g,'>')
-      .replace(/"/g,'"');
-  }
   function initials(s){
     return String(s || '?').trim().slice(0,2).toUpperCase();
   }
@@ -188,12 +183,12 @@ h1{
       return (
         '<a class="card card--hover" href="/dashboard.html">' +
           '<div class="item">' +
-            '<span class="item__ava">' + initials(x.ticker || x.projectName) + '</span>' +
+            '<span class="item__ava">' + BardPlatform.escapeHtml(initials(x.ticker || x.projectName)) + '</span>' +
             '<div class="item__body">' +
-              '<div class="item__title">' + escapeHtml(c.title) +
-                ' <span class="muted">· $' + escapeHtml(x.ticker) + '</span></div>' +
-              '<div class="item__sub">' + escapeHtml(x.projectName) + ' · ' + escapeHtml(c.type) +
-                ' · ' + escapeHtml((c.rule || '').slice(0,64)) + ((c.rule || '').length > 64 ? '…' : '') + '</div>' +
+              '<div class="item__title">' + BardPlatform.escapeHtml(c.title) +
+                ' <span class="muted">· $' + BardPlatform.escapeHtml(x.ticker) + '</span></div>' +
+              '<div class="item__sub">' + BardPlatform.escapeHtml(x.projectName) + ' · ' + BardPlatform.escapeHtml(c.type) +
+                ' · ' + BardPlatform.escapeHtml((c.rule || '').slice(0,64)) + ((c.rule || '').length > 64 ? '…' : '') + '</div>' +
             '</div>' +
             '<div class="item__right"><span class="pill pill--live">Live</span></div>' +
           '</div>' +

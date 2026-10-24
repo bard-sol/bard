@@ -6,3 +6,16 @@ wrangler.toml
 .wrangler/
 supabase/
 README.md
+.github/
+index_preview.html
+BardUpdated.png
+package.json
+package-lock.json
+node_modules/
+tests/
+playwright.config.js
+playwright-report/
+test-results/
+blob-report/
+.gitignore
+Agents.md
