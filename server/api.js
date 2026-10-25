@@ -1,3 +1,4 @@
+import bs58 from 'bs58';
 import {
   SIGNIN_DOMAIN,
   createNonce,
@@ -11,6 +12,8 @@ import {
 import {
   FEE_TREASURY,
   SQUADS_PROGRAM,
+  SQUADS_PERMISSION_VOTE,
+  SQUADS_PERMISSION_EXECUTE,
   TOKEN_PROGRAM,
   TOKEN_2022_PROGRAM,
   PLAN_SOL,
@@ -370,6 +373,36 @@ async function handleSetPlan(request, env, projectId) {
   return json({ project });
 }
 
+function isZeroPubkey(key) {
+  try {
+    const bytes = bs58.decode(key);
+    return bytes.length === 32 && bytes.every((byte) => byte === 0);
+  } catch {
+    return false;
+  }
+}
+
+function memberCanVoteAndExecute(mask) {
+  const bits = Number(mask);
+  return (bits & SQUADS_PERMISSION_VOTE) === SQUADS_PERMISSION_VOTE
+    && (bits & SQUADS_PERMISSION_EXECUTE) === SQUADS_PERMISSION_EXECUTE;
+}
+
+function hasReservedFunds(value) {
+  const text = String(value == null ? '' : value).trim();
+  if (!text || text.startsWith('-')) return false;
+  const match = text.match(/^(\d+)(?:\.(\d+))?$/);
+  if (!match) return Number(text) > 0;
+  if (match[1].replace(/0/g, '') !== '') return true;
+  return match[2] != null && /[1-9]/.test(match[2]);
+}
+
+async function projectHasOpenSettlement(env, projectId) {
+  const rows = await select(env, 'vault_settlements', 'project_id=eq.' + encodeURIComponent(projectId) + '&select=status');
+  if (!Array.isArray(rows)) return false;
+  return rows.some((row) => row && row.status !== 'executed' && row.status !== 'cancelled');
+}
+
 async function handleLinkVault(request, env, projectId) {
   const session = await sessionWallet(request, env);
   if (session.error) return session.error;
@@ -390,11 +423,23 @@ async function handleLinkVault(request, env, projectId) {
     return json({ error: 'vault is not a Squads multisig' }, 400);
   }
   const parsed = await parseSquadsMultisig(decodeBase64(value.data[0]));
-  if (!parsed || parsed.threshold !== 2 || !sameMemberSet(parsed.members, [admin.project.admin_wallet, signer])) {
+  if (!parsed || !isZeroPubkey(parsed.configAuthority)) {
+    return json({ error: 'vault config authority must be unset' }, 400);
+  }
+  if (parsed.threshold !== 2 || !sameMemberSet(parsed.members, [admin.project.admin_wallet, signer])) {
     return json({ error: 'vault must be 2-of-2 with the project admin and the Bard signer' }, 400);
+  }
+  if (!parsed.members.every((member) => memberCanVoteAndExecute(member.permissions))) {
+    return json({ error: 'vault members must be able to vote and execute' }, 400);
   }
   const vault = await squadsVaultAddress(multisig);
   if (address !== vault) return json({ error: 'deposit address is not the Squads vault' }, 400);
+  if (hasReservedFunds(admin.project.vault_reserved)) {
+    return json({ error: 'vault cannot be re-linked while funds are reserved' }, 400);
+  }
+  if (await projectHasOpenSettlement(env, projectId)) {
+    return json({ error: 'vault cannot be re-linked while a settlement is open' }, 400);
+  }
   const updated = await patch(env, 'projects', 'id=eq.' + encodeURIComponent(projectId), {
     vault_address: address,
     vault_multisig: multisig,
@@ -572,6 +617,9 @@ async function handleTeamSign(request, env, settlementId) {
   if (current.status === 'executed' || current.status === 'cancelled') return json({ error: 'settlement is closed' }, 400);
   const linkedMultisig = admin.project.vault_multisig || '';
   if (!isBase58Address(linkedMultisig)) return json({ error: 'project vault is not linked' }, 400);
+  if (body.txIndex != null && !/^\d+$/.test(String(body.txIndex))) {
+    return json({ error: 'invalid tx index' }, 400);
+  }
   const status = current.bard_signed ? 'both_signed' : 'awaiting_bard';
   const updated = await patch(env, 'vault_settlements', 'id=eq.' + encodeURIComponent(settlementId), {
     team_signed: true,
@@ -798,10 +846,28 @@ export async function verifyExecutedPayout(env, settlement, project, signature) 
     expected.set(ata, (expected.get(ata) || 0n) + raw);
   }
   if (!expected.size) throw new Error('settlement has no payout amounts');
+  const ownedByVault = new Map();
+  async function sourceInScope(source) {
+    if (!source) return false;
+    if (source === vaultAta) return true;
+    if (ownedByVault.has(source)) return ownedByVault.get(source);
+    const result = await rpc(env, 'getAccountInfo', [source, { encoding: 'base64', commitment: 'confirmed' }]);
+    const value = result && result.value;
+    let owned = false;
+    if (value && value.owner === mintInfo.tokenProgram && value.data && value.data[0]) {
+      const data = decodeBase64(value.data[0]);
+      if (data.length >= 64) {
+        owned = bs58.encode(data.subarray(0, 32)) === mint
+          && bs58.encode(data.subarray(32, 64)) === project.vault_address;
+      }
+    }
+    ownedByVault.set(source, owned);
+    return owned;
+  }
   const actual = new Map();
   for (const transfer of parsedTransfers(tx)) {
-    if (!transfer.mint || transfer.mint !== mint) continue;
-    if (!transfer.source || transfer.source !== vaultAta) continue;
+    if (!(await sourceInScope(transfer.source))) continue;
+    if (transfer.mint && transfer.mint !== mint) throw new Error('payout mint is not the vault mint');
     if (!parsedTokenProgramOk(transfer, mintInfo.tokenProgram)) {
       throw new Error('payout program is not the vault token program');
     }
@@ -878,12 +944,24 @@ async function handleExecute(request, env, settlementId) {
       vault_reserved: subDecimal(reserved, current.total),
     });
   }
-  const updated = await patch(env, 'vault_settlements', 'id=eq.' + encodeURIComponent(settlementId), {
-    status: 'executed',
-    tx_signature: signature,
-    executed_at: now,
-  });
-  const settlement = firstRow(updated) || Object.assign({}, current, { status: 'executed', tx_signature: signature, executed_at: now });
+  let updated;
+  try {
+    updated = await patch(
+      env,
+      'vault_settlements',
+      'id=eq.' + encodeURIComponent(settlementId) + '&status=not.in.(executed,cancelled)',
+      {
+        status: 'executed',
+        tx_signature: signature,
+        executed_at: now,
+      }
+    );
+  } catch (err) {
+    if (err.code === '23505') return json({ error: 'signature already used' }, 400);
+    throw err;
+  }
+  const settlement = firstRow(updated);
+  if (!settlement) return json({ error: 'settlement is closed' }, 400);
   return json({ settlement });
 }
 

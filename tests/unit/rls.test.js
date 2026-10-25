@@ -408,6 +408,43 @@ test('RLS isolates two wallets and blocks privileged columns', { timeout: 120000
       denied(db, `UPDATE public.vault_settlements SET status = 'nope' WHERE id = $1`, [settlement.id]));
     assert.match(badStatus, /vault_settlements_status_chk|check constraint/i);
 
+    const sigIndex = await one(db, `SELECT indexdef FROM pg_indexes WHERE indexname = 'vault_settlements_tx_uidx'`);
+    assert.match(sigIndex.indexdef, /UNIQUE/i);
+    assert.match(sigIndex.indexdef, /tx_signature IS NOT NULL/i);
+    await withRole(db, 'service_role', '', () => db.query(`
+      INSERT INTO public.vault_settlements (project_id, campaign_id, payouts, total, unit, tx_signature, status)
+      VALUES ($1, $2, '[]'::jsonb, 1, 'TOKEN', 'sig-once', 'executed')
+    `, [project.id, campaign.id]));
+    const dupSig = await withRole(db, 'service_role', '', () =>
+      denied(db, `
+        INSERT INTO public.vault_settlements (project_id, campaign_id, payouts, total, unit, tx_signature, status)
+        VALUES ($1, $2, '[]'::jsonb, 1, 'TOKEN', 'sig-once', 'executed')
+      `, [project.id, campaign.id]));
+    assert.match(dupSig, /duplicate|unique/i);
+    const otherSig = await withRole(db, 'service_role', '', () => one(db, `
+      INSERT INTO public.vault_settlements (project_id, campaign_id, payouts, total, unit, tx_signature, status)
+      VALUES ($1, $2, '[]'::jsonb, 1, 'TOKEN', 'sig-other', 'executed')
+      RETURNING id
+    `, [project.id, campaign.id]));
+    const dupUpdate = await withRole(db, 'service_role', '', () =>
+      denied(db, `UPDATE public.vault_settlements SET tx_signature = 'sig-once' WHERE id = $1`, [otherSig.id]));
+    assert.match(dupUpdate, /duplicate|unique/i);
+    await withRole(db, 'service_role', '', async () => {
+      await db.query(`
+        INSERT INTO public.vault_settlements (project_id, campaign_id, payouts, total, unit, status)
+        VALUES ($1, $2, '[]'::jsonb, 1, 'TOKEN', 'proposed')
+      `, [project.id, campaign.id]);
+      await db.query(`
+        INSERT INTO public.vault_settlements (project_id, campaign_id, payouts, total, unit, status)
+        VALUES ($1, $2, '[]'::jsonb, 1, 'TOKEN', 'proposed')
+      `, [project.id, campaign.id]);
+    });
+    const nullSigs = await db.query(`
+      SELECT count(*)::int AS n FROM public.vault_settlements
+      WHERE project_id = $1 AND tx_signature IS NULL
+    `, [project.id]);
+    assert.ok(nullSigs.rows[0].n >= 2);
+
     await withRole(db, 'authenticated', holder, () => db.query(
       `INSERT INTO public.holders (wallet, x_handle, x_via) VALUES ($1, '@holder', 'x')`,
       [holder]

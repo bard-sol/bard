@@ -29,6 +29,9 @@ export async function squadsMultisigDiscriminator() {
   return new Uint8Array(digest).slice(0, 8);
 }
 
+export const SQUADS_PERMISSION_VOTE = 2;
+export const SQUADS_PERMISSION_EXECUTE = 4;
+
 export async function parseSquadsMultisig(data) {
   const bytes = data instanceof Uint8Array ? data : new Uint8Array(data);
   const expected = await squadsMultisigDiscriminator();
@@ -37,6 +40,7 @@ export async function parseSquadsMultisig(data) {
     if (bytes[i] !== expected[i]) return null;
   }
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const configAuthority = bs58.encode(bytes.subarray(40, 72));
   let offset = 8 + 32 + 32;
   const threshold = readU16(view, offset);
   offset += 2 + 4 + 8 + 8;
@@ -53,16 +57,25 @@ export async function parseSquadsMultisig(data) {
   const members = [];
   for (let i = 0; i < count; i++) {
     if (offset + 33 > bytes.length) return null;
-    members.push(bs58.encode(bytes.subarray(offset, offset + 32)));
+    members.push({
+      key: bs58.encode(bytes.subarray(offset, offset + 32)),
+      permissions: bytes[offset + 32],
+    });
     offset += 33;
   }
-  return { threshold, members };
+  return { threshold, configAuthority, members };
+}
+
+function memberKey(member) {
+  if (typeof member === 'string') return member;
+  if (member && typeof member.key === 'string') return member.key;
+  return '';
 }
 
 export function sameMemberSet(members, expected) {
-  if (members.length !== expected.length) return false;
-  const got = new Set(members);
-  return expected.every((key) => got.has(key));
+  if (!members || !expected || members.length !== expected.length) return false;
+  const got = new Set(members.map(memberKey));
+  return expected.every((key) => got.has(memberKey(key)));
 }
 
 export function decodeBase64(value) {
