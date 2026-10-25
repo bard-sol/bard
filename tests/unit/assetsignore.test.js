@@ -54,6 +54,8 @@ test('assetsignore serves page assets and hides dev files', () => {
     'node_modules/wrangler/package.json',
     'worker.js',
     'wrangler.toml',
+    'auth-worker.js',
+    'wrangler.auth.toml',
     'server/api.js',
     'scripts/m2-two-wallet-check.mjs',
     'vault-src/src/index.js',

@@ -102,7 +102,11 @@ test('holders.show_handle defaults off, is owner-writable, and the down migratio
     assert.match(nullWrite, /not-null|null value/i);
 
     await withRole(db, 'authenticated', owner, () => db.query(
-      `INSERT INTO public.holders (wallet, x_handle, show_handle) VALUES ($1, '@me', true)`,
+      `INSERT INTO public.holders (wallet, show_handle) VALUES ($1, true)`,
+      [owner]
+    ));
+    await withRole(db, 'service_role', '', () => db.query(
+      `UPDATE public.holders SET x_handle = '@me' WHERE wallet = $1`,
       [owner]
     ));
     const opted = await db.query(`SELECT show_handle, x_handle FROM public.holders WHERE wallet = $1`, [owner]);

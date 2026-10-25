@@ -1,5 +1,7 @@
 worker.js
 wrangler.toml
+auth-worker.js
+wrangler.auth.toml
 .assetsignore
 .git/
 .claude/
