@@ -203,8 +203,29 @@ function proofEnv(parsedTx, tokenProgram) {
   };
 }
 
+// A confirmed jsonParsed transaction carries pre and post token balances.
+// The execute check refuses a missing list, and it refuses a vault-owned
+// account of this mint whose owner changes. Record the vault ATA both times.
+function attachVaultTokenBalances(parsed, project, tokenProgram) {
+  var program = tokenProgram === TOKEN_2022_PROGRAM_ID.toBase58() ? TOKEN_2022_PROGRAM_ID : TOKEN_PROGRAM_ID;
+  var mint = project.vault_mint || project.mint;
+  var vaultAta = getAssociatedTokenAddressSync(
+    new PublicKey(mint),
+    new PublicKey(project.vault_address),
+    true,
+    program
+  ).toBase58();
+  var keys = parsed.transaction.message.accountKeys;
+  var accountIndex = keys.indexOf(vaultAta);
+  if (accountIndex < 0) throw new Error('simulated execute is missing the vault token account');
+  var entry = { accountIndex: accountIndex, mint: mint, owner: project.vault_address };
+  parsed.meta.preTokenBalances = [entry];
+  parsed.meta.postTokenBalances = [{ accountIndex: accountIndex, mint: mint, owner: project.vault_address }];
+}
+
 async function assertRealExecute(sent, signature, settlement, project, tokenProgram, minTransfers) {
   var built = jsonParsedFromSent(sent);
+  attachVaultTokenBalances(built.parsed, project, tokenProgram);
   assert.ok(
     built.logs.some(function (line) { return String(line).includes('VaultTransactionExecute'); }),
     'real execute logs did not include VaultTransactionExecute\n' + built.logs.join('\n')
@@ -551,6 +572,7 @@ async function runMint(connection, svm, label, tokenProgram, team, bard) {
   );
   var extraSent = connection.lastSent;
   var extraParsed = jsonParsedFromSent(extraSent);
+  attachVaultTokenBalances(extraParsed.parsed, project, tokenProgram.toBase58());
   assert.ok(extraParsed.logs.some(function (line) { return String(line).includes('VaultTransactionExecute'); }));
   var extraFailed = false;
   try {
