@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import ignore from 'ignore';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
-const pages = ['index.html', 'explore.html', 'dashboard.html', 'admin.html'];
+const pages = ['index.html', 'explore.html', 'dashboard.html', 'admin.html', 'campaign.html'];
 
 function referencedAssets() {
   const found = new Set();

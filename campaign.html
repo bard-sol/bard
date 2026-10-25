@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bard — campaign</title>
+<meta name="description" content="Read a Bard campaign before connecting a wallet.">
+<link rel="icon" href="/transparentbardsmile.png" type="image/png">
+<link rel="apple-touch-icon" href="/transparentbardsmile.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#1c1e26;
+  --surface:#262930;
+  --surface-2:#2d3039;
+  --purple:#a78bfa;
+  --text:#f4f4f5;
+  --muted:#a1a1aa;
+  --body:#d5d5da;
+  --line:rgba(244,244,245,.08);
+  --line-strong:rgba(244,244,245,.16);
+  --purple-soft:rgba(167,139,250,.12);
+  --purple-line:rgba(167,139,250,.35);
+  --font:"Archivo","Helvetica Neue",Helvetica,Arial,sans-serif;
+  --r:12px;
+  --gutter:clamp(18px,4vw,40px);
+  --max:760px;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0;background:var(--bg);color:var(--text);
+  font-family:var(--font);font-size:16px;line-height:1.6;
+  font-variation-settings:"wdth" 100,"wght" 420;
+  -webkit-font-smoothing:antialiased;min-height:100vh;
+}
+img{display:block;max-width:100%}
+a{color:var(--purple);text-decoration:none}
+button,input{font:inherit;color:inherit}
+button{background:none;border:none;cursor:pointer;padding:0}
+:focus-visible{outline:2px solid var(--purple);outline-offset:3px;border-radius:4px}
+.num{font-variant-numeric:tabular-nums}
+.muted{color:var(--muted)}
+.head{
+  position:sticky;top:0;z-index:40;
+  background:rgba(28,30,38,.9);
+  backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+  border-bottom:1px solid var(--line);
+}
+.head__in{
+  display:flex;align-items:center;gap:20px;
+  min-height:72px;max-width:1080px;margin:0 auto;padding:10px var(--gutter);
+}
+.mark{
+  display:inline-flex;flex-direction:column;align-items:center;
+  gap:2px;margin-right:auto;line-height:1;text-align:center;color:var(--text);
+}
+.mark__word{font-size:1.15rem;font-variation-settings:"wdth" 112,"wght" 720;letter-spacing:-.015em}
+.mark__smile{width:26px;height:16px;object-fit:contain}
+.head__link{font-size:.9rem;color:var(--muted);padding:8px 12px;border-radius:8px}
+.head__link:hover{color:var(--text);background:var(--purple-soft)}
+.main{max-width:var(--max);margin:0 auto;padding:clamp(28px,5vw,48px) var(--gutter) 80px}
+.tabs{display:flex;gap:8px;margin-bottom:22px}
+.tabs button{
+  padding:8px 14px;border-radius:8px;color:var(--muted);border:1px solid var(--line);
+}
+.tabs button.is-on{color:var(--text);background:var(--purple-soft);border-color:var(--purple-line)}
+h1{
+  margin:0 0 8px;font-size:clamp(1.6rem,3.4vw,2.2rem);line-height:1.2;
+  font-variation-settings:"wdth" 108,"wght" 700;letter-spacing:-.025em;
+}
+.line{margin:0 0 10px;color:var(--body)}
+.who{margin:0 0 18px;color:var(--text);font-variation-settings:"wght" 560}
+.stack{display:grid;gap:8px;margin:18px 0}
+.card{
+  background:var(--surface);border:1px solid var(--line);
+  border-radius:var(--r);padding:16px 18px;
+}
+.lbl{font-size:.75rem;color:var(--muted);margin:0 0 4px}
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:8px;
+  padding:12px 20px;border-radius:9px;font-size:.95rem;
+  font-variation-settings:"wght" 620;border:1px solid transparent;
+}
+.btn--solid{background:var(--purple);color:#191320}
+.btn--solid:hover{background:#b9a3ff}
+.check{display:flex;align-items:flex-start;gap:10px;margin:14px 0;color:var(--body);font-size:.92rem}
+.check input{width:auto;margin-top:4px}
+.board__row{
+  display:grid;grid-template-columns:48px 1fr 80px 120px;gap:10px;
+  padding:10px 0;border-bottom:1px solid var(--line);font-size:.92rem;
+}
+.board__head{color:var(--muted);font-size:.75rem}
+.warn{color:#fbbf24}
+[hidden]{display:none !important}
+</style>
+</head>
+<body>
+<header class="head">
+  <div class="head__in">
+    <a class="mark" href="/" aria-label="Bard home">
+      <span class="mark__word">Bard</span>
+      <img class="mark__smile" src="/transparentbardsmile.png" alt="">
+    </a>
+    <a class="head__link" href="/explore.html">Explore</a>
+    <a class="head__link" href="/dashboard.html">Dashboard</a>
+  </div>
+</header>
+<main class="main">
+  <div class="tabs">
+    <button type="button" id="tab-campaign" class="is-on">Campaign</button>
+    <button type="button" id="tab-board">Board</button>
+  </div>
+  <section id="panel-campaign">
+    <h1 id="prize-line">—</h1>
+    <p class="line" id="prize-detail"></p>
+    <p class="line" id="cut-line"></p>
+    <p class="line warn" id="below-line"></p>
+    <p class="who" id="who-line"></p>
+    <p class="line num" id="qualified-count">Qualified: 0</p>
+    <p class="line" id="clock-line">—</p>
+    <p class="line" id="token-row">—</p>
+    <div class="card stack">
+      <p class="lbl">Your status</p>
+      <p id="your-status">Not joined · progress 0 · not qualified · not paid</p>
+      <label class="check" for="show-handle">
+        <input id="show-handle" type="checkbox">
+        <span>show my X handle on the public page</span>
+      </label>
+      <div>
+        <button class="btn btn--solid" type="button" id="join-btn">Connect to join</button>
+        <p class="muted" id="join-reason" hidden></p>
+      </div>
+    </div>
+  </section>
+  <section id="panel-board" hidden>
+    <div class="card">
+      <div class="board__row board__head"><span>Rank</span><span>Holder</span><span>Progress</span><span>Qualified</span></div>
+      <div id="board">No holders on the board yet.</div>
+    </div>
+  </section>
+</main>
+<script src="/platform.js"></script>
+<script>
+(function () {
+  var wallet = null;
+  var state = null;
+  var joined = false;
+
+  function campaignId() {
+    var match = location.pathname.match(/^\/c\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/?$/i);
+    return match ? match[1] : '';
+  }
+
+  function setText(id, text) {
+    var el = document.getElementById(id);
+    if (el) el.textContent = text || '';
+  }
+
+  function showTab(which) {
+    var campaign = which === 'campaign';
+    document.getElementById('panel-campaign').hidden = !campaign;
+    document.getElementById('panel-board').hidden = campaign;
+    document.getElementById('tab-campaign').className = campaign ? 'is-on' : '';
+    document.getElementById('tab-board').className = campaign ? '' : 'is-on';
+  }
+
+  function renderBoard(board) {
+    var el = document.getElementById('board');
+    var rows = board || [];
+    if (!rows.length) {
+      el.textContent = 'No holders on the board yet.';
+      return;
+    }
+    el.innerHTML = rows.map(function (row) {
+      var name = row.handle || row.wallet_short || '—';
+      var stamp = row.qualified ? 'qualified' : 'not qualified';
+      return '<div class="board__row"><span class="num">' + BardPlatform.escapeHtml(row.rank)
+        + '</span><span>' + BardPlatform.escapeHtml(name)
+        + '</span><span class="num">' + BardPlatform.escapeHtml(row.progress)
+        + '</span><span>' + BardPlatform.escapeHtml(stamp) + '</span></div>';
+    }).join('');
+  }
+
+  function paintJoin() {
+    var btn = document.getElementById('join-btn');
+    var reason = document.getElementById('join-reason');
+    reason.hidden = true;
+    reason.textContent = '';
+    btn.hidden = false;
+    if (!wallet) {
+      btn.textContent = 'Connect to join';
+      return;
+    }
+    if (!state || !state.clock) {
+      btn.hidden = true;
+      reason.hidden = false;
+      reason.textContent = 'Campaign state is unavailable.';
+      return;
+    }
+    if (joined) {
+      btn.hidden = true;
+      reason.hidden = false;
+      reason.textContent = 'You already joined.';
+      return;
+    }
+    if (state.clock.state === 'live') {
+      btn.textContent = 'Join';
+      return;
+    }
+    btn.hidden = true;
+    reason.hidden = false;
+    var why = {
+      upcoming: 'This campaign has not started.',
+      ended: 'This campaign has ended.',
+      paid: 'This campaign is already paid.'
+    };
+    reason.textContent = why[state.clock.state] || 'Joining is closed.';
+  }
+
+  function statusLine(isJoined, progress, qualified, paid) {
+    return (isJoined ? 'Joined' : 'Not joined')
+      + ' · progress ' + (progress || 0)
+      + ' · ' + (qualified ? 'qualified' : 'not qualified')
+      + ' · ' + (paid ? 'paid' : 'not paid');
+  }
+
+  async function paintStatus() {
+    if (!wallet || !state) {
+      joined = false;
+      setText('your-status', statusLine(false, 0, false, false));
+      paintJoin();
+      return;
+    }
+    var hash = BardPlatform.sha256Hex(wallet);
+    var row = (state.board || []).filter(function (item) { return item.wallet_hash === hash; })[0] || null;
+    var mine = null;
+    try {
+      var joins = await BardPlatform.listJoinsForWallet(wallet);
+      mine = (joins || []).filter(function (item) {
+        return item.campaign_id === state.campaign.id && item.status !== 'rejected';
+      })[0] || null;
+    } catch (err) {
+      mine = null;
+    }
+    joined = !!(mine || row);
+    var progress = mine ? (mine.progress || 0) : (row ? row.progress : 0);
+    var qualified = mine ? !!mine.qualified : !!(row && row.qualified);
+    var paid = !!(state.clock && state.clock.state === 'paid' && row);
+    setText('your-status', statusLine(joined, progress, qualified, paid));
+    paintJoin();
+  }
+
+  function render(next) {
+    state = next;
+    var copy = BardPlatform.campaignPublicCopy(next);
+    setText('prize-line', copy.headline);
+    var detail = document.getElementById('prize-detail');
+    detail.textContent = '';
+    if (copy.detail) detail.append(document.createTextNode(copy.detail));
+    var href = BardPlatform.safeHttpUrl(next.vault && next.vault.explorer_url);
+    if (href) {
+      if (copy.detail) detail.append(document.createTextNode(' · '));
+      var link = document.createElement('a');
+      link.id = 'explorer-link';
+      link.href = href;
+      link.target = '_blank';
+      link.rel = 'noopener';
+      link.textContent = 'view on explorer';
+      detail.append(link);
+    }
+    if (next.vault && next.vault.balance_as_of && (copy.detail || href)) {
+      detail.append(document.createTextNode(' · as of ' + BardPlatform.clockDate(next.vault.balance_as_of)));
+    }
+    setText('cut-line', copy.cut);
+    setText('below-line', copy.warning);
+    setText('who-line', (next.prize && next.prize.who_gets_paid_text) || '');
+    setText('qualified-count', copy.qualified);
+    var clock = document.getElementById('clock-line');
+    clock.textContent = copy.clock;
+    if (next.links && next.links.receipt) {
+      clock.append(document.createTextNode(' · '));
+      var receipt = document.createElement('a');
+      receipt.href = next.links.receipt;
+      receipt.textContent = 'receipt';
+      clock.append(receipt);
+    }
+    var token = document.getElementById('token-row');
+    token.textContent = '';
+    var symbol = (next.prize && next.prize.symbol) || '—';
+    var mint = (next.prize && next.prize.mint) || '';
+    token.append(document.createTextNode(symbol + ' · ' + BardPlatform.shortWallet(mint)));
+    if (mint) {
+      var cluster = href && href.indexOf('cluster=devnet') >= 0 ? '?cluster=devnet' : '';
+      var tokenHref = BardPlatform.safeHttpUrl('https://solscan.io/token/' + encodeURIComponent(mint) + cluster);
+      if (tokenHref) {
+        token.append(document.createTextNode(' · '));
+        var tokenLink = document.createElement('a');
+        tokenLink.href = tokenHref;
+        tokenLink.target = '_blank';
+        tokenLink.rel = 'noopener';
+        tokenLink.textContent = 'view token';
+        token.append(tokenLink);
+      }
+    }
+    renderBoard(next.board);
+    paintStatus();
+  }
+
+  async function loadState() {
+    var id = campaignId();
+    if (!id) return;
+    try {
+      var res = await fetch('/api/campaigns/' + encodeURIComponent(id) + '/state');
+      if (!res.ok) return;
+      render(await res.json());
+    } catch (err) {}
+  }
+
+  async function connect() {
+    var provider = (window.phantom && window.phantom.solana) || window.solflare || window.solana;
+    var reason = document.getElementById('join-reason');
+    if (!provider || typeof provider.connect !== 'function') {
+      reason.hidden = false;
+      reason.textContent = 'No wallet found in this browser.';
+      return;
+    }
+    var resp = await provider.connect();
+    wallet = (resp && resp.publicKey && resp.publicKey.toString())
+      || (provider.publicKey && provider.publicKey.toString())
+      || '';
+    if (!wallet) {
+      reason.hidden = false;
+      reason.textContent = 'Could not read the wallet address.';
+      return;
+    }
+    try {
+      if (BardPlatform.signIn) await BardPlatform.signIn(provider);
+    } catch (err) {}
+    await paintStatus();
+  }
+
+  async function onJoin() {
+    if (!wallet) {
+      await connect();
+      return;
+    }
+    if (!state || !state.clock || state.clock.state !== 'live' || joined) return;
+    var show = !!document.getElementById('show-handle').checked;
+    await BardPlatform.joinCampaign(state.campaign.project.id, state.campaign.id, wallet, null, show);
+    await paintStatus();
+  }
+
+  document.getElementById('tab-campaign').addEventListener('click', function () { showTab('campaign'); });
+  document.getElementById('tab-board').addEventListener('click', function () { showTab('board'); });
+  document.getElementById('join-btn').addEventListener('click', function () {
+    onJoin().catch(function () {
+      var reason = document.getElementById('join-reason');
+      reason.hidden = false;
+      reason.textContent = 'Join failed.';
+    });
+  });
+
+  if (window.BardPlatform) {
+    BardPlatform.init().then(loadState).catch(function () { loadState(); });
+  }
+})();
+</script>
+</body>
+</html>

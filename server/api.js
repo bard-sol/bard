@@ -36,8 +36,20 @@ import {
   accountKeysOf,
   parsedTransfers,
 } from './settlement.js';
+import { handleCampaignState } from './campaign_state.js';
 
 const FEES_ENABLED = false;
+const CAMPAIGN_PAGE = /^\/c\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i;
+const RECEIPT_PAGE = /^\/c\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/receipt$/i;
+
+export function rewriteCampaignRequest(request) {
+  const url = new URL(request.url);
+  if (CAMPAIGN_PAGE.test(url.pathname)) url.pathname = '/campaign.html';
+  else if (RECEIPT_PAGE.test(url.pathname)) url.pathname = '/receipt.html';
+  else return request;
+  return new Request(url.toString(), request);
+}
+
 const JSON_HEADERS = { 'cache-control': 'no-store' };
 
 function json(data, status = 200) {
@@ -921,6 +933,8 @@ export async function handleRequest(request, env) {
     if (drawCommit && method === 'POST') return await handleDrawCommit(request, env, decodeURIComponent(drawCommit[1]));
     const drawFinal = path.match(/^\/api\/campaigns\/([^/]+)\/draw\/finalize$/);
     if (drawFinal && method === 'POST') return await handleDrawFinalize(request, env, decodeURIComponent(drawFinal[1]));
+    const stateRoute = path.match(/^\/api\/campaigns\/([^/]+)\/state$/);
+    if (stateRoute && method === 'GET') return await handleCampaignState(request, env, decodeURIComponent(stateRoute[1]), readVaultTokenRaw);
     if (path.startsWith('/api/')) return json({ error: 'not found' }, 404);
     return null;
   } catch (err) {

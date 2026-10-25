@@ -181,7 +181,7 @@ h1{
     list.innerHTML = filtered.map(function(x){
       var c = x.campaign;
       return (
-        '<a class="card card--hover" href="/dashboard.html">' +
+        '<a class="card card--hover" href="/c/' + encodeURIComponent(c.id) + '">' +
           '<div class="item">' +
             '<span class="item__ava">' + BardPlatform.escapeHtml(initials(x.ticker || x.projectName)) + '</span>' +
             '<div class="item__body">' +

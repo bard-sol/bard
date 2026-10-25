@@ -1019,19 +1019,28 @@
     return { ok: true, signature: sig, fee: feeRow, amount: amount };
   }
 
-  async function upsertHolder(wallet, xHandle, xVia) {
+  async function upsertHolder(wallet, xHandle, xVia, showHandle) {
     await init();
     if (mode === 'supabase' && sb && wallet) {
       var existing = await sb.from('holders').select('*').eq('wallet', wallet).maybeSingle();
+      if (existing.error) throw existing.error;
       var row = { x_handle: xHandle || null, x_linked_at: xHandle ? new Date().toISOString() : null, x_via: xVia || null };
-      if (existing.data) await sb.from('holders').update(row).eq('wallet', wallet);
-      else await sb.from('holders').insert(Object.assign({ wallet: wallet }, row));
+      if (typeof showHandle === 'boolean') row.show_handle = showHandle;
+      var write = existing.data
+        ? sb.from('holders').update(row).eq('wallet', wallet)
+        : sb.from('holders').insert(Object.assign({ wallet: wallet }, row));
+      var saved = await write;
+      if (saved.error) throw saved.error;
     }
-    var h = localHolder(); if (xHandle) h.xHandle = xHandle; saveLocalHolder(h);
+    var h = localHolder();
+    if (xHandle) h.xHandle = xHandle;
+    if (typeof showHandle === 'boolean') h.showHandle = showHandle;
+    saveLocalHolder(h);
   }
 
-  async function joinCampaign(projectId, campaignId, wallet, xHandle) {
+  async function joinCampaign(projectId, campaignId, wallet, xHandle, showHandle) {
     await init();
+    if (typeof showHandle === 'boolean') await upsertHolder(wallet, xHandle, null, showHandle);
     var rosterRole = null;
     if (mode === 'supabase' && sb) {
       try {
@@ -1361,6 +1370,93 @@
     return out;
   }
 
+  var MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+  function shortWallet(addr) {
+    if (!addr) return '—';
+    var s = String(addr);
+    if (s.length < 10) return s;
+    return s.slice(0, 4) + '…' + s.slice(-4);
+  }
+
+  function clockDate(iso) {
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return '';
+    return d.getUTCDate() + ' ' + MONTHS[d.getUTCMonth()] + ' ' + d.getUTCFullYear();
+  }
+
+  function clockText(clock) {
+    if (!clock) return '—';
+    if (clock.state === 'paid') return 'paid';
+    if (clock.state === 'ended') {
+      return clock.ends_at ? ('ended ' + clockDate(clock.ends_at) + ', the team is reviewing') : 'ended, the team is reviewing';
+    }
+    if (clock.no_end) return 'no end set';
+    if (clock.state === 'upcoming') return clock.starts_at ? ('starts ' + clockDate(clock.starts_at)) : 'upcoming';
+    if (clock.ends_at) return 'ends ' + clockDate(clock.ends_at);
+    return 'no end set';
+  }
+
+  function formatRaw(raw, decimals) {
+    if (raw == null || String(raw).trim() === '') return '—';
+    var s = String(raw).trim();
+    if (!/^\d+$/.test(s)) return '—';
+    if (decimals == null || decimals === '') return '—';
+    var d = Number(decimals);
+    if (!Number.isInteger(d) || d < 0) return '—';
+    if (d === 0) return s.replace(/^0+(?=\d)/, '') || '0';
+    var whole;
+    var frac;
+    if (s.length <= d) {
+      whole = '0';
+      frac = new Array(d - s.length + 1).join('0') + s;
+    } else {
+      whole = s.slice(0, s.length - d);
+      frac = s.slice(s.length - d);
+    }
+    frac = frac.replace(/0+$/, '');
+    whole = whole.replace(/^0+(?=\d)/, '') || '0';
+    return frac ? (whole + '.' + frac) : whole;
+  }
+
+  function formatBps(bps) {
+    var n = Number(bps);
+    if (!Number.isInteger(n) || n < 0) return '0';
+    var whole = Math.floor(n / 100);
+    var frac = n % 100;
+    if (frac === 0) return String(whole);
+    if (frac % 10 === 0) return whole + '.' + String(frac / 10);
+    var text = String(frac);
+    if (text.length < 2) text = '0' + text;
+    return whole + '.' + text;
+  }
+
+  function campaignPublicCopy(state) {
+    var prize = (state && state.prize) || {};
+    var vault = (state && state.vault) || {};
+    var ticker = prize.symbol || 'TOKEN';
+    var headline = 'No verified vault yet';
+    var detail = '';
+    var cut = '';
+    if (prize.locked) {
+      headline = 'Prize for holders: ' + formatRaw(prize.prize_raw, prize.decimals) + ' ' + ticker;
+      detail = 'Locked in a two-key vault: ' + formatRaw(prize.locked_raw, prize.decimals) + ' ' + ticker
+        + ' · vault balance now ' + formatRaw(vault.balance_raw, prize.decimals) + ' ' + ticker;
+      if (prize.cut_bps != null) cut = 'Bard takes ' + formatBps(prize.cut_bps) + '% of payouts';
+    } else if (vault.address) {
+      headline = 'In the vault now: ' + formatRaw(vault.balance_raw, prize.decimals) + ' ' + ticker;
+    }
+    return {
+      headline: headline,
+      detail: detail,
+      cut: cut,
+      warning: vault.below_locked === true ? 'The vault holds less than the locked total right now.' : '',
+      who: prize.who_gets_paid_text || '',
+      clock: clockText(state && state.clock),
+      qualified: 'Qualified: ' + (((state && state.counts) || {}).qualified || 0)
+    };
+  }
+
   global.BardPlatform = {
     init: init, FEES: FEES,
     feesEnabled: function () { return FEES_ENABLED; },
@@ -1411,6 +1507,11 @@
     executeSettlement: executeSettlement,
     getRpc: getRpc,
     escapeHtml: escapeHtml,
-    safeHttpUrl: safeHttpUrl
+    safeHttpUrl: safeHttpUrl,
+    shortWallet: shortWallet,
+    sha256Hex: sha256Hex,
+    clockDate: clockDate,
+    clockText: clockText,
+    campaignPublicCopy: campaignPublicCopy
   };
 })(typeof window !== 'undefined' ? window : globalThis);

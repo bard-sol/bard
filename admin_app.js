@@ -4,7 +4,7 @@ function toast(msg,kind){var el=document.getElementById('toast');el.textContent=
 function show(name){document.querySelectorAll('.page').forEach(function(p){p.classList.remove('is-on');});var page=document.getElementById('page-'+name);if(page)page.classList.add('is-on');window.scrollTo(0,0);}
 function initials(s){s=(s||'?').trim();return s.slice(0,2).toUpperCase();}
 function shortMint(m){if(!m||m.length<10)return m||'—';return m.slice(0,4)+'…'+m.slice(-4);}
-function shortAddr(a){if(!a)return'—';if(a.length<10)return a;return a.slice(0,4)+'…'+a.slice(-4);}
+function shortAddr(a){return window.BardPlatform.shortWallet(a);}
 function vaultErr(e, addr){
   var m=(e&&(e.message||e.logs&&e.logs.join(' ')||String(e)))||'';
   if(/debit an account|no record of a prior credit|insufficient/i.test(m))
