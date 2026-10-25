@@ -101,6 +101,51 @@ test('home keeps one headline colour, sentence-case labels, and no sideways scro
   }
 });
 
+test('home corner logo and tab icon have no black plate', async ({ page, request }) => {
+  const icon = await request.get('/favicon.png');
+  expect(icon.status()).toBe(200);
+  expect(icon.headers()['content-type'] || '').toContain('image/png');
+
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto('/');
+  await expect(page.locator('link[rel="icon"]')).toHaveAttribute('href', '/favicon.png');
+
+  const readMark = async (selector) => page.locator(selector).evaluate(async (img) => {
+    if (!img.complete || !img.naturalWidth) {
+      await new Promise((resolve, reject) => {
+        img.addEventListener('load', resolve, { once: true });
+        img.addEventListener('error', () => reject(new Error('logo failed to load')), { once: true });
+      });
+    }
+    const style = getComputedStyle(img);
+    const canvas = document.createElement('canvas');
+    const w = img.naturalWidth;
+    const h = img.naturalHeight;
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    ctx.clearRect(0, 0, w, h);
+    ctx.drawImage(img, 0, 0);
+    const at = (x, y) => Array.from(ctx.getImageData(x, y, 1, 1).data);
+    return {
+      src: img.getAttribute('src'),
+      radius: style.borderRadius,
+      background: style.backgroundColor,
+      box: [Math.round(img.getBoundingClientRect().width), Math.round(img.getBoundingClientRect().height)],
+      corners: [at(0, 0), at(w - 1, 0), at(0, h - 1), at(w - 1, h - 1)],
+    };
+  });
+
+  for (const selector of ['.nav-logo img', '.footer-logo img']) {
+    const mark = await readMark(selector);
+    expect(mark.src, selector).toBe('/transparentbardsmile.png');
+    expect(mark.radius, selector).toBe('0px');
+    expect(mark.background, selector).toBe('rgba(0, 0, 0, 0)');
+    expect(mark.box[0], selector).toBeGreaterThan(mark.box[1]);
+    for (const pixel of mark.corners) expect(pixel[3], selector).toBe(0);
+  }
+});
+
 test('campaigns and join pages have no public label and no dashed empty box', async ({ page }) => {
   await mockSupabase(page, {});
   for (const width of WIDTHS) {

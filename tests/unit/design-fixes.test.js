@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
+import zlib from 'node:zlib';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const home = readFileSync(path.join(root, 'index.html'), 'utf8');
@@ -64,6 +65,115 @@ test('join and campaigns drop the public label and the dashed box', () => {
   assert.doesNotMatch(dashboard, /dashed/);
   assert.match(dashboard, /Open team admin/);
   assert.match(dashboard, /Connect wallet/);
+});
+
+function pngRgba(buf) {
+  assert.equal(buf.subarray(0, 8).toString('hex'), '89504e470d0a1a0a');
+  let offset = 8;
+  let width = 0;
+  let height = 0;
+  let bitDepth = 0;
+  let colorType = 0;
+  let interlace = 0;
+  const idat = [];
+  while (offset < buf.length) {
+    const length = buf.readUInt32BE(offset);
+    offset += 4;
+    const type = buf.subarray(offset, offset + 4).toString('ascii');
+    offset += 4;
+    const data = buf.subarray(offset, offset + length);
+    offset += length + 4;
+    if (type === 'IHDR') {
+      width = data.readUInt32BE(0);
+      height = data.readUInt32BE(4);
+      bitDepth = data[8];
+      colorType = data[9];
+      interlace = data[12];
+    } else if (type === 'IDAT') {
+      idat.push(data);
+    } else if (type === 'IEND') {
+      break;
+    }
+  }
+  assert.equal(bitDepth, 8);
+  assert.equal(colorType, 6, 'tab icon must be RGBA so the tab can show through');
+  assert.equal(interlace, 0);
+  const raw = zlib.inflateSync(Buffer.concat(idat));
+  const stride = width * 4;
+  const out = Buffer.alloc(height * stride);
+  let i = 0;
+  for (let y = 0; y < height; y++) {
+    const filter = raw[i++];
+    const row = y * stride;
+    for (let x = 0; x < stride; x++) {
+      const value = raw[i++];
+      const left = x >= 4 ? out[row + x - 4] : 0;
+      const up = y > 0 ? out[row - stride + x] : 0;
+      const upLeft = x >= 4 && y > 0 ? out[row - stride + x - 4] : 0;
+      let next = value;
+      if (filter === 1) next = (value + left) & 255;
+      else if (filter === 2) next = (value + up) & 255;
+      else if (filter === 3) next = (value + Math.floor((left + up) / 2)) & 255;
+      else if (filter === 4) {
+        const paeth = left + up - upLeft;
+        const da = Math.abs(paeth - left);
+        const db = Math.abs(paeth - up);
+        const dc = Math.abs(paeth - upLeft);
+        const pred = da <= db && da <= dc ? left : db <= dc ? up : upLeft;
+        next = (value + pred) & 255;
+      } else if (filter !== 0) {
+        throw new Error('unknown png filter ' + filter);
+      }
+      out[row + x] = next;
+    }
+  }
+  return { width, height, data: out };
+}
+
+test('corner mark and tab icon have no black plate', () => {
+  assert.match(home, /<link rel="icon" type="image\/png" href="\/favicon.png">/);
+  assert.doesNotMatch(home, /rel="icon"[^>]*jpeg|rel="icon"[^>]*BardSmile\.jpg/);
+  assert.match(home, /class="nav-logo"[\s\S]*?src="\/transparentbardsmile.png"/);
+  assert.match(home, /class="footer-logo"[\s\S]*?src="\/transparentbardsmile.png"/);
+  assert.doesNotMatch(home, /\.nav-logo img \{[^}]*border-radius/);
+  assert.doesNotMatch(home, /\.footer-logo img \{[^}]*border-radius/);
+  assert.doesNotMatch(home, /<img[^>]*src="\/BardSmile\.jpg"/);
+  for (const page of [explore, dashboard]) {
+    assert.match(page, /<link rel="icon" href="\/favicon.png" type="image\/png">/);
+    assert.match(page, /<link rel="apple-touch-icon" href="\/favicon.png">/);
+  }
+
+  const icon = pngRgba(readFileSync(path.join(root, 'favicon.png')));
+  assert.equal(icon.width, icon.height);
+  const px = (x, y) => {
+    const i = (y * icon.width + x) * 4;
+    return [icon.data[i], icon.data[i + 1], icon.data[i + 2], icon.data[i + 3]];
+  };
+  for (const [x, y] of [[0, 0], [icon.width - 1, 0], [0, icon.height - 1], [icon.width - 1, icon.height - 1]]) {
+    assert.equal(px(x, y)[3], 0, 'corner alpha');
+  }
+  let opaqueBlack = 0;
+  let visible = 0;
+  let minX = icon.width;
+  let minY = icon.height;
+  let maxX = 0;
+  let maxY = 0;
+  for (let y = 0; y < icon.height; y++) {
+    for (let x = 0; x < icon.width; x++) {
+      const [r, g, b, a] = px(x, y);
+      if (a > 20) {
+        visible++;
+        minX = Math.min(minX, x);
+        minY = Math.min(minY, y);
+        maxX = Math.max(maxX, x);
+        maxY = Math.max(maxY, y);
+      }
+      if (a > 200 && r < 30 && g < 30 && b < 30) opaqueBlack++;
+    }
+  }
+  assert.equal(opaqueBlack, 0);
+  assert.ok(visible > 100);
+  assert.ok(maxX - minX > maxY - minY, 'the tab mark stays the wide smile');
 });
 
 test('changed label colours clear 4.5:1 on the page background', () => {
