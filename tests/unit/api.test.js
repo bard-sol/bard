@@ -621,7 +621,12 @@ test('privileged writes require the project admin session', { timeout: 30000 }, 
     assert.match(closed.data.error, /closed/);
     const bard = await call(env, 'POST', '/api/vault/bard-sign', { settlementId });
     assert.equal(bard.status, 400, JSON.stringify(bard.data));
-    assert.equal(bard.data.reason, 'settlement has no vault transaction');
+    assert.equal(bard.data.reason, 'vault transaction is missing');
+    assert.equal(tables.vault_settlements[0].bard_signed, true);
+    tables.vault_settlements[0].tx_index = null;
+    const bardWithoutTx = await call(env, 'POST', '/api/vault/bard-sign', { settlementId });
+    assert.equal(bardWithoutTx.status, 400, JSON.stringify(bardWithoutTx.data));
+    assert.equal(bardWithoutTx.data.reason, 'settlement has no vault transaction');
     assert.equal(tables.vault_settlements[0].bard_signed, true);
     assert.equal(calls.some((line) => /supabase\.co|mainnet|publicnode/.test(line)), false);
   } finally {
