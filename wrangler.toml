@@ -7,5 +7,5 @@ directory = "."
 binding = "ASSETS"
 
 # This worker is deployed to bard.is (custom domain: noisysurg11)
-# The bard-auth worker (bard-auth.bardsoltoken.workers.dev) is a separate deployment
-# used for the X OAuth callback redirect URI.
+# The bard-auth worker (auth-worker.js, wrangler.auth.toml) is a separate deployment.
+# Its callback is the X redirect URI and writes the verified handle with the service key.

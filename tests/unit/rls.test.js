@@ -408,17 +408,30 @@ test('RLS isolates two wallets and blocks privileged columns', { timeout: 120000
       denied(db, `UPDATE public.vault_settlements SET status = 'nope' WHERE id = $1`, [settlement.id]));
     assert.match(badStatus, /vault_settlements_status_chk|check constraint/i);
 
+    const insertHandle = await withRole(db, 'authenticated', holder, () =>
+      denied(db, `INSERT INTO public.holders (wallet, x_handle) VALUES ($1, '@holder')`, [holder]));
+    assert.match(insertHandle, /permission denied/i);
+    const insertVia = await withRole(db, 'authenticated', holder, () =>
+      denied(db, `INSERT INTO public.holders (wallet, x_via) VALUES ($1, 'oauth')`, [holder]));
+    assert.match(insertVia, /permission denied/i);
     await withRole(db, 'authenticated', holder, () => db.query(
-      `INSERT INTO public.holders (wallet, x_handle, x_via) VALUES ($1, '@holder', 'x')`,
+      `INSERT INTO public.holders (wallet) VALUES ($1)`,
       [holder]
     ));
-    await withRole(db, 'authenticated', holder, () => db.query(
-      `UPDATE public.holders SET x_handle = '@holder2' WHERE wallet = $1`,
+    const updateHandle = await withRole(db, 'authenticated', holder, () =>
+      denied(db, `UPDATE public.holders SET x_handle = '@holder2' WHERE wallet = $1`, [holder]));
+    assert.match(updateHandle, /permission denied/i);
+    const updateVia = await withRole(db, 'authenticated', holder, () =>
+      denied(db, `UPDATE public.holders SET x_via = 'oauth' WHERE wallet = $1`, [holder]));
+    assert.match(updateVia, /permission denied/i);
+    await withRole(db, 'service_role', '', () => db.query(
+      `UPDATE public.holders SET x_handle = '@holder2', x_via = 'oauth', x_linked_at = now() WHERE wallet = $1`,
       [holder]
     ));
     const holderRead = await withRole(db, 'authenticated', holder, () =>
-      one(db, `SELECT x_handle FROM public.holders WHERE wallet = $1`, [holder]));
+      one(db, `SELECT x_handle, x_via FROM public.holders WHERE wallet = $1`, [holder]));
     assert.equal(holderRead.x_handle, '@holder2');
+    assert.equal(holderRead.x_via, 'oauth');
     const hiddenFromB = await withRole(db, 'authenticated', walletB, () =>
       db.query(`SELECT wallet, x_handle FROM public.holders WHERE wallet = $1`, [holder]));
     assert.equal(hiddenFromB.rows.length, 0);

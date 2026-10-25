@@ -343,7 +343,7 @@ test('campaign state matches the public shape for every payout sentence and cloc
       joins,
       holders: [
         { wallet: holderA, x_handle: '@hidden', show_handle: false },
-        { wallet: holderB, x_handle: '@shown', show_handle: true },
+        { wallet: holderB, x_handle: '@shown', show_handle: true, x_via: 'oauth' },
         { wallet: rejected, x_handle: '@nope', show_handle: true },
       ],
     });
@@ -613,4 +613,53 @@ test('public copy and the page file follow the no-wallet rules', () => {
   const admin = readFileSync(path.join(root, 'admin_app.js'), 'utf8');
   assert.match(admin, /BardPlatform\.shortWallet/);
   assert.equal(admin.includes("a.slice(0,4)"), false);
+});
+
+test('a manual handle is not published and an oauth handle is', async () => {
+  const restore = installFetchGuard();
+  try {
+    const mint = keypair();
+    const vault = keypair();
+    const manual = keypair();
+    const oauth = keypair();
+    const hidden = keypair();
+    const plain = keypair();
+    const shouted = keypair();
+    const stale = keypair();
+    const { env } = createEnv({
+      campaigns: [campaignRow()],
+      projects: [projectRow(mint, vault)],
+      joins: [
+        { campaign_id: CID, wallet: manual, qualified: true, status: 'approved', progress: 5 },
+        { campaign_id: CID, wallet: oauth, qualified: true, status: 'approved', progress: 4 },
+        { campaign_id: CID, wallet: hidden, qualified: false, status: 'approved', progress: 3 },
+        { campaign_id: CID, wallet: plain, qualified: false, status: 'approved', progress: 2 },
+        { campaign_id: CID, wallet: shouted, qualified: false, status: 'approved', progress: 1 },
+        { campaign_id: CID, wallet: stale, qualified: false, status: 'approved', progress: 1 },
+      ],
+      holders: [
+        { wallet: manual, x_handle: '@stranger', x_via: 'manual', show_handle: true },
+        { wallet: oauth, x_handle: '@real', x_via: 'oauth', show_handle: true },
+        { wallet: hidden, x_handle: '@secret', x_via: 'oauth', show_handle: false },
+        { wallet: plain, x_handle: '@typed', show_handle: true },
+        { wallet: shouted, x_handle: '@loud', x_via: 'OAUTH', show_handle: 'true' },
+        { wallet: stale, x_handle: '@stale', x_via: 'unverified', show_handle: true },
+      ],
+    });
+    const body = await buildCampaignState(env, CID, NOW, async () => ({ raw: '0', decimals: 6, tokenProgram: TOKEN_PROGRAM }));
+    const byHash = new Map(body.board.map((row) => [row.wallet_hash, row.handle]));
+    assert.equal(byHash.get(sha256Hex(manual)), null);
+    assert.equal(byHash.get(sha256Hex(oauth)), '@real');
+    assert.equal(byHash.get(sha256Hex(hidden)), null);
+    assert.equal(byHash.get(sha256Hex(plain)), null);
+    assert.equal(byHash.get(sha256Hex(shouted)), null);
+    assert.equal(byHash.get(sha256Hex(stale)), null);
+    const dumped = JSON.stringify(body);
+    for (const secret of ['@stranger', '@secret', '@typed', '@loud', '@stale', manual, oauth, hidden, plain, shouted, stale]) {
+      assert.equal(dumped.includes(secret), false, secret);
+    }
+    assert.equal(dumped.includes('@real'), true);
+  } finally {
+    restore();
+  }
 });

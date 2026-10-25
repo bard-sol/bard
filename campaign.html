@@ -249,7 +249,7 @@ h1{
     if (wallet) {
       try {
         var holder = await BardPlatform.getHolder(wallet);
-        linkedHandle = holder && holder.x_handle ? String(holder.x_handle) : null;
+        linkedHandle = BardPlatform.linkedXHandle(holder);
       } catch (err) {
         linkedHandle = null;
       }

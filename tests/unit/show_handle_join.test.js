@@ -61,8 +61,12 @@ function memoryClient(tables) {
   };
 }
 
-function loadPlatform(client) {
+function loadPlatform(client, sessionItems) {
   const store = new Map();
+  const session = new Map();
+  if (sessionItems) {
+    for (const [key, value] of Object.entries(sessionItems)) session.set(key, value);
+  }
   const sandbox = {
     console,
     URL,
@@ -88,6 +92,11 @@ function loadPlatform(client) {
       getItem(key) { return store.has(key) ? store.get(key) : null; },
       setItem(key, value) { store.set(key, String(value)); },
       removeItem(key) { store.delete(key); },
+    },
+    sessionStorage: {
+      getItem(key) { return session.has(key) ? session.get(key) : null; },
+      setItem(key, value) { session.set(key, String(value)); },
+      removeItem(key) { session.delete(key); },
     },
     document: {
       querySelector() { return null; },
@@ -181,26 +190,66 @@ test('joining from the page keeps the linked X handle', async () => {
   assert.equal(nullTables.holders[0].show_handle, true);
 });
 
-test('dashboard holder writes still set the X fields and skip show_handle', async () => {
+test('dashboard holder writes do not send x_handle, x_linked_at, or x_via', async () => {
   const wallet = 'DashWa11et111111111111111111111111111111';
   const tables = freshTables(wallet, true);
   const client = memoryClient(tables);
   const BP = loadPlatform(client);
-  await BP.upsertHolder(wallet, '@b', 'manual');
-  const updated = holderMutations(client.writes);
-  assert.equal(updated.length, 1);
-  assert.equal(updated[0].payload.x_handle, '@b');
-  assert.equal(updated[0].payload.x_via, 'manual');
-  assert.equal(typeof updated[0].payload.x_linked_at, 'string');
-  assert.equal(Object.hasOwn(updated[0].payload, 'show_handle'), false);
-  assert.equal(tables.holders[0].x_handle, '@b');
+  await BP.upsertHolder(wallet, '@b', 'oauth');
+  assert.equal(holderMutations(client.writes).length, 0);
+  assertLinkKept(tables.holders[0]);
   assert.equal(tables.holders[0].show_handle, true);
-  assert.equal(tables.holders[0].x_via, 'manual');
+
+  const fresh = {
+    projects: [{ id: PROJECT }],
+    campaigns: [],
+    project_roster: [],
+    campaign_joins: [],
+    holders: [],
+  };
+  const created = memoryClient(fresh);
+  const blank = loadPlatform(created);
+  await blank.upsertHolder(wallet, '@spoof', 'oauth', true);
+  const inserted = holderMutations(created.writes);
+  assert.equal(inserted.length, 1);
+  assert.equal(inserted[0].op, 'insert');
+  assert.deepEqual(inserted[0].payload, { wallet, show_handle: true });
+  assert.equal(Object.hasOwn(inserted[0].payload, 'x_handle'), false);
+  assert.equal(Object.hasOwn(inserted[0].payload, 'x_via'), false);
+  assert.equal(Object.hasOwn(inserted[0].payload, 'x_linked_at'), false);
 
   const mark = client.writes.length;
   await BP.joinCampaign(PROJECT, CAMPAIGN, wallet, '@b');
   assert.equal(holderMutations(client.writes.slice(mark)).length, 0);
-  assert.equal(tables.holders[0].x_handle, '@b');
-  assert.equal(tables.holders[0].x_linked_at !== LINKED_AT, true);
+  assertLinkKept(tables.holders[0]);
   assert.equal(tables.holders[0].show_handle, true);
+});
+
+test('only an oauth handle counts as linked when the row came from the database', () => {
+  const BP = loadPlatform(memoryClient({ projects: [{ id: 'p' }] }));
+  assert.equal(BP.linkedXHandle({ x_handle: '@a', x_via: 'manual', x_linked_at: LINKED_AT }), null);
+  assert.equal(BP.linkedXHandle({ x_handle: '@a', x_via: 'oauth', x_linked_at: LINKED_AT }), '@a');
+  assert.equal(BP.linkedXHandle({ x_handle: '@local', x_via: null, x_linked_at: null }), '@local');
+  assert.equal(BP.linkedXHandle({ x_handle: '@old', x_via: null, x_linked_at: LINKED_AT }), null);
+  assert.equal(BP.linkedXHandle(null), null);
+});
+
+test('supabase mode does not treat an empty x_via as a linked handle', async () => {
+  const BP = loadPlatform(memoryClient({ projects: [{ id: 'p' }] }));
+  await BP.init();
+  assert.equal(BP.getMode(), 'supabase');
+  assert.equal(BP.linkedXHandle({ x_handle: '@local', x_via: null, x_linked_at: null }), null);
+  assert.equal(BP.linkedXHandle({ x_handle: '@old', x_via: 'unverified', x_linked_at: LINKED_AT }), null);
+  assert.equal(BP.linkedXHandle({ x_handle: '@a', x_via: 'oauth', x_linked_at: LINKED_AT }), '@a');
+});
+
+test('getSessionToken returns the saved Bard session', async () => {
+  const exp = Math.floor(Date.now() / 1000) + 3600;
+  const sessionWallet = 'Wallet111111111111111111111111111111111';
+  const BP = loadPlatform(memoryClient({ projects: [{ id: 'p' }] }), {
+    bard_session: JSON.stringify({ token: 'jwt-token', wallet: sessionWallet, exp }),
+  });
+  await BP.init();
+  assert.equal(BP.getSessionToken(), 'jwt-token');
+  assert.equal(BP.getSessionWallet(), sessionWallet);
 });

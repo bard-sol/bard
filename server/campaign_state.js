@@ -151,7 +151,8 @@ function boardSort(a, b) {
 
 function boardEntry(rank, wallet, holder, progress, qualified) {
   const show = !!holder && (holder.show_handle === true || holder.show_handle === 'true');
-  const handle = show && holder.x_handle ? String(holder.x_handle) : null;
+  const verified = !!holder && holder.x_via === 'oauth';
+  const handle = show && verified && holder.x_handle ? String(holder.x_handle) : null;
   return {
     rank,
     wallet_short: shortWallet(wallet),
@@ -182,7 +183,7 @@ async function holdersByWallet(env, wallets) {
   const map = new Map();
   if (!unique.length) return map;
   const list = unique.map((wallet) => '"' + String(wallet).replace(/"/g, '') + '"').join(',');
-  const rows = await sbGet(env, '/holders?select=*&wallet=in.(' + list + ')');
+  const rows = await sbGet(env, '/holders?select=wallet,x_handle,show_handle,x_via&wallet=in.(' + list + ')');
   for (const row of rows) {
     if (row && row.wallet) map.set(row.wallet, row);
   }

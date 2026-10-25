@@ -370,13 +370,13 @@ h1{
     <button class="btn btn--solid" id="x-oauth" style="width:100%">Continue with X</button>
     <div class="hint">OAuth via the Bard auth worker when available.</div>
     <div style="margin:16px 0 8px;border-top:1px solid var(--line);padding-top:14px">
-      <div class="side__lbl" style="margin-bottom:8px">Or save handle for testing</div>
+      <div class="side__lbl" style="margin-bottom:8px">Or save a handle on this device</div>
       <input id="x-handle-input" placeholder="@yourhandle" autocomplete="off" spellcheck="false">
       <div class="actions">
         <button class="btn btn--ghost" id="x-save-handle">Save handle</button>
         <button class="btn btn--ghost" id="x-modal-close">Cancel</button>
       </div>
-      <div class="hint">Test path stores the handle locally. Production scoring will require real OAuth.</div>
+      <div class="hint">This name stays in this browser. The public campaign page shows a handle only after Continue with X.</div>
     </div>
   </div>
 </div>
@@ -456,10 +456,10 @@ h1{
     }
   }
 
-  function setXHandle(handle, via){
+  function setXHandle(handle){
     xHandle = normalizeHandle(handle);
     if (window.BardPlatform && wallet) {
-      BardPlatform.upsertHolder(wallet, xHandle, via || 'manual').catch(function(){});
+      BardPlatform.upsertHolder(wallet).catch(function(){});
     }
     if(xHandle) localStorage.setItem('bard_holder_x', xHandle);
     else localStorage.removeItem('bard_holder_x');
@@ -500,6 +500,15 @@ h1{
     document.getElementById('app').style.display = 'flex';
     document.getElementById('side-addr').textContent = wallet ? shortAddr(wallet) : 'Browsing';
     updateXUI();
+    if (window.BardPlatform && wallet && BardPlatform.getHolder) {
+      BardPlatform.init().then(function () { return BardPlatform.getHolder(wallet); }).then(function (row) {
+        if (row && row.x_via === 'oauth' && row.x_handle) {
+          xHandle = normalizeHandle(row.x_handle);
+          if (xHandle) localStorage.setItem('bard_holder_x', xHandle);
+          updateXUI();
+        }
+      }).catch(function () {});
+    }
     refreshCampaignCache().then(renderAll).catch(function(e){ console.error(e); renderAll(); });
     showPage('overview');
   }
@@ -523,7 +532,7 @@ h1{
       localStorage.setItem('bard_holder_wallet', wallet);
       if (window.BardPlatform) {
         if (BardPlatform.signIn) await BardPlatform.signIn(provider);
-        await BardPlatform.upsertHolder(wallet, xHandle, null);
+        await BardPlatform.upsertHolder(wallet);
       }
       toast('Wallet connected', 'ok');
       enterApp();
@@ -538,11 +547,21 @@ h1{
       toast('Connect a wallet before linking X', 'err');
       return;
     }
+    var token = window.BardPlatform && BardPlatform.getSessionToken && BardPlatform.getSessionToken();
+    if(!token){
+      toast('Sign in with your wallet before linking X', 'err');
+      return;
+    }
     try{
-      var res = await fetch(AUTH_WORKER + '/auth/x/start?wallet=' + encodeURIComponent(wallet));
+      var res = await fetch(AUTH_WORKER + '/auth/x/start', {
+        headers: { Authorization: 'Bearer ' + token }
+      });
+      if(res.status === 401){
+        toast('Sign in with your wallet before linking X', 'err');
+        return;
+      }
       if(!res.ok) throw new Error('auth start failed');
       var data = await res.json();
-      if(data.codeVerifier) localStorage.setItem('bard_cv', data.codeVerifier);
       if(data.authUrl){
         window.location.href = data.authUrl;
         return;
@@ -554,28 +573,69 @@ h1{
     }
   }
 
+  function xlinkTokenFromHash(){
+    var hash = window.location.hash || '';
+    if(hash.charAt(0) === '#') hash = hash.slice(1);
+    return new URLSearchParams(hash).get('xlink') || '';
+  }
+
+  function finishXLink(verified){
+    if(verified){
+      xHandle = verified;
+      localStorage.setItem('bard_holder_x', verified);
+      toast('X linked as ' + verified, 'ok');
+    }else{
+      toast('X login did not verify a handle', 'err');
+    }
+    updateXUI();
+    if(wallet) enterApp();
+    if(pendingJoin){
+      var pj = pendingJoin; pendingJoin = null;
+      openDetail(pj.projectId, pj.campaignId);
+    }
+  }
+
+  async function confirmXLink(token){
+    window.history.replaceState({}, '', '/dashboard.html');
+    var session = window.BardPlatform && BardPlatform.getSessionToken && BardPlatform.getSessionToken();
+    if(!session){
+      toast('Sign in with your wallet to finish linking X', 'err');
+      if(wallet) enterApp();
+      return;
+    }
+    try{
+      var res = await fetch(AUTH_WORKER + '/auth/x/confirm', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          Authorization: 'Bearer ' + session
+        },
+        body: JSON.stringify({ token: token })
+      });
+      var data = {};
+      try { data = await res.json(); } catch (e) { data = {}; }
+      var verified = res.ok ? normalizeHandle(data.handle) : null;
+      finishXLink(verified);
+    }catch(e){
+      console.error(e);
+      finishXLink(null);
+    }
+  }
+
   function handleAuthCallback(){
-    var params = new URLSearchParams(window.location.search);
-    var auth = params.get('auth');
-    var handle = params.get('handle');
-    var w = params.get('wallet');
-    if(auth === 'success' && handle){
-      if(w){
-        wallet = w;
-        localStorage.setItem('bard_holder_wallet', wallet);
+    var xlink = xlinkTokenFromHash();
+    if(xlink){
+      var savedW = localStorage.getItem('bard_holder_wallet');
+      if(savedW){
+        wallet = savedW;
         browseOnly = false;
       }
-      setXHandle(handle, 'oauth');
-      window.history.replaceState({}, '', '/dashboard.html');
-      toast('X linked as ' + normalizeHandle(handle), 'ok');
-      enterApp();
-      if(pendingJoin){
-        var pj = pendingJoin; pendingJoin = null;
-        openDetail(pj.projectId, pj.campaignId);
-      }
+      var ready = (window.BardPlatform && BardPlatform.init) ? BardPlatform.init() : Promise.resolve();
+      ready.then(function () { return confirmXLink(xlink); }).catch(function () { finishXLink(null); });
       return true;
     }
-    if(auth === 'error'){
+    var params = new URLSearchParams(window.location.search);
+    if(params.get('auth') === 'error'){
       window.history.replaceState({}, '', '/dashboard.html');
       toast('X login failed', 'err');
     }
@@ -1016,9 +1076,9 @@ h1{
       toast('Enter a valid handle', 'err');
       return;
     }
-    setXHandle(n, 'manual');
+    setXHandle(n);
     closeXModal();
-    toast('X saved as ' + n + ' (test link)', 'ok');
+    toast('Saved on this device as ' + n, 'ok');
     if(pendingJoin){
       var pj = pendingJoin; pendingJoin = null;
       tryJoin(pj.projectId, pj.campaignId);

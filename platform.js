@@ -1026,23 +1026,37 @@
     return { ok: true, signature: sig, fee: feeRow, amount: amount };
   }
 
+  // x_handle, x_linked_at, and x_via are written by the auth worker with the
+  // service key. Supabase mode never sends them. A typed handle stays on this
+  // device (local mode and the dashboard's own storage).
   async function upsertHolder(wallet, xHandle, xVia, showHandle) {
     await init();
     if (mode === 'supabase' && sb && wallet) {
-      var existing = await sb.from('holders').select('*').eq('wallet', wallet).maybeSingle();
+      var existing = await sb.from('holders').select('wallet').eq('wallet', wallet).maybeSingle();
       if (existing.error) throw existing.error;
-      var row = { x_handle: xHandle || null, x_linked_at: xHandle ? new Date().toISOString() : null, x_via: xVia || null };
+      var row = {};
       if (typeof showHandle === 'boolean') row.show_handle = showHandle;
-      var write = existing.data
-        ? sb.from('holders').update(row).eq('wallet', wallet)
-        : sb.from('holders').insert(Object.assign({ wallet: wallet }, row));
-      var saved = await write;
-      if (saved.error) throw saved.error;
+      if (!existing.data) {
+        var inserted = await sb.from('holders').insert(Object.assign({ wallet: wallet }, row));
+        if (inserted.error) throw inserted.error;
+      } else if (typeof showHandle === 'boolean') {
+        var updated = await sb.from('holders').update(row).eq('wallet', wallet);
+        if (updated.error) throw updated.error;
+      }
     }
     var h = localHolder();
-    if (xHandle) h.xHandle = xHandle;
+    if (mode !== 'supabase' && xHandle) h.xHandle = xHandle;
     if (typeof showHandle === 'boolean') h.showHandle = showHandle;
     saveLocalHolder(h);
+  }
+
+  function linkedXHandle(holder) {
+    if (!holder || !holder.x_handle) return null;
+    if (holder.x_via === 'oauth') return String(holder.x_handle);
+    // Local mode stores a typed handle with both fields empty. A database row
+    // in that shape was not proved, so it must not open a needsX join.
+    if (mode !== 'supabase' && holder.x_via == null && holder.x_linked_at == null) return String(holder.x_handle);
+    return null;
   }
 
   // Public-page opt-in. Writes show_handle only. A join must not clear
@@ -1511,6 +1525,7 @@
     signIn: signIn,
     signOut: signOut,
     getSessionWallet: function () { return sessionWallet; },
+    getSessionToken: function () { return sessionToken; },
     isPremiumType: isPremiumType,
     isPremiumReward: isPremiumReward,
     isPremiumPlan: isPremiumPlan,
@@ -1525,7 +1540,7 @@
     updateCampaignStatus: updateCampaignStatus, listLiveCampaigns: listLiveCampaigns,
     recordFee: recordFee, payFee: payFee, markFeeConfirmed: markFeeConfirmed,
     needsX: needsX,
-    upsertHolder: upsertHolder, setShowHandle: setShowHandle, getHolder: getHolder, joinCampaign: joinCampaign,
+    upsertHolder: upsertHolder, linkedXHandle: linkedXHandle, setShowHandle: setShowHandle, getHolder: getHolder, joinCampaign: joinCampaign,
     listJoinsForCampaign: listJoinsForCampaign, setJoinStatus: setJoinStatus, setJoinProgress: setJoinProgress,
     listRoster: listRoster, upsertRoster: upsertRoster, removeRoster: removeRoster,
     drawAirdrop: drawAirdrop,
