@@ -367,6 +367,10 @@ test('RLS isolates two wallets and blocks privileged columns', { timeout: 120000
     assert.equal(wiped.payout_hash, null);
     assert.equal(wiped.vault_multisig, null);
     assert.equal(wiped.status, 'proposed');
+    await withRole(db, 'service_role', '', () => db.query(
+      `UPDATE public.vault_settlements SET status = 'cancelled' WHERE campaign_id = $1 AND status <> 'cancelled'`,
+      [campaign.id]
+    ));
 
     const settlement = await withRole(db, 'service_role', '', () => one(db, `
       INSERT INTO public.vault_settlements (project_id, campaign_id, payouts, total, unit, payout_hash)
@@ -379,6 +383,12 @@ test('RLS isolates two wallets and blocks privileged columns', { timeout: 120000
     assert.equal(settlement.tx_signature, null);
     assert.equal(settlement.payout_hash, 'honest-hash');
     assert.equal(settlement.vault_multisig, null);
+    const secondOpen = await withRole(db, 'service_role', '', () =>
+      denied(db, `
+        INSERT INTO public.vault_settlements (project_id, campaign_id, payouts, total, unit, payout_hash)
+        VALUES ($1, $2, '[]'::jsonb, 1, 'TOKEN', 'second-hash')
+      `, [project.id, campaign.id]));
+    assert.match(secondOpen, /vault_settlements_one_open_per_campaign|duplicate key|unique/i);
 
     await db.exec('GRANT UPDATE (payout_hash, vault_multisig) ON public.vault_settlements TO authenticated');
     await withRole(db, 'authenticated', walletA, () => db.query(
@@ -625,6 +635,10 @@ test('RLS isolates two wallets and blocks privileged columns', { timeout: 120000
       [walletA]
     ));
 
+    await withRole(db, 'service_role', '', () => db.query(
+      `UPDATE public.vault_settlements SET status = 'cancelled' WHERE campaign_id = $1 AND status <> 'cancelled'`,
+      [campaign.id]
+    ));
     await db.exec('GRANT INSERT (project_id, campaign_id, payouts, total, unit, cut_raw, cut_waived, holder_total_raw) ON public.vault_settlements TO authenticated');
     const forgedCut = await withRole(db, 'authenticated', walletA, () => one(db, `
       INSERT INTO public.vault_settlements (project_id, campaign_id, payouts, total, unit, cut_raw, cut_waived, holder_total_raw)

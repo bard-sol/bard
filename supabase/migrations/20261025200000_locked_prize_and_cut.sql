@@ -17,6 +17,13 @@ ALTER TABLE public.campaigns
 ALTER TABLE public.projects
   ADD COLUMN IF NOT EXISTS vault_reserved_raw numeric(40, 0) NOT NULL DEFAULT 0;
 
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM public.campaigns WHERE status = 'active' AND locked_raw IS NULL) THEN
+    RAISE EXCEPTION 'active campaigns without a lock exist; end or re-create them before this migration';
+  END IF;
+END $$;
+
 -- Copy a lock that this migration already stored. Human vault_reserved stays
 -- a display value; coverage reads the raw column, which has no 8-place round.
 UPDATE public.campaigns
@@ -45,6 +52,8 @@ ALTER TABLE public.vault_settlements
   ADD COLUMN IF NOT EXISTS cut_bps integer,
   ADD COLUMN IF NOT EXISTS cut_waived boolean NOT NULL DEFAULT false,
   ADD COLUMN IF NOT EXISTS holder_total_raw numeric(40, 0);
+
+CREATE UNIQUE INDEX vault_settlements_one_open_per_campaign ON public.vault_settlements (campaign_id) WHERE status <> 'cancelled';
 
 ALTER TABLE public.projects ALTER COLUMN fee_paid SET DEFAULT true;
 ALTER TABLE public.campaigns ALTER COLUMN fee_paid SET DEFAULT true;

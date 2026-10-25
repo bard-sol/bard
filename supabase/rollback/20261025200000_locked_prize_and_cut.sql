@@ -2,6 +2,8 @@
 -- Restores the M3 campaign guard and the pre-cut settlement guard.
 -- Kept out of supabase/migrations so the test runner does not apply it as an up.
 
+DROP INDEX IF EXISTS public.vault_settlements_one_open_per_campaign;
+
 DROP FUNCTION IF EXISTS public.release_campaign_vault(uuid, uuid);
 DROP FUNCTION IF EXISTS public.release_vault_raw(uuid, numeric);
 DROP FUNCTION IF EXISTS public.reserve_vault_raw(uuid, numeric, numeric, uuid);
