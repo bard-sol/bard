@@ -349,6 +349,8 @@ export function parsedTransfers(tx) {
     const info = parsed.info;
     const amount = info.tokenAmount && info.tokenAmount.amount != null ? info.tokenAmount.amount : info.amount;
     out.push({
+      program: ix.program || '',
+      programId: ix.programId || '',
       source: info.source || '',
       destination: info.destination || '',
       mint: info.mint || '',

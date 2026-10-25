@@ -85,8 +85,9 @@ export function collectTreasuryLamports(tx, { treasury, payer }) {
   for (const ix of groups) {
     const parsed = ix && ix.parsed;
     if (!parsed || parsed.type !== 'transfer' || !parsed.info) continue;
-    if (ix.program && ix.program !== 'system') continue;
-    if (parsed.info.destination !== treasury || parsed.info.source !== payer) continue;
+    if (!ix.program || ix.program !== 'system') continue;
+    if (!parsed.info.destination || parsed.info.destination !== treasury) continue;
+    if (!parsed.info.source || parsed.info.source !== payer) continue;
     total += BigInt(parsed.info.lamports || 0);
   }
   return total;

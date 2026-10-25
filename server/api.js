@@ -683,6 +683,14 @@ async function handlePropose(request, env) {
   return json({ settlement });
 }
 
+function parsedTokenProgramOk(transfer, tokenProgram) {
+  const program = transfer.program || '';
+  const programId = transfer.programId || '';
+  if (!program || !programId || programId !== tokenProgram) return false;
+  if (program === 'spl-token') return true;
+  return tokenProgram === TOKEN_2022_PROGRAM && (program === 'spl-token-2022' || program === 'spl-token2022');
+}
+
 export async function verifyExecutedPayout(env, settlement, project, signature) {
   const multisig = project.vault_multisig || settlement.vault_multisig || '';
   if (!multisig) throw new Error('project vault is not linked');
@@ -720,12 +728,19 @@ export async function verifyExecutedPayout(env, settlement, project, signature) 
   if (!expected.size) throw new Error('settlement has no payout amounts');
   const actual = new Map();
   for (const transfer of parsedTransfers(tx)) {
-    if (transfer.mint !== mint || transfer.source !== vaultAta) continue;
-    if (transfer.authority && transfer.authority !== project.vault_address) {
+    if (!transfer.mint || transfer.mint !== mint) continue;
+    if (!transfer.source || transfer.source !== vaultAta) continue;
+    if (!parsedTokenProgramOk(transfer, mintInfo.tokenProgram)) {
+      throw new Error('payout program is not the vault token program');
+    }
+    if (!transfer.authority || transfer.authority !== project.vault_address) {
       throw new Error('payout authority is not the project vault');
     }
-    if (!expected.has(transfer.destination)) throw new Error('payout pays an unexpected account');
-    actual.set(transfer.destination, (actual.get(transfer.destination) || 0n) + BigInt(transfer.amount || '0'));
+    if (!transfer.destination || !expected.has(transfer.destination)) {
+      throw new Error('payout pays an unexpected account');
+    }
+    if (!transfer.amount) throw new Error('payout amount is missing');
+    actual.set(transfer.destination, (actual.get(transfer.destination) || 0n) + BigInt(transfer.amount));
   }
   if (actual.size !== expected.size) throw new Error('on-chain payouts do not match the settlement');
   for (const [ata, raw] of expected) {

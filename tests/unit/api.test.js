@@ -660,6 +660,7 @@ test('settlement routes keep the canonical hash and reject the other wallet', { 
           accountKeys: [SQUADS_PROGRAM, multisig, transactionPda, proposalPda],
           instructions: [{
             program: 'spl-token',
+            programId: TOKEN_PROGRAM,
             parsed: {
               type: 'transferChecked',
               info: {
@@ -674,6 +675,7 @@ test('settlement routes keep the canonical hash and reject the other wallet', { 
         },
       },
     };
+    let shownTx = payoutTx;
     const originalFetch = env.fetch;
     env.fetch = async (url, opts = {}) => {
       const u = new URL(url);
@@ -681,11 +683,54 @@ test('settlement routes keep the canonical hash and reject the other wallet', { 
         const payload = JSON.parse(opts.body);
         if (payload.method === 'getTransaction') {
           const sig = payload.params[0];
-          return Response.json({ jsonrpc: '2.0', id: 1, result: sig === paySig ? payoutTx : null });
+          return Response.json({ jsonrpc: '2.0', id: 1, result: sig === paySig ? shownTx : null });
         }
       }
       return originalFetch(url, opts);
     };
+
+    const refuseExecute = async (tx) => {
+      shownTx = tx;
+      const res = await call(env, 'POST', '/api/settlements/' + settlementId + '/execute', { signature: paySig }, tokenA);
+      assert.equal(res.status, 400, JSON.stringify(res.data));
+      assert.equal(tables.vault_settlements[0].status, 'proposed');
+      assert.equal(tables.platform_claims.length, 0);
+      assert.equal(tables.vault_reservations[0].status, 'reserved');
+      assert.equal(String(tables.projects[0].vault_reserved), '3');
+      assert.equal(tables.campaign_joins[0].qualified, true);
+      return res;
+    };
+    const clonePayout = () => structuredClone(payoutTx);
+    const wrongAuthority = clonePayout();
+    wrongAuthority.transaction.message.instructions[0].parsed.info.authority = stranger.publicKey;
+    const wrongAuth = await refuseExecute(wrongAuthority);
+    assert.match(wrongAuth.data.error, /authority/);
+    const missingAuthority = clonePayout();
+    delete missingAuthority.transaction.message.instructions[0].parsed.info.authority;
+    const missingAuth = await refuseExecute(missingAuthority);
+    assert.match(missingAuth.data.error, /authority/);
+    const emptyAuthority = clonePayout();
+    emptyAuthority.transaction.message.instructions[0].parsed.info.authority = '';
+    const emptyAuth = await refuseExecute(emptyAuthority);
+    assert.match(emptyAuth.data.error, /authority/);
+    for (const field of ['mint', 'source', 'destination']) {
+      const tx = clonePayout();
+      delete tx.transaction.message.instructions[0].parsed.info[field];
+      await refuseExecute(tx);
+    }
+    const missingProgram = clonePayout();
+    delete missingProgram.transaction.message.instructions[0].program;
+    const missingProgramRes = await refuseExecute(missingProgram);
+    assert.match(missingProgramRes.data.error, /program/);
+    const missingProgramId = clonePayout();
+    delete missingProgramId.transaction.message.instructions[0].programId;
+    const missingProgramIdRes = await refuseExecute(missingProgramId);
+    assert.match(missingProgramIdRes.data.error, /program/);
+    const wrongProgramId = clonePayout();
+    wrongProgramId.transaction.message.instructions[0].programId = stranger.publicKey;
+    const wrongProgramIdRes = await refuseExecute(wrongProgramId);
+    assert.match(wrongProgramIdRes.data.error, /program/);
+    shownTx = payoutTx;
 
     const paid = await call(env, 'POST', '/api/settlements/' + settlementId + '/execute', { signature: paySig }, tokenA);
     assert.equal(paid.status, 200, JSON.stringify(paid.data));
