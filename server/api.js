@@ -37,6 +37,7 @@ import {
   parsedTransfers,
 } from './settlement.js';
 import { handleCampaignState } from './campaign_state.js';
+import { decodeVaultTransactionAccount, verifyVaultTransactionMessage } from './approve.js';
 
 const FEES_ENABLED = false;
 const CAMPAIGN_PAGE = /^\/c\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i;
@@ -585,8 +586,67 @@ async function handleTeamSign(request, env, settlementId) {
   return json({ settlement });
 }
 
-function handleBardSign() {
+function signerWaiting() {
   return json({ ok: false, waiting: true, reason: 'bard_signer_not_wired' });
+}
+
+function signerReject(reason, status = 400) {
+  return json({ ok: false, reason }, status);
+}
+
+async function handleBardSign(request, env) {
+  if (!isBase58Address(env.BARD_SIGNER_PUBKEY || '')) return signerWaiting();
+  const body = await readJson(request);
+  if (body == null) return signerReject('invalid json');
+  const settlementId = body.settlementId ? String(body.settlementId) : '';
+  if (!settlementId) return signerReject('settlement not found', 404);
+  const current = firstRow(await select(env, 'vault_settlements', 'id=eq.' + encodeURIComponent(settlementId) + '&select=*'));
+  if (!current) return signerReject('settlement not found', 404);
+  const multisig = String(current.vault_multisig || '').trim();
+  if (!isBase58Address(multisig)) return signerReject('project vault is not linked');
+  if (current.tx_index == null || String(current.tx_index).trim() === '') {
+    return signerReject('settlement has no vault transaction');
+  }
+  let txIndex;
+  try {
+    txIndex = BigInt(String(current.tx_index).trim());
+  } catch {
+    return signerReject('settlement has no vault transaction');
+  }
+  const project = firstRow(await select(env, 'projects', 'id=eq.' + encodeURIComponent(current.project_id) + '&select=*'));
+  if (!project || !project.vault_address) return signerReject('project vault is not linked');
+  const mint = project.vault_mint || project.mint;
+  if (!mint) return signerReject('Vault mint is missing');
+  let accountInfo;
+  try {
+    const transactionPda = await squadsTransactionAddress(multisig, txIndex);
+    accountInfo = await rpc(env, 'getAccountInfo', [transactionPda, { encoding: 'base64', commitment: 'confirmed' }]);
+  } catch (err) {
+    return signerReject(err && err.message ? err.message : 'vault transaction is missing');
+  }
+  const value = accountInfo && accountInfo.value;
+  if (!value || value.owner !== SQUADS_PROGRAM || !value.data || !value.data[0]) {
+    return signerReject('vault transaction is missing');
+  }
+  const decoded = decodeVaultTransactionAccount(decodeBase64(value.data[0]));
+  if (!decoded) return signerReject('vault transaction account');
+  if (decoded.multisig !== multisig) return signerReject('vault transaction multisig');
+  if (decoded.index !== txIndex) return signerReject('vault transaction index');
+  let mintInfo;
+  try {
+    mintInfo = await readMint(env, mint);
+  } catch (err) {
+    return signerReject(err && err.message ? err.message : 'Vault mint is missing');
+  }
+  const verdict = await verifyVaultTransactionMessage(decoded, current, {
+    multisig,
+    vaultAddress: project.vault_address,
+    mint,
+    decimals: mintInfo.decimals,
+    tokenProgram: mintInfo.tokenProgram,
+  });
+  if (!verdict.ok) return signerReject(verdict.reason);
+  return signerWaiting();
 }
 
 async function handleReserve(request, env) {
@@ -918,7 +978,7 @@ export async function handleRequest(request, env) {
     if (path === '/api/joins/progress' && method === 'POST') return await handleJoinProgress(request, env);
     if (path === '/api/joins/qualify' && method === 'POST') return await handleQualify(request, env);
     if (path === '/api/claims' && method === 'POST') return await handleClaim(request, env);
-    if (path === '/api/vault/bard-sign' && method === 'POST') return handleBardSign();
+    if (path === '/api/vault/bard-sign' && method === 'POST') return await handleBardSign(request, env);
     if (path === '/api/vault/reserve' && method === 'POST') return await handleReserve(request, env);
     if (path === '/api/settlements/propose' && method === 'POST') return await handlePropose(request, env);
     const plan = path.match(/^\/api\/projects\/([^/]+)\/plan$/);

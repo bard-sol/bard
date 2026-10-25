@@ -103,6 +103,7 @@ export function createLiteSvmConnection(svm) {
     async sendRawTransaction(raw) {
       var bytes = toBytes(raw);
       var result = sendWire(svm, bytes);
+      this.lastSent = { bytes: bytes, meta: result };
       var sig = result.signature();
       try {
         sig = VersionedTransaction.deserialize(bytes).signatures[0];

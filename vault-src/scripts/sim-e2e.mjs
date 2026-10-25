@@ -15,7 +15,7 @@ import path from 'node:path';
 import vm from 'node:vm';
 import { fileURLToPath } from 'node:url';
 import { FailedTransactionMetadata, LiteSVM } from 'litesvm';
-import { Keypair, PublicKey, SystemProgram, Transaction } from '@solana/web3.js';
+import { Keypair, PublicKey, SystemProgram, Transaction, TransactionMessage, VersionedTransaction } from '@solana/web3.js';
 import {
   createMint,
   getAccount,
@@ -23,15 +23,20 @@ import {
   getOrCreateAssociatedTokenAccount,
   mintTo,
   transferChecked,
+  createAssociatedTokenAccountIdempotentInstruction,
+  createTransferCheckedInstruction,
   TOKEN_PROGRAM_ID,
   TOKEN_2022_PROGRAM_ID,
 } from '@solana/spl-token';
+import * as multisig from '@sqds/multisig';
 import {
   createTwoOfTwo,
   createPayoutProposal,
   teamApprove,
   executePayout,
 } from '../src/index.js';
+import { verifyExecutedPayout } from '../../server/api.js';
+import { decodeVaultTransactionAccount, verifyVaultTransactionMessage } from '../../server/approve.js';
 import { loadSquadsCache, SQUADS_PROGRAM_ID } from './litesvm-cache.mjs';
 import { applyComputeBudget, createLiteSvmConnection } from './litesvm-connection.mjs';
 
@@ -73,6 +78,143 @@ function loadPlatform() {
 
 const platform = loadPlatform();
 
+function accountKeysFromWire(bytes) {
+  var wire = Buffer.from(bytes);
+  try {
+    var versioned = VersionedTransaction.deserialize(wire);
+    return versioned.message.staticAccountKeys.map(function (key) { return key.toBase58(); });
+  } catch (e) {
+    var legacy = Transaction.from(wire);
+    return legacy.compileMessage().accountKeys.map(function (key) { return key.toBase58(); });
+  }
+}
+
+function parsedCompiled(ix, keys) {
+  var programIndex = typeof ix.programIdIndex === 'function' ? ix.programIdIndex() : ix.programIdIndex;
+  var rawAccounts = typeof ix.accounts === 'function' ? ix.accounts() : (ix.accountKeyIndexes || ix.accounts);
+  var rawData = typeof ix.data === 'function' ? ix.data() : ix.data;
+  var programId = keys[programIndex] || '';
+  var accounts = Array.from(rawAccounts || []).map(function (index) { return keys[index] || ''; });
+  var data = Uint8Array.from(rawData || []);
+  var tokenName = programId === TOKEN_2022_PROGRAM_ID.toBase58() ? 'spl-token-2022'
+    : (programId === TOKEN_PROGRAM_ID.toBase58() ? 'spl-token' : '');
+  if (tokenName && data.length >= 10 && data[0] === 12 && accounts.length >= 4) {
+    var amount = new DataView(data.buffer, data.byteOffset, data.byteLength).getBigUint64(1, true);
+    return {
+      program: tokenName,
+      programId: programId,
+      parsed: {
+        type: 'transferChecked',
+        info: {
+          source: accounts[0],
+          mint: accounts[1],
+          destination: accounts[2],
+          authority: accounts[3],
+          tokenAmount: { amount: amount.toString(), decimals: data[9] },
+        },
+      },
+    };
+  }
+  return { programId: programId, accounts: accounts, data: Buffer.from(data).toString('base64') };
+}
+
+function outerCompiled(bytes) {
+  try {
+    var versioned = VersionedTransaction.deserialize(Buffer.from(bytes));
+    return versioned.message.compiledInstructions.map(function (ix) {
+      return { programIdIndex: ix.programIdIndex, accountKeyIndexes: ix.accountKeyIndexes, data: ix.data };
+    });
+  } catch (e) {
+    var legacy = Transaction.from(Buffer.from(bytes));
+    return legacy.compileMessage().instructions.map(function (ix) {
+      return { programIdIndex: ix.programIdIndex, accounts: ix.accounts, data: ix.data };
+    });
+  }
+}
+
+function innerGroups(meta) {
+  var raw = meta.innerInstructions();
+  if (!raw || !raw.length) return [];
+  if (Array.isArray(raw[0])) return raw;
+  return [raw];
+}
+
+function jsonParsedFromSent(sent) {
+  var logs = sent.meta.logs();
+  var keys = accountKeysFromWire(sent.bytes);
+  var innerInstructions = [];
+  var groups = innerGroups(sent.meta);
+  for (var i = 0; i < groups.length; i++) {
+    var group = groups[i] || [];
+    if (!group.length) continue;
+    innerInstructions.push({
+      index: i,
+      instructions: group.map(function (inner) {
+        var ix = inner && typeof inner.instruction === 'function' ? inner.instruction() : inner;
+        return parsedCompiled(ix, keys);
+      }),
+    });
+  }
+  return {
+    logs: logs,
+    parsed: {
+      meta: { err: null, logMessages: logs, innerInstructions: innerInstructions },
+      transaction: {
+        message: {
+          accountKeys: keys,
+          instructions: outerCompiled(sent.bytes).map(function (ix) { return parsedCompiled(ix, keys); }),
+        },
+      },
+    },
+  };
+}
+
+function countTransfers(parsed) {
+  var n = 0;
+  var groups = [parsed.transaction.message.instructions].concat(
+    (parsed.meta.innerInstructions || []).map(function (group) { return group.instructions || []; })
+  );
+  for (var g = 0; g < groups.length; g++) {
+    for (var i = 0; i < groups[g].length; i++) {
+      if (groups[g][i].parsed && groups[g][i].parsed.type === 'transferChecked') n += 1;
+    }
+  }
+  return n;
+}
+
+function proofEnv(parsedTx, tokenProgram) {
+  var mintData = Buffer.alloc(82);
+  mintData[44] = DECIMALS;
+  return {
+    SOLANA_RPC: 'http://127.0.0.1/proof',
+    fetch: async function (url, opts) {
+      void url;
+      var payload = JSON.parse(opts.body);
+      if (payload.method === 'getTransaction') {
+        return Response.json({ jsonrpc: '2.0', id: 1, result: parsedTx });
+      }
+      if (payload.method === 'getAccountInfo') {
+        return Response.json({ jsonrpc: '2.0', id: 1, result: {
+          value: { owner: tokenProgram, data: [mintData.toString('base64'), 'base64'] },
+        }});
+      }
+      throw new Error('unexpected proof rpc ' + payload.method);
+    },
+  };
+}
+
+async function assertRealExecute(sent, signature, settlement, project, tokenProgram, minTransfers) {
+  var built = jsonParsedFromSent(sent);
+  assert.ok(
+    built.logs.some(function (line) { return String(line).includes('VaultTransactionExecute'); }),
+    'real execute logs did not include VaultTransactionExecute\n' + built.logs.join('\n')
+  );
+  assert.ok(countTransfers(built.parsed) >= minTransfers, 'simulated execute did not expose transferChecked instructions');
+  var env = proofEnv(built.parsed, tokenProgram);
+  await verifyExecutedPayout(env, settlement, project, signature);
+  return built;
+}
+
 function tokenBalance(account) {
   return BigInt(account.amount.toString());
 }
@@ -98,6 +240,69 @@ async function fund(svm, pubkey, sol) {
     throw new Error('airdrop failed for ' + pubkey.toBase58());
   }
   svm.expireBlockhash();
+}
+
+async function sendSigned(connection, tx, signer) {
+  tx.sign([signer]);
+  var signature = await connection.sendRawTransaction(tx.serialize());
+  await connection.confirmTransaction(signature, 'confirmed');
+  return signature;
+}
+
+async function proposeExtraTransfer(connection, team, multisigAddress, mint, tokenProgram, payouts, stranger) {
+  var multisigPda = new PublicKey(String(multisigAddress));
+  var vaultPda = multisig.getVaultPda({ multisigPda: multisigPda, index: 0 })[0];
+  var account = await multisig.accounts.Multisig.fromAccountAddress(connection, multisigPda);
+  var transactionIndex = BigInt(account.transactionIndex.toString()) + 1n;
+  var vaultAta = getAssociatedTokenAddressSync(mint, vaultPda, true, tokenProgram);
+  var ordered = payouts.slice().sort(function (a, b) {
+    if (a.wallet < b.wallet) return -1;
+    if (a.wallet > b.wallet) return 1;
+    return 0;
+  });
+  var instructions = [
+    createAssociatedTokenAccountIdempotentInstruction(vaultPda, vaultAta, vaultPda, mint, tokenProgram),
+  ];
+  for (var i = 0; i < ordered.length; i++) {
+    var owner = new PublicKey(ordered[i].wallet);
+    var ata = getAssociatedTokenAddressSync(mint, owner, true, tokenProgram);
+    instructions.push(createAssociatedTokenAccountIdempotentInstruction(vaultPda, ata, owner, mint, tokenProgram));
+    instructions.push(createTransferCheckedInstruction(
+      vaultAta, mint, ata, vaultPda, BigInt(ordered[i].amountRaw), DECIMALS, [], tokenProgram
+    ));
+  }
+  var strangerAta = getAssociatedTokenAddressSync(mint, stranger, true, tokenProgram);
+  instructions.push(createTransferCheckedInstruction(
+    vaultAta, mint, strangerAta, vaultPda, 1n, DECIMALS, [], tokenProgram
+  ));
+  var block = await connection.getLatestBlockhash('confirmed');
+  var message = new TransactionMessage({
+    payerKey: vaultPda,
+    recentBlockhash: block.blockhash,
+    instructions: instructions,
+  });
+  var createSig = await sendSigned(connection, multisig.transactions.vaultTransactionCreate({
+    blockhash: block.blockhash,
+    feePayer: team.publicKey,
+    multisigPda: multisigPda,
+    transactionIndex: transactionIndex,
+    creator: team.publicKey,
+    vaultIndex: 0,
+    ephemeralSigners: 0,
+    transactionMessage: message,
+    memo: 'bard extra',
+  }), team);
+  var proposalBlock = await connection.getLatestBlockhash('confirmed');
+  await sendSigned(connection, multisig.transactions.proposalCreate({
+    blockhash: proposalBlock.blockhash,
+    feePayer: team.publicKey,
+    multisigPda: multisigPda,
+    transactionIndex: transactionIndex,
+    creator: team.publicKey,
+    rentPayer: team.publicKey,
+    isDraft: false,
+  }), team);
+  return { transactionIndex: transactionIndex.toString(), signature: createSig };
 }
 
 async function runMint(connection, svm, label, tokenProgram, team, bard) {
@@ -221,6 +426,24 @@ async function runMint(connection, svm, label, tokenProgram, team, bard) {
   console.log('proposal', proposed.proposalSignature);
   console.log('txIndex', proposed.transactionIndex);
   assert.equal(proposed.tokenProgram, tokenProgram.toBase58());
+  var txPda = multisig.getTransactionPda({
+    multisigPda: new PublicKey(created.multisig),
+    index: BigInt(proposed.transactionIndex),
+  })[0];
+  var stored = await connection.getAccountInfo(txPda);
+  var decoded = decodeVaultTransactionAccount(stored.data);
+  assert.ok(decoded, label + ' vault transaction did not decode');
+  var verdict = await verifyVaultTransactionMessage(decoded, {
+    payouts: built.payouts,
+    payout_hash: built.hash,
+  }, {
+    multisig: created.multisig,
+    vaultAddress: created.vault,
+    mint: mint.toBase58(),
+    decimals: DECIMALS,
+    tokenProgram: tokenProgram.toBase58(),
+  });
+  assert.equal(verdict.ok, true, label + ' signer rejected the proposal: ' + verdict.reason);
 
   var teamSig = await teamApprove(
     connection, team, team.publicKey.toBase58(), created.multisig, proposed.transactionIndex
@@ -234,6 +457,7 @@ async function runMint(connection, svm, label, tokenProgram, team, bard) {
     connection, team, team.publicKey.toBase58(), created.multisig, proposed.transactionIndex
   );
   console.log('execute', execSig);
+  var cleanSent = connection.lastSent;
 
   var paid = 0n;
   for (var i = 0; i < built.payouts.length; i++) {
@@ -251,6 +475,19 @@ async function runMint(connection, svm, label, tokenProgram, team, bard) {
   assert.ok(await connection.getAccountInfo(missingBefore[0]));
   assert.ok(await connection.getAccountInfo(missingBefore[1]));
   console.log('vaultRemaining', vaultAfter.amount.toString());
+  var settlement = {
+    vault_multisig: created.multisig,
+    tx_index: proposed.transactionIndex,
+    payouts: built.payouts,
+  };
+  var project = {
+    vault_multisig: created.multisig,
+    vault_address: created.vault,
+    vault_mint: mint.toBase58(),
+    mint: mint.toBase58(),
+  };
+  await assertRealExecute(cleanSent, execSig, settlement, project, tokenProgram.toBase58(), built.payouts.length);
+  console.log('verifyExecutedPayout accepted the real execute');
 
   var over = [{
     wallet: recipients[0].publicKey.toBase58(),
@@ -272,6 +509,66 @@ async function runMint(connection, svm, label, tokenProgram, team, bard) {
   assert.equal(overFailed, true, label + ' over-payout must fail');
   var vaultStill = await getAccount(connection, vaultAta.address, 'confirmed', tokenProgram);
   assert.equal(tokenBalance(vaultStill), DEPOSIT - paid);
+
+  // The clean execute already spent the reserved pool. Top the vault up so the
+  // same payouts plus one stranger transfer can actually land on chain.
+  await mintTo(
+    connection, team, mint, teamAta.address, team, paid + UNIT, [], { commitment: 'confirmed' }, tokenProgram
+  );
+  await transferChecked(
+    connection, team, teamAta.address, mint, vaultAta.address, team, paid + 1n, DECIMALS, [],
+    { commitment: 'confirmed' }, tokenProgram
+  );
+  var stranger = Keypair.generate();
+  await getOrCreateAssociatedTokenAccount(
+    connection, team, mint, stranger.publicKey, false, 'confirmed', undefined, tokenProgram
+  );
+  var extra = await proposeExtraTransfer(
+    connection, team, created.multisig, mint, tokenProgram, built.payouts, stranger.publicKey
+  );
+  var extraPda = multisig.getTransactionPda({
+    multisigPda: new PublicKey(created.multisig),
+    index: BigInt(extra.transactionIndex),
+  })[0];
+  var extraStored = await connection.getAccountInfo(extraPda);
+  var extraDecoded = decodeVaultTransactionAccount(extraStored.data);
+  var extraVerdict = await verifyVaultTransactionMessage(extraDecoded, {
+    payouts: built.payouts,
+    payout_hash: built.hash,
+  }, {
+    multisig: created.multisig,
+    vaultAddress: created.vault,
+    mint: mint.toBase58(),
+    decimals: DECIMALS,
+    tokenProgram: tokenProgram.toBase58(),
+  });
+  assert.equal(extraVerdict.ok, false, label + ' extra transfer must fail the signer');
+  assert.equal(extraVerdict.reason, 'extra_instruction');
+  await teamApprove(connection, team, team.publicKey.toBase58(), created.multisig, extra.transactionIndex);
+  await teamApprove(connection, bard, bard.publicKey.toBase58(), created.multisig, extra.transactionIndex);
+  var extraSig = await executePayout(
+    connection, team, team.publicKey.toBase58(), created.multisig, extra.transactionIndex
+  );
+  var extraSent = connection.lastSent;
+  var extraParsed = jsonParsedFromSent(extraSent);
+  assert.ok(extraParsed.logs.some(function (line) { return String(line).includes('VaultTransactionExecute'); }));
+  var extraFailed = false;
+  try {
+    await verifyExecutedPayout(
+      proofEnv(extraParsed.parsed, tokenProgram.toBase58()),
+      Object.assign({}, settlement, { tx_index: extra.transactionIndex }),
+      project,
+      extraSig
+    );
+  } catch (e) {
+    extraFailed = true;
+    assert.match(String(e && e.message), /unexpected account/);
+    console.log('extra transfer refused', e.message);
+  }
+  assert.equal(extraFailed, true, label + ' extra transfer must fail verifyExecutedPayout');
+  var strangerAta = getAssociatedTokenAddressSync(mint, stranger.publicKey, true, tokenProgram);
+  var strangerAccount = await getAccount(connection, strangerAta, 'confirmed', tokenProgram);
+  assert.equal(tokenBalance(strangerAccount), 1n, label + ' stranger did not receive the extra transfer');
 
   console.log('ok', label);
   return {

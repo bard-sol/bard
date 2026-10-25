@@ -158,7 +158,15 @@ export async function createPayoutProposal(rpc, signer, wallet, multisigAddress,
   var instructions = [
     createAssociatedTokenAccountIdempotentInstruction(vaultPda, vaultAta, vaultPda, mint, tokenProgram),
   ];
-  (payouts || []).forEach(function (payout) {
+  // The signer accepts payouts only in wallet order, the same order as payoutHash.
+  var ordered = (payouts || []).slice().sort(function (a, b) {
+    var aw = String(a && a.wallet || '');
+    var bw = String(b && b.wallet || '');
+    if (aw < bw) return -1;
+    if (aw > bw) return 1;
+    return 0;
+  });
+  ordered.forEach(function (payout) {
     var raw = payoutRaw(payout, decimals);
     if (raw <= 0n) return;
     var owner = new PublicKey(String(payout.wallet));
