@@ -210,3 +210,23 @@ test('draw winners are deterministic and a second draw is refused', () => {
   assert.throws(() => BP.assertDrawStep({ drawSlot: 10 }, 'commit'), /already committed/);
   assert.throws(() => BP.assertDrawStep({ drawSeed: 'x', drawWinners: first }, 'finalize'), /already finalized/);
 });
+
+test('draw seed waits for the committed slot and skips a missing block', async () => {
+  const blocks = { 1151: { blockhash: 'SeedHashFromNextSlot' } };
+  let slot = 1149;
+  const conn = {
+    async getSlot() { return slot; },
+    async getBlock(target) {
+      if (target === 1150) throw new Error('Slot 1150 was skipped');
+      if (!blocks[target]) return null;
+      return blocks[target];
+    },
+  };
+  await assert.rejects(() => BP.resolveDrawSeed(conn, 1150), /not final yet/);
+  slot = 1152;
+  const found = await BP.resolveDrawSeed(conn, 1150);
+  assert.equal(found.slot, 1151);
+  assert.equal(found.blockhash, 'SeedHashFromNextSlot');
+  const campaign = { drawSeed: found.blockhash, drawCount: 0, drawWinners: BP.deriveWinners([{ wallet: 'A', status: 'approved' }], found.blockhash, 0), drawSlot: 1150, drawSeedSlot: found.slot };
+  assert.equal(BP.verifyDraw(campaign, [{ wallet: 'A', status: 'approved' }]).ok, true);
+});

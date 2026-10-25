@@ -1228,6 +1228,12 @@
     throw new Error('No block found at or after slot ' + slot);
   }
 
+  async function resolveDrawSeed(conn, committedSlot) {
+    var current = await conn.getSlot('finalized');
+    if (!(current >= committedSlot)) throw new Error('Slot ' + committedSlot + ' is not final yet');
+    return blockhashAtOrAfter(conn, committedSlot);
+  }
+
   async function commitDraw(campaignId, topN) {
     await init();
     refuseLocalTeamWrite();
@@ -1253,9 +1259,7 @@
     if (!global.solanaWeb3) throw new Error('Solana web3 not loaded');
     var conn = new global.solanaWeb3.Connection(RPC, 'finalized');
     var slot = Number(camp.drawSlot);
-    var current = await conn.getSlot('finalized');
-    if (!(current >= slot)) throw new Error('Slot ' + slot + ' is not final yet');
-    var found = await blockhashAtOrAfter(conn, slot);
+    var found = await resolveDrawSeed(conn, slot);
     var joins = await listJoinsForCampaign(campaignId);
     var winners = deriveWinners(joins, found.blockhash, camp.drawCount || 0);
     var payload = {
@@ -1331,6 +1335,8 @@
     deriveWinners: deriveWinners,
     verifyDraw: verifyDraw,
     assertDrawStep: assertDrawStep,
+    resolveDrawSeed: resolveDrawSeed,
+    blockhashAtOrAfter: blockhashAtOrAfter,
     canonicalPayoutText: canonicalPayoutText,
     payoutHash: payoutHash,
     planReservation: planReservation,

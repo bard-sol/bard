@@ -6,6 +6,7 @@
     "test": "node --test tests/unit/platform.test.js tests/unit/rpc-guard.test.js",
     "e2e": "playwright install chromium && playwright test",
     "devnet:e2e": "node vault-src/scripts/devnet-e2e.mjs",
+    "sim:e2e": "node vault-src/scripts/sim-e2e.mjs",
     "build:vault": "npm --prefix vault-src run build"
   },
   "devDependencies": {

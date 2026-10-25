@@ -43,7 +43,7 @@ function isKeypair(signer) {
   return !!(
     signer &&
     signer.secretKey &&
-    typeof signer.sign === 'function' &&
+    signer.publicKey &&
     typeof signer.signTransaction !== 'function'
   );
 }
