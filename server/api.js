@@ -176,7 +176,7 @@ async function readMint(env, mint) {
   return { decimals: data[44], tokenProgram: value.owner };
 }
 
-async function readVaultTokenRaw(env, address, mint) {
+export async function readVaultTokenRaw(env, address, mint) {
   const mintInfo = await readMint(env, mint);
   const result = await rpc(env, 'getTokenAccountsByOwner', [
     address,
@@ -683,7 +683,7 @@ async function handlePropose(request, env) {
   return json({ settlement });
 }
 
-async function verifyExecutedPayout(env, settlement, project, signature) {
+export async function verifyExecutedPayout(env, settlement, project, signature) {
   const multisig = project.vault_multisig || settlement.vault_multisig || '';
   if (!multisig) throw new Error('project vault is not linked');
   if (settlement.tx_index == null || String(settlement.tx_index).trim() === '') {
