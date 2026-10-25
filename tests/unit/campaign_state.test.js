@@ -492,6 +492,31 @@ test('a second state read within 60s makes no RPC call', async () => {
 
     const bad = await handleRequest(new Request('http://127.0.0.1/api/campaigns/not-a-uuid/state'), env);
     assert.equal(bad.status, 404);
+
+    const queryStore = new Map();
+    env.caches = {
+      default: {
+        async match(req) {
+          const hit = queryStore.get(req.url);
+          if (!hit) return undefined;
+          return new Response(hit.body, { status: hit.status, headers: hit.headers });
+        },
+        async put(req, res) {
+          const headers = {};
+          res.headers.forEach((value, key) => { headers[key] = value; });
+          queryStore.set(req.url, { body: await res.text(), status: res.status, headers });
+        },
+      },
+    };
+    const withQuery = await handleRequest(new Request('http://127.0.0.1' + path + '?x=1'), env);
+    assert.equal(withQuery.status, 200);
+    const afterQuery = rpcCalls.length;
+    assert.ok(afterQuery > afterFirst);
+    const otherQuery = await handleRequest(new Request('http://127.0.0.1' + path + '?x=2'), env);
+    assert.equal(otherQuery.status, 200);
+    assert.equal(rpcCalls.length, afterQuery);
+    assert.equal((await otherQuery.json()).vault.balance_raw, '0');
+    assert.deepEqual([...queryStore.keys()], ['http://127.0.0.1' + path]);
   } finally {
     restore();
   }
@@ -578,6 +603,13 @@ test('public copy and the page file follow the no-wallet rules', () => {
   const dashboard = readFileSync(path.join(root, 'dashboard.html'), 'utf8');
   assert.match(dashboard, /id="detail-public"/);
   assert.match(dashboard, /BardPlatform\.shortWallet/);
+  assert.equal(dashboard.includes('var X_TYPES'), false);
+  assert.match(dashboard, /BardPlatform\.needsX\(type\)/);
+  assert.match(page, /BardPlatform\.needsX\(state\.campaign && state\.campaign\.type\)/);
+  assert.match(page, /This campaign needs a linked X account/);
+  assert.match(page, /Link it on the dashboard/);
+  assert.equal(page.includes('wallet, null, show'), false);
+  assert.match(page, /linkedHandle \|\| null, show/);
   const admin = readFileSync(path.join(root, 'admin_app.js'), 'utf8');
   assert.match(admin, /BardPlatform\.shortWallet/);
   assert.equal(admin.includes("a.slice(0,4)"), false);

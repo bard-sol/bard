@@ -148,6 +148,7 @@ h1{
   var wallet = null;
   var state = null;
   var joined = false;
+  var linkedHandle = null;
 
   function campaignId() {
     var match = location.pathname.match(/^\/c\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/?$/i);
@@ -184,6 +185,20 @@ h1{
     }).join('');
   }
 
+  function setReason(text, href, label) {
+    var reason = document.getElementById('join-reason');
+    reason.hidden = false;
+    reason.textContent = '';
+    reason.append(document.createTextNode(text));
+    if (href && label) {
+      reason.append(document.createTextNode(' '));
+      var link = document.createElement('a');
+      link.href = href;
+      link.textContent = label;
+      reason.append(link);
+    }
+  }
+
   function paintJoin() {
     var btn = document.getElementById('join-btn');
     var reason = document.getElementById('join-reason');
@@ -196,28 +211,30 @@ h1{
     }
     if (!state || !state.clock) {
       btn.hidden = true;
-      reason.hidden = false;
-      reason.textContent = 'Campaign state is unavailable.';
+      setReason('Campaign state is unavailable.');
       return;
     }
     if (joined) {
       btn.hidden = true;
-      reason.hidden = false;
-      reason.textContent = 'You already joined.';
+      setReason('You already joined.');
       return;
     }
-    if (state.clock.state === 'live') {
-      btn.textContent = 'Join';
+    if (state.clock.state !== 'live') {
+      btn.hidden = true;
+      var why = {
+        upcoming: 'This campaign has not started.',
+        ended: 'This campaign has ended.',
+        paid: 'This campaign is already paid.'
+      };
+      setReason(why[state.clock.state] || 'Joining is closed.');
       return;
     }
-    btn.hidden = true;
-    reason.hidden = false;
-    var why = {
-      upcoming: 'This campaign has not started.',
-      ended: 'This campaign has ended.',
-      paid: 'This campaign is already paid.'
-    };
-    reason.textContent = why[state.clock.state] || 'Joining is closed.';
+    if (BardPlatform.needsX(state.campaign && state.campaign.type) && !linkedHandle) {
+      btn.hidden = true;
+      setReason('This campaign needs a linked X account.', '/dashboard.html', 'Link it on the dashboard');
+      return;
+    }
+    btn.textContent = 'Join';
   }
 
   function statusLine(isJoined, progress, qualified, paid) {
@@ -228,6 +245,15 @@ h1{
   }
 
   async function paintStatus() {
+    linkedHandle = null;
+    if (wallet) {
+      try {
+        var holder = await BardPlatform.getHolder(wallet);
+        linkedHandle = holder && holder.x_handle ? String(holder.x_handle) : null;
+      } catch (err) {
+        linkedHandle = null;
+      }
+    }
     if (!wallet || !state) {
       joined = false;
       setText('your-status', statusLine(false, 0, false, false));
@@ -348,8 +374,9 @@ h1{
       return;
     }
     if (!state || !state.clock || state.clock.state !== 'live' || joined) return;
+    if (BardPlatform.needsX(state.campaign && state.campaign.type) && !linkedHandle) return;
     var show = !!document.getElementById('show-handle').checked;
-    await BardPlatform.joinCampaign(state.campaign.project.id, state.campaign.id, wallet, null, show);
+    await BardPlatform.joinCampaign(state.campaign.project.id, state.campaign.id, wallet, linkedHandle || null, show);
     await paintStatus();
   }
 

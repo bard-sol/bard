@@ -30,6 +30,9 @@
 
   var PREMIUM_TYPES = { hold: true, refer: true, custom: true, board: true, pool: true, airdrop: true };
   var PREMIUM_REWARDS = { top3: true, pool: true, growing: true };
+  // Same set the dashboard used before this lived in one place. Raid-style
+  // campaigns score X activity, so Join stays closed until a handle is linked.
+  var X_LINK_TYPES = { raid: true, post: true, reply: true, social: true };
 
   var TEAM_KEY = 'bard_team_v1';
   var HOLDER_KEY = 'bard_holder_v1';
@@ -44,6 +47,10 @@
   var sessionWallet = null;
   var bardSignerPubkey = '';
   var B58 = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+
+  function needsX(type) {
+    return !!X_LINK_TYPES[String(type || '').toLowerCase()];
+  }
 
   function escapeHtml(s) {
     if (s == null) return '';
@@ -1038,9 +1045,50 @@
     saveLocalHolder(h);
   }
 
+  // Public-page opt-in. Writes show_handle only. A join must not clear
+  // x_handle, x_linked_at, or x_via on a holder who already linked X.
+  async function setShowHandle(wallet, show) {
+    await init();
+    var on = !!show;
+    if (mode === 'supabase' && sb && wallet) {
+      var existing = await sb.from('holders').select('wallet').eq('wallet', wallet).maybeSingle();
+      if (existing.error) throw existing.error;
+      var write = existing.data
+        ? sb.from('holders').update({ show_handle: on }).eq('wallet', wallet)
+        : sb.from('holders').insert({ wallet: wallet, show_handle: on });
+      var saved = await write;
+      if (saved.error) throw saved.error;
+    }
+    var h = localHolder();
+    h.showHandle = on;
+    saveLocalHolder(h);
+  }
+
+  async function getHolder(wallet) {
+    await init();
+    if (!wallet) return null;
+    if (mode === 'supabase' && sb) {
+      var res = await sb.from('holders').select('wallet, x_handle, x_linked_at, x_via, show_handle').eq('wallet', wallet).maybeSingle();
+      if (res.error) throw res.error;
+      return res.data || null;
+    }
+    var h = localHolder();
+    var handle = h.xHandle || null;
+    if (!handle) {
+      try { handle = localStorage.getItem('bard_holder_x') || null; } catch (e) {}
+    }
+    return {
+      wallet: wallet,
+      x_handle: handle || null,
+      x_linked_at: null,
+      x_via: null,
+      show_handle: !!h.showHandle
+    };
+  }
+
   async function joinCampaign(projectId, campaignId, wallet, xHandle, showHandle) {
     await init();
-    if (typeof showHandle === 'boolean') await upsertHolder(wallet, xHandle, null, showHandle);
+    if (typeof showHandle === 'boolean') await setShowHandle(wallet, showHandle);
     var rosterRole = null;
     if (mode === 'supabase' && sb) {
       try {
@@ -1476,7 +1524,8 @@
     listProjects: listProjects, createProject: createProject, createCampaign: createCampaign,
     updateCampaignStatus: updateCampaignStatus, listLiveCampaigns: listLiveCampaigns,
     recordFee: recordFee, payFee: payFee, markFeeConfirmed: markFeeConfirmed,
-    upsertHolder: upsertHolder, joinCampaign: joinCampaign,
+    needsX: needsX,
+    upsertHolder: upsertHolder, setShowHandle: setShowHandle, getHolder: getHolder, joinCampaign: joinCampaign,
     listJoinsForCampaign: listJoinsForCampaign, setJoinStatus: setJoinStatus, setJoinProgress: setJoinProgress,
     listRoster: listRoster, upsertRoster: upsertRoster, removeRoster: removeRoster,
     drawAirdrop: drawAirdrop,

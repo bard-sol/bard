@@ -387,8 +387,6 @@ h1{
 <script>
 (function(){
   var AUTH_WORKER = 'https://bard-auth.bardsoltoken.workers.dev';
-  var X_TYPES = { raid: true, post: true, reply: true, social: true };
-
   var wallet = null;
   var xHandle = null;
   var browseOnly = false;
@@ -400,7 +398,7 @@ h1{
   var claimsCache = [];
 
   function needsX(type){
-    return !!X_TYPES[String(type || '').toLowerCase()];
+    return !!(window.BardPlatform && BardPlatform.needsX(type));
   }
   function toast(msg, kind){
     var el = document.getElementById('toast');

@@ -285,9 +285,14 @@ export async function buildCampaignState(env, campaignId, now = new Date(), read
   };
 }
 
+export function campaignStateCacheUrl(requestUrl) {
+  const url = new URL(requestUrl);
+  return url.origin + url.pathname;
+}
+
 export async function handleCampaignState(request, env, campaignId, readVaultTokenRaw) {
   const cache = cacheDefault(env);
-  const key = new Request(request.url, { method: 'GET' });
+  const key = new Request(campaignStateCacheUrl(request.url), { method: 'GET' });
   if (cache) {
     try {
       const hit = await cache.match(key);
