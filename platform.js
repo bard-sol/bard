@@ -1493,6 +1493,40 @@
     return whole + '.' + text;
   }
 
+  function publicBoardRow(row, wallet) {
+    var entry = row || {};
+    var hash = entry.wallet_hash ? String(entry.wallet_hash) : '';
+    var you = !!(wallet && hash && sha256Hex(wallet) === hash);
+    var who = entry.handle ? String(entry.handle) : (entry.wallet_short ? String(entry.wallet_short) : '—');
+    return {
+      you: you,
+      label: (you ? 'You · ' : '') + who,
+      progress: Number(entry.progress) || 0,
+      qualified: !!entry.qualified
+    };
+  }
+
+  // Public leaderboard. The worker campaign-state route already shortens
+  // wallets and omits holder notes. This does not query Supabase.
+  async function loadPublicBoard(campaignId) {
+    if (!campaignId) return [];
+    var res = await fetch('/api/campaigns/' + encodeURIComponent(campaignId) + '/state');
+    if (!res || !res.ok) throw new Error('campaign board unavailable');
+    var data = {};
+    try { data = await res.json(); } catch (e) { data = {}; }
+    var board = (data && data.board) || [];
+    return board.map(function (row) {
+      return {
+        rank: row && row.rank,
+        wallet_short: row && row.wallet_short ? String(row.wallet_short) : '—',
+        wallet_hash: row && row.wallet_hash ? String(row.wallet_hash) : '',
+        handle: row && row.handle ? String(row.handle) : null,
+        progress: row && row.progress ? Number(row.progress) || 0 : 0,
+        qualified: !!(row && row.qualified)
+      };
+    });
+  }
+
   function campaignPublicCopy(state) {
     var prize = (state && state.prize) || {};
     var vault = (state && state.vault) || {};
@@ -1576,6 +1610,8 @@
     sha256Hex: sha256Hex,
     clockDate: clockDate,
     clockText: clockText,
-    campaignPublicCopy: campaignPublicCopy
+    campaignPublicCopy: campaignPublicCopy,
+    publicBoardRow: publicBoardRow,
+    loadPublicBoard: loadPublicBoard
   };
 })(typeof window !== 'undefined' ? window : globalThis);

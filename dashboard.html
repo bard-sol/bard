@@ -929,7 +929,7 @@ h1{
     }
 
     fillMission(match, joined, settled);
-    fillBoard(match, joined);
+    fillBoard(match);
     showPage('detail');
   }
 
@@ -1008,34 +1008,31 @@ h1{
     });
   }
 
-  async function fillBoard(match, joined){
+  async function fillBoard(match){
     var el = document.getElementById('detail-lb');
     if (!el) return;
     el.innerHTML = '<div class="muted">Loading board…</div>';
     var rows = [];
     try {
-      if (window.BardPlatform) rows = await BardPlatform.listJoinsForCampaign(match.campaign.id);
-    } catch(e) {}
-    rows = (rows || []).filter(function(j){ return j.status !== 'rejected'; })
-      .sort(function(a,b){ return (b.progress||0) - (a.progress||0); });
+      if (window.BardPlatform && BardPlatform.loadPublicBoard) {
+        rows = await BardPlatform.loadPublicBoard(match.campaign.id);
+      }
+    } catch (e) {}
     if (!rows.length) {
       el.innerHTML = '<div class="muted">No one on the board yet. Be first.</div>';
       return;
     }
     el.innerHTML = rows.map(function(j, i){
-      var you = wallet && j.wallet === wallet;
-      var who = j.x_handle || shortAddr(j.wallet);
-      var label = (you ? 'You · ' : '') + who;
-      if (j.note) label += ' · ' + j.note;
-      var st = j.qualified ? 'Qualified' : (j.status === 'pending' ? 'Waiting on team' : 'In');
+      var line = BardPlatform.publicBoardRow(j, wallet);
+      var st = line.qualified ? 'Qualified' : 'In';
       return (
         '<div class="item" style="padding:10px 0;border-bottom:1px solid var(--line)">' +
           '<span class="muted num" style="width:24px">' + (i+1) + '</span>' +
           '<div class="item__body">' +
-            '<div class="item__title" style="font-size:.94rem">' + BardPlatform.escapeHtml(label) + '</div>' +
-            '<div class="item__sub">score ' + BardPlatform.escapeHtml(j.progress || 0) + ' · ' + BardPlatform.escapeHtml(st) + '</div>' +
+            '<div class="item__title" style="font-size:.94rem">' + BardPlatform.escapeHtml(line.label) + '</div>' +
+            '<div class="item__sub">score ' + BardPlatform.escapeHtml(line.progress) + ' · ' + BardPlatform.escapeHtml(st) + '</div>' +
           '</div>' +
-          (j.qualified ? '<span class="pill pill--live">In</span>' : '<span class="pill pill--muted">…</span>') +
+          (line.qualified ? '<span class="pill pill--live">In</span>' : '<span class="pill pill--muted">…</span>') +
         '</div>'
       );
     }).join('');
