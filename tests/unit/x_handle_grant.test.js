@@ -153,11 +153,11 @@ async function bootBeforeOauthMigration() {
   const migrationsDir = path.join(root, 'supabase', 'migrations');
   const names = await readdir(migrationsDir);
   const files = names.filter((name) => name.endsWith('.sql')).sort();
-  assert.equal(files[files.length - 1], MIGRATION);
+  const cut = files.indexOf(MIGRATION);
+  assert.ok(cut > 0);
   const db = new PGlite({ extensions: { pgcrypto } });
   await db.exec(AUTH_SHIM);
-  for (const file of files) {
-    if (file === MIGRATION) continue;
+  for (const file of files.slice(0, cut)) {
     const sql = await readFile(path.join(migrationsDir, file), 'utf8');
     await db.exec(sql);
   }

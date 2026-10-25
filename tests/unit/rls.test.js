@@ -438,7 +438,7 @@ test('RLS isolates two wallets and blocks privileged columns', { timeout: 120000
 
     const join = await withRole(db, 'authenticated', holder, () => one(db, `
       INSERT INTO public.campaign_joins (campaign_id, project_id, wallet, x_handle, note)
-      VALUES ($1, $2, $3, '@holder2', 'hello')
+      VALUES ($1, $2, $3, '@typed', 'hello')
       RETURNING id, status, qualified, progress, note
     `, [campaign.id, project.id, holder]));
     assert.equal(join.status, 'approved');
@@ -469,23 +469,24 @@ test('RLS isolates two wallets and blocks privileged columns', { timeout: 120000
     const handleCol = await withRole(db, 'authenticated', walletB, () =>
       denied(db, `SELECT x_handle FROM public.campaign_joins WHERE id = $1`, [join.id]));
     assert.match(handleCol, /permission denied/);
-    const publicCols = await withRole(db, 'anon', '', () =>
-      one(db, `SELECT wallet, status FROM public.campaign_joins WHERE id = $1`, [join.id]));
-    assert.equal(publicCols.wallet, holder);
-    assert.equal(publicCols.status, 'approved');
+    const anonJoin = await withRole(db, 'anon', '', () =>
+      denied(db, `SELECT wallet, status, note FROM public.campaign_joins WHERE id = $1`, [join.id]));
+    assert.match(anonJoin, /permission denied/);
 
     const anonFeed = await withRole(db, 'anon', '', () =>
-      one(db, `SELECT wallet, x_handle FROM public.campaign_join_feed WHERE id = $1`, [join.id]));
-    assert.equal(anonFeed.x_handle, null);
+      denied(db, `SELECT wallet, x_handle, note FROM public.campaign_join_feed WHERE id = $1`, [join.id]));
+    assert.match(anonFeed, /permission denied/);
     const bFeed = await withRole(db, 'authenticated', walletB, () =>
-      one(db, `SELECT x_handle FROM public.campaign_join_feed WHERE id = $1`, [join.id]));
-    assert.equal(bFeed.x_handle, null);
+      db.query(`SELECT wallet, x_handle, note FROM public.campaign_join_feed WHERE id = $1`, [join.id]));
+    assert.equal(bFeed.rows.length, 0);
     const selfFeed = await withRole(db, 'authenticated', holder, () =>
-      one(db, `SELECT x_handle FROM public.campaign_join_feed WHERE id = $1`, [join.id]));
+      one(db, `SELECT x_handle, note FROM public.campaign_join_feed WHERE id = $1`, [join.id]));
     assert.equal(selfFeed.x_handle, '@holder2');
+    assert.equal(selfFeed.note, 'edited');
     const adminFeed = await withRole(db, 'authenticated', walletA, () =>
-      one(db, `SELECT x_handle FROM public.campaign_join_feed WHERE id = $1`, [join.id]));
+      one(db, `SELECT x_handle, note FROM public.campaign_join_feed WHERE id = $1`, [join.id]));
     assert.equal(adminFeed.x_handle, '@holder2');
+    assert.equal(adminFeed.note, 'edited');
     const adminHolder = await withRole(db, 'authenticated', walletA, () =>
       one(db, `SELECT x_handle FROM public.holders WHERE wallet = $1`, [holder]));
     assert.equal(adminHolder.x_handle, '@holder2');
@@ -532,10 +533,10 @@ test('RLS isolates two wallets and blocks privileged columns', { timeout: 120000
     assert.equal(spoof.status, 'pending');
     const spoofSeen = await withRole(db, 'authenticated', walletA, () =>
       one(db, `SELECT x_handle FROM public.campaign_join_feed WHERE campaign_id = $1 AND wallet = $2`, [forced.id, cross]));
-    assert.equal(spoofSeen.x_handle, '@spoof');
+    assert.equal(spoofSeen.x_handle, null);
     const spoofHidden = await withRole(db, 'authenticated', walletB, () =>
-      one(db, `SELECT x_handle FROM public.campaign_join_feed WHERE campaign_id = $1 AND wallet = $2`, [forced.id, cross]));
-    assert.equal(spoofHidden.x_handle, null);
+      db.query(`SELECT x_handle, note FROM public.campaign_join_feed WHERE campaign_id = $1 AND wallet = $2`, [forced.id, cross]));
+    assert.equal(spoofHidden.rows.length, 0);
     const missingCampaign = await withRole(db, 'authenticated', stranger, () =>
       denied(db, `
         INSERT INTO public.campaign_joins (campaign_id, project_id, wallet)
