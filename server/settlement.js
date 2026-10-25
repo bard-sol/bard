@@ -264,15 +264,25 @@ export function computePayouts(campaign, joins, decimals) {
   const poolSource = view.vaultReserved || view.pool || view.reward || 0;
   let payouts = [];
   if (rewardMode === 'fixed') {
-    let fixedRaw = 0n;
-    if (view.reward != null && String(view.reward).trim() !== '') fixedRaw = decimalToRaw(view.reward, d);
-    if (fixedRaw <= 0n) {
-      const poolRawFixed = decimalToRaw(poolSource || 0, d);
+    let each = 0n;
+    if (view.reward != null && String(view.reward).trim() !== '') each = decimalToRaw(view.reward, d);
+    const lockedFixed = lockedPrizeRaw(view);
+    if (each <= 0n) {
+      const poolRawFixed = lockedFixed != null
+        ? lockedFixed
+        : decimalToRaw(poolSource || 0, d);
       if (poolRawFixed <= 0n) throw new Error('Set a reward amount or pool first');
-      fixedRaw = poolRawFixed / BigInt(rows.length);
+      each = poolRawFixed / BigInt(rows.length);
     }
-    if (fixedRaw <= 0n) throw new Error('Set a reward amount or pool first');
-    payouts = rows.map((j) => payoutRow(j.wallet, fixedRaw, d, j.progress));
+    if (each <= 0n) throw new Error('Set a reward amount or pool first');
+    let paying = rows;
+    if (lockedFixed != null) {
+      const slots = lockedFixed / each;
+      const count = slots > BigInt(rows.length) ? rows.length : Number(slots);
+      paying = rows.slice(0, count);
+    }
+    if (!paying.length) throw new Error('Locked prize does not cover one reward');
+    payouts = paying.map((j) => payoutRow(j.wallet, each, d, j.progress));
   } else if (rewardMode === 'top3' || rewardMode === 'topn') {
     const lockedTop = lockedPrizeRaw(view);
     const poolRawTop = lockedTop != null ? lockedTop : decimalToRaw(view.pool || view.vaultReserved || 0, d);

@@ -660,6 +660,58 @@ test('RLS isolates two wallets and blocks privileged columns', { timeout: 120000
   }
 });
 
+test('vault reservation is raw, locked, and refused when the balance is short', async () => {
+  const restore = installFetchGuard();
+  const db = await boot();
+  const wallet = 'wallet-reserve';
+  try {
+    await withRole(db, 'service_role', '', () => db.query(`
+      INSERT INTO public.projects (name, ticker, mint, chain, admin_wallet, created_by, vault_reserved)
+      VALUES ('Alpha', 'ALP', 'mint-a', 'solana', $1, $1, 10.5)
+    `, [wallet]));
+    const project = await one(db, `SELECT id, vault_reserved, vault_reserved_raw FROM public.projects LIMIT 1`);
+    assert.equal(Number(project.vault_reserved), 10.5);
+    assert.equal(String(project.vault_reserved_raw), '0');
+    const campaign = await withRole(db, 'service_role', '', () => one(db, `
+      INSERT INTO public.campaigns (project_id, title, type, rule_text, status, locked_raw, vault_reserved_raw)
+      VALUES ($1, 'Hold', 'hold', 'hold', 'active', 60, 0)
+      RETURNING id
+    `, [project.id]));
+    const first = await withRole(db, 'service_role', '', () => one(db, `
+      SELECT public.reserve_vault_raw($1, 100, 60, NULL) AS result
+    `, [project.id]));
+    assert.equal(first.result.ok, true);
+    assert.equal(first.result.vault_reserved_raw, '60');
+    const second = await withRole(db, 'service_role', '', () => one(db, `
+      SELECT public.reserve_vault_raw($1, 100, 60, NULL) AS result
+    `, [project.id]));
+    assert.equal(second.result.ok, false);
+    assert.equal(second.result.reason, 'short_balance');
+    const kept = await one(db, `SELECT vault_reserved_raw FROM public.projects WHERE id = $1`, [project.id]);
+    assert.equal(String(kept.vault_reserved_raw), '60');
+    const added = await withRole(db, 'service_role', '', () => one(db, `
+      SELECT public.reserve_vault_raw($1, 200, 40, $2) AS result
+    `, [project.id, campaign.id]));
+    assert.equal(added.result.ok, true);
+    assert.equal(added.result.vault_reserved_raw, '100');
+    assert.equal(added.result.campaign_reserved_raw, '40');
+    const released = await withRole(db, 'service_role', '', () => one(db, `
+      SELECT public.release_campaign_vault($1, $2) AS result
+    `, [project.id, campaign.id]));
+    assert.equal(released.result.ok, true);
+    assert.equal(released.result.released_raw, '40');
+    assert.equal(released.result.vault_reserved_raw, '60');
+    const deniedReserve = await withRole(db, 'authenticated', wallet, () =>
+      denied(db, `SELECT public.reserve_vault_raw($1, 1000, 1, NULL)`, [project.id]));
+    assert.match(deniedReserve, /permission denied/i);
+    const frozen = await one(db, `SELECT vault_reserved_raw FROM public.projects WHERE id = $1`, [project.id]);
+    assert.equal(String(frozen.vault_reserved_raw), '60');
+  } finally {
+    restore();
+    await db.close();
+  }
+});
+
 test('locked prize rollback drops the new columns and restores the old status check', async () => {
   const restore = installFetchGuard();
   const db = await boot();
@@ -676,6 +728,15 @@ test('locked prize rollback drops the new columns and restores the old status ch
       WHERE table_schema = 'public' AND table_name = 'vault_settlements' AND column_name = 'cut_raw'
     `);
     assert.equal(cut.rows.length, 0);
+    const raw = await db.query(`
+      SELECT column_name FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'projects' AND column_name = 'vault_reserved_raw'
+    `);
+    assert.equal(raw.rows.length, 0);
+    const fn = await db.query(`
+      SELECT proname FROM pg_proc WHERE proname = 'reserve_vault_raw'
+    `);
+    assert.equal(fn.rows.length, 0);
     await withRole(db, 'service_role', '', () => db.query(`
       INSERT INTO public.projects (name, ticker, mint, chain, admin_wallet, created_by)
       VALUES ('Alpha', 'ALP', 'mint-a', 'solana', 'wallet', 'wallet')

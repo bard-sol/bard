@@ -660,6 +660,14 @@
     return { wallet: wallet, amount: rawToDecimal(raw, decimals), amountRaw: raw.toString(), progress: progress || 0 };
   }
 
+  function lockedPrizeRaw(campaign) {
+    var raw = campaign && (campaign.prizeRaw != null ? campaign.prizeRaw : campaign.prize_raw);
+    if (raw == null || String(raw).trim() === '') return null;
+    var text = String(raw).trim();
+    if (!/^\d+$/.test(text)) throw new Error('Locked prize is invalid');
+    return BigInt(text);
+  }
+
   function computePayouts(campaign, joins, decimals) {
     var d = decimals == null ? 0 : decimals;
     var rows = (joins || []).filter(function (j) {
@@ -679,15 +687,23 @@
     var poolSource = campaign.vaultReserved || campaign.pool || campaign.reward || 0;
     var payouts = [];
     if (rewardMode === 'fixed') {
-      var fixedRaw = 0n;
-      if (campaign.reward != null && String(campaign.reward).trim() !== '') fixedRaw = decimalToRaw(campaign.reward, d);
-      if (fixedRaw <= 0n) {
-        var poolRawFixed = decimalToRaw(poolSource || 0, d);
+      var each = 0n;
+      if (campaign.reward != null && String(campaign.reward).trim() !== '') each = decimalToRaw(campaign.reward, d);
+      var lockedFixed = lockedPrizeRaw(campaign);
+      if (each <= 0n) {
+        var poolRawFixed = lockedFixed != null ? lockedFixed : decimalToRaw(poolSource || 0, d);
         if (poolRawFixed <= 0n) throw new Error('Set a reward amount or pool first');
-        fixedRaw = poolRawFixed / BigInt(rows.length);
+        each = poolRawFixed / BigInt(rows.length);
       }
-      if (fixedRaw <= 0n) throw new Error('Set a reward amount or pool first');
-      payouts = rows.map(function (j) { return payoutRow(j.wallet, fixedRaw, d, j.progress); });
+      if (each <= 0n) throw new Error('Set a reward amount or pool first');
+      var paying = rows;
+      if (lockedFixed != null) {
+        var slots = lockedFixed / each;
+        var count = slots > BigInt(rows.length) ? rows.length : Number(slots);
+        paying = rows.slice(0, count);
+      }
+      if (!paying.length) throw new Error('Locked prize does not cover one reward');
+      payouts = paying.map(function (j) { return payoutRow(j.wallet, each, d, j.progress); });
     } else if (rewardMode === 'top3' || rewardMode === 'topn') {
       var poolRawTop = decimalToRaw(campaign.pool || campaign.vaultReserved || 0, d);
       if (poolRawTop <= 0n) throw new Error('Top N needs a pool size');

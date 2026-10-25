@@ -30,7 +30,6 @@ import {
   findFinalizedBlockhash,
   payoutHash,
   payoutRawAmount,
-  planReservation,
   rawToDecimal,
   settlementLines,
   subDecimal,
@@ -40,7 +39,7 @@ import {
 import { handleCampaignState } from './campaign_state.js';
 import { decodeVaultTransactionAccount, verifyVaultTransactionMessage } from './approve.js';
 import { decodeProposal, decodeVaultTransaction, diffTransfers } from './accounts.js';
-import { covered, lockNeed, resolvePrizeRaw, settlementCut } from './money.js';
+import { lockNeed, resolvePrizeRaw, settlementCut } from './money.js';
 const CAMPAIGN_PAGE = /^\/c\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i;
 const RECEIPT_PAGE = /^\/c\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/receipt$/i;
 
@@ -110,6 +109,20 @@ function patch(env, table, query, row) {
 
 function upsert(env, table, row, onConflict) {
   return sb(env, 'POST', '/' + table + '?on_conflict=' + encodeURIComponent(onConflict), row, 'resolution=merge-duplicates,return=representation');
+}
+
+function sbRpc(env, name, args) {
+  return sb(env, 'POST', '/rpc/' + name, args);
+}
+
+function rpcRaw(value) {
+  if (typeof value === 'number') {
+    if (!Number.isSafeInteger(value) || value < 0) throw new Error('amount is invalid');
+    return String(value);
+  }
+  const text = String(value == null ? '' : value).trim();
+  if (!/^\d+$/.test(text)) throw new Error('amount is invalid');
+  return text;
 }
 
 async function readJson(request) {
@@ -331,53 +344,77 @@ async function handleCreateCampaign(request, env) {
     return badRequest(err);
   }
   const lock = lockNeed(prizeRaw, settings.cutBps);
-  const reservedRaw = decimalToRaw(project.vault_reserved || 0, balance.decimals);
-  if (!covered(balance.raw, reservedRaw, lock.lockedRaw)) {
+  const reserved = await sbRpc(env, 'reserve_vault_raw', {
+    p_project_id: project.id,
+    p_balance_raw: balance.raw,
+    p_locked_raw: lock.lockedRaw.toString(),
+    p_campaign_id: null,
+  });
+  if (!reserved || reserved.ok !== true) {
+    if (reserved && reserved.reason === 'missing') return json({ error: 'project not found' }, 404);
     return json({ error: 'Vault balance does not cover the prize plus Bard\'s cut' }, 409);
   }
   const days = (body.days === 0 || body.days === '0') ? 0 : (parseInt(body.days, 10) || 7);
   const now = new Date().toISOString();
   const lockedDecimal = rawToDecimal(lock.lockedRaw, balance.decimals);
-  const created = await insert(env, 'campaigns', {
-    project_id: body.projectId,
-    title,
-    type,
-    rule_text: rule,
-    reward: body.reward == null ? null : String(body.reward),
-    reward_unit: 'TOKEN',
-    pool_size: body.pool == null ? (body.prize == null ? null : String(body.prize)) : String(body.pool),
-    duration_days: days,
-    status: 'active',
-    fee_paid: true,
-    fee_amount_sol: 0,
-    access_mode: body.accessMode || 'open',
-    raid_mode: type === 'raid' ? (body.raidMode || null) : null,
-    reward_mode: rewardMode,
-    post_url: body.postUrl || null,
-    targets: body.targets || null,
-    bonus_handle: body.bonusHandle || null,
-    config: body.config || {},
-    prize_raw: lock.prizeRaw.toString(),
-    cut_bps: Number(settings.cutBps),
-    cut_raw: lock.cutRaw.toString(),
-    locked_raw: lock.lockedRaw.toString(),
-    cut_wallet: settings.cutWallet,
-    prize_mint: mint,
-    lock_checked_at: now,
-    lock_balance_raw: balance.raw,
-    vault_reserved: lockedDecimal,
-  });
-  const campaign = Array.isArray(created) ? created[0] : created;
-  const nextReserved = reservedRaw + lock.lockedRaw;
-  await patch(env, 'projects', 'id=eq.' + encodeURIComponent(project.id), {
-    vault_reserved: rawToDecimal(nextReserved, balance.decimals),
-  });
-  await insert(env, 'vault_reservations', {
-    project_id: project.id,
-    campaign_id: campaign.id,
-    amount: lockedDecimal,
-    status: 'reserved',
-  });
+  const projectDecimal = rawToDecimal(rpcRaw(reserved.vault_reserved_raw), balance.decimals);
+  let campaign = null;
+  try {
+    const created = await insert(env, 'campaigns', {
+      project_id: body.projectId,
+      title,
+      type,
+      rule_text: rule,
+      reward: body.reward == null ? null : String(body.reward),
+      reward_unit: 'TOKEN',
+      pool_size: body.pool == null ? (body.prize == null ? null : String(body.prize)) : String(body.pool),
+      duration_days: days,
+      status: 'active',
+      fee_paid: true,
+      fee_amount_sol: 0,
+      access_mode: body.accessMode || 'open',
+      raid_mode: type === 'raid' ? (body.raidMode || null) : null,
+      reward_mode: rewardMode,
+      post_url: body.postUrl || null,
+      targets: body.targets || null,
+      bonus_handle: body.bonusHandle || null,
+      config: body.config || {},
+      prize_raw: lock.prizeRaw.toString(),
+      cut_bps: Number(settings.cutBps),
+      cut_raw: lock.cutRaw.toString(),
+      locked_raw: lock.lockedRaw.toString(),
+      cut_wallet: settings.cutWallet,
+      prize_mint: mint,
+      lock_checked_at: now,
+      lock_balance_raw: balance.raw,
+      vault_reserved: lockedDecimal,
+      vault_reserved_raw: lock.lockedRaw.toString(),
+    });
+    campaign = Array.isArray(created) ? created[0] : created;
+    if (!campaign || !campaign.id) throw new Error('campaign was not saved');
+    await insert(env, 'vault_reservations', {
+      project_id: project.id,
+      campaign_id: campaign.id,
+      amount: lockedDecimal,
+      status: 'reserved',
+    });
+    await patch(env, 'projects', 'id=eq.' + encodeURIComponent(project.id), {
+      vault_reserved: projectDecimal,
+    });
+  } catch (err) {
+    try {
+      await sbRpc(env, 'release_vault_raw', {
+        p_project_id: project.id,
+        p_locked_raw: lock.lockedRaw.toString(),
+      });
+    } catch { /* the row lock already refused a second spend; keep the original error */ }
+    if (campaign && campaign.id) {
+      try {
+        await sb(env, 'DELETE', '/campaigns?id=eq.' + encodeURIComponent(campaign.id));
+      } catch { /* the reservation is already released */ }
+    }
+    throw err;
+  }
   return json({ campaign });
 }
 
@@ -692,35 +729,45 @@ async function handleReserve(request, env) {
   } catch (err) {
     return badRequest(err);
   }
-  let plan;
+  let addRaw;
   try {
-    plan = planReservation(
-      project.vault_reserved || 0,
-      campaign ? campaign.vault_reserved || 0 : 0,
-      body.amount,
-      bal.raw,
-      bal.decimals
-    );
+    addRaw = decimalToRaw(body.amount, bal.decimals);
   } catch (err) {
     return badRequest(err);
   }
+  if (addRaw <= 0n) return json({ error: 'Reserve amount must be greater than 0' }, 400);
+  const reserved = await sbRpc(env, 'reserve_vault_raw', {
+    p_project_id: project.id,
+    p_balance_raw: bal.raw,
+    p_locked_raw: addRaw.toString(),
+    p_campaign_id: campaign ? campaign.id : null,
+  });
+  if (!reserved || reserved.ok !== true) {
+    if (reserved && reserved.reason === 'missing') return json({ error: 'project not found' }, 404);
+    return json({ error: 'Reservation exceeds vault token balance' }, 400);
+  }
+  const projectReserved = rawToDecimal(rpcRaw(reserved.vault_reserved_raw), bal.decimals);
+  const added = rawToDecimal(addRaw, bal.decimals);
   const updated = await patch(env, 'projects', 'id=eq.' + encodeURIComponent(project.id), {
-    vault_reserved: plan.projectReserved,
+    vault_reserved: projectReserved,
   });
   const saved = firstRow(updated);
   if (!saved) return json({ error: 'project not found' }, 404);
+  let campaignReserved = null;
   if (campaign) {
+    campaignReserved = rawToDecimal(rpcRaw(reserved.campaign_reserved_raw), bal.decimals);
     await patch(env, 'campaigns', 'id=eq.' + encodeURIComponent(campaign.id), {
-      vault_reserved: plan.campaignReserved,
+      vault_reserved: campaignReserved,
+      vault_reserved_raw: rpcRaw(reserved.campaign_reserved_raw),
     });
     await insert(env, 'vault_reservations', {
       project_id: project.id,
       campaign_id: campaign.id,
-      amount: plan.added,
+      amount: added,
       status: 'reserved',
     });
   }
-  return json({ reserved: plan.projectReserved, added: plan.added, campaignReserved: plan.campaignReserved });
+  return json({ reserved: projectReserved, added, campaignReserved });
 }
 
 async function handlePropose(request, env) {
@@ -917,12 +964,20 @@ async function handleExecute(request, env, settlementId) {
   );
   const campaign = await loadCampaign(env, current.campaign_id);
   if (campaign && campaign.locked_raw != null && String(campaign.locked_raw).trim() !== '') {
+    const released = await sbRpc(env, 'release_campaign_vault', {
+      p_project_id: current.project_id,
+      p_campaign_id: campaign.id,
+    });
+    if (!released || released.ok !== true) return json({ error: 'could not release the reservation' }, 409);
+    const mint = admin.project.vault_mint || admin.project.mint;
+    const mintInfo = await readMint(env, mint);
     await patch(env, 'projects', 'id=eq.' + encodeURIComponent(current.project_id), {
-      vault_reserved: subDecimal(admin.project.vault_reserved || 0, campaign.vault_reserved || 0),
+      vault_reserved: rawToDecimal(rpcRaw(released.vault_reserved_raw), mintInfo.decimals),
     });
     await patch(env, 'campaigns', 'id=eq.' + encodeURIComponent(campaign.id), {
       status: 'paid',
       vault_reserved: '0',
+      vault_reserved_raw: '0',
     });
   } else if (current.total != null) {
     await patch(env, 'projects', 'id=eq.' + encodeURIComponent(current.project_id), {
@@ -1014,6 +1069,32 @@ async function handleDrawFinalize(request, env, campaignId) {
   return json({ campaign: saved });
 }
 
+async function displayTransferDiff(settlement, mint, tokenProgram, data) {
+  const weak = data ? decodeVaultTransaction(data) : null;
+  let lines = [];
+  try {
+    lines = settlementLines(
+      settlement.payouts,
+      settlement.cut_waived ? null : settlement.cut_wallet,
+      settlement.cut_waived ? 0 : settlement.cut_raw
+    );
+  } catch (err) {
+    return { matches: false, missing: [], extra: [], reason: err.message || 'payout lines are invalid' };
+  }
+  const expected = [];
+  for (const line of lines) {
+    expected.push({
+      destination: await associatedTokenAddress(line.wallet, mint, tokenProgram),
+      amountRaw: line.amountRaw,
+    });
+  }
+  const actual = ((weak && weak.transfers) || []).filter((row) => row.mint === mint).map((row) => ({
+    destination: row.destination,
+    amountRaw: row.amountRaw,
+  }));
+  return diffTransfers(expected, actual);
+}
+
 async function handleSettlementVerify(env, settlementId) {
   const settlement = firstRow(await select(env, 'vault_settlements', 'id=eq.' + encodeURIComponent(settlementId) + '&select=*'));
   if (!settlement) return json({ error: 'settlement not found' }, 404);
@@ -1031,42 +1112,29 @@ async function handleSettlementVerify(env, settlementId) {
     return json({ matches: false, diff: { reason: err.message || 'vault transaction is missing' } });
   }
   const data = await readSquadsAccount(env, txAddress);
-  const decoded = data ? decodeVaultTransaction(data) : null;
+  const decoded = data ? decodeVaultTransactionAccount(data) : null;
   let index;
   try { index = BigInt(String(txIndex).trim()); } catch { index = null; }
   if (!decoded || decoded.multisig !== multisig || index == null || decoded.index !== index) {
     return json({ matches: false, diff: { reason: 'on-chain vault transaction does not match this payout' }, transaction: txAddress });
   }
   const mint = project.vault_mint || project.mint;
-  let tokenProgram = TOKEN_PROGRAM;
+  let mintInfo;
   try {
-    tokenProgram = (await readMint(env, mint)).tokenProgram;
+    mintInfo = await readMint(env, mint);
   } catch (err) {
     return json({ matches: false, diff: { reason: err.message || 'could not read the mint' }, transaction: txAddress });
   }
-  let lines;
-  try {
-    lines = settlementLines(
-      settlement.payouts,
-      settlement.cut_waived ? null : settlement.cut_wallet,
-      settlement.cut_waived ? 0 : settlement.cut_raw
-    );
-  } catch (err) {
-    return json({ matches: false, diff: { reason: err.message || 'payout lines are invalid' }, transaction: txAddress });
-  }
-  const expected = [];
-  for (const line of lines) {
-    expected.push({
-      destination: await associatedTokenAddress(line.wallet, mint, tokenProgram),
-      amountRaw: line.amountRaw,
-    });
-  }
-  const actual = (decoded.transfers || []).filter((row) => row.mint === mint).map((row) => ({
-    destination: row.destination,
-    amountRaw: row.amountRaw,
-  }));
-  const diff = diffTransfers(expected, actual);
-  return json({ matches: diff.matches, diff, transaction: txAddress });
+  const verdict = await verifyVaultTransactionMessage(decoded, settlement, {
+    multisig,
+    vaultAddress: project.vault_address,
+    mint,
+    decimals: mintInfo.decimals,
+    tokenProgram: mintInfo.tokenProgram,
+  });
+  const diff = await displayTransferDiff(settlement, mint, mintInfo.tokenProgram, data);
+  if (!verdict.ok) diff.reason = verdict.reason || 'vault transaction does not match the payout';
+  return json({ matches: verdict.ok === true, diff, transaction: txAddress });
 }
 
 export async function handleRequest(request, env) {

@@ -3,7 +3,6 @@ import { createHash } from 'node:crypto';
 import { test } from 'node:test';
 import {
   ceilCut,
-  computePayouts,
   covered,
   decimalToRaw,
   floorCut,
@@ -14,6 +13,8 @@ import {
   settlementCut,
   canonicalPayoutText,
 } from '../../server/money.js';
+import { computePayouts } from '../../server/settlement.js';
+import * as money from '../../server/money.js';
 
 test('lock uses ceil and payout uses floor, including a one-raw-unit pool', () => {
   assert.equal(ceilCut(1000n, 500), 50n);
@@ -104,6 +105,32 @@ test('computePayouts uses prize_raw, dedupes wallets, and refuses an over-prize 
     () => settlementCut(built.payouts, 3n, 500, 'treasury'),
     /larger than the locked prize/
   );
+});
+
+test('computePayouts lives in settlement and caps a fixed reward to the lock', () => {
+  assert.equal(money.computePayouts, undefined);
+  const joins = Array.from({ length: 11 }, (_, index) => ({
+    wallet: 'w' + String(index).padStart(2, '0'),
+    qualified: true,
+    status: 'approved',
+    progress: 100 - index,
+  }));
+  const built = computePayouts({
+    rewardMode: 'fixed',
+    reward: '1',
+    prize_raw: '10',
+    vaultReserved: '15',
+  }, joins, 0);
+  assert.equal(built.payouts.length, 10);
+  assert.equal(built.totalRaw, '10');
+  assert.equal(built.payouts.some((row) => row.wallet === 'w10'), false);
+  const fromPrize = computePayouts({
+    rewardMode: 'fixed',
+    prize_raw: '10',
+    vaultReserved: '15',
+  }, joins.slice(0, 2), 0);
+  assert.equal(fromPrize.totalRaw, '10');
+  assert.equal(fromPrize.payouts[0].amountRaw, '5');
 });
 
 test('a one-raw shared pool pays the holder and waives the cut', () => {
