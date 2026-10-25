@@ -1,11 +1,13 @@
-name = "bard-auth"
+name = "bard-x-auth"
 main = "auth-worker.js"
 compatibility_date = "2024-01-01"
 
-# Separate deployment from the bard.is worker. X redirects here.
-# Set X_CLIENT_ID, X_CLIENT_SECRET, X_OAUTH_STATE_SECRET (or SUPABASE_JWT_SECRET),
-# SUPABASE_URL, and SUPABASE_SERVICE_ROLE_KEY on the worker.
-# Do not deploy this from a task that was not asked to ship it.
+# X OAuth only. Deploying this file creates bard-x-auth.
+# Do not deploy it onto the live worker named bard-auth. That worker still
+# serves admin, member, wallet, and tweet routes.
+# Set X_CLIENT_ID, X_CLIENT_SECRET, X_OAUTH_STATE_SECRET,
+# SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, and SUPABASE_JWT_SECRET here.
+# SUPABASE_JWT_SECRET is the same value the bard.is worker uses to sign session JWTs.
 # Only POST /auth/x/confirm writes holders.x_handle, x_linked_at, and x_via = oauth
 # with the service key. GET /auth/x/callback does not write the holder row.
 # Neither path writes show_handle.

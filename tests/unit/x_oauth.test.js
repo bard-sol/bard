@@ -183,7 +183,7 @@ test('start requires the wallet JWT and ignores the query wallet', async () => {
     assert.equal(authUrl.pathname, '/i/oauth2/authorize');
     assert.equal(authUrl.searchParams.get('code_challenge_method'), 'S256');
     assert.equal(authUrl.searchParams.get('scope'), 'tweet.read users.read');
-    assert.equal(authUrl.searchParams.get('redirect_uri'), 'https://bard-auth.bardsoltoken.workers.dev/auth/x/callback');
+    assert.equal(authUrl.searchParams.get('redirect_uri'), 'https://bard-x-auth.bardsoltoken.workers.dev/auth/x/callback');
     assert.equal(authUrl.searchParams.get('client_id'), 'test-client');
     const state = decodePayload(authUrl.searchParams.get('state'));
     assert.equal(state.typ, 'xstate');

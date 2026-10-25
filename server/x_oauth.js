@@ -5,7 +5,7 @@ const STATE_TTL_MS = 10 * 60 * 1000;
 const X_AUTHORIZE = 'https://x.com/i/oauth2/authorize';
 const X_TOKEN = 'https://api.x.com/2/oauth2/token';
 const X_ME = 'https://api.x.com/2/users/me?user.fields=username';
-const DEFAULT_REDIRECT = 'https://bard-auth.bardsoltoken.workers.dev/auth/x/callback';
+const DEFAULT_REDIRECT = 'https://bard-x-auth.bardsoltoken.workers.dev/auth/x/callback';
 
 const CORS = {
   'access-control-allow-origin': 'https://bard.is',
