@@ -126,23 +126,32 @@
   }
   .nav-links a {
     font-family: 'DM Mono', monospace;
-    font-size: 0.72rem;
+    font-size: 0.875rem;
     color: var(--text-muted);
     text-decoration: none;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
+    letter-spacing: 0.01em;
     transition: color 0.2s;
   }
   .nav-links a:hover { color: var(--purple); }
+
+  /* .nav-links a beats .nav-cta on specificity, so the muted link
+     colour was painting the label onto the purple (1.14:1). */
+  .nav-links a.nav-cta,
+  .nav-links a.nav-cta:hover {
+    color: #0c0c0f;
+    font-family: 'Outfit', sans-serif;
+    font-size: 0.875rem;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+  }
 
   .nav-cta {
     background: var(--purple);
     color: #0c0c0f;
     font-family: 'Outfit', sans-serif;
-    font-size: 0.75rem;
+    font-size: 0.875rem;
     font-weight: 600;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
+    letter-spacing: 0.01em;
     padding: 0.55rem 1.25rem;
     text-decoration: none;
     border-radius: 6px;
@@ -164,16 +173,19 @@
     padding: 7.5rem 1.5rem 4.5rem;
     position: relative;
     z-index: 5;
+    /* The smile canvas is padded past the mark. On a phone that pad
+       is wider than the screen, and clipping only html/body still
+       counts as sideways scroll. */
+    overflow-x: clip;
   }
 
   .hero-face { width: var(--smile-w); }
 
   .hero-eyebrow {
     font-family: 'DM Mono', monospace;
-    font-size: 0.7rem;
-    letter-spacing: 0.22em;
+    font-size: 0.875rem;
+    letter-spacing: 0.01em;
     color: var(--purple);
-    text-transform: uppercase;
     margin-bottom: calc(var(--u) * 1.35);
   }
 
@@ -186,7 +198,6 @@
     margin-bottom: calc(var(--u) * 1.15);
     text-shadow: 0 32px 70px rgba(155,127,232,0.16);
   }
-  .hero-title span { color: var(--purple); }
 
   .hero-sub {
     font-size: 1.05rem;
@@ -234,7 +245,6 @@
     height: 100%;
     object-fit: contain;
     object-position: center bottom;
-    filter: drop-shadow(0 0 28px rgba(155,127,232,0.35));
   }
   .no-canvas .mark canvas { display: none; }
   .no-canvas .mark-fallback { display: block; }
@@ -252,10 +262,9 @@
     border: none;
     padding: 0.95rem 2.1rem;
     font-family: 'Outfit', sans-serif;
-    font-size: 0.85rem;
+    font-size: 0.875rem;
     font-weight: 600;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
+    letter-spacing: 0.01em;
     text-decoration: none;
     border-radius: 6px;
     transition: opacity 0.2s, transform 0.2s, box-shadow 0.3s;
@@ -273,9 +282,8 @@
     border: 1px solid var(--purple-border);
     padding: 0.95rem 2.1rem;
     font-family: 'DM Mono', monospace;
-    font-size: 0.78rem;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
+    font-size: 0.875rem;
+    letter-spacing: 0.01em;
     text-decoration: none;
     border-radius: 6px;
     transition: all 0.2s;
@@ -285,35 +293,6 @@
     border-color: var(--purple);
     color: var(--purple);
   }
-
-  .scroll-hint {
-    margin-top: 2.4rem;
-    font-family: 'DM Mono', monospace;
-    font-size: 0.6rem;
-    letter-spacing: 0.2em;
-    text-transform: uppercase;
-    color: var(--text-dim);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 0.55rem;
-    opacity: 0;
-  }
-  body.is-lit .scroll-hint {
-    animation: rise 1s cubic-bezier(0.22, 1, 0.36, 1) 1.1s forwards;
-  }
-  .scroll-hint i {
-    width: 1px;
-    height: 34px;
-    background: linear-gradient(to bottom, var(--purple), transparent);
-    animation: drip 2.2s ease-in-out 1.6s infinite;
-  }
-  @keyframes drip {
-    0% { transform: scaleY(0); transform-origin: top; opacity: 0; }
-    35% { transform: scaleY(1); opacity: 1; }
-    100% { transform: scaleY(1) translateY(8px); opacity: 0; }
-  }
-  .scroll-hint.is-hidden { opacity: 0 !important; animation: none; }
 
   main { position: relative; z-index: 5; }
 
@@ -325,10 +304,9 @@
   }
   .section-label {
     font-family: 'DM Mono', monospace;
-    font-size: 0.68rem;
-    letter-spacing: 0.22em;
+    font-size: 0.875rem;
+    letter-spacing: 0.01em;
     color: var(--purple);
-    text-transform: uppercase;
     margin-bottom: 0.9rem;
   }
   .section-title {
@@ -475,7 +453,6 @@
     footer { padding: 2rem 1.25rem; }
     .hero { padding: 6.5rem 1.25rem 5.5rem; }
     :root { --smile-w: min(680px, 88vw); }
-    .scroll-hint { display: none; }
   }
 
   @media (max-height: 760px) {
@@ -486,12 +463,11 @@
 
   @media (prefers-reduced-motion: reduce) {
     html { scroll-behavior: auto; }
-    .hero-face, .hero-cta, .scroll-hint, .reveal {
+    .hero-face, .hero-cta, .reveal {
       opacity: 1 !important;
       transform: none !important;
       animation: none !important;
     }
-    .scroll-hint i { animation: none; }
     .btn-primary:hover, .nav-cta:hover { transform: none; }
   }
 </style>
@@ -510,9 +486,9 @@
   </a>
   <ul class="nav-links">
     <li><a href="#features">Features</a></li>
-    <li><a href="#projects">For Projects</a></li>
+    <li><a href="#projects">For projects</a></li>
     <li><a href="/explore.html">Explore</a></li>
-    <li><a href="/dashboard.html" class="nav-cta">Launch App</a></li>
+    <li><a href="/dashboard.html" class="nav-cta">Launch app</a></li>
   </ul>
 </nav>
 
@@ -521,7 +497,7 @@
     <p class="hero-eyebrow">Built for Solana meme projects</p>
     <h1 class="hero-title">
       Campaigns, leaderboards<br>
-      &amp; airdrops. <span>Simple.</span>
+      &amp; airdrops. Simple.
     </h1>
     <p class="hero-sub">
       One platform for meme teams to run competitions and rewards — and for holders to track everything across multiple projects.
@@ -534,10 +510,9 @@
   </div>
 
   <div class="hero-cta">
-    <a href="/dashboard.html" class="btn-primary">Launch App</a>
-    <a href="#projects" class="btn-ghost">For Projects</a>
+    <a href="/dashboard.html" class="btn-primary">Launch app</a>
+    <a href="#projects" class="btn-ghost">For projects</a>
   </div>
-  <div class="scroll-hint" id="scrollHint"><span>Scroll</span><i></i></div>
 </section>
 
 <main>
@@ -583,7 +558,7 @@
           <p class="section-body">Connect your wallet, create your first campaign, and start rewarding your community. No complicated setup. Built so any team can use it.</p>
         </div>
         <div>
-          <a href="/admin.html" class="btn-primary">Start as a Project</a>
+          <a href="/admin.html" class="btn-primary">Start as a project</a>
         </div>
       </div>
     </div>
@@ -621,7 +596,6 @@
   const voidCanvas = document.getElementById('void');
   const mark = document.getElementById('mark');
   const nav = document.getElementById('nav');
-  const hint = document.getElementById('scrollHint');
   const io = new IntersectionObserver(function (entries) {
     entries.forEach(function (en) {
       if (en.isIntersecting) en.target.classList.add('is-in');
@@ -747,7 +721,6 @@
 
     const sc = scrollAmount();
     nav.classList.toggle('is-scrolled', scrollY > 16);
-    if (hint) hint.classList.toggle('is-hidden', scrollY > 70);
     mark.style.transform = 'translateY(' + (sc * -36) + 'px) scale(' + (1 - sc * 0.06) + ')';
     mark.style.opacity = String(1 - sc * 0.28);
 
@@ -779,8 +752,6 @@
     const s = CANON.stroke;
     const glow = ignite * (0.85 + breath * 0.2 + pulse * 0.25);
 
-    tube(cx, cy, r, aEnd, s * 3.6, '#9b7fe8', 0.055 * glow, s * 1.9);
-    tube(cx, cy, r, aEnd, s * 2.25, '#9b7fe8', 0.14 * glow, s * 0.85);
     tube(cx, cy, r, aEnd, s * 1.45, '#c4b0f4', 0.5 * glow, s * 0.25);
     tube(cx, cy, r, aEnd, s * 1.04, '#d8c8fa', 0.98 * ignite, 0);
     tube(cx, cy, r, aEnd, s * 0.62, '#f3edff', ignite, 0);
@@ -791,15 +762,6 @@
 
     if (vctx) {
       vctx.clearRect(0, 0, innerWidth, innerHeight);
-      const box = mark.getBoundingClientRect();
-      const gx = box.left + box.width * 0.5;
-      const gy = box.top + box.height * 0.58;
-      const grd = vctx.createRadialGradient(gx, gy, 20, gx, gy, Math.max(innerWidth, innerHeight) * 0.55);
-      grd.addColorStop(0, 'rgba(155,127,232,' + (0.13 * ignite * (1 - sc * 0.45)) + ')');
-      grd.addColorStop(0.35, 'rgba(155,127,232,' + (0.045 * ignite) + ')');
-      grd.addColorStop(1, 'rgba(12,12,15,0)');
-      vctx.fillStyle = grd;
-      vctx.fillRect(0, 0, innerWidth, innerHeight);
 
       for (let i = 0; i < stars.length; i++) {
         const st = stars[i];
