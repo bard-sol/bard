@@ -811,6 +811,32 @@ function parsedTokenProgramOk(transfer, tokenProgram) {
   return tokenProgram === TOKEN_2022_PROGRAM && (program === 'spl-token-2022' || program === 'spl-token2022');
 }
 
+function tokenAccountPubkey(tx, accountIndex) {
+  if (!Number.isInteger(accountIndex) || accountIndex < 0) return '';
+  const keys = accountKeysOf(tx);
+  return keys[accountIndex] || '';
+}
+
+// Scope comes from pre-token balances. A closed or re-owned source is still in
+// that list, and the post-balance owner must still be the vault.
+function vaultOwnedSources(tx, vault, mint) {
+  const pre = tx && tx.meta && tx.meta.preTokenBalances;
+  if (!Array.isArray(pre)) throw new Error('transaction is missing pre-token balances');
+  const post = tx.meta && Array.isArray(tx.meta.postTokenBalances) ? tx.meta.postTokenBalances : [];
+  const owned = new Set();
+  for (const entry of pre) {
+    if (!entry || entry.owner !== vault || entry.mint !== mint) continue;
+    const pubkey = tokenAccountPubkey(tx, entry.accountIndex);
+    if (!pubkey) throw new Error('transaction is missing pre-token balances');
+    const match = post.find((item) => item && item.accountIndex === entry.accountIndex);
+    if (!match || match.owner !== vault || match.mint !== mint) {
+      throw new Error('vault token account owner changed');
+    }
+    owned.add(pubkey);
+  }
+  return owned;
+}
+
 export async function verifyExecutedPayout(env, settlement, project, signature) {
   const multisig = project.vault_multisig || settlement.vault_multisig || '';
   if (!multisig) throw new Error('project vault is not linked');
@@ -846,27 +872,15 @@ export async function verifyExecutedPayout(env, settlement, project, signature) 
     expected.set(ata, (expected.get(ata) || 0n) + raw);
   }
   if (!expected.size) throw new Error('settlement has no payout amounts');
-  const ownedByVault = new Map();
-  async function sourceInScope(source) {
+  const vaultOwned = vaultOwnedSources(tx, project.vault_address, mint);
+  const sourceInScope = (source) => {
     if (!source) return false;
     if (source === vaultAta) return true;
-    if (ownedByVault.has(source)) return ownedByVault.get(source);
-    const result = await rpc(env, 'getAccountInfo', [source, { encoding: 'base64', commitment: 'confirmed' }]);
-    const value = result && result.value;
-    let owned = false;
-    if (value && value.owner === mintInfo.tokenProgram && value.data && value.data[0]) {
-      const data = decodeBase64(value.data[0]);
-      if (data.length >= 64) {
-        owned = bs58.encode(data.subarray(0, 32)) === mint
-          && bs58.encode(data.subarray(32, 64)) === project.vault_address;
-      }
-    }
-    ownedByVault.set(source, owned);
-    return owned;
-  }
+    return vaultOwned.has(source);
+  };
   const actual = new Map();
   for (const transfer of parsedTransfers(tx)) {
-    if (!(await sourceInScope(transfer.source))) continue;
+    if (!sourceInScope(transfer.source)) continue;
     if (transfer.mint && transfer.mint !== mint) throw new Error('payout mint is not the vault mint');
     if (!parsedTokenProgramOk(transfer, mintInfo.tokenProgram)) {
       throw new Error('payout program is not the vault token program');
@@ -903,12 +917,38 @@ async function handleExecute(request, env, settlementId) {
     if (current.tx_signature === signature) return json({ settlement: current });
     return json({ error: 'settlement is closed' }, 400);
   }
-  const used = await select(env, 'vault_settlements', 'tx_signature=eq.' + encodeURIComponent(signature) + '&select=id');
-  if (Array.isArray(used) && used.some((row) => row.id !== current.id)) return json({ error: 'signature already used' }, 400);
-  try {
-    await verifyExecutedPayout(env, current, admin.project, signature);
-  } catch (err) {
-    return badRequest(err);
+  if (current.tx_signature && current.tx_signature !== signature) {
+    return json({ error: 'settlement is closed' }, 400);
+  }
+  // Claim the signature before any bookkeeping. A retry that already holds it
+  // resumes at the writes, then the status patch closes the settlement.
+  const resume = current.tx_signature === signature;
+  if (!resume) {
+    const used = await select(env, 'vault_settlements', 'tx_signature=eq.' + encodeURIComponent(signature) + '&select=id');
+    if (Array.isArray(used) && used.some((row) => row.id !== current.id)) return json({ error: 'signature already used' }, 400);
+    try {
+      await verifyExecutedPayout(env, current, admin.project, signature);
+    } catch (err) {
+      return badRequest(err);
+    }
+    let claimed;
+    try {
+      claimed = await patch(
+        env,
+        'vault_settlements',
+        'id=eq.' + encodeURIComponent(settlementId) + '&status=not.in.(executed,cancelled)&tx_signature=is.null',
+        { tx_signature: signature }
+      );
+    } catch (err) {
+      if (err.code === '23505') return json({ error: 'signature already used' }, 400);
+      throw err;
+    }
+    if (!firstRow(claimed)) {
+      const again = firstRow(await select(env, 'vault_settlements', 'id=eq.' + encodeURIComponent(settlementId) + '&select=*'));
+      if (!again || again.tx_signature !== signature || again.status === 'executed' || again.status === 'cancelled') {
+        return json({ error: 'settlement is closed' }, 400);
+      }
+    }
   }
   const now = new Date().toISOString();
   const payouts = Array.isArray(current.payouts) ? current.payouts : [];
@@ -944,22 +984,15 @@ async function handleExecute(request, env, settlementId) {
       vault_reserved: subDecimal(reserved, current.total),
     });
   }
-  let updated;
-  try {
-    updated = await patch(
-      env,
-      'vault_settlements',
-      'id=eq.' + encodeURIComponent(settlementId) + '&status=not.in.(executed,cancelled)',
-      {
-        status: 'executed',
-        tx_signature: signature,
-        executed_at: now,
-      }
-    );
-  } catch (err) {
-    if (err.code === '23505') return json({ error: 'signature already used' }, 400);
-    throw err;
-  }
+  const updated = await patch(
+    env,
+    'vault_settlements',
+    'id=eq.' + encodeURIComponent(settlementId) + '&tx_signature=eq.' + encodeURIComponent(signature),
+    {
+      status: 'executed',
+      executed_at: now,
+    }
+  );
   const settlement = firstRow(updated);
   if (!settlement) return json({ error: 'settlement is closed' }, 400);
   return json({ settlement });

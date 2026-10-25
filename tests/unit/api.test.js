@@ -171,6 +171,7 @@ function createEnv({ signer, accounts, txs, tokenAccounts, chain }) {
         const got = row[filter.key] == null ? '' : String(row[filter.key]);
         if (filter.op === 'eq') return got === filter.val;
         if (filter.op === 'lt') return got < filter.val;
+        if (filter.op === 'is' && filter.val === 'null') return row[filter.key] == null;
         if (filter.op === 'not.in') {
           const list = filter.val.replace(/^\(/, '').replace(/\)$/, '').split(',');
           return !list.includes(got);
@@ -634,13 +635,6 @@ function mintAccount(decimals) {
   return { value: { owner: TOKEN_PROGRAM, data: [toBase64(data), 'base64'] } };
 }
 
-function tokenAccountOwned(mintKey, ownerKey) {
-  const data = new Uint8Array(165);
-  data.set(bs58.decode(mintKey), 0);
-  data.set(bs58.decode(ownerKey), 32);
-  return { value: { owner: TOKEN_PROGRAM, data: [toBase64(data), 'base64'] } };
-}
-
 function ownedTokens(mint, amount, decimals) {
   return {
     value: [{
@@ -675,7 +669,6 @@ test('settlement routes keep the canonical hash and reject the other wallet', { 
     accounts: {
       [multisig]: account(goodAccount),
       [mint]: mintAccount(6),
-      [secondSource]: tokenAccountOwned(mint, vaultAddress),
     },
     txs: {},
     tokenAccounts: {
@@ -777,15 +770,31 @@ test('settlement routes keep the canonical hash and reject the other wallet', { 
     const proposalPda = await squadsProposalAddress(multisig, txIndex);
     const vaultAta = await associatedTokenAddress(vaultAddress, mint, TOKEN_PROGRAM);
     const holderAta = await associatedTokenAddress(holder.publicKey, mint, TOKEN_PROGRAM);
+    const tokenBalance = (accountIndex, owner, amount) => ({
+      accountIndex,
+      mint,
+      owner,
+      uiTokenAmount: { amount: String(amount), decimals: 6 },
+    });
     const payoutTx = {
       meta: {
         err: null,
         logMessages: ['Program log: Instruction: VaultTransactionExecute'],
         innerInstructions: [],
+        preTokenBalances: [
+          tokenBalance(4, vaultAddress, '10000000'),
+          tokenBalance(6, vaultAddress, '10000000'),
+        ],
+        postTokenBalances: [
+          tokenBalance(4, vaultAddress, '8000000'),
+          tokenBalance(5, holder.publicKey, expected.payouts[0].amountRaw),
+          tokenBalance(6, vaultAddress, '10000000'),
+        ],
       },
       transaction: {
         message: {
-          accountKeys: [SQUADS_PROGRAM, multisig, transactionPda, proposalPda],
+          accountKeys: [SQUADS_PROGRAM, multisig, transactionPda, proposalPda, vaultAta, holderAta, secondSource]
+            .map((pubkey) => ({ pubkey })),
           instructions: [{
             program: 'spl-token',
             programId: TOKEN_PROGRAM,
@@ -809,6 +818,9 @@ test('settlement routes keep the canonical hash and reject the other wallet', { 
     let closeRace = false;
     let wroteAfterEmpty = false;
     let sawEmptyPatch = false;
+    let bookkeepingWrites = 0;
+    let armCrashAfterClaim = false;
+    let throwNextWrite = false;
     const originalFetch = env.fetch;
     env.fetch = async (url, opts = {}) => {
       const u = new URL(url);
@@ -837,7 +849,21 @@ test('settlement routes keep the canonical hash and reject the other wallet', { 
         closeRace = false;
         sawEmptyPatch = true;
       }
+      if (throwNextWrite && opts.method && opts.method !== 'GET') {
+        throwNextWrite = false;
+        throw new Error('crash between claim and close');
+      }
       const res = await originalFetch(url, opts);
+      if (armCrashAfterClaim && opts.method === 'PATCH' && u.pathname.endsWith('/vault_settlements') && u.search.includes('is.null')) {
+        armCrashAfterClaim = false;
+        throwNextWrite = true;
+      }
+      if (opts.method === 'POST' && u.pathname.endsWith('/platform_claims')) bookkeepingWrites += 1;
+      if (opts.method === 'PATCH' && (
+        u.pathname.endsWith('/vault_reservations')
+        || u.pathname.endsWith('/projects')
+        || u.pathname.endsWith('/campaign_joins')
+      )) bookkeepingWrites += 1;
       if (sawEmptyPatch && opts.method && opts.method !== 'GET' && !(u.pathname.endsWith('/vault_settlements') && u.search.includes('not.in'))) {
         wroteAfterEmpty = true;
       }
@@ -923,6 +949,38 @@ test('settlement routes keep the canonical hash and reject the other wallet', { 
     });
     const refusedPlainSecond = await refuseExecute(plainSecond);
     assert.match(refusedPlainSecond.data.error, /unexpected/);
+    const extraFromSecond = () => ({
+      program: 'spl-token',
+      programId: TOKEN_PROGRAM,
+      parsed: {
+        type: 'transferChecked',
+        info: {
+          source: secondSource,
+          destination: strangerAta,
+          mint,
+          authority: vaultAddress,
+          tokenAmount: { amount: '1', decimals: 6 },
+        },
+      },
+    });
+    const closedSource = clonePayout();
+    closedSource.transaction.message.instructions.push(extraFromSecond());
+    closedSource.meta.postTokenBalances = closedSource.meta.postTokenBalances.filter((entry) => entry.accountIndex !== 6);
+    const refusedClosed = await refuseExecute(closedSource);
+    assert.match(refusedClosed.data.error, /owner changed/);
+    const reownedSource = clonePayout();
+    reownedSource.transaction.message.instructions.push(extraFromSecond());
+    reownedSource.meta.postTokenBalances.find((entry) => entry.accountIndex === 6).owner = stranger.publicKey;
+    const refusedReowned = await refuseExecute(reownedSource);
+    assert.match(refusedReowned.data.error, /owner changed/);
+    const reownedAta = clonePayout();
+    reownedAta.meta.postTokenBalances.find((entry) => entry.accountIndex === 4).owner = stranger.publicKey;
+    const refusedAta = await refuseExecute(reownedAta);
+    assert.match(refusedAta.data.error, /owner changed/);
+    const missingPre = clonePayout();
+    delete missingPre.meta.preTokenBalances;
+    const refusedMissingPre = await refuseExecute(missingPre);
+    assert.match(refusedMissingPre.data.error, /pre-token balances/);
     const strangerSource = keypair().publicKey;
     const unrelated = clonePayout();
     unrelated.transaction.message.instructions.push({
@@ -941,17 +999,17 @@ test('settlement routes keep the canonical hash and reject the other wallet', { 
     });
     shownTx = unrelated;
     const payoutFetch = env.fetch;
+    let strangerLookups = 0;
     env.fetch = async (url, opts = {}) => {
       const u = new URL(url);
       if (u.hostname === 'rpc.test') {
         const payload = JSON.parse(opts.body);
-        if (payload.method === 'getAccountInfo' && payload.params[0] === strangerSource) {
-          return Response.json({ jsonrpc: '2.0', id: 1, result: tokenAccountOwned(mint, stranger.publicKey) });
-        }
+        if (payload.method === 'getAccountInfo' && payload.params[0] === strangerSource) strangerLookups += 1;
       }
       return payoutFetch(url, opts);
     };
     await verifyExecutedPayout(env, tables.vault_settlements[0], tables.projects[0], paySig);
+    assert.equal(strangerLookups, 0);
     env.fetch = payoutFetch;
     shownTx = payoutTx;
     const missingProgram = clonePayout();
@@ -1027,21 +1085,35 @@ test('settlement routes keep the canonical hash and reject the other wallet', { 
     };
     const raceSig = '7'.repeat(88);
     const closedSig = '8'.repeat(88);
+    const crashSig = '9'.repeat(88);
     servedSigs.add(raceSig);
     servedSigs.add(closedSig);
+    servedSigs.add(crashSig);
     shownTx = payoutTx;
     const dupId = stageSettlement();
     injectDup = true;
+    const writesBeforeDup = bookkeepingWrites;
+    const reservedBeforeDup = String(tables.projects[0].vault_reserved);
+    const claimsBeforeDup = JSON.stringify(tables.platform_claims);
+    const reservationBeforeDup = tables.vault_reservations[0].status;
     const dup = await call(env, 'POST', '/api/settlements/' + dupId + '/execute', { signature: raceSig }, tokenA);
     assert.equal(dup.status, 400, JSON.stringify(dup.data));
     assert.equal(dup.data.error, 'signature already used');
     const dupRow = tables.vault_settlements.find((row) => row.id === dupId);
     assert.equal(dupRow.status, 'proposed');
     assert.equal(dupRow.tx_signature || null, null);
+    assert.equal(bookkeepingWrites, writesBeforeDup);
+    assert.equal(String(tables.projects[0].vault_reserved), reservedBeforeDup);
+    assert.equal(JSON.stringify(tables.platform_claims), claimsBeforeDup);
+    assert.equal(tables.vault_reservations[0].status, reservationBeforeDup);
     const closedId = stageSettlement();
     closeRace = closedId;
     wroteAfterEmpty = false;
     sawEmptyPatch = false;
+    const writesBeforeClose = bookkeepingWrites;
+    const reservedBeforeClose = String(tables.projects[0].vault_reserved);
+    const claimsBeforeClose = JSON.stringify(tables.platform_claims);
+    const reservationBeforeClose = tables.vault_reservations[0].status;
     const lost = await call(env, 'POST', '/api/settlements/' + closedId + '/execute', { signature: closedSig }, tokenA);
     assert.equal(lost.status, 400, JSON.stringify(lost.data));
     assert.equal(lost.data.error, 'settlement is closed');
@@ -1049,6 +1121,38 @@ test('settlement routes keep the canonical hash and reject the other wallet', { 
     const closedRow = tables.vault_settlements.find((row) => row.id === closedId);
     assert.equal(closedRow.status, 'cancelled');
     assert.equal(closedRow.tx_signature || null, null);
+    assert.equal(bookkeepingWrites, writesBeforeClose);
+    assert.equal(String(tables.projects[0].vault_reserved), reservedBeforeClose);
+    assert.equal(JSON.stringify(tables.platform_claims), claimsBeforeClose);
+    assert.equal(tables.vault_reservations[0].status, reservationBeforeClose);
+    const crashId = stageSettlement();
+    const writesBeforeCrash = bookkeepingWrites;
+    const reservedBeforeCrash = String(tables.projects[0].vault_reserved);
+    const claimsBeforeCrash = JSON.stringify(tables.platform_claims);
+    const reservationBeforeCrash = tables.vault_reservations[0].status;
+    armCrashAfterClaim = true;
+    const crashed = await call(env, 'POST', '/api/settlements/' + crashId + '/execute', { signature: crashSig }, tokenA);
+    assert.equal(crashed.status, 500, JSON.stringify(crashed.data));
+    assert.match(crashed.data.error, /crash between claim and close/);
+    const crashRow = tables.vault_settlements.find((row) => row.id === crashId);
+    assert.equal(crashRow.status, 'proposed');
+    assert.equal(crashRow.tx_signature, crashSig);
+    assert.equal(bookkeepingWrites, writesBeforeCrash);
+    assert.equal(String(tables.projects[0].vault_reserved), reservedBeforeCrash);
+    assert.equal(JSON.stringify(tables.platform_claims), claimsBeforeCrash);
+    assert.equal(tables.vault_reservations[0].status, reservationBeforeCrash);
+    const recovered = await call(env, 'POST', '/api/settlements/' + crashId + '/execute', { signature: crashSig }, tokenA);
+    assert.equal(recovered.status, 200, JSON.stringify(recovered.data));
+    assert.equal(recovered.data.settlement.status, 'executed');
+    assert.equal(recovered.data.settlement.tx_signature, crashSig);
+    assert.equal(bookkeepingWrites, writesBeforeCrash + 4);
+    const reservedAfterRecovery = String(tables.projects[0].vault_reserved);
+    assert.notEqual(reservedAfterRecovery, reservedBeforeCrash);
+    const replay = await call(env, 'POST', '/api/settlements/' + crashId + '/execute', { signature: crashSig }, tokenA);
+    assert.equal(replay.status, 200, JSON.stringify(replay.data));
+    assert.equal(replay.data.settlement.status, 'executed');
+    assert.equal(bookkeepingWrites, writesBeforeCrash + 4);
+    assert.equal(String(tables.projects[0].vault_reserved), reservedAfterRecovery);
   } finally {
     restore();
   }
