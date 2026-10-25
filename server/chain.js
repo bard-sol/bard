@@ -3,19 +3,6 @@ import bs58 from 'bs58';
 export const FEE_TREASURY = 'JB9uSThPHadHPpyed7E2rvpYubGHBA8evZqQgNQZZFAd';
 export const SQUADS_PROGRAM = 'SQDS4ep65T869zMMBKyuUq6aD6EgTu8psMjkvj52pCf';
 
-export const PLAN_SOL = {
-  starter: 1,
-  pro: 4,
-  onboard: 0.25,
-  campaign: 0.25,
-  claim: 0.1,
-  stake: 0.05,
-};
-
-export function solToLamports(sol) {
-  return BigInt(Math.round(Number(sol) * 1e9));
-}
-
 function readU16(view, offset) {
   return view.getUint16(offset, true);
 }

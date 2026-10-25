@@ -13,12 +13,9 @@ import {
   SQUADS_PROGRAM,
   TOKEN_PROGRAM,
   TOKEN_2022_PROGRAM,
-  PLAN_SOL,
-  solToLamports,
   parseSquadsMultisig,
   sameMemberSet,
   decodeBase64,
-  collectTreasuryLamports,
   squadsVaultAddress,
   squadsTransactionAddress,
   squadsProposalAddress,
@@ -28,18 +25,22 @@ import {
   DRAW_SLOT_OFFSET,
   assertDrawStep,
   computePayouts,
+  decimalToRaw,
   deriveWinners,
   findFinalizedBlockhash,
+  payoutHash,
   payoutRawAmount,
   planReservation,
+  rawToDecimal,
+  settlementLines,
   subDecimal,
   accountKeysOf,
   parsedTransfers,
 } from './settlement.js';
 import { handleCampaignState } from './campaign_state.js';
 import { decodeVaultTransactionAccount, verifyVaultTransactionMessage } from './approve.js';
-
-const FEES_ENABLED = false;
+import { decodeProposal, decodeVaultTransaction, diffTransfers } from './accounts.js';
+import { covered, lockNeed, resolvePrizeRaw, settlementCut } from './money.js';
 const CAMPAIGN_PAGE = /^\/c\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i;
 const RECEIPT_PAGE = /^\/c\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/receipt$/i;
 
@@ -270,16 +271,23 @@ async function handleVerify(request, env) {
   return json({ token: jwt.token, expiresAt: jwt.exp, wallet: body.wallet });
 }
 
+function cutSettings(env) {
+  const bpsText = String(env.BARD_CUT_BPS == null || env.BARD_CUT_BPS === '' ? '500' : env.BARD_CUT_BPS).trim();
+  if (!/^\d+$/.test(bpsText) || BigInt(bpsText) > 10000n) throw new Error('BARD_CUT_BPS is invalid');
+  const wallet = String(env.BARD_CUT_WALLET || FEE_TREASURY).trim();
+  if (!isBase58Address(wallet)) throw new Error('BARD_CUT_WALLET is invalid');
+  return { cutBps: bpsText, cutWallet: wallet };
+}
+
 function handleConfig(env) {
+  const cut = cutSettings(env);
   return json({
     bardSignerPubkey: env.BARD_SIGNER_PUBKEY || '',
-    feesEnabled: FEES_ENABLED,
-    feeTreasury: FEE_TREASURY,
+    cutBps: Number(cut.cutBps),
+    cutWallet: cut.cutWallet,
   });
 }
 
-const PREMIUM_TYPES = { hold: true, refer: true, custom: true };
-const PREMIUM_REWARDS = { top3: true, pool: true, growing: true };
 const CAMPAIGN_TYPES = ['hold', 'raid', 'refer', 'custom'];
 
 async function handleCreateCampaign(request, env) {
@@ -296,32 +304,80 @@ async function handleCreateCampaign(request, env) {
   if (!title || !rule) return json({ error: 'title and rule are required' }, 400);
   if (CAMPAIGN_TYPES.indexOf(type) < 0) return json({ error: 'unknown campaign type' }, 400);
   if (['fixed', 'top3', 'pool', 'growing'].indexOf(rewardMode) < 0) return json({ error: 'unknown reward mode' }, 400);
-  const plan = admin.project.plan || 'free';
-  if (plan !== 'pro' && (PREMIUM_TYPES[type] || PREMIUM_REWARDS[rewardMode])) {
-    return json({ error: 'premium plan required' }, 402);
+  const project = admin.project;
+  if (project.vault_status !== 'linked' || !isBase58Address(project.vault_address || '') || !isBase58Address(project.vault_mint || project.mint || '')) {
+    return json({ error: 'Link a vault before a campaign can go live' }, 409);
+  }
+  let settings;
+  try { settings = cutSettings(env); } catch (err) { return json({ error: err.message }, 500); }
+  const mint = project.vault_mint || project.mint;
+  let balance;
+  try {
+    balance = await readVaultTokenRaw(env, project.vault_address, mint);
+  } catch (err) {
+    return badRequest(err);
+  }
+  let prizeRaw;
+  try {
+    prizeRaw = resolvePrizeRaw({
+      rewardMode,
+      reward: body.reward,
+      prize: body.prize,
+      pool: body.pool,
+      config: body.config,
+      decimals: balance.decimals,
+    });
+  } catch (err) {
+    return badRequest(err);
+  }
+  const lock = lockNeed(prizeRaw, settings.cutBps);
+  const reservedRaw = decimalToRaw(project.vault_reserved || 0, balance.decimals);
+  if (!covered(balance.raw, reservedRaw, lock.lockedRaw)) {
+    return json({ error: 'Vault balance does not cover the prize plus Bard\'s cut' }, 409);
   }
   const days = (body.days === 0 || body.days === '0') ? 0 : (parseInt(body.days, 10) || 7);
+  const now = new Date().toISOString();
+  const lockedDecimal = rawToDecimal(lock.lockedRaw, balance.decimals);
   const created = await insert(env, 'campaigns', {
     project_id: body.projectId,
     title,
     type,
     rule_text: rule,
-    reward: body.reward || null,
-    reward_unit: body.unit || 'SOL',
-    pool_size: body.pool || null,
+    reward: body.reward == null ? null : String(body.reward),
+    reward_unit: 'TOKEN',
+    pool_size: body.pool == null ? (body.prize == null ? null : String(body.prize)) : String(body.pool),
     duration_days: days,
     status: 'active',
-    fee_paid: !FEES_ENABLED,
-    fee_amount_sol: PLAN_SOL.campaign,
+    fee_paid: true,
+    fee_amount_sol: 0,
     access_mode: body.accessMode || 'open',
-    raid_mode: body.raidMode || null,
+    raid_mode: type === 'raid' ? (body.raidMode || null) : null,
     reward_mode: rewardMode,
     post_url: body.postUrl || null,
     targets: body.targets || null,
     bonus_handle: body.bonusHandle || null,
     config: body.config || {},
+    prize_raw: lock.prizeRaw.toString(),
+    cut_bps: Number(settings.cutBps),
+    cut_raw: lock.cutRaw.toString(),
+    locked_raw: lock.lockedRaw.toString(),
+    cut_wallet: settings.cutWallet,
+    prize_mint: mint,
+    lock_checked_at: now,
+    lock_balance_raw: balance.raw,
+    vault_reserved: lockedDecimal,
   });
   const campaign = Array.isArray(created) ? created[0] : created;
+  const nextReserved = reservedRaw + lock.lockedRaw;
+  await patch(env, 'projects', 'id=eq.' + encodeURIComponent(project.id), {
+    vault_reserved: rawToDecimal(nextReserved, balance.decimals),
+  });
+  await insert(env, 'vault_reservations', {
+    project_id: project.id,
+    campaign_id: campaign.id,
+    amount: lockedDecimal,
+    status: 'reserved',
+  });
   return json({ campaign });
 }
 
@@ -343,30 +399,13 @@ async function handleCreateProject(request, env) {
     chain: body.chain || 'solana',
     admin_wallet: session.wallet,
     created_by: session.wallet,
-    plan: FEES_ENABLED ? 'free' : plan,
-    fee_paid: !FEES_ENABLED,
-    fee_amount_sol: PLAN_SOL[plan],
-    plan_paid_at: FEES_ENABLED ? null : now,
+    plan,
+    fee_paid: true,
+    fee_amount_sol: 0,
+    plan_paid_at: now,
   };
   const created = await insert(env, 'projects', row);
   const project = Array.isArray(created) ? created[0] : created;
-  return json({ project });
-}
-
-async function handleSetPlan(request, env, projectId) {
-  const session = await sessionWallet(request, env);
-  if (session.error) return session.error;
-  const admin = await projectForAdmin(env, projectId, session.wallet);
-  if (admin.error) return admin.error;
-  const body = await readJson(request);
-  if (body == null) return json({ error: 'invalid json' }, 400);
-  if (body.plan !== 'starter' && body.plan !== 'pro' && body.plan !== 'free') return json({ error: 'unknown plan' }, 400);
-  if (FEES_ENABLED && body.plan !== 'free') return json({ error: 'plan payment required' }, 402);
-  const patchRow = { plan: body.plan };
-  if (body.plan !== 'free') patchRow.plan_paid_at = new Date().toISOString();
-  if (!FEES_ENABLED && body.plan !== 'free') patchRow.fee_paid = true;
-  const updated = await patch(env, 'projects', 'id=eq.' + encodeURIComponent(projectId), patchRow);
-  const project = Array.isArray(updated) ? updated[0] : updated;
   return json({ project });
 }
 
@@ -404,77 +443,6 @@ async function handleLinkVault(request, env, projectId) {
   });
   const project = Array.isArray(updated) ? updated[0] : updated;
   return json({ project });
-}
-
-async function handleFeeConfirm(request, env) {
-  const session = await sessionWallet(request, env);
-  if (session.error) return session.error;
-  const body = await readJson(request);
-  if (body == null) return json({ error: 'invalid json' }, 400);
-  const kind = String(body.kind || '');
-  const price = PLAN_SOL[kind];
-  if (price == null) return json({ error: 'unknown fee kind' }, 400);
-  const signature = String(body.signature || '').trim();
-  if (!isBase58Address(signature) && !/^[1-9A-HJ-NP-Za-km-z]{64,128}$/.test(signature)) {
-    return json({ error: 'invalid signature' }, 400);
-  }
-  const projectId = body.projectId || null;
-  let campaignProjectId = null;
-  if (kind === 'campaign') {
-    if (!body.campaignId) return json({ error: 'campaign is required' }, 400);
-    const rows = await select(env, 'campaigns', 'id=eq.' + encodeURIComponent(body.campaignId) + '&select=id,project_id');
-    const campaign = Array.isArray(rows) ? rows[0] : null;
-    if (!campaign) return json({ error: 'campaign not found' }, 404);
-    const admin = await projectForAdmin(env, campaign.project_id, session.wallet);
-    if (admin.error) return admin.error;
-    if (projectId && projectId !== campaign.project_id) return json({ error: 'campaign is not in that project' }, 400);
-    campaignProjectId = campaign.project_id;
-  } else if (projectId) {
-    const admin = await projectForAdmin(env, projectId, session.wallet);
-    if (admin.error) return admin.error;
-  }
-  const existing = await select(env, 'fee_payments', 'tx_signature=eq.' + encodeURIComponent(signature) + '&select=id');
-  if (Array.isArray(existing) && existing.length) return json({ error: 'signature already used' }, 400);
-  const tx = await rpc(env, 'getTransaction', [signature, { encoding: 'jsonParsed', commitment: 'confirmed', maxSupportedTransactionVersion: 0 }]);
-  const lamports = collectTreasuryLamports(tx, { treasury: FEE_TREASURY, payer: session.wallet });
-  if (lamports == null) return json({ error: 'transaction is not confirmed' }, 400);
-  if (lamports < solToLamports(price)) return json({ error: 'payment is below the plan price' }, 400);
-  let payment;
-  try {
-    payment = await insert(env, 'fee_payments', {
-      kind,
-      amount_sol: price,
-      payer_wallet: session.wallet,
-      tx_signature: signature,
-      status: 'confirmed',
-      project_id: campaignProjectId || projectId,
-      campaign_id: body.campaignId || null,
-      claim_id: body.claimId || null,
-      confirmed_at: new Date().toISOString(),
-      meta: {},
-    });
-  } catch (err) {
-    if (err.code === '23505') return json({ error: 'signature already used' }, 400);
-    throw err;
-  }
-  const fee = Array.isArray(payment) ? payment[0] : payment;
-  if (projectId && (kind === 'starter' || kind === 'pro' || kind === 'onboard')) {
-    const row = { fee_paid: true, fee_tx: signature, fee_amount_sol: price };
-    if (kind === 'starter' || kind === 'pro') {
-      row.plan = kind;
-      row.plan_tx = signature;
-      row.plan_paid_at = new Date().toISOString();
-    }
-    await patch(env, 'projects', 'id=eq.' + encodeURIComponent(projectId), row);
-  }
-  if (campaignProjectId) {
-    await patch(env, 'campaigns', 'id=eq.' + encodeURIComponent(body.campaignId), {
-      fee_paid: true,
-      fee_tx: signature,
-      fee_amount_sol: price,
-    });
-  }
-  return json({ ok: true, fee });
 }
 
 async function handleJoinStatus(request, env) {
@@ -535,54 +503,106 @@ async function handleQualify(request, env) {
   return json({ join });
 }
 
-async function handleClaim(request, env) {
-  const session = await sessionWallet(request, env);
-  if (session.error) return session.error;
-  const body = await readJson(request);
-  if (body == null) return json({ error: 'invalid json' }, 400);
-  const admin = await campaignForAdmin(env, body.campaignId, session.wallet);
-  if (admin.error) return admin.error;
-  if (!isBase58Address(body.wallet)) return json({ error: 'invalid wallet' }, 400);
-  const created = await insert(env, 'platform_claims', {
-    project_id: admin.project.id,
-    campaign_id: body.campaignId,
-    wallet: body.wallet,
-    x_handle: body.xHandle || null,
-    amount: body.amount == null ? null : String(body.amount),
-    unit: body.unit || 'SOL',
-    settled: true,
-    settled_at: new Date().toISOString(),
-    fee_paid: false,
-    fee_amount_sol: PLAN_SOL.claim,
-  });
-  const claim = Array.isArray(created) ? created[0] : created;
-  return json({ claim });
+async function readSquadsAccount(env, address) {
+  const info = await rpc(env, 'getAccountInfo', [address, { encoding: 'base64', commitment: 'confirmed' }]);
+  const value = info && info.value;
+  if (!value || !value.data || !value.data[0]) return null;
+  if (value.owner !== SQUADS_PROGRAM) return null;
+  return decodeBase64(value.data[0]);
 }
 
-async function handleTeamSign(request, env, settlementId) {
+async function vaultMessageVerdict(env, settlement, project) {
+  const multisig = String((project && project.vault_multisig) || settlement.vault_multisig || '').trim();
+  if (!isBase58Address(multisig)) throw new Error('project vault is not linked');
+  if (settlement.tx_index == null || String(settlement.tx_index).trim() === '') {
+    throw new Error('settlement has no vault transaction');
+  }
+  let txIndex;
+  try {
+    txIndex = BigInt(String(settlement.tx_index).trim());
+  } catch {
+    throw new Error('settlement has no vault transaction');
+  }
+  const mint = (project && (project.vault_mint || project.mint)) || '';
+  if (!mint || !project.vault_address) throw new Error('Vault mint is missing');
+  const transactionPda = await squadsTransactionAddress(multisig, txIndex);
+  const data = await readSquadsAccount(env, transactionPda);
+  if (!data) throw new Error('vault transaction is missing');
+  const decoded = decodeVaultTransactionAccount(data);
+  if (!decoded) throw new Error('vault transaction account');
+  if (decoded.multisig !== multisig) throw new Error('vault transaction multisig');
+  if (decoded.index !== txIndex) throw new Error('vault transaction index');
+  const mintInfo = await readMint(env, mint);
+  const verdict = await verifyVaultTransactionMessage(decoded, settlement, {
+    multisig,
+    vaultAddress: project.vault_address,
+    mint,
+    decimals: mintInfo.decimals,
+    tokenProgram: mintInfo.tokenProgram,
+  });
+  if (!verdict.ok) throw new Error('vault transaction does not match the payout');
+  return { multisig, txIndex };
+}
+
+async function memberApproved(env, multisig, txIndex, wallet) {
+  if (!isBase58Address(wallet)) return null;
+  const proposalAddress = await squadsProposalAddress(multisig, txIndex);
+  const data = await readSquadsAccount(env, proposalAddress);
+  if (!data) return null;
+  const proposal = decodeProposal(data);
+  if (!proposal) return null;
+  if (proposal.multisig !== multisig || proposal.transactionIndex !== BigInt(txIndex)) return null;
+  if (!proposal.approved.includes(wallet)) return null;
+  return proposal;
+}
+
+async function handleMemberSigned(request, env, settlementId, kind) {
   const session = await sessionWallet(request, env);
   if (session.error) return session.error;
   const body = await readJson(request);
   if (body == null) return json({ error: 'invalid json' }, 400);
-  const rows = await select(env, 'vault_settlements', 'id=eq.' + encodeURIComponent(settlementId) + '&select=*');
-  const current = Array.isArray(rows) ? rows[0] : null;
+  const current = firstRow(await select(env, 'vault_settlements', 'id=eq.' + encodeURIComponent(settlementId) + '&select=*'));
   if (!current) return json({ error: 'settlement not found' }, 404);
-  const admin = await projectForAdmin(env, current.project_id, session.wallet);
-  if (admin.error) return admin.error;
+  const project = firstRow(await select(env, 'projects', 'id=eq.' + encodeURIComponent(current.project_id) + '&select=*'));
+  if (!project) return json({ error: 'project not found' }, 404);
+  if (kind === 'bard') {
+    const signer = env.BARD_SIGNER_PUBKEY || '';
+    if (!isBase58Address(signer) || session.wallet !== signer) return json({ error: 'not the Bard signer' }, 403);
+  } else if (project.admin_wallet !== session.wallet) {
+    return json({ error: 'not the project admin' }, 403);
+  }
   if (current.status === 'executed' || current.status === 'cancelled') return json({ error: 'settlement is closed' }, 400);
-  const linkedMultisig = admin.project.vault_multisig || '';
+  const linkedMultisig = project.vault_multisig || '';
   if (!isBase58Address(linkedMultisig)) return json({ error: 'project vault is not linked' }, 400);
-  const status = current.bard_signed ? 'both_signed' : 'awaiting_bard';
-  const updated = await patch(env, 'vault_settlements', 'id=eq.' + encodeURIComponent(settlementId), {
-    team_signed: true,
-    team_signed_at: new Date().toISOString(),
+  const txIndexText = body.txIndex == null || String(body.txIndex).trim() === '' ? current.tx_index : body.txIndex;
+  const pending = Object.assign({}, current, { tx_index: txIndexText, vault_multisig: linkedMultisig });
+  let checked;
+  try {
+    checked = await vaultMessageVerdict(env, pending, project);
+  } catch (err) {
+    return badRequest(err);
+  }
+  const proposal = await memberApproved(env, checked.multisig, checked.txIndex, session.wallet);
+  if (!proposal) return json({ error: 'approval is not on the vault proposal' }, 400);
+  const teamSigned = kind === 'team' ? true : !!current.team_signed;
+  const bardSigned = kind === 'bard' ? true : !!current.bard_signed;
+  const status = teamSigned && bardSigned ? 'both_signed' : (teamSigned ? 'awaiting_bard' : 'awaiting_team');
+  const row = {
+    team_signed: teamSigned,
+    bard_signed: bardSigned,
     status,
-    cosigned_wallet: session.wallet,
-    cosign_sig: body.sig || null,
-    tx_index: body.txIndex == null ? current.tx_index : String(body.txIndex),
+    tx_index: String(checked.txIndex),
     vault_multisig: linkedMultisig,
-  });
-  const settlement = Array.isArray(updated) ? updated[0] : updated;
+  };
+  if (kind === 'team') {
+    row.team_signed_at = new Date().toISOString();
+    row.cosigned_wallet = session.wallet;
+    row.cosign_sig = body.sig || null;
+  } else {
+    row.bard_signed_at = new Date().toISOString();
+  }
+  const updated = await patch(env, 'vault_settlements', 'id=eq.' + encodeURIComponent(settlementId), row);
+  const settlement = firstRow(updated);
   return json({ settlement });
 }
 
@@ -734,8 +754,12 @@ async function handlePropose(request, env) {
     vaultMultisig: project.vault_multisig || '',
   });
   let built;
+  let cut;
   try {
     built = computePayouts(stored, joins, decimals);
+    const bps = campaign.cut_bps == null || String(campaign.cut_bps).trim() === '' ? 0 : campaign.cut_bps;
+    cut = settlementCut(built.payouts, campaign.prize_raw, bps, campaign.cut_wallet);
+    built.hash = payoutHash(settlementLines(built.payouts, cut.cutWallet, cut.cutRaw));
   } catch (err) {
     return badRequest(err);
   }
@@ -750,6 +774,11 @@ async function handlePropose(request, env) {
     team_signed: false,
     bard_signed: false,
     vault_multisig: project.vault_multisig || null,
+    cut_raw: cut.cutRaw.toString(),
+    cut_wallet: cut.cutWaived ? null : cut.cutWallet,
+    cut_bps: campaign.cut_bps == null || campaign.cut_bps === '' ? null : Number(campaign.cut_bps),
+    cut_waived: cut.cutWaived,
+    holder_total_raw: cut.holderTotalRaw.toString(),
   });
   const settlement = firstRow(created);
   return json({ settlement });
@@ -797,6 +826,19 @@ export async function verifyExecutedPayout(env, settlement, project, signature) 
     const ata = await associatedTokenAddress(payout.wallet, mint, mintInfo.tokenProgram);
     expected.set(ata, (expected.get(ata) || 0n) + raw);
   }
+  if (settlement.cut_waived !== true) {
+    const cutText = String(settlement.cut_raw == null ? '' : settlement.cut_raw).trim();
+    if (cutText) {
+      if (!/^\d+$/.test(cutText)) throw new Error('Cut amount is invalid');
+      const cut = BigInt(cutText);
+      if (cut > 0n) {
+        const cutWallet = settlement.cut_wallet;
+        if (!cutWallet) throw new Error('Cut wallet is missing');
+        const cutAta = await associatedTokenAddress(cutWallet, mint, mintInfo.tokenProgram);
+        expected.set(cutAta, (expected.get(cutAta) || 0n) + cut);
+      }
+    }
+  }
   if (!expected.size) throw new Error('settlement has no payout amounts');
   const actual = new Map();
   for (const transfer of parsedTransfers(tx)) {
@@ -841,6 +883,7 @@ async function handleExecute(request, env, settlementId) {
   if (Array.isArray(used) && used.some((row) => row.id !== current.id)) return json({ error: 'signature already used' }, 400);
   try {
     await verifyExecutedPayout(env, current, admin.project, signature);
+    await vaultMessageVerdict(env, current, admin.project);
   } catch (err) {
     return badRequest(err);
   }
@@ -862,8 +905,8 @@ async function handleExecute(request, env, settlementId) {
       unit: current.unit,
       settled: true,
       settled_at: now,
-      fee_paid: !FEES_ENABLED,
-      fee_amount_sol: PLAN_SOL.claim,
+      fee_paid: true,
+      fee_amount_sol: 0,
     }, 'campaign_id,wallet');
   }
   await patch(
@@ -872,10 +915,18 @@ async function handleExecute(request, env, settlementId) {
     'campaign_id=eq.' + encodeURIComponent(current.campaign_id) + '&status=eq.reserved',
     { status: 'settled' }
   );
-  if (current.total != null) {
-    const reserved = admin.project.vault_reserved || 0;
+  const campaign = await loadCampaign(env, current.campaign_id);
+  if (campaign && campaign.locked_raw != null && String(campaign.locked_raw).trim() !== '') {
     await patch(env, 'projects', 'id=eq.' + encodeURIComponent(current.project_id), {
-      vault_reserved: subDecimal(reserved, current.total),
+      vault_reserved: subDecimal(admin.project.vault_reserved || 0, campaign.vault_reserved || 0),
+    });
+    await patch(env, 'campaigns', 'id=eq.' + encodeURIComponent(campaign.id), {
+      status: 'paid',
+      vault_reserved: '0',
+    });
+  } else if (current.total != null) {
+    await patch(env, 'projects', 'id=eq.' + encodeURIComponent(current.project_id), {
+      vault_reserved: subDecimal(admin.project.vault_reserved || 0, current.total),
     });
   }
   const updated = await patch(env, 'vault_settlements', 'id=eq.' + encodeURIComponent(settlementId), {
@@ -963,6 +1014,61 @@ async function handleDrawFinalize(request, env, campaignId) {
   return json({ campaign: saved });
 }
 
+async function handleSettlementVerify(env, settlementId) {
+  const settlement = firstRow(await select(env, 'vault_settlements', 'id=eq.' + encodeURIComponent(settlementId) + '&select=*'));
+  if (!settlement) return json({ error: 'settlement not found' }, 404);
+  const project = firstRow(await select(env, 'projects', 'id=eq.' + encodeURIComponent(settlement.project_id) + '&select=*'));
+  if (!project) return json({ error: 'project not found' }, 404);
+  const multisig = project.vault_multisig || settlement.vault_multisig || '';
+  const txIndex = settlement.tx_index;
+  if (!isBase58Address(multisig) || txIndex == null || String(txIndex).trim() === '') {
+    return json({ matches: false, diff: { reason: 'vault transaction is not recorded yet' } });
+  }
+  let txAddress;
+  try {
+    txAddress = await squadsTransactionAddress(multisig, txIndex);
+  } catch (err) {
+    return json({ matches: false, diff: { reason: err.message || 'vault transaction is missing' } });
+  }
+  const data = await readSquadsAccount(env, txAddress);
+  const decoded = data ? decodeVaultTransaction(data) : null;
+  let index;
+  try { index = BigInt(String(txIndex).trim()); } catch { index = null; }
+  if (!decoded || decoded.multisig !== multisig || index == null || decoded.index !== index) {
+    return json({ matches: false, diff: { reason: 'on-chain vault transaction does not match this payout' }, transaction: txAddress });
+  }
+  const mint = project.vault_mint || project.mint;
+  let tokenProgram = TOKEN_PROGRAM;
+  try {
+    tokenProgram = (await readMint(env, mint)).tokenProgram;
+  } catch (err) {
+    return json({ matches: false, diff: { reason: err.message || 'could not read the mint' }, transaction: txAddress });
+  }
+  let lines;
+  try {
+    lines = settlementLines(
+      settlement.payouts,
+      settlement.cut_waived ? null : settlement.cut_wallet,
+      settlement.cut_waived ? 0 : settlement.cut_raw
+    );
+  } catch (err) {
+    return json({ matches: false, diff: { reason: err.message || 'payout lines are invalid' }, transaction: txAddress });
+  }
+  const expected = [];
+  for (const line of lines) {
+    expected.push({
+      destination: await associatedTokenAddress(line.wallet, mint, tokenProgram),
+      amountRaw: line.amountRaw,
+    });
+  }
+  const actual = (decoded.transfers || []).filter((row) => row.mint === mint).map((row) => ({
+    destination: row.destination,
+    amountRaw: row.amountRaw,
+  }));
+  const diff = diffTransfers(expected, actual);
+  return json({ matches: diff.matches, diff, transaction: txAddress });
+}
+
 export async function handleRequest(request, env) {
   const url = new URL(request.url);
   const path = url.pathname;
@@ -973,20 +1079,24 @@ export async function handleRequest(request, env) {
     if (path === '/api/config' && method === 'GET') return handleConfig(env);
     if (path === '/api/projects' && method === 'POST') return await handleCreateProject(request, env);
     if (path === '/api/campaigns' && method === 'POST') return await handleCreateCampaign(request, env);
-    if (path === '/api/fees/confirm' && method === 'POST') return await handleFeeConfirm(request, env);
     if (path === '/api/joins/status' && method === 'POST') return await handleJoinStatus(request, env);
     if (path === '/api/joins/progress' && method === 'POST') return await handleJoinProgress(request, env);
     if (path === '/api/joins/qualify' && method === 'POST') return await handleQualify(request, env);
-    if (path === '/api/claims' && method === 'POST') return await handleClaim(request, env);
     if (path === '/api/vault/bard-sign' && method === 'POST') return await handleBardSign(request, env);
     if (path === '/api/vault/reserve' && method === 'POST') return await handleReserve(request, env);
     if (path === '/api/settlements/propose' && method === 'POST') return await handlePropose(request, env);
-    const plan = path.match(/^\/api\/projects\/([^/]+)\/plan$/);
-    if (plan && method === 'POST') return await handleSetPlan(request, env, decodeURIComponent(plan[1]));
     const vault = path.match(/^\/api\/projects\/([^/]+)\/vault$/);
     if (vault && method === 'POST') return await handleLinkVault(request, env, decodeURIComponent(vault[1]));
+    const verify = path.match(/^\/api\/settlements\/([^/]+)\/verify$/);
+    if (verify && method === 'GET') return await handleSettlementVerify(env, decodeURIComponent(verify[1]));
+    const teamSigned = path.match(/^\/api\/settlements\/([^/]+)\/team-signed$/);
+    if (teamSigned && method === 'POST') return await handleMemberSigned(request, env, decodeURIComponent(teamSigned[1]), 'team');
     const team = path.match(/^\/api\/settlements\/([^/]+)\/team-sign$/);
-    if (team && method === 'POST') return await handleTeamSign(request, env, decodeURIComponent(team[1]));
+    if (team && method === 'POST') return await handleMemberSigned(request, env, decodeURIComponent(team[1]), 'team');
+    const bardSigned = path.match(/^\/api\/settlements\/([^/]+)\/bard-signed$/);
+    if (bardSigned && method === 'POST') return await handleMemberSigned(request, env, decodeURIComponent(bardSigned[1]), 'bard');
+    const executed = path.match(/^\/api\/settlements\/([^/]+)\/executed$/);
+    if (executed && method === 'POST') return await handleExecute(request, env, decodeURIComponent(executed[1]));
     const execute = path.match(/^\/api\/settlements\/([^/]+)\/execute$/);
     if (execute && method === 'POST') return await handleExecute(request, env, decodeURIComponent(execute[1]));
     const drawCommit = path.match(/^\/api\/campaigns\/([^/]+)\/draw\/commit$/);

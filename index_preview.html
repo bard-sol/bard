@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Bard — reward the people who show up</title>
-<meta name="description" content="Bard is where Solana projects run campaigns, leaderboards and airdrops. Flat SOL fees, 0% of your token.">
+<meta name="description" content="Bard is where Solana projects run campaigns, leaderboards and airdrops. The prize locks in a vault. Bard's fee is a cut of each payout.">
 <meta name="robots" content="noindex">
 <link rel="icon" href="/favicon.png" type="image/png">
 <link rel="preload" as="image" href="/transparentbardsmile.png">
@@ -306,7 +306,7 @@ h1 em{font-style:normal;color:var(--purple);text-shadow:0 0 40px rgba(167,139,25
           <a class="btn btn--solid magnetic" href="/admin.html" data-magnetic>Start a campaign</a>
           <a class="btn btn--ghost magnetic" href="/explore.html" data-magnetic>Explore projects</a>
         </div>
-        <p class="hero__note">Flat fees in SOL, published upfront. <b>0% of your token, ever.</b></p>
+        <p class="hero__note">No upfront fee. Bard takes a cut of each payout, set in config. <b>The prize stays locked in the vault.</b></p>
       </div>
       <div class="orb reveal" id="orb" aria-hidden="true">
         <div class="orb__ring"></div>
@@ -376,7 +376,7 @@ h1 em{font-style:normal;color:var(--purple);text-shadow:0 0 40px rgba(167,139,25
           <ul>
             <li><i>1</i> Connect a wallet and join live campaigns</li>
             <li><i>2</i> Climb the public ranking</li>
-            <li><i>3</i> Claim rewards from the same dashboard</li>
+            <li><i>3</i> Payouts show on the same dashboard</li>
           </ul>
           <a class="txt" href="/dashboard.html">Open the dashboard →</a>
         </div>
@@ -387,14 +387,14 @@ h1 em{font-style:normal;color:var(--purple);text-shadow:0 0 40px rgba(167,139,25
     <div class="wrap">
       <div class="sec__head reveal">
         <span class="label">Pricing</span>
-        <h2>Flat fees. Nothing off the top.</h2>
-        <p>Published in SOL. Never a cut of your supply.</p>
+        <h2>A cut of the payout. Nothing upfront.</h2>
+        <p>The percentage is config. It freezes on the campaign when the prize locks.</p>
       </div>
       <div class="fees">
-        <div class="fee reveal reveal-d1"><div class="fee__lbl">Onboard a project</div><div class="fee__val">0.25 <span>SOL</span></div></div>
-        <div class="fee reveal reveal-d2"><div class="fee__lbl">Create a campaign</div><div class="fee__val">0.25 <span>SOL</span></div></div>
-        <div class="fee reveal reveal-d3"><div class="fee__lbl">Settle a claim</div><div class="fee__val">0.1 <span>SOL</span></div></div>
-        <div class="fee fee--zero reveal"><div class="fee__lbl">Of your token</div><div class="fee__val">0%</div></div>
+        <div class="fee reveal reveal-d1"><div class="fee__lbl">Onboard a project</div><div class="fee__val">0</div></div>
+        <div class="fee reveal reveal-d2"><div class="fee__lbl">Create a campaign</div><div class="fee__val">0</div></div>
+        <div class="fee reveal reveal-d3"><div class="fee__lbl">Holder payout</div><div class="fee__val">0</div></div>
+        <div class="fee fee--zero reveal"><div class="fee__lbl">Bard cut</div><div class="fee__val">5% <span>placeholder</span></div></div>
       </div>
     </div>
   </section>
@@ -402,10 +402,10 @@ h1 em{font-style:normal;color:var(--purple);text-shadow:0 0 40px rgba(167,139,25
     <div class="wrap">
       <div class="sec__head reveal"><h2>Straight answers</h2><p>The questions teams ask in the first five minutes.</p></div>
       <div class="qa">
-        <div class="qa__row reveal"><p class="qa__q">Do you take a percentage of my token?</p><p class="qa__a"><b>No.</b> Not at onboarding, not from the reward pool, not later. Bard is paid in SOL at the prices listed above, and nowhere else.</p></div>
+        <div class="qa__row reveal"><p class="qa__q">Do you take a percentage of my token?</p><p class="qa__a"><b>Of each payout, yes.</b> Not at onboarding. When the vault pays holders, Bard’s cut is a config percentage frozen on that campaign. There is no separate holder fee.</p></div>
         <div class="qa__row reveal"><p class="qa__q">Do I need to hold a Bard token to use this?</p><p class="qa__a"><b>No.</b> The platform stands on its own. If a Bard token ever exists, it will be separate — using the platform will never depend on it.</p></div>
         <div class="qa__row reveal"><p class="qa__q">Who decides who qualifies?</p><p class="qa__a"><b>The rule you publish.</b> Hold-style rules can be checked on-chain. Other campaign types use the same public leaderboard and claim flow so results aren’t hidden in a private chat.</p></div>
-        <div class="qa__row reveal"><p class="qa__q">What if a campaign flops?</p><p class="qa__a"><b>You’re out the campaign fee.</b> Claim fees only apply when rewards are actually claimed, so a campaign nobody finishes costs almost nothing.</p></div>
+        <div class="qa__row reveal"><p class="qa__q">What if a campaign flops?</p><p class="qa__a"><b>The prize stays in the vault.</b> A campaign nobody finishes still has its locked prize until the team settles it or ends the campaign.</p></div>
         <div class="qa__row reveal"><p class="qa__q">Is any of it public?</p><p class="qa__a"><b>Rankings and settled claims are meant to be.</b> That’s the point of a shared record — the community can see what was earned without asking for a screenshot.</p></div>
       </div>
     </div>

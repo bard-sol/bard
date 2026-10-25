@@ -3,7 +3,7 @@
  * - Supabase when tables exist
  * - localStorage fallback otherwise
  *
- * FEE_TREASURY: set your private collection wallet (base58).
+ * FEE_TREASURY is the default payout-cut wallet until worker config replaces it.
  * It is used for transfers only — never shown as a marketing address.
  */
 (function (global) {
@@ -13,23 +13,11 @@
   var SUPABASE_ANON =
     'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB4ZGl5dWt4Z25waHhsa25obWtlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM4NTg2NDAsImV4cCI6MjA4OTQzNDY0MH0.eOJ8I7UBCywHDMWdPbcWFURbfoDgMUHFD_cSAZA8Hk4';
 
-  /** @type {string} Set to your fee collection wallet (not displayed in UI) */
+  /** Default payout-cut wallet. The worker config freezes the real one onto each campaign. */
   var FEE_TREASURY = 'JB9uSThPHadHPpyed7E2rvpYubGHBA8evZqQgNQZZFAd';
+  var cutBps = 500;
+  var cutWallet = FEE_TREASURY;
 
-  /** Flip to true when ready to collect real SOL again. */
-  var FEES_ENABLED = false;
-
-  var FEES = {
-    onboard: 0.25,
-    campaign: 0.25,
-    claim: 0.1,
-    stake: 0.05,
-    starter: 1,
-    pro: 4
-  };
-
-  var PREMIUM_TYPES = { hold: true, refer: true, custom: true, board: true, pool: true, airdrop: true };
-  var PREMIUM_REWARDS = { top3: true, pool: true, growing: true };
   // Same set the dashboard used before this lived in one place. Raid-style
   // campaigns score X activity, so Join stays closed until a handle is linked.
   var X_LINK_TYPES = { raid: true, post: true, reply: true, social: true };
@@ -218,6 +206,8 @@
         if (cfgRes && cfgRes.ok) {
           var cfg = await cfgRes.json();
           bardSignerPubkey = (cfg && cfg.bardSignerPubkey) || '';
+          if (cfg && cfg.cutBps != null && cfg.cutBps !== '') cutBps = Number(cfg.cutBps);
+          if (cfg && cfg.cutWallet) cutWallet = String(cfg.cutWallet);
         }
       } catch (cfgErr) {}
       if (mode === 'local') showLocalBanner();
@@ -239,6 +229,8 @@
 
   /** Bard's Squads signer. Loaded from GET /api/config, never the fee treasury. */
   function getVaultBardMember() { return bardSignerPubkey; }
+  function getCutBps() { return cutBps; }
+  function getCutWallet() { return cutWallet; }
 
   function parseTweetId(url) {
     if (!url) return null;
@@ -337,6 +329,12 @@
       rewardMode: c.reward_mode || 'fixed', postUrl: c.post_url || '', targets: c.targets || '',
       bonusHandle: c.bonus_handle || '', config: (function(cfg){ if (!cfg) return {}; if (typeof cfg === 'string') { try { return JSON.parse(cfg); } catch (e) { return {}; } } return cfg; })(c.config),
       vaultReserved: c.vault_reserved != null ? c.vault_reserved : (c.vaultReserved || 0),
+      prizeRaw: c.prize_raw == null ? null : String(c.prize_raw),
+      cutBps: c.cut_bps == null ? null : Number(c.cut_bps),
+      cutRaw: c.cut_raw == null ? null : String(c.cut_raw),
+      lockedRaw: c.locked_raw == null ? null : String(c.locked_raw),
+      cutWallet: c.cut_wallet || '',
+      prizeMint: c.prize_mint || '',
       drawSeed: c.draw_seed || c.drawSeed || null,
       drawAt: c.draw_at || c.drawAt || null,
       drawWinners: c.draw_winners || c.drawWinners || null,
@@ -371,8 +369,7 @@
   async function createProject(input) {
     await init();
     refuseLocalTeamWrite();
-    var paid = !FEES_ENABLED;
-    var payload = { name: input.name, ticker: input.ticker, mint: input.mint, chain: input.chain || 'solana', admin_wallet: input.admin || null, created_by: input.createdBy || input.admin || null, fee_paid: paid, fee_amount_sol: FEES.onboard, plan: input.plan || 'starter' };
+    var payload = { name: input.name, ticker: input.ticker, mint: input.mint, chain: input.chain || 'solana', admin_wallet: input.admin || null, created_by: input.createdBy || input.admin || null, fee_paid: true, fee_amount_sol: 0, plan: input.plan || 'starter' };
     if (mode === 'supabase' && sb) {
       if (!sessionToken) throw new Error('Sign in with your wallet first');
       var created = await apiPost('/api/projects', {
@@ -381,33 +378,18 @@
       return mapProjectRow(created.project, []);
     }
     var state = localTeam();
-    var project = { id: 'id_' + Math.random().toString(36).slice(2, 10), name: payload.name, ticker: payload.ticker, mint: payload.mint, admin: payload.admin_wallet || '', chain: payload.chain, feePaid: paid, createdAt: new Date().toISOString(), campaigns: [], plan: payload.plan || 'starter' };
+    var project = { id: 'id_' + Math.random().toString(36).slice(2, 10), name: payload.name, ticker: payload.ticker, mint: payload.mint, admin: payload.admin_wallet || '', chain: payload.chain, feePaid: true, createdAt: new Date().toISOString(), campaigns: [], plan: payload.plan || 'starter' };
     state.projects.push(project); saveLocalTeam(state); return project;
   }
 
   async function createCampaign(projectId, input) {
     await init();
     refuseLocalTeamWrite();
-    var plan = 'free';
-    if (mode === 'supabase' && sb) {
-      var proj = await sb.from('projects').select('id, fee_paid, plan').eq('id', projectId).maybeSingle();
-      if (proj.error) throw proj.error;
-      if (!proj.data) throw new Error('Project not found');
-      plan = proj.data.plan || 'free';
-    } else {
-      var stateCheck = localTeam();
-      var pCheck = stateCheck.projects.find(function (x) { return x.id === projectId; });
-      if (!pCheck) throw new Error('Project not found');
-      plan = pCheck.plan || 'free';
-    }
-    if (!isPremiumPlan(plan) && (PREMIUM_TYPES[input.type] || PREMIUM_REWARDS[input.rewardMode])) {
-      throw new Error('Premium (4 SOL) unlocks holds, boards, growing pools, and airdrops. Starter is raids with a fixed payout.');
-    }
     if (mode === 'supabase' && sb) {
       if (!sessionToken) throw new Error('Sign in with your wallet first');
       var createdCamp = await apiPost('/api/campaigns', {
         projectId: projectId, title: input.title, type: input.type, rule: input.rule,
-        reward: input.reward || null, unit: input.unit || 'SOL', pool: input.pool || null,
+        reward: input.reward || null, prize: input.prize || null, unit: input.unit || 'TOKEN', pool: input.pool || null,
         days: (input.days === 0 || input.days === '0') ? 0 : (parseInt(input.days, 10) || 7),
         accessMode: input.accessMode || 'open', raidMode: input.raidMode || null, rewardMode: input.rewardMode || 'fixed',
         postUrl: input.postUrl || null, targets: input.targets || null, bonusHandle: input.bonusHandle || null, config: input.config || {}
@@ -417,7 +399,7 @@
     var state = localTeam();
     var p = state.projects.find(function (x) { return x.id === projectId; });
     if (!p) throw new Error('Project not found');
-    var camp = { id: 'id_' + Math.random().toString(36).slice(2, 10), title: input.title, type: input.type, rule: input.rule, reward: input.reward || '', unit: input.unit || 'SOL', pool: input.pool || '', days: (input.days === 0 || input.days === '0') ? 0 : (parseInt(input.days, 10) || 7), status: 'active', settled: 0, feePaid: !FEES_ENABLED, createdAt: new Date().toISOString(), accessMode: input.accessMode || 'open', raidMode: input.raidMode || null, rewardMode: input.rewardMode || 'fixed', postUrl: input.postUrl || '', targets: input.targets || '', bonusHandle: input.bonusHandle || '', config: input.config || {} };
+    var camp = { id: 'id_' + Math.random().toString(36).slice(2, 10), title: input.title, type: input.type, rule: input.rule, reward: input.reward || '', unit: input.unit || 'TOKEN', pool: input.pool || '', days: (input.days === 0 || input.days === '0') ? 0 : (parseInt(input.days, 10) || 7), status: 'active', settled: 0, feePaid: true, createdAt: new Date().toISOString(), accessMode: input.accessMode || 'open', raidMode: input.raidMode || null, rewardMode: input.rewardMode || 'fixed', postUrl: input.postUrl || '', targets: input.targets || '', bonusHandle: input.bonusHandle || '', config: input.config || {} };
     p.campaigns = p.campaigns || []; p.campaigns.push(camp); saveLocalTeam(state); return camp;
   }
 
@@ -472,30 +454,6 @@
     saveLocalTeam(state);
     return { reserved: plan.projectReserved, added: plan.added, campaignReserved: plan.campaignReserved };
   }
-
-  async function setProjectPlan(projectId, plan) {
-    await init();
-    refuseLocalTeamWrite();
-    if (plan !== 'free' && plan !== 'starter' && plan !== 'pro') throw new Error('Unknown plan');
-    var payload = { plan: plan };
-    if (plan !== 'free') payload.plan_paid_at = new Date().toISOString();
-    if (mode === 'supabase' && sb) {
-      var planned = await apiPost('/api/projects/' + encodeURIComponent(projectId) + '/plan', { plan: plan });
-      return mapProjectRow(planned.project, []);
-    }
-    var state = localTeam();
-    var p = state.projects.find(function (x) { return x.id === projectId; });
-    if (!p) throw new Error('Project not found');
-    p.plan = plan;
-    saveLocalTeam(state);
-    return p;
-  }
-
-  function isPremiumType(type) { return !!PREMIUM_TYPES[String(type || '').toLowerCase()]; }
-  function isPremiumReward(mode) { return !!PREMIUM_REWARDS[String(mode || '').toLowerCase()]; }
-  function isPremiumPlan(plan) { return String(plan || '') === 'pro'; }
-  function planLabel(plan) { return isPremiumPlan(plan) ? 'Premium' : 'Starter'; }
-  function normalizePlan(plan) { return isPremiumPlan(plan) ? 'pro' : 'starter'; }
 
   function growingNow(campaign) {
     var cfg = campaign && campaign.config ? campaign.config : {};
@@ -847,15 +805,22 @@
   async function signSettlement(settlementId, who, extra) {
     await init();
     refuseLocalTeamWrite();
-    if (who === 'bard') {
-      return apiPost('/api/vault/bard-sign', { settlementId: settlementId });
-    }
-    var signed = await apiPost('/api/settlements/' + encodeURIComponent(settlementId) + '/team-sign', {
+    var path = who === 'bard' ? '/bard-signed' : '/team-signed';
+    var signed = await apiPost('/api/settlements/' + encodeURIComponent(settlementId) + path, {
       sig: extra && extra.sig,
-      txIndex: extra && extra.txIndex,
+      txIndex: extra && (extra.txIndex != null ? extra.txIndex : extra.tx_index),
       wallet: extra && extra.wallet
     });
-    return signed.settlement;
+    return signed.settlement || signed;
+  }
+
+  async function verifySettlement(settlementId) {
+    await init();
+    var res = await fetch('/api/settlements/' + encodeURIComponent(settlementId) + '/verify');
+    var data = {};
+    try { data = await res.json(); } catch (e) { data = {}; }
+    if (!res.ok) throw new Error((data && data.error) || 'Could not read the vault transaction');
+    return data;
   }
 
   function getRpc() { return RPC; }
@@ -870,6 +835,16 @@
     return (localTeam().settlements || []).filter(function (s) { return s.campaign_id === campaignId; });
   }
 
+  async function listExecutedSettlements() {
+    await init();
+    if (mode === 'supabase' && sb) {
+      var res = await sb.from('vault_settlements').select('*').eq('status', 'executed').order('executed_at', { ascending: false });
+      if (res.error) throw res.error;
+      return res.data || [];
+    }
+    return (localTeam().settlements || []).filter(function (row) { return row.status === 'executed'; });
+  }
+
   async function cosignSettlement(settlementId, wallet, sig) {
     await init();
     refuseLocalTeamWrite();
@@ -881,7 +856,7 @@
     refuseLocalTeamWrite();
     if (mode === 'supabase' && sb) {
       if (!sessionToken) throw new Error('Sign in with your wallet first');
-      var done = await apiPost('/api/settlements/' + encodeURIComponent(settlementId) + '/execute', {
+      var done = await apiPost('/api/settlements/' + encodeURIComponent(settlementId) + '/executed', {
         signature: txSignature || '',
         projectId: projectId || null
       });
@@ -920,110 +895,6 @@
     }); });
     out.sort(function (a, b) { return String(b.campaign.createdAt || '').localeCompare(String(a.campaign.createdAt || '')); });
     return out;
-  }
-
-  async function recordFee(kind, payerWallet, refs) {
-    await init();
-    refuseLocalTeamWrite();
-    var amount = FEES[kind];
-    if (amount == null) throw new Error('Unknown fee kind');
-    var row = { kind: kind, amount_sol: amount, payer_wallet: payerWallet, status: 'pending', project_id: (refs && refs.projectId) || null, campaign_id: (refs && refs.campaignId) || null, claim_id: (refs && refs.claimId) || null, meta: refs && refs.meta ? refs.meta : {} };
-    if (mode === 'supabase' && sb) return Object.assign({ id: null, skipped: true }, row);
-    return Object.assign({ id: 'local_fee_' + Date.now() }, row);
-  }
-
-  async function markFeeConfirmed(feeId, txSignature, kind, refs) {
-    await init();
-    refuseLocalTeamWrite();
-    if (mode === 'supabase' && sb) {
-      if (txSignature && txSignature !== 'fees-disabled') {
-        await apiPost('/api/fees/confirm', {
-          kind: kind, signature: txSignature,
-          projectId: refs && refs.projectId, campaignId: refs && refs.campaignId, claimId: refs && refs.claimId
-        });
-      } else if ((kind === 'starter' || kind === 'pro' || kind === 'onboard') && refs && refs.projectId) {
-        await apiPost('/api/projects/' + encodeURIComponent(refs.projectId) + '/plan', { plan: kind === 'pro' ? 'pro' : 'starter' });
-      }
-    } else if (kind === 'onboard' && refs && refs.projectId) {
-      var state = localTeam(); state.projects.forEach(function (p) { if (p.id === refs.projectId) { p.feePaid = true; p.feeTx = txSignature; } }); saveLocalTeam(state);
-    } else if (kind === 'campaign' && refs && refs.campaignId) {
-      var state2 = localTeam(); state2.projects.forEach(function (p) { (p.campaigns || []).forEach(function (c) { if (c.id === refs.campaignId) { c.feePaid = true; c.feeTx = txSignature; } }); }); saveLocalTeam(state2);
-    }
-  }
-
-  async function markFeeFailed(feeId, reason) {
-    await init();
-    refuseLocalTeamWrite();
-    if (mode === 'supabase' && sb && feeId) {
-      console.warn('[Bard] markFeeFailed', reason || 'failed');
-    }
-  }
-
-  async function payFee(kind, payerWallet, provider, refs) {
-    await init();
-    refuseLocalTeamWrite();
-    if (!FEES_ENABLED) {
-      var freeRow = await recordFee(kind, payerWallet, refs || {});
-      await markFeeConfirmed(freeRow && freeRow.id, 'fees-disabled', kind, refs || {});
-      return { ok: true, signature: 'fees-disabled', fee: freeRow, amount: 0, message: 'Fees temporarily disabled for testing' };
-    }
-    if (!FEE_TREASURY) {
-      var pending = await recordFee(kind, payerWallet, refs);
-      return { ok: false, pending: true, fee: pending, message: 'Fee treasury not configured yet — recorded as pending.' };
-    }
-    if (!global.solanaWeb3) throw new Error('Solana web3 not loaded');
-    if (typeof global.Buffer === 'undefined' || typeof global.Buffer.from !== 'function') throw new Error('Buffer not ready — hard refresh the page');
-    var amount = FEES[kind];
-    if (amount == null) throw new Error('Unknown fee kind: ' + kind);
-    var Connection = global.solanaWeb3.Connection;
-    var PublicKey = global.solanaWeb3.PublicKey;
-    var SystemProgram = global.solanaWeb3.SystemProgram;
-    var Transaction = global.solanaWeb3.Transaction;
-    var lamports = Math.round(amount * 1e9);
-    var minNeeded = lamports + 10000;
-    var connection = new Connection(RPC, 'confirmed');
-    var from = new PublicKey(payerWallet);
-    var to = new PublicKey(FEE_TREASURY);
-    var bal = await connection.getBalance(from, 'confirmed');
-    if (bal < minNeeded) throw new Error('Insufficient SOL: need ' + amount + ' SOL + fees, wallet has ~' + (bal / 1e9).toFixed(4) + ' SOL');
-    var feeRow = await recordFee(kind, payerWallet, refs);
-    var tx = new Transaction().add(SystemProgram.transfer({ fromPubkey: from, toPubkey: to, lamports: lamports }));
-    tx.feePayer = from;
-    var latest = await connection.getLatestBlockhash('confirmed');
-    tx.recentBlockhash = latest.blockhash;
-    if (latest.lastValidBlockHeight) tx.lastValidBlockHeight = latest.lastValidBlockHeight;
-    var sig;
-    try {
-      if (provider && typeof provider.signAndSendTransaction === 'function') {
-        var sent = await provider.signAndSendTransaction(tx);
-        sig = typeof sent === 'string' ? sent : (sent && (sent.signature || sent));
-      } else if (provider && typeof provider.signTransaction === 'function') {
-        var signedTx = await provider.signTransaction(tx);
-        sig = await connection.sendRawTransaction(signedTx.serialize(), { skipPreflight: false, preflightCommitment: 'confirmed' });
-      } else throw new Error('Wallet does not support signing');
-    } catch (signErr) { await markFeeFailed(feeRow && feeRow.id, signErr && signErr.message); throw signErr; }
-    if (!sig) { await markFeeFailed(feeRow && feeRow.id, 'no signature'); throw new Error('No transaction signature returned'); }
-    var confirmed = false;
-    try {
-      var conf = await connection.confirmTransaction({ signature: sig, blockhash: latest.blockhash, lastValidBlockHeight: latest.lastValidBlockHeight }, 'confirmed');
-      if (conf && conf.value && conf.value.err) { await markFeeFailed(feeRow.id, JSON.stringify(conf.value.err)); throw new Error('Transaction failed on-chain'); }
-      confirmed = true;
-    } catch (confirmErr) {
-      try {
-        var st = await connection.getSignatureStatuses([sig]);
-        var v = st && st.value && st.value[0];
-        if (v && !v.err && (v.confirmationStatus === 'confirmed' || v.confirmationStatus === 'finalized')) confirmed = true;
-        else if (v && v.err) { await markFeeFailed(feeRow.id, JSON.stringify(v.err)); throw new Error('Transaction failed on-chain'); }
-        else { await markFeeFailed(feeRow.id, confirmErr && confirmErr.message); throw new Error('Could not confirm payment on-chain. Sig: ' + sig); }
-      } catch (statusErr) {
-        if (statusErr && /on-chain|failed/.test(statusErr.message)) throw statusErr;
-        await markFeeFailed(feeRow.id, statusErr && statusErr.message);
-        throw new Error('Could not confirm payment on-chain. Sig: ' + sig);
-      }
-    }
-    if (!confirmed) { await markFeeFailed(feeRow.id, 'not confirmed'); throw new Error('Payment not confirmed'); }
-    await markFeeConfirmed(feeRow.id, sig, kind, refs);
-    return { ok: true, signature: sig, fee: feeRow, amount: amount };
   }
 
   async function upsertHolder(wallet, xHandle, xVia, showHandle) {
@@ -1160,17 +1031,9 @@
     if (h.joined[key]) { h.joined[key].qualified = true; saveLocalHolder(h); }
   }
 
-  async function settleClaim(projectId, campaignId, wallet, xHandle, amount, unit) {
+  async function settleClaim() {
     await init();
-    if (mode === 'supabase' && sb) {
-      var claimed = await apiPost('/api/claims', {
-        projectId: projectId, campaignId: campaignId, wallet: wallet, xHandle: xHandle || null, amount: amount, unit: unit || 'SOL'
-      });
-      return claimed.claim;
-    }
-    var h = localHolder(); var key = projectId + '::' + campaignId;
-    h.claims[key] = { settled: true, at: new Date().toISOString(), wallet: wallet, xHandle: xHandle };
-    saveLocalHolder(h); return h.claims[key];
+    throw new Error('A payout is recorded when the vault transaction confirms');
   }
 
   function mapRosterRow(r) {
@@ -1506,24 +1369,19 @@
   }
 
   global.BardPlatform = {
-    init: init, FEES: FEES,
-    feesEnabled: function () { return FEES_ENABLED; },
+    init: init,
     signIn: signIn,
     signOut: signOut,
     getSessionWallet: function () { return sessionWallet; },
-    isPremiumType: isPremiumType,
-    isPremiumReward: isPremiumReward,
-    isPremiumPlan: isPremiumPlan,
-    planLabel: planLabel,
     growingNow: growingNow,
     growingMeta: growingMeta,
-    setProjectPlan: setProjectPlan,
-    getFeeTreasury: function () { return FEE_TREASURY; },
-    setFeeTreasury: function (addr) { FEE_TREASURY = addr || ''; },
+    getFeeTreasury: function () { return cutWallet; },
+    setFeeTreasury: function (addr) { cutWallet = addr || FEE_TREASURY; },
+    getCutBps: getCutBps,
+    getCutWallet: getCutWallet,
     getMode: function () { return mode; },
     listProjects: listProjects, createProject: createProject, createCampaign: createCampaign,
     updateCampaignStatus: updateCampaignStatus, listLiveCampaigns: listLiveCampaigns,
-    recordFee: recordFee, payFee: payFee, markFeeConfirmed: markFeeConfirmed,
     needsX: needsX,
     upsertHolder: upsertHolder, setShowHandle: setShowHandle, getHolder: getHolder, joinCampaign: joinCampaign,
     listJoinsForCampaign: listJoinsForCampaign, setJoinStatus: setJoinStatus, setJoinProgress: setJoinProgress,
@@ -1550,7 +1408,9 @@
     computePayouts: computePayouts,
     proposeSettlement: proposeSettlement,
     listSettlements: listSettlements,
+    listExecutedSettlements: listExecutedSettlements,
     listOpenSettlements: listOpenSettlements,
+    verifySettlement: verifySettlement,
     signSettlement: signSettlement,
     cosignSettlement: cosignSettlement,
     executeSettlement: executeSettlement,

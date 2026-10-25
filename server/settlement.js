@@ -174,7 +174,27 @@ export function asCampaign(row) {
     drawSlot: source.draw_slot || source.drawSlot || null,
     drawSeedSlot: source.draw_seed_slot || source.drawSeedSlot || null,
     drawCount: source.draw_count != null ? source.draw_count : (source.drawCount != null ? source.drawCount : 0),
+    prizeRaw: source.prize_raw != null ? source.prize_raw : (source.prizeRaw != null ? source.prizeRaw : null),
   };
+}
+
+function dedupeJoins(joins) {
+  const best = new Map();
+  for (const join of joins || []) {
+    if (!join || !join.wallet) continue;
+    const rank = (join.qualified ? 1000000000 : 0) + (Number(join.progress) || 0);
+    const prev = best.get(join.wallet);
+    const prevRank = prev ? (prev.qualified ? 1000000000 : 0) + (Number(prev.progress) || 0) : -1;
+    if (!prev || rank > prevRank) best.set(join.wallet, join);
+  }
+  return [...best.values()];
+}
+
+function lockedPrizeRaw(campaign) {
+  if (!campaign || campaign.prizeRaw == null || String(campaign.prizeRaw).trim() === '') return null;
+  const text = String(campaign.prizeRaw).trim();
+  if (!/^\d+$/.test(text)) throw new Error('Locked prize is invalid');
+  return BigInt(text);
 }
 
 function growingRaw(campaign, decimals) {
@@ -203,10 +223,31 @@ export function payoutRawAmount(payout, decimals) {
   return decimalToRaw(payout && payout.amount, decimals);
 }
 
+export function settlementLines(payouts, cutWallet, cutRaw) {
+  const lines = [];
+  for (const row of payouts || []) {
+    if (!row || !row.wallet) continue;
+    const raw = payoutRawAmount(row, 0);
+    if (raw <= 0n) continue;
+    lines.push({ wallet: String(row.wallet), amountRaw: raw.toString() });
+  }
+  let cut = 0n;
+  if (cutRaw != null && String(cutRaw).trim() !== '') {
+    const text = String(cutRaw).trim();
+    if (!/^\d+$/.test(text)) throw new Error('Cut amount is invalid');
+    cut = BigInt(text);
+  }
+  if (cut > 0n) {
+    if (!cutWallet) throw new Error('Cut wallet is missing');
+    lines.push({ wallet: String(cutWallet), amountRaw: cut.toString() });
+  }
+  return lines;
+}
+
 export function computePayouts(campaign, joins, decimals) {
   const view = asCampaign(campaign);
   const d = decimals == null ? 0 : decimals;
-  const rows = (joins || []).filter((j) => {
+  const rows = dedupeJoins(joins).filter((j) => {
     if (j.status === 'rejected') return false;
     return !!(j.qualified || (j.status === 'approved' && (j.progress || 0) > 0));
   }).slice().sort((a, b) => {
@@ -233,7 +274,8 @@ export function computePayouts(campaign, joins, decimals) {
     if (fixedRaw <= 0n) throw new Error('Set a reward amount or pool first');
     payouts = rows.map((j) => payoutRow(j.wallet, fixedRaw, d, j.progress));
   } else if (rewardMode === 'top3' || rewardMode === 'topn') {
-    const poolRawTop = decimalToRaw(view.pool || view.vaultReserved || 0, d);
+    const lockedTop = lockedPrizeRaw(view);
+    const poolRawTop = lockedTop != null ? lockedTop : decimalToRaw(view.pool || view.vaultReserved || 0, d);
     if (poolRawTop <= 0n) throw new Error('Top N needs a pool size');
     const top = rows.slice(0, 3);
     const cfg = campaignConfig(view);
@@ -242,13 +284,17 @@ export function computePayouts(campaign, joins, decimals) {
       wholeNumber(cfg.top3Second != null ? cfg.top3Second : 30, 30),
       wholeNumber(cfg.top3Third != null ? cfg.top3Third : 20, 20),
     ];
+    if (parts[0] + parts[1] + parts[2] !== 100n) throw new Error('Top 3 shares must sum to 100');
     payouts = top.map((j, i) => payoutRow(j.wallet, poolRawTop * parts[i] / 100n, d, j.progress));
   } else if (rewardMode === 'growing') {
-    const grow = growingRaw(view, d);
+    let grow = growingRaw(view, d);
+    const capRaw = lockedPrizeRaw(view);
+    if (capRaw != null && grow > capRaw) grow = capRaw;
     if (grow <= 0n) throw new Error('Growing pool needs a starting size');
     payouts = [payoutRow(rows[0].wallet, grow, d, rows[0].progress)];
   } else {
-    const poolRaw = decimalToRaw(view.pool || view.vaultReserved || view.reward || 0, d);
+    const lockedPool = lockedPrizeRaw(view);
+    const poolRaw = lockedPool != null ? lockedPool : decimalToRaw(view.pool || view.vaultReserved || view.reward || 0, d);
     if (poolRaw <= 0n) throw new Error('Shared pool needs a pool size');
     const each = poolRaw / BigInt(rows.length);
     const rem = poolRaw % BigInt(rows.length);

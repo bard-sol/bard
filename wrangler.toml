@@ -6,6 +6,10 @@ compatibility_date = "2024-01-01"
 directory = "."
 binding = "ASSETS"
 
+[vars]
+BARD_CUT_BPS = "500"
+BARD_CUT_WALLET = "JB9uSThPHadHPpyed7E2rvpYubGHBA8evZqQgNQZZFAd"
+
 # This worker is deployed to bard.is (custom domain: noisysurg11)
 # The bard-auth worker (bard-auth.bardsoltoken.workers.dev) is a separate deployment
 # used for the X OAuth callback redirect URI.

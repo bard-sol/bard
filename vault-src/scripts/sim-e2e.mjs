@@ -5,8 +5,8 @@
  *
  * Reuses the same vault transaction builders as bard-vault.js / devnet-e2e.mjs.
  * Runs once for a classic SPL mint and once for a Token-2022 mint.
- * Asserts balances, ATA creation, payout hash, and an over-balance failure.
- * Does not send transactions to any cluster.
+ * Asserts balances, ATA creation, payout hash, the treasury cut, and an over-balance failure.
+ * A third run waives the cut. Does not send transactions to any cluster.
  */
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
@@ -305,7 +305,8 @@ async function proposeExtraTransfer(connection, team, multisigAddress, mint, tok
   return { transactionIndex: transactionIndex.toString(), signature: createSig };
 }
 
-async function runMint(connection, svm, label, tokenProgram, team, bard) {
+async function runMint(connection, svm, label, tokenProgram, team, bard, cutBps) {
+  if (cutBps == null) cutBps = 500;
   console.log('\n=== ' + label + ' ===');
   var mint = await createMint(
     connection,
@@ -411,8 +412,21 @@ async function runMint(connection, svm, label, tokenProgram, team, bard) {
   var expectedHash = createHash('sha256').update(platform.canonicalPayoutText(built.payouts), 'utf8').digest('hex');
   assert.equal(built.hash, expectedHash);
   assert.equal(built.hash, platform.payoutHash(built.payouts));
-  console.log('payoutHash', built.hash);
-  console.log('payouts', built.payouts.map(function (p) { return p.wallet + ':' + p.amountRaw; }).join(' '));
+  var treasury = Keypair.generate();
+  var holderTotal = 0n;
+  for (var h = 0; h < built.payouts.length; h++) holderTotal += BigInt(built.payouts[h].amountRaw);
+  var cutRaw = BigInt(cutBps) <= 0n ? 0n : (holderTotal * BigInt(cutBps)) / 10000n;
+  var lines = built.payouts.map(function (p) { return { wallet: p.wallet, amountRaw: String(p.amountRaw) }; });
+  var cutArg = null;
+  if (cutRaw > 0n) {
+    lines.push({ wallet: treasury.publicKey.toBase58(), amountRaw: cutRaw.toString() });
+    cutArg = { wallet: treasury.publicKey.toBase58(), amountRaw: cutRaw.toString() };
+  }
+  var payoutHash = platform.payoutHash(lines);
+  if (cutRaw > 0n) assert.notEqual(payoutHash, built.hash);
+  else assert.equal(payoutHash, built.hash);
+  console.log('payoutHash', payoutHash, 'cutRaw', cutRaw.toString());
+  console.log('payouts', lines.map(function (p) { return p.wallet + ':' + p.amountRaw; }).join(' '));
 
   var proposed = await createPayoutProposal(
     connection,
@@ -420,7 +434,8 @@ async function runMint(connection, svm, label, tokenProgram, team, bard) {
     team.publicKey.toBase58(),
     created.multisig,
     mint.toBase58(),
-    built.payouts
+    built.payouts,
+    cutArg
   );
   console.log('propose', proposed.signature);
   console.log('proposal', proposed.proposalSignature);
@@ -435,7 +450,10 @@ async function runMint(connection, svm, label, tokenProgram, team, bard) {
   assert.ok(decoded, label + ' vault transaction did not decode');
   var verdict = await verifyVaultTransactionMessage(decoded, {
     payouts: built.payouts,
-    payout_hash: built.hash,
+    payout_hash: payoutHash,
+    cut_raw: cutRaw.toString(),
+    cut_wallet: treasury.publicKey.toBase58(),
+    cut_waived: cutRaw === 0n,
   }, {
     multisig: created.multisig,
     vaultAddress: created.vault,
@@ -470,8 +488,16 @@ async function runMint(connection, svm, label, tokenProgram, team, bard) {
     console.log('balance', row.wallet, account.amount.toString());
   }
   assert.equal(paid, BigInt(built.totalRaw));
+  var treasuryAta = getAssociatedTokenAddressSync(mint, treasury.publicKey, true, tokenProgram);
+  if (cutRaw > 0n) {
+    var treasuryAccount = await getAccount(connection, treasuryAta, 'confirmed', tokenProgram);
+    assert.equal(tokenBalance(treasuryAccount), cutRaw, label + ' treasury');
+    console.log('treasury', treasury.publicKey.toBase58(), treasuryAccount.amount.toString());
+  } else {
+    assert.equal(await connection.getAccountInfo(treasuryAta), null, label + ' waived cut created a treasury account');
+  }
   var vaultAfter = await getAccount(connection, vaultAta.address, 'confirmed', tokenProgram);
-  assert.equal(tokenBalance(vaultAfter), DEPOSIT - paid);
+  assert.equal(tokenBalance(vaultAfter), DEPOSIT - paid - cutRaw);
   assert.ok(await connection.getAccountInfo(missingBefore[0]));
   assert.ok(await connection.getAccountInfo(missingBefore[1]));
   console.log('vaultRemaining', vaultAfter.amount.toString());
@@ -479,6 +505,9 @@ async function runMint(connection, svm, label, tokenProgram, team, bard) {
     vault_multisig: created.multisig,
     tx_index: proposed.transactionIndex,
     payouts: built.payouts,
+    cut_raw: cutRaw.toString(),
+    cut_wallet: treasury.publicKey.toBase58(),
+    cut_waived: cutRaw === 0n,
   };
   var project = {
     vault_multisig: created.multisig,
@@ -486,7 +515,7 @@ async function runMint(connection, svm, label, tokenProgram, team, bard) {
     vault_mint: mint.toBase58(),
     mint: mint.toBase58(),
   };
-  await assertRealExecute(cleanSent, execSig, settlement, project, tokenProgram.toBase58(), built.payouts.length);
+  await assertRealExecute(cleanSent, execSig, settlement, project, tokenProgram.toBase58(), built.payouts.length + (cutRaw > 0n ? 1 : 0));
   console.log('verifyExecutedPayout accepted the real execute');
 
   var over = [{
@@ -508,7 +537,7 @@ async function runMint(connection, svm, label, tokenProgram, team, bard) {
   }
   assert.equal(overFailed, true, label + ' over-payout must fail');
   var vaultStill = await getAccount(connection, vaultAta.address, 'confirmed', tokenProgram);
-  assert.equal(tokenBalance(vaultStill), DEPOSIT - paid);
+  assert.equal(tokenBalance(vaultStill), DEPOSIT - paid - cutRaw);
 
   // The clean execute already spent the reserved pool. Top the vault up so the
   // same payouts plus one stranger transfer can actually land on chain.
@@ -583,7 +612,9 @@ async function runMint(connection, svm, label, tokenProgram, team, bard) {
       bardApprove: bardSig,
       execute: execSig,
     },
-    hash: built.hash,
+    hash: payoutHash,
+    holderHash: built.hash,
+    cutRaw: cutRaw.toString(),
     totalRaw: built.totalRaw,
   };
 }
@@ -599,12 +630,15 @@ async function main() {
   console.log('bard', bard.publicKey.toBase58());
   await fund(svm, team.publicKey, 2);
   await fund(svm, bard.publicKey, 1);
-  var classic = await runMint(connection, svm, 'classic SPL', TOKEN_PROGRAM_ID, team, bard);
+  var classic = await runMint(connection, svm, 'classic SPL', TOKEN_PROGRAM_ID, team, bard, 500);
   await fund(svm, team.publicKey, 2);
   await fund(svm, bard.publicKey, 1);
-  var token2022 = await runMint(connection, svm, 'Token-2022', TOKEN_2022_PROGRAM_ID, team, bard);
+  var token2022 = await runMint(connection, svm, 'Token-2022', TOKEN_2022_PROGRAM_ID, team, bard, 500);
+  await fund(svm, team.publicKey, 2);
+  await fund(svm, bard.publicKey, 1);
+  var waived = await runMint(connection, svm, 'waived cut', TOKEN_PROGRAM_ID, team, bard, 0);
   console.log('\nsim e2e passed');
-  console.log(JSON.stringify({ classic: classic, token2022: token2022 }, null, 2));
+  console.log(JSON.stringify({ classic: classic, token2022: token2022, waived: waived }, null, 2));
 }
 
 main().catch(function (e) {
