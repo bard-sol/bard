@@ -4,7 +4,10 @@
   "type": "module",
   "scripts": {
     "test": "node --test tests/unit/*.test.js",
-    "e2e": "playwright install chromium && playwright test"
+    "e2e": "playwright install chromium && playwright test",
+    "devnet:e2e": "node vault-src/scripts/devnet-e2e.mjs",
+    "sim:e2e": "node vault-src/scripts/sim-e2e.mjs",
+    "build:vault": "npm --prefix vault-src run build"
   },
   "dependencies": {
     "bs58": "^6.0.0",

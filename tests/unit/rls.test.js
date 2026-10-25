@@ -217,17 +217,41 @@ test('RLS isolates two wallets and blocks privileged columns', { timeout: 120000
     assert.match(stolenCampaign, /row-level security/);
 
     await withRole(db, 'authenticated', walletA, () => db.query(
-      `UPDATE public.campaigns SET title = 'Public raid renamed', draw_seed = 'seed-a' WHERE id = $1`,
+      `UPDATE public.campaigns SET title = 'Public raid renamed' WHERE id = $1`,
       [campaign.id]
     ));
+    const drawDenied = await withRole(db, 'authenticated', walletA, () =>
+      denied(db, `UPDATE public.campaigns SET draw_seed = 'seed-a', draw_at = now(), draw_winners = '[]'::jsonb WHERE id = $1`, [campaign.id]));
+    assert.match(drawDenied, /permission denied/);
+    const drawSlotDenied = await withRole(db, 'authenticated', walletA, () =>
+      denied(db, `UPDATE public.campaigns SET draw_slot = 10, draw_count = 1 WHERE id = $1`, [campaign.id]));
+    assert.match(drawSlotDenied, /permission denied/);
+    const strangerDraw = await withRole(db, 'authenticated', walletB, () =>
+      denied(db, `UPDATE public.campaigns SET draw_seed = 'seed-b', draw_slot = 99 WHERE id = $1`, [campaign.id]));
+    assert.match(strangerDraw, /permission denied/);
     await withRole(db, 'authenticated', walletB, () => db.query(
-      `UPDATE public.campaigns SET title = 'hacked', draw_seed = 'seed-b' WHERE id = $1`,
+      `UPDATE public.campaigns SET title = 'hacked' WHERE id = $1`,
       [campaign.id]
     ));
-    const campRow = await one(db, `SELECT title, draw_seed, fee_paid FROM public.campaigns WHERE id = $1`, [campaign.id]);
+    const campRow = await one(db, `SELECT title, draw_seed, draw_slot, draw_count, fee_paid FROM public.campaigns WHERE id = $1`, [campaign.id]);
     assert.equal(campRow.title, 'Public raid renamed');
-    assert.equal(campRow.draw_seed, 'seed-a');
+    assert.equal(campRow.draw_seed, null);
+    assert.equal(campRow.draw_slot, null);
+    assert.equal(Number(campRow.draw_count), 0);
     assert.equal(campRow.fee_paid, false);
+
+    const reservedProject = await withRole(db, 'authenticated', walletA, () =>
+      denied(db, `UPDATE public.projects SET vault_reserved = 9 WHERE id = $1`, [project.id]));
+    assert.match(reservedProject, /permission denied/);
+    await db.exec('GRANT UPDATE (vault_reserved) ON public.projects TO authenticated');
+    await withRole(db, 'authenticated', walletA, () => db.query(
+      `UPDATE public.projects SET name = 'Alpha renamed', vault_reserved = 9 WHERE id = $1`,
+      [project.id]
+    ));
+    await db.exec('REVOKE UPDATE (vault_reserved) ON public.projects FROM authenticated');
+    const reserveKept = await one(db, `SELECT name, vault_reserved FROM public.projects WHERE id = $1`, [project.id]);
+    assert.equal(reserveKept.name, 'Alpha renamed');
+    assert.equal(Number(reserveKept.vault_reserved), 0);
 
     const vested = await withRole(db, 'service_role', '', () =>
       denied(db, `UPDATE public.campaigns SET reward_mode = 'vested' WHERE id = $1`, [campaign.id]));
@@ -259,52 +283,69 @@ test('RLS isolates two wallets and blocks privileged columns', { timeout: 120000
       [project.id, blocked]
     ));
 
-    await withRole(db, 'authenticated', walletA, () => db.query(
+    const reserveDenied = await withRole(db, 'authenticated', walletA, () =>
+      denied(db, `INSERT INTO public.vault_reservations (project_id, campaign_id, amount, status) VALUES ($1, $2, 5, 'reserved')`, [project.id, campaign.id]));
+    assert.match(reserveDenied, /permission denied/);
+    const strangerReserve = await withRole(db, 'authenticated', walletB, () =>
+      denied(db, `INSERT INTO public.vault_reservations (project_id, campaign_id, amount, status) VALUES ($1, $2, 99, 'reserved')`, [project.id, campaign.id]));
+    assert.match(strangerReserve, /permission denied/);
+    await withRole(db, 'service_role', '', () => db.query(
       `INSERT INTO public.vault_reservations (project_id, campaign_id, amount, status) VALUES ($1, $2, 5, 'reserved')`,
       [project.id, campaign.id]
-    ));
-    await withRole(db, 'authenticated', walletB, () => db.query(
-      `UPDATE public.vault_reservations SET amount = 99 WHERE project_id = $1`,
-      [project.id]
     ));
     const reserved = await one(db, `SELECT amount, status FROM public.vault_reservations WHERE project_id = $1`, [project.id]);
     assert.equal(Number(reserved.amount), 5);
     assert.equal(reserved.status, 'reserved');
+    const reserveUpdateDenied = await withRole(db, 'authenticated', walletB, () =>
+      denied(db, `UPDATE public.vault_reservations SET amount = 99 WHERE project_id = $1`, [project.id]));
+    assert.match(reserveUpdateDenied, /permission denied/);
+    await db.exec('GRANT INSERT (project_id, campaign_id, amount, status) ON public.vault_reservations TO authenticated');
+    const reserveTrigger = await withRole(db, 'authenticated', walletA, () =>
+      denied(db, `INSERT INTO public.vault_reservations (project_id, campaign_id, amount, status) VALUES ($1, $2, 7, 'reserved')`, [project.id, campaign.id]));
+    await db.exec('REVOKE INSERT (project_id, campaign_id, amount, status) ON public.vault_reservations FROM authenticated');
+    assert.match(reserveTrigger, /reservation is server-only/);
+    const reservedKept = await one(db, `SELECT amount, status FROM public.vault_reservations WHERE project_id = $1`, [project.id]);
+    assert.equal(Number(reservedKept.amount), 5);
+    assert.equal(reservedKept.status, 'reserved');
 
-    const hashDenied = await withRole(db, 'authenticated', walletA, () =>
+    const proposeDenied = await withRole(db, 'authenticated', walletA, () =>
       denied(db, `
         INSERT INTO public.vault_settlements (project_id, campaign_id, payouts, total, unit, payout_hash)
         VALUES ($1, $2, '[]'::jsonb, 1, 'TOKEN', 'hash-a')
       `, [project.id, campaign.id]));
-    assert.match(hashDenied, /permission denied/);
-    const multisigDenied = await withRole(db, 'authenticated', walletA, () =>
+    assert.match(proposeDenied, /permission denied/);
+    const strangerPropose = await withRole(db, 'authenticated', walletB, () =>
       denied(db, `
-        INSERT INTO public.vault_settlements (project_id, campaign_id, payouts, total, unit, vault_multisig)
-        VALUES ($1, $2, '[]'::jsonb, 1, 'TOKEN', 'forged-multisig')
+        INSERT INTO public.vault_settlements (project_id, campaign_id, payouts, total, unit)
+        VALUES ($1, $2, '[]'::jsonb, 1, 'TOKEN')
       `, [project.id, campaign.id]));
-    assert.match(multisigDenied, /permission denied/);
+    assert.match(strangerPropose, /permission denied/);
+    const executeDenied = await withRole(db, 'authenticated', walletB, () =>
+      denied(db, `UPDATE public.vault_settlements SET status = 'executed', tx_signature = 'forged' WHERE project_id = $1`, [project.id]));
+    assert.match(executeDenied, /permission denied/);
 
-    const settlement = await withRole(db, 'authenticated', walletA, () => one(db, `
-      INSERT INTO public.vault_settlements (project_id, campaign_id, payouts, total, unit)
-      VALUES ($1, $2, '[]'::jsonb, 1, 'TOKEN')
+    await db.exec('GRANT INSERT (project_id, campaign_id, payouts, total, unit, payout_hash, vault_multisig) ON public.vault_settlements TO authenticated');
+    const wiped = await withRole(db, 'authenticated', walletA, () => one(db, `
+      INSERT INTO public.vault_settlements (project_id, campaign_id, payouts, total, unit, payout_hash, vault_multisig)
+      VALUES ($1, $2, '[]'::jsonb, 1, 'TOKEN', 'hash-a', 'forged-multisig')
+      RETURNING payout_hash, vault_multisig, status
+    `, [project.id, campaign.id]));
+    await db.exec('REVOKE INSERT (project_id, campaign_id, payouts, total, unit, payout_hash, vault_multisig) ON public.vault_settlements FROM authenticated');
+    assert.equal(wiped.payout_hash, null);
+    assert.equal(wiped.vault_multisig, null);
+    assert.equal(wiped.status, 'proposed');
+
+    const settlement = await withRole(db, 'service_role', '', () => one(db, `
+      INSERT INTO public.vault_settlements (project_id, campaign_id, payouts, total, unit, payout_hash)
+      VALUES ($1, $2, '[]'::jsonb, 1, 'TOKEN', 'honest-hash')
       RETURNING id, status, team_signed, bard_signed, tx_signature, payout_hash, vault_multisig
     `, [project.id, campaign.id]));
     assert.equal(settlement.status, 'proposed');
     assert.equal(settlement.team_signed, false);
     assert.equal(settlement.bard_signed, false);
     assert.equal(settlement.tx_signature, null);
-    assert.equal(settlement.payout_hash, null);
+    assert.equal(settlement.payout_hash, 'honest-hash');
     assert.equal(settlement.vault_multisig, null);
-
-    await db.exec('GRANT INSERT (payout_hash, vault_multisig) ON public.vault_settlements TO authenticated');
-    const wiped = await withRole(db, 'authenticated', walletA, () => one(db, `
-      INSERT INTO public.vault_settlements (project_id, campaign_id, payouts, total, unit, payout_hash, vault_multisig)
-      VALUES ($1, $2, '[]'::jsonb, 1, 'TOKEN', 'hash-a', 'forged-multisig')
-      RETURNING payout_hash, vault_multisig
-    `, [project.id, campaign.id]));
-    await db.exec('REVOKE INSERT (payout_hash, vault_multisig) ON public.vault_settlements FROM authenticated');
-    assert.equal(wiped.payout_hash, null);
-    assert.equal(wiped.vault_multisig, null);
 
     await db.exec('GRANT UPDATE (payout_hash, vault_multisig) ON public.vault_settlements TO authenticated');
     await withRole(db, 'authenticated', walletA, () => db.query(
@@ -313,27 +354,46 @@ test('RLS isolates two wallets and blocks privileged columns', { timeout: 120000
     ));
     await db.exec('REVOKE UPDATE (payout_hash, vault_multisig) ON public.vault_settlements FROM authenticated');
     const hashKept = await one(db, `SELECT payout_hash, vault_multisig FROM public.vault_settlements WHERE id = $1`, [settlement.id]);
-    assert.equal(hashKept.payout_hash, null);
+    assert.equal(hashKept.payout_hash, 'honest-hash');
     assert.equal(hashKept.vault_multisig, null);
 
-    await db.exec('GRANT UPDATE (status, team_signed, tx_signature) ON public.vault_settlements TO authenticated');
+    await db.exec('GRANT UPDATE (total, status, team_signed, tx_signature) ON public.vault_settlements TO authenticated');
     await withRole(db, 'authenticated', walletA, () => db.query(
       `UPDATE public.vault_settlements SET total = 2, status = 'executed', team_signed = true, tx_signature = 'forged' WHERE id = $1`,
       [settlement.id]
     ));
-    await db.exec('REVOKE UPDATE (status, team_signed, tx_signature) ON public.vault_settlements FROM authenticated');
-    const stillProposed = await one(db, `SELECT total, status, team_signed, tx_signature FROM public.vault_settlements WHERE id = $1`, [settlement.id]);
+    await db.exec('REVOKE UPDATE (total, status, team_signed, tx_signature) ON public.vault_settlements FROM authenticated');
+    const stillProposed = await one(db, `SELECT total, status, team_signed, tx_signature, payout_hash FROM public.vault_settlements WHERE id = $1`, [settlement.id]);
     assert.equal(Number(stillProposed.total), 2);
     assert.equal(stillProposed.status, 'proposed');
     assert.equal(stillProposed.team_signed, false);
     assert.equal(stillProposed.tx_signature, null);
+    assert.equal(stillProposed.payout_hash, 'honest-hash');
 
-    await withRole(db, 'authenticated', walletB, () => db.query(
-      `UPDATE public.vault_settlements SET total = 50 WHERE id = $1`,
-      [settlement.id]
-    ));
-    const totalKept = await one(db, `SELECT total FROM public.vault_settlements WHERE id = $1`, [settlement.id]);
+    const strangerExecute = await withRole(db, 'authenticated', walletB, () =>
+      denied(db, `UPDATE public.vault_settlements SET total = 50, status = 'executed' WHERE id = $1`, [settlement.id]));
+    assert.match(strangerExecute, /permission denied/);
+    const totalKept = await one(db, `SELECT total, status FROM public.vault_settlements WHERE id = $1`, [settlement.id]);
     assert.equal(Number(totalKept.total), 2);
+    assert.equal(totalKept.status, 'proposed');
+
+    await withRole(db, 'service_role', '', () => db.query(
+      `UPDATE public.campaigns SET draw_slot = 100, draw_count = 1, draw_committed_at = now() WHERE id = $1`,
+      [campaign.id]
+    ));
+    const secondCommit = await withRole(db, 'service_role', '', () =>
+      denied(db, `UPDATE public.campaigns SET draw_slot = 200 WHERE id = $1`, [campaign.id]));
+    assert.match(secondCommit, /Draw slot already committed/);
+    await withRole(db, 'service_role', '', () => db.query(
+      `UPDATE public.campaigns SET draw_seed = 'seed-a', draw_at = now(), draw_winners = '[]'::jsonb, draw_seed_slot = 100 WHERE id = $1`,
+      [campaign.id]
+    ));
+    const secondFinal = await withRole(db, 'service_role', '', () =>
+      denied(db, `UPDATE public.campaigns SET draw_seed = 'seed-b' WHERE id = $1`, [campaign.id]));
+    assert.match(secondFinal, /Draw already finalized/);
+    const drawn = await one(db, `SELECT draw_slot, draw_seed FROM public.campaigns WHERE id = $1`, [campaign.id]);
+    assert.equal(Number(drawn.draw_slot), 100);
+    assert.equal(drawn.draw_seed, 'seed-a');
 
     await withRole(db, 'service_role', '', () => db.query(
       `UPDATE public.vault_settlements SET team_signed = true, status = 'awaiting_bard', bard_signed = false, payout_hash = 'm3-later', vault_multisig = 'squads-key' WHERE id = $1`,

@@ -11,6 +11,8 @@ import {
 import {
   FEE_TREASURY,
   SQUADS_PROGRAM,
+  TOKEN_PROGRAM,
+  TOKEN_2022_PROGRAM,
   PLAN_SOL,
   solToLamports,
   parseSquadsMultisig,
@@ -18,7 +20,22 @@ import {
   decodeBase64,
   collectTreasuryLamports,
   squadsVaultAddress,
+  squadsTransactionAddress,
+  squadsProposalAddress,
+  associatedTokenAddress,
 } from './chain.js';
+import {
+  DRAW_SLOT_OFFSET,
+  assertDrawStep,
+  computePayouts,
+  deriveWinners,
+  findFinalizedBlockhash,
+  payoutRawAmount,
+  planReservation,
+  subDecimal,
+  accountKeysOf,
+  parsedTransfers,
+} from './settlement.js';
 
 const FEES_ENABLED = false;
 const JSON_HEADERS = { 'cache-control': 'no-store' };
@@ -77,6 +94,10 @@ function patch(env, table, query, row) {
   return sb(env, 'PATCH', '/' + table + '?' + query, row, 'return=representation');
 }
 
+function upsert(env, table, row, onConflict) {
+  return sb(env, 'POST', '/' + table + '?on_conflict=' + encodeURIComponent(onConflict), row, 'resolution=merge-duplicates,return=representation');
+}
+
 async function readJson(request) {
   try {
     const data = await request.json();
@@ -123,8 +144,64 @@ async function rpc(env, method, params) {
     body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }),
   });
   const data = await res.json();
-  if (data.error) throw new Error(data.error.message || 'rpc failed');
+  if (data.error) {
+    const err = new Error(data.error.message || 'rpc failed');
+    err.code = data.error.code;
+    throw err;
+  }
   return data.result;
+}
+
+function firstRow(rows) {
+  return Array.isArray(rows) ? rows[0] : null;
+}
+
+function badRequest(err) {
+  return json({ error: err && err.message ? err.message : 'invalid request' }, 400);
+}
+
+function isSignature(value) {
+  return /^[1-9A-HJ-NP-Za-km-z]{64,128}$/.test(String(value || '').trim());
+}
+
+async function readMint(env, mint) {
+  const result = await rpc(env, 'getAccountInfo', [mint, { encoding: 'base64', commitment: 'confirmed' }]);
+  const value = result && result.value;
+  if (!value || !value.data || !value.data[0]) throw new Error('Mint account not found');
+  if (value.owner !== TOKEN_PROGRAM && value.owner !== TOKEN_2022_PROGRAM) {
+    throw new Error('Mint owner is not SPL Token or Token-2022');
+  }
+  const data = decodeBase64(value.data[0]);
+  if (data.length < 45) throw new Error('Mint account is too small');
+  return { decimals: data[44], tokenProgram: value.owner };
+}
+
+async function readVaultTokenRaw(env, address, mint) {
+  const mintInfo = await readMint(env, mint);
+  const result = await rpc(env, 'getTokenAccountsByOwner', [
+    address,
+    { mint },
+    { encoding: 'jsonParsed', commitment: 'confirmed' },
+  ]);
+  let raw = 0n;
+  let decimals = mintInfo.decimals;
+  for (const acc of (result && result.value) || []) {
+    const info = acc && acc.account && acc.account.data && acc.account.data.parsed && acc.account.data.parsed.info;
+    if (!info || info.mint !== mint || !info.tokenAmount) continue;
+    raw += BigInt(info.tokenAmount.amount || '0');
+    if (info.tokenAmount.decimals != null) decimals = Number(info.tokenAmount.decimals);
+  }
+  return { raw: raw.toString(), decimals, tokenProgram: mintInfo.tokenProgram };
+}
+
+async function loadCampaign(env, campaignId) {
+  if (!campaignId) return null;
+  return firstRow(await select(env, 'campaigns', 'id=eq.' + encodeURIComponent(campaignId) + '&select=*'));
+}
+
+async function joinsForCampaign(env, campaignId) {
+  const rows = await select(env, 'campaign_joins', 'campaign_id=eq.' + encodeURIComponent(campaignId) + '&select=wallet,qualified,status,progress,x_handle');
+  return Array.isArray(rows) ? rows : [];
 }
 
 async function handleNonce(request, env) {
@@ -500,6 +577,305 @@ function handleBardSign() {
   return json({ ok: false, waiting: true, reason: 'bard_signer_not_wired' });
 }
 
+async function handleReserve(request, env) {
+  const session = await sessionWallet(request, env);
+  if (session.error) return session.error;
+  const body = await readJson(request);
+  if (body == null) return json({ error: 'invalid json' }, 400);
+  const admin = await projectForAdmin(env, body.projectId, session.wallet);
+  if (admin.error) return admin.error;
+  const project = admin.project;
+  if (!project.vault_address) return json({ error: 'Link a vault first' }, 400);
+  const mint = project.vault_mint || project.mint;
+  if (!mint) return json({ error: 'Vault mint is missing' }, 400);
+  let campaign = null;
+  if (body.campaignId) {
+    campaign = await loadCampaign(env, body.campaignId);
+    if (!campaign) return json({ error: 'campaign not found' }, 404);
+    if (campaign.project_id !== project.id) return json({ error: 'campaign is not in that project' }, 400);
+  }
+  let bal;
+  try {
+    bal = await readVaultTokenRaw(env, project.vault_address, mint);
+  } catch (err) {
+    return badRequest(err);
+  }
+  let plan;
+  try {
+    plan = planReservation(
+      project.vault_reserved || 0,
+      campaign ? campaign.vault_reserved || 0 : 0,
+      body.amount,
+      bal.raw,
+      bal.decimals
+    );
+  } catch (err) {
+    return badRequest(err);
+  }
+  const updated = await patch(env, 'projects', 'id=eq.' + encodeURIComponent(project.id), {
+    vault_reserved: plan.projectReserved,
+  });
+  const saved = firstRow(updated);
+  if (!saved) return json({ error: 'project not found' }, 404);
+  if (campaign) {
+    await patch(env, 'campaigns', 'id=eq.' + encodeURIComponent(campaign.id), {
+      vault_reserved: plan.campaignReserved,
+    });
+    await insert(env, 'vault_reservations', {
+      project_id: project.id,
+      campaign_id: campaign.id,
+      amount: plan.added,
+      status: 'reserved',
+    });
+  }
+  return json({ reserved: plan.projectReserved, added: plan.added, campaignReserved: plan.campaignReserved });
+}
+
+async function handlePropose(request, env) {
+  const session = await sessionWallet(request, env);
+  if (session.error) return session.error;
+  const body = await readJson(request);
+  if (body == null) return json({ error: 'invalid json' }, 400);
+  const campaign = await loadCampaign(env, body.campaignId);
+  if (!campaign) return json({ error: 'campaign not found' }, 404);
+  if (body.projectId && body.projectId !== campaign.project_id) return json({ error: 'campaign is not in that project' }, 400);
+  const admin = await projectForAdmin(env, campaign.project_id, session.wallet);
+  if (admin.error) return admin.error;
+  const project = admin.project;
+  const joins = await joinsForCampaign(env, campaign.id);
+  const mint = project.vault_mint || project.mint || '';
+  let decimals = 0;
+  try {
+    if (mint) {
+      const bal = await readVaultTokenRaw(env, project.vault_address, mint);
+      decimals = bal.decimals;
+    } else if (String(campaign.reward_unit || '').toUpperCase() === 'SOL') {
+      decimals = 9;
+    }
+  } catch (err) {
+    return badRequest(err);
+  }
+  const stored = Object.assign({}, campaign, {
+    vaultReserved: campaign.vault_reserved,
+    mint,
+    vaultAddress: project.vault_address || '',
+    vaultMultisig: project.vault_multisig || '',
+  });
+  let built;
+  try {
+    built = computePayouts(stored, joins, decimals);
+  } catch (err) {
+    return badRequest(err);
+  }
+  const created = await insert(env, 'vault_settlements', {
+    project_id: project.id,
+    campaign_id: campaign.id,
+    payouts: built.payouts,
+    total: built.total,
+    unit: built.unit,
+    payout_hash: built.hash,
+    status: 'proposed',
+    team_signed: false,
+    bard_signed: false,
+    vault_multisig: project.vault_multisig || null,
+  });
+  const settlement = firstRow(created);
+  return json({ settlement });
+}
+
+async function verifyExecutedPayout(env, settlement, project, signature) {
+  const multisig = project.vault_multisig || settlement.vault_multisig || '';
+  if (!multisig) throw new Error('project vault is not linked');
+  if (settlement.tx_index == null || String(settlement.tx_index).trim() === '') {
+    throw new Error('settlement has no vault transaction');
+  }
+  const mint = project.vault_mint || project.mint;
+  if (!mint || !project.vault_address) throw new Error('Vault mint is missing');
+  const tx = await rpc(env, 'getTransaction', [signature, {
+    encoding: 'jsonParsed',
+    commitment: 'confirmed',
+    maxSupportedTransactionVersion: 0,
+  }]);
+  if (!tx || !tx.meta || tx.meta.err) throw new Error('transaction is not confirmed');
+  const logs = tx.meta.logMessages || [];
+  if (!logs.some((line) => String(line).includes('VaultTransactionExecute'))) {
+    throw new Error('transaction is not a Squads vault execute');
+  }
+  const mintInfo = await readMint(env, mint);
+  const index = BigInt(String(settlement.tx_index).trim());
+  const transactionPda = await squadsTransactionAddress(multisig, index);
+  const proposalPda = await squadsProposalAddress(multisig, index);
+  const keys = new Set(accountKeysOf(tx));
+  if (!keys.has(SQUADS_PROGRAM) || !keys.has(multisig) || !keys.has(transactionPda) || !keys.has(proposalPda)) {
+    throw new Error('transaction does not execute this settlement');
+  }
+  const vaultAta = await associatedTokenAddress(project.vault_address, mint, mintInfo.tokenProgram);
+  const expected = new Map();
+  for (const payout of settlement.payouts || []) {
+    const raw = payoutRawAmount(payout, mintInfo.decimals);
+    if (raw <= 0n) continue;
+    const ata = await associatedTokenAddress(payout.wallet, mint, mintInfo.tokenProgram);
+    expected.set(ata, (expected.get(ata) || 0n) + raw);
+  }
+  if (!expected.size) throw new Error('settlement has no payout amounts');
+  const actual = new Map();
+  for (const transfer of parsedTransfers(tx)) {
+    if (transfer.mint !== mint || transfer.source !== vaultAta) continue;
+    if (transfer.authority && transfer.authority !== project.vault_address) {
+      throw new Error('payout authority is not the project vault');
+    }
+    if (!expected.has(transfer.destination)) throw new Error('payout pays an unexpected account');
+    actual.set(transfer.destination, (actual.get(transfer.destination) || 0n) + BigInt(transfer.amount || '0'));
+  }
+  if (actual.size !== expected.size) throw new Error('on-chain payouts do not match the settlement');
+  for (const [ata, raw] of expected) {
+    if (actual.get(ata) !== raw) throw new Error('on-chain payouts do not match the settlement');
+  }
+}
+
+async function handleExecute(request, env, settlementId) {
+  const session = await sessionWallet(request, env);
+  if (session.error) return session.error;
+  const body = await readJson(request);
+  if (body == null) return json({ error: 'invalid json' }, 400);
+  const current = firstRow(await select(env, 'vault_settlements', 'id=eq.' + encodeURIComponent(settlementId) + '&select=*'));
+  if (!current) return json({ error: 'settlement not found' }, 404);
+  const admin = await projectForAdmin(env, current.project_id, session.wallet);
+  if (admin.error) return admin.error;
+  const signature = String(body.signature || '').trim();
+  if (!isSignature(signature)) return json({ error: 'invalid signature' }, 400);
+  if (!current.payout_hash) return json({ error: 'settlement has no canonical hash' }, 400);
+  if (current.status === 'cancelled') return json({ error: 'settlement is closed' }, 400);
+  if (current.status === 'executed') {
+    if (current.tx_signature === signature) return json({ settlement: current });
+    return json({ error: 'settlement is closed' }, 400);
+  }
+  const used = await select(env, 'vault_settlements', 'tx_signature=eq.' + encodeURIComponent(signature) + '&select=id');
+  if (Array.isArray(used) && used.some((row) => row.id !== current.id)) return json({ error: 'signature already used' }, 400);
+  try {
+    await verifyExecutedPayout(env, current, admin.project, signature);
+  } catch (err) {
+    return badRequest(err);
+  }
+  const now = new Date().toISOString();
+  const payouts = Array.isArray(current.payouts) ? current.payouts : [];
+  for (const payout of payouts) {
+    if (!payout || !payout.wallet) continue;
+    await patch(
+      env,
+      'campaign_joins',
+      'campaign_id=eq.' + encodeURIComponent(current.campaign_id) + '&wallet=eq.' + encodeURIComponent(payout.wallet),
+      { qualified: true, qualified_at: now }
+    );
+    await upsert(env, 'platform_claims', {
+      project_id: current.project_id,
+      campaign_id: current.campaign_id,
+      wallet: payout.wallet,
+      amount: String(payout.amount),
+      unit: current.unit,
+      settled: true,
+      settled_at: now,
+      fee_paid: !FEES_ENABLED,
+      fee_amount_sol: PLAN_SOL.claim,
+    }, 'campaign_id,wallet');
+  }
+  await patch(
+    env,
+    'vault_reservations',
+    'campaign_id=eq.' + encodeURIComponent(current.campaign_id) + '&status=eq.reserved',
+    { status: 'settled' }
+  );
+  if (current.total != null) {
+    const reserved = admin.project.vault_reserved || 0;
+    await patch(env, 'projects', 'id=eq.' + encodeURIComponent(current.project_id), {
+      vault_reserved: subDecimal(reserved, current.total),
+    });
+  }
+  const updated = await patch(env, 'vault_settlements', 'id=eq.' + encodeURIComponent(settlementId), {
+    status: 'executed',
+    tx_signature: signature,
+    executed_at: now,
+  });
+  const settlement = firstRow(updated) || Object.assign({}, current, { status: 'executed', tx_signature: signature, executed_at: now });
+  return json({ settlement });
+}
+
+async function handleDrawCommit(request, env, campaignId) {
+  const session = await sessionWallet(request, env);
+  if (session.error) return session.error;
+  const body = await readJson(request);
+  if (body == null) return json({ error: 'invalid json' }, 400);
+  const campaign = await loadCampaign(env, campaignId);
+  if (!campaign) return json({ error: 'campaign not found' }, 404);
+  const admin = await projectForAdmin(env, campaign.project_id, session.wallet);
+  if (admin.error) return admin.error;
+  try {
+    assertDrawStep(campaign, 'commit');
+  } catch (err) {
+    return badRequest(err);
+  }
+  let current;
+  try {
+    current = Number(await rpc(env, 'getSlot', [{ commitment: 'finalized' }]));
+  } catch (err) {
+    return badRequest(err);
+  }
+  if (!Number.isInteger(current) || current < 0) return json({ error: 'slot is unavailable' }, 400);
+  let count = parseInt(body.topN, 10);
+  if (Number.isNaN(count) || count < 0) count = 0;
+  const updated = await patch(env, 'campaigns', 'id=eq.' + encodeURIComponent(campaignId), {
+    draw_slot: current + DRAW_SLOT_OFFSET,
+    draw_count: count,
+    draw_committed_at: new Date().toISOString(),
+  });
+  const saved = firstRow(updated);
+  if (!saved) return json({ error: 'campaign not found' }, 404);
+  return json({ campaign: saved });
+}
+
+async function handleDrawFinalize(request, env, campaignId) {
+  const session = await sessionWallet(request, env);
+  if (session.error) return session.error;
+  const body = await readJson(request);
+  if (body == null) return json({ error: 'invalid json' }, 400);
+  const campaign = await loadCampaign(env, campaignId);
+  if (!campaign) return json({ error: 'campaign not found' }, 404);
+  const admin = await projectForAdmin(env, campaign.project_id, session.wallet);
+  if (admin.error) return admin.error;
+  let view;
+  try {
+    view = assertDrawStep(campaign, 'finalize');
+  } catch (err) {
+    return badRequest(err);
+  }
+  let found;
+  try {
+    found = await findFinalizedBlockhash(
+      () => rpc(env, 'getSlot', [{ commitment: 'finalized' }]),
+      (slot) => rpc(env, 'getBlock', [slot, {
+        commitment: 'finalized',
+        transactionDetails: 'none',
+        rewards: false,
+        maxSupportedTransactionVersion: 0,
+      }]),
+      view.drawSlot
+    );
+  } catch (err) {
+    return badRequest(err);
+  }
+  const joins = await joinsForCampaign(env, campaignId);
+  const winners = deriveWinners(joins, found.blockhash, view.drawCount || 0);
+  const updated = await patch(env, 'campaigns', 'id=eq.' + encodeURIComponent(campaignId), {
+    draw_seed: found.blockhash,
+    draw_seed_slot: found.slot,
+    draw_at: new Date().toISOString(),
+    draw_winners: winners,
+  });
+  const saved = firstRow(updated);
+  if (!saved) return json({ error: 'campaign not found' }, 404);
+  return json({ campaign: saved });
+}
+
 export async function handleRequest(request, env) {
   const url = new URL(request.url);
   const path = url.pathname;
@@ -516,12 +892,20 @@ export async function handleRequest(request, env) {
     if (path === '/api/joins/qualify' && method === 'POST') return await handleQualify(request, env);
     if (path === '/api/claims' && method === 'POST') return await handleClaim(request, env);
     if (path === '/api/vault/bard-sign' && method === 'POST') return handleBardSign();
+    if (path === '/api/vault/reserve' && method === 'POST') return await handleReserve(request, env);
+    if (path === '/api/settlements/propose' && method === 'POST') return await handlePropose(request, env);
     const plan = path.match(/^\/api\/projects\/([^/]+)\/plan$/);
     if (plan && method === 'POST') return await handleSetPlan(request, env, decodeURIComponent(plan[1]));
     const vault = path.match(/^\/api\/projects\/([^/]+)\/vault$/);
     if (vault && method === 'POST') return await handleLinkVault(request, env, decodeURIComponent(vault[1]));
     const team = path.match(/^\/api\/settlements\/([^/]+)\/team-sign$/);
     if (team && method === 'POST') return await handleTeamSign(request, env, decodeURIComponent(team[1]));
+    const execute = path.match(/^\/api\/settlements\/([^/]+)\/execute$/);
+    if (execute && method === 'POST') return await handleExecute(request, env, decodeURIComponent(execute[1]));
+    const drawCommit = path.match(/^\/api\/campaigns\/([^/]+)\/draw\/commit$/);
+    if (drawCommit && method === 'POST') return await handleDrawCommit(request, env, decodeURIComponent(drawCommit[1]));
+    const drawFinal = path.match(/^\/api\/campaigns\/([^/]+)\/draw\/finalize$/);
+    if (drawFinal && method === 'POST') return await handleDrawFinalize(request, env, decodeURIComponent(drawFinal[1]));
     if (path.startsWith('/api/')) return json({ error: 'not found' }, 404);
     return null;
   } catch (err) {

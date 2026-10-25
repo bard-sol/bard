@@ -172,10 +172,25 @@ export async function findProgramAddress(seeds, programId) {
   throw new Error('no program address');
 }
 
+export const TOKEN_PROGRAM = 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA';
+export const TOKEN_2022_PROGRAM = 'TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb';
+export const ASSOCIATED_TOKEN_PROGRAM = 'ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL';
+
+function decodeKey(value, label) {
+  const key = bs58.decode(value);
+  if (key.length !== 32) throw new Error('invalid ' + label);
+  return key;
+}
+
+export function u64le(value) {
+  const out = new Uint8Array(8);
+  new DataView(out.buffer).setBigUint64(0, BigInt(value), true);
+  return out;
+}
+
 export async function squadsVaultAddress(multisig, index = 0) {
   if (!Number.isInteger(index) || index < 0 || index > 255) throw new Error('invalid vault index');
-  const key = bs58.decode(multisig);
-  if (key.length !== 32) throw new Error('invalid multisig');
+  const key = decodeKey(multisig, 'multisig');
   const text = new TextEncoder();
   const found = await findProgramAddress([
     text.encode('multisig'),
@@ -183,5 +198,39 @@ export async function squadsVaultAddress(multisig, index = 0) {
     text.encode('vault'),
     Uint8Array.of(index),
   ], SQUADS_PROGRAM);
+  return found.address;
+}
+
+export async function squadsTransactionAddress(multisig, index) {
+  const key = decodeKey(multisig, 'multisig');
+  const text = new TextEncoder();
+  const found = await findProgramAddress([
+    text.encode('multisig'),
+    key,
+    text.encode('transaction'),
+    u64le(index),
+  ], SQUADS_PROGRAM);
+  return found.address;
+}
+
+export async function squadsProposalAddress(multisig, index) {
+  const key = decodeKey(multisig, 'multisig');
+  const text = new TextEncoder();
+  const found = await findProgramAddress([
+    text.encode('multisig'),
+    key,
+    text.encode('transaction'),
+    u64le(index),
+    text.encode('proposal'),
+  ], SQUADS_PROGRAM);
+  return found.address;
+}
+
+export async function associatedTokenAddress(owner, mint, tokenProgram) {
+  const found = await findProgramAddress([
+    decodeKey(owner, 'owner'),
+    decodeKey(tokenProgram, 'token program'),
+    decodeKey(mint, 'mint'),
+  ], ASSOCIATED_TOKEN_PROGRAM);
   return found.address;
 }

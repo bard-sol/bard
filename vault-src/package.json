@@ -1,0 +1,17 @@
+{
+  "name": "bard-vault-src",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs"
+  },
+  "dependencies": {
+    "@solana/spl-token": "0.4.15",
+    "@solana/web3.js": "1.95.4",
+    "@sqds/multisig": "2.1.4"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2",
+    "litesvm": "1.6.1"
+  }
+}

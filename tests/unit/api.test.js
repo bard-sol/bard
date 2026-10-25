@@ -7,12 +7,17 @@ import { handleRequest } from '../../server/api.js';
 import {
   FEE_TREASURY,
   SQUADS_PROGRAM,
+  TOKEN_PROGRAM,
+  associatedTokenAddress,
   decodeBase64,
   parseSquadsMultisig,
   sameMemberSet,
   squadsMultisigDiscriminator,
+  squadsProposalAddress,
+  squadsTransactionAddress,
   squadsVaultAddress,
 } from '../../server/chain.js';
+import { computePayouts } from '../../server/settlement.js';
 
 const SECRET = 'test-secret-test-secret-test-secret';
 
@@ -94,7 +99,7 @@ function transferTx(payer, lamports) {
   };
 }
 
-function createEnv({ signer, accounts, txs }) {
+function createEnv({ signer, accounts, txs, tokenAccounts, chain }) {
   const tables = {
     projects: [],
     campaigns: [],
@@ -102,6 +107,7 @@ function createEnv({ signer, accounts, txs }) {
     platform_claims: [],
     fee_payments: [],
     vault_settlements: [],
+    vault_reservations: [],
     auth_nonces: [],
   };
   const calls = [];
@@ -123,6 +129,19 @@ function createEnv({ signer, accounts, txs }) {
         if (payload.method === 'getTransaction') {
           return Response.json({ jsonrpc: '2.0', id: 1, result: txs[payload.params[0]] || null });
         }
+        if (payload.method === 'getTokenAccountsByOwner') {
+          const mint = payload.params[1] && payload.params[1].mint;
+          const key = payload.params[0] + '|' + mint;
+          return Response.json({ jsonrpc: '2.0', id: 1, result: (tokenAccounts && tokenAccounts[key]) || { value: [] } });
+        }
+        if (payload.method === 'getSlot') {
+          return Response.json({ jsonrpc: '2.0', id: 1, result: chain ? chain.slot : 0 });
+        }
+        if (payload.method === 'getBlock') {
+          const block = chain && chain.blocks ? chain.blocks[payload.params[0]] : null;
+          if (block && block.error) return Response.json({ jsonrpc: '2.0', id: 1, error: block.error });
+          return Response.json({ jsonrpc: '2.0', id: 1, result: block || null });
+        }
         return Response.json({ jsonrpc: '2.0', id: 1, error: { message: 'unknown rpc' } });
       }
       const table = u.pathname.replace(/^\/rest\/v1\//, '');
@@ -130,7 +149,7 @@ function createEnv({ signer, accounts, txs }) {
       if (!rows) return Response.json({ message: 'missing ' + table }, { status: 500 });
       const filters = [];
       for (const [key, value] of u.searchParams) {
-        if (key === 'select') continue;
+        if (key === 'select' || key === 'on_conflict') continue;
         const dot = value.indexOf('.');
         filters.push({ key, op: value.slice(0, dot), val: value.slice(dot + 1) });
       }
@@ -152,6 +171,15 @@ function createEnv({ signer, accounts, txs }) {
         }
         if (table === 'auth_nonces' && rows.some((row) => row.jti === body.jti)) {
           return Response.json({ code: '23505', message: 'duplicate' }, { status: 409 });
+        }
+        const conflict = u.searchParams.get('on_conflict');
+        if (conflict) {
+          const keys = conflict.split(',');
+          const existing = rows.find((row) => keys.every((key) => String(row[key]) === String(body[key])));
+          if (existing) {
+            Object.assign(existing, body);
+            return Response.json([existing]);
+          }
         }
         const stored = { id: crypto.randomUUID(), ...body };
         rows.push(stored);
@@ -230,6 +258,11 @@ test('privileged writes require the project admin session', { timeout: 30000 }, 
       ['/api/joins/qualify', { campaignId: 'c', wallet: holder.publicKey }],
       ['/api/claims', { campaignId: 'c', wallet: holder.publicKey }],
       ['/api/settlements/s/team-sign', {}],
+      ['/api/settlements/propose', { projectId: 'x', campaignId: 'c' }],
+      ['/api/vault/reserve', { projectId: 'x', campaignId: 'c', amount: '1' }],
+      ['/api/settlements/s/execute', { signature: goodSig }],
+      ['/api/campaigns/c/draw/commit', { topN: 1 }],
+      ['/api/campaigns/c/draw/finalize', {}],
     ];
     for (const [path, body] of locked) {
       const res = await call(env, 'POST', path, body);
@@ -471,6 +504,228 @@ test('privileged writes require the project admin session', { timeout: 30000 }, 
     assert.equal(bard.data.waiting, true);
     assert.equal(tables.vault_settlements[0].bard_signed, true);
     assert.equal(calls.some((line) => /supabase\.co|mainnet|publicnode/.test(line)), false);
+  } finally {
+    restore();
+  }
+});
+
+function mintAccount(decimals) {
+  const data = new Uint8Array(82);
+  data[44] = decimals;
+  return { value: { owner: TOKEN_PROGRAM, data: [toBase64(data), 'base64'] } };
+}
+
+function ownedTokens(mint, amount, decimals) {
+  return {
+    value: [{
+      account: {
+        data: { parsed: { info: { mint, tokenAmount: { amount: String(amount), decimals } } } },
+      },
+    }],
+  };
+}
+
+test('settlement routes keep the canonical hash and reject the other wallet', { timeout: 30000 }, async () => {
+  const restore = installFetchGuard();
+  const walletA = keypair();
+  const walletB = keypair();
+  const holder = keypair();
+  const stranger = keypair();
+  const signer = keypair();
+  const multisig = keypair().publicKey;
+  const mint = keypair().publicKey;
+  const vaultAddress = await squadsVaultAddress(multisig);
+  const goodAccount = await craftMultisig(2, [walletA.publicKey, signer.publicKey]);
+  const chain = {
+    slot: 1000,
+    blocks: {
+      1150: { error: { code: -32007, message: 'Slot 1150 was skipped' } },
+      1151: { blockhash: 'SeedHashFromNextSlot' },
+    },
+  };
+  const { env, tables } = createEnv({
+    signer: signer.publicKey,
+    accounts: {
+      [multisig]: account(goodAccount),
+      [mint]: mintAccount(6),
+    },
+    txs: {},
+    tokenAccounts: {
+      [vaultAddress + '|' + mint]: ownedTokens(mint, 10_000_000, 6),
+    },
+    chain,
+  });
+  const tokenA = (await signJwt(SECRET, walletA.publicKey)).token;
+  const tokenB = (await signJwt(SECRET, walletB.publicKey)).token;
+  const paySig = '5'.repeat(88);
+  const otherSig = '6'.repeat(88);
+  try {
+    const created = await call(env, 'POST', '/api/projects', {
+      name: 'Alpha', ticker: 'ALP', mint, plan: 'starter',
+    }, tokenA);
+    assert.equal(created.status, 200, JSON.stringify(created.data));
+    const project = created.data.project;
+    const raid = await call(env, 'POST', '/api/campaigns', {
+      projectId: project.id, title: 'Raid', rule: 'reply', type: 'raid', rewardMode: 'fixed', reward: '2', unit: 'TOKEN',
+    }, tokenA);
+    assert.equal(raid.status, 200, JSON.stringify(raid.data));
+    const campaign = raid.data.campaign;
+
+    const bPropose = await call(env, 'POST', '/api/settlements/propose', {
+      projectId: project.id, campaignId: campaign.id, payouts: [{ wallet: stranger.publicKey, amountRaw: '1' }],
+    }, tokenB);
+    assert.equal(bPropose.status, 403);
+    const bReserve = await call(env, 'POST', '/api/vault/reserve', {
+      projectId: project.id, campaignId: campaign.id, amount: '1',
+    }, tokenB);
+    assert.equal(bReserve.status, 403);
+    const bDraw = await call(env, 'POST', '/api/campaigns/' + campaign.id + '/draw/commit', { topN: 1 }, tokenB);
+    assert.equal(bDraw.status, 403);
+    assert.equal(tables.vault_settlements.length, 0);
+    assert.equal(tables.vault_reservations.length, 0);
+
+    const linked = await call(env, 'POST', '/api/projects/' + project.id + '/vault', {
+      address: vaultAddress, multisig, mint,
+    }, tokenA);
+    assert.equal(linked.status, 200, JSON.stringify(linked.data));
+
+    const tooMuch = await call(env, 'POST', '/api/vault/reserve', {
+      projectId: project.id, campaignId: campaign.id, amount: '100',
+    }, tokenA);
+    assert.equal(tooMuch.status, 400);
+    assert.match(tooMuch.data.error, /exceeds vault token balance/);
+    const reserved = await call(env, 'POST', '/api/vault/reserve', {
+      projectId: project.id, campaignId: campaign.id, amount: '3',
+    }, tokenA);
+    assert.equal(reserved.status, 200, JSON.stringify(reserved.data));
+    assert.equal(tables.projects[0].vault_reserved, '3');
+    assert.equal(tables.campaigns[0].vault_reserved, '3');
+    assert.equal(tables.vault_reservations.length, 1);
+    assert.equal(tables.vault_reservations[0].status, 'reserved');
+
+    tables.campaign_joins.push({
+      id: crypto.randomUUID(),
+      campaign_id: campaign.id,
+      project_id: project.id,
+      wallet: holder.publicKey,
+      status: 'approved',
+      progress: 1,
+      qualified: true,
+    });
+    tables.campaign_joins.push({
+      id: crypto.randomUUID(),
+      campaign_id: campaign.id,
+      project_id: project.id,
+      wallet: stranger.publicKey,
+      status: 'rejected',
+      progress: 9,
+      qualified: false,
+    });
+    const expected = computePayouts({
+      reward_mode: 'fixed', reward: '2', reward_unit: 'TOKEN', vault_reserved: '3',
+    }, tables.campaign_joins, 6);
+    const proposed = await call(env, 'POST', '/api/settlements/propose', {
+      projectId: project.id,
+      campaignId: campaign.id,
+      payouts: [{ wallet: stranger.publicKey, amount: '99', amountRaw: '99' }],
+      payout_hash: 'client-hash',
+    }, tokenA);
+    assert.equal(proposed.status, 200, JSON.stringify(proposed.data));
+    assert.equal(proposed.data.settlement.payout_hash, expected.hash);
+    assert.notEqual(proposed.data.settlement.payout_hash, 'client-hash');
+    assert.deepEqual(proposed.data.settlement.payouts.map((row) => row.wallet), [holder.publicKey]);
+    assert.equal(tables.vault_settlements[0].payout_hash, expected.hash);
+
+    const settlementId = proposed.data.settlement.id;
+    const bExecute = await call(env, 'POST', '/api/settlements/' + settlementId + '/execute', { signature: paySig }, tokenB);
+    assert.equal(bExecute.status, 403);
+    const missingTx = await call(env, 'POST', '/api/settlements/' + settlementId + '/execute', { signature: paySig }, tokenA);
+    assert.equal(missingTx.status, 400);
+    assert.match(missingTx.data.error, /no vault transaction/);
+
+    const txIndex = 4n;
+    tables.vault_settlements[0].tx_index = '4';
+    const transactionPda = await squadsTransactionAddress(multisig, txIndex);
+    const proposalPda = await squadsProposalAddress(multisig, txIndex);
+    const vaultAta = await associatedTokenAddress(vaultAddress, mint, TOKEN_PROGRAM);
+    const holderAta = await associatedTokenAddress(holder.publicKey, mint, TOKEN_PROGRAM);
+    const payoutTx = {
+      meta: {
+        err: null,
+        logMessages: ['Program log: Instruction: VaultTransactionExecute'],
+        innerInstructions: [],
+      },
+      transaction: {
+        message: {
+          accountKeys: [SQUADS_PROGRAM, multisig, transactionPda, proposalPda],
+          instructions: [{
+            program: 'spl-token',
+            parsed: {
+              type: 'transferChecked',
+              info: {
+                source: vaultAta,
+                destination: holderAta,
+                mint,
+                authority: vaultAddress,
+                tokenAmount: { amount: expected.payouts[0].amountRaw, decimals: 6 },
+              },
+            },
+          }],
+        },
+      },
+    };
+    const originalFetch = env.fetch;
+    env.fetch = async (url, opts = {}) => {
+      const u = new URL(url);
+      if (u.hostname === 'rpc.test') {
+        const payload = JSON.parse(opts.body);
+        if (payload.method === 'getTransaction') {
+          const sig = payload.params[0];
+          return Response.json({ jsonrpc: '2.0', id: 1, result: sig === paySig ? payoutTx : null });
+        }
+      }
+      return originalFetch(url, opts);
+    };
+
+    const paid = await call(env, 'POST', '/api/settlements/' + settlementId + '/execute', { signature: paySig }, tokenA);
+    assert.equal(paid.status, 200, JSON.stringify(paid.data));
+    assert.equal(paid.data.settlement.status, 'executed');
+    assert.equal(paid.data.settlement.tx_signature, paySig);
+    assert.equal(tables.campaign_joins[0].qualified, true);
+    assert.equal(tables.platform_claims.length, 1);
+    assert.equal(tables.platform_claims[0].wallet, holder.publicKey);
+    assert.equal(tables.platform_claims[0].settled, true);
+    assert.equal(tables.vault_reservations[0].status, 'settled');
+    assert.equal(tables.projects[0].vault_reserved, '1');
+    const again = await call(env, 'POST', '/api/settlements/' + settlementId + '/execute', { signature: paySig }, tokenA);
+    assert.equal(again.status, 200);
+    assert.equal(again.data.settlement.status, 'executed');
+    const reused = await call(env, 'POST', '/api/settlements/' + settlementId + '/execute', { signature: otherSig }, tokenA);
+    assert.equal(reused.status, 400);
+    assert.match(reused.data.error, /closed/);
+
+    const committed = await call(env, 'POST', '/api/campaigns/' + campaign.id + '/draw/commit', { topN: 1 }, tokenA);
+    assert.equal(committed.status, 200, JSON.stringify(committed.data));
+    assert.equal(Number(tables.campaigns[0].draw_slot), 1150);
+    assert.equal(Number(tables.campaigns[0].draw_count), 1);
+    const secondCommit = await call(env, 'POST', '/api/campaigns/' + campaign.id + '/draw/commit', { topN: 2 }, tokenA);
+    assert.equal(secondCommit.status, 400);
+    assert.match(secondCommit.data.error, /already committed/);
+    const early = await call(env, 'POST', '/api/campaigns/' + campaign.id + '/draw/finalize', {}, tokenA);
+    assert.equal(early.status, 400);
+    assert.match(early.data.error, /not final yet/);
+    chain.slot = 1152;
+    const finalized = await call(env, 'POST', '/api/campaigns/' + campaign.id + '/draw/finalize', {}, tokenA);
+    assert.equal(finalized.status, 200, JSON.stringify(finalized.data));
+    assert.equal(tables.campaigns[0].draw_seed, 'SeedHashFromNextSlot');
+    assert.equal(Number(tables.campaigns[0].draw_seed_slot), 1151);
+    assert.equal(tables.campaigns[0].draw_winners.length, 1);
+    assert.equal(tables.campaigns[0].draw_winners[0].wallet, holder.publicKey);
+    const secondFinal = await call(env, 'POST', '/api/campaigns/' + campaign.id + '/draw/finalize', {}, tokenA);
+    assert.equal(secondFinal.status, 400);
+    assert.match(secondFinal.data.error, /already finalized/);
+    const bFinal = await call(env, 'POST', '/api/campaigns/' + campaign.id + '/draw/finalize', {}, tokenB);
+    assert.equal(bFinal.status, 403);
   } finally {
     restore();
   }

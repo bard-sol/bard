@@ -930,6 +930,8 @@ h1{
           return '<div class="item" style="padding:8px 0"><span class="muted num" style="width:24px">'+(i+1)+'</span><div class="item__body"><div class="item__title" style="font-size:.94rem">'+(you?'You · ':'')+BardPlatform.escapeHtml(shortAddr(w.wallet||w))+'</div></div></div>';
         }).join('');
         html += '<div class="draw-seed">Seed '+BardPlatform.escapeHtml(c.drawSeed)+'</div>';
+      } else if (c.drawSlot) {
+        html += '<p class="muted" style="margin:6px 0 0;font-size:.86rem">Committed to Solana slot '+BardPlatform.escapeHtml(String(c.drawSlot))+'. Winners stay hidden until that slot is final, then the blockhash is the seed.</p>';
       } else {
         html += '<p class="muted" style="margin:6px 0 0;font-size:.86rem">Team hits Draw. A Solana blockhash seeds the shuffle. You see the seed here.</p>';
       }

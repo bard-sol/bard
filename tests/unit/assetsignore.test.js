@@ -56,6 +56,7 @@ test('assetsignore serves page assets and hides dev files', () => {
     'wrangler.toml',
     'server/api.js',
     'scripts/m2-two-wallet-check.mjs',
+    'vault-src/src/index.js',
     'playwright.config.js',
   ];
   for (const file of hidden) assert.equal(ig.ignores(file), true, file + ' must not be served');
