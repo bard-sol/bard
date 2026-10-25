@@ -1,13 +1,16 @@
 import assert from 'node:assert/strict';
-import { createHash } from 'node:crypto';
+import { createHash, createHmac } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import nacl from 'tweetnacl';
 import bs58 from 'bs58';
 import worker from '../../auth-worker.js';
+import { signJwt } from '../../server/auth.js';
 import { handleXOauth, normalizeXHandle } from '../../server/x_oauth.js';
 
 const NOW = Date.parse('2026-10-25T16:00:00.000Z');
 const SECRET = 'state-secret-state-secret-state-secret';
+const JWT_SECRET = 'jwt-secret-jwt-secret-jwt-secret-jwt';
 
 function wallet() {
   return bs58.encode(nacl.sign.keyPair().publicKey);
@@ -30,10 +33,29 @@ function oauthEnv(impl) {
     X_CLIENT_ID: 'test-client',
     X_CLIENT_SECRET: 'test-secret',
     X_OAUTH_STATE_SECRET: SECRET,
+    SUPABASE_JWT_SECRET: JWT_SECRET,
     SUPABASE_URL: 'http://supabase.test',
     SUPABASE_SERVICE_ROLE_KEY: 'service-role-test',
     fetch: impl,
   };
+}
+
+function decodePayload(token) {
+  const body = String(token || '').split('.')[0];
+  return JSON.parse(Buffer.from(body, 'base64url').toString('utf8'));
+}
+
+function derivedVerifier(nonce) {
+  return createHmac('sha256', SECRET).update('pkce:' + nonce).digest('base64url');
+}
+
+async function bearer(addr, now = NOW) {
+  const signed = await signJwt(JWT_SECRET, addr, now);
+  return { authorization: 'Bearer ' + signed.token };
+}
+
+function holderWrites(calls) {
+  return calls.filter((call) => call.href === 'http://supabase.test/rest/v1/holders');
 }
 
 function scriptedFetch(routes) {
@@ -74,9 +96,53 @@ function xRoutes({ username = 'real_user', tokenStatus = 200, meStatus = 200, wr
   };
 }
 
-async function start(env, addr, now = NOW) {
-  const res = await handleXOauth(new Request('http://auth.test/auth/x/start?wallet=' + encodeURIComponent(addr)), env, now);
+async function start(env, addr, now = NOW, queryWallet = '') {
+  const url = new URL('http://auth.test/auth/x/start');
+  if (queryWallet) url.searchParams.set('wallet', queryWallet);
+  const res = await handleXOauth(new Request(url, { headers: await bearer(addr, now) }), env, now);
   const data = await res.json();
+  return { res, data };
+}
+
+async function runCallback(env, authUrl, now) {
+  const callback = new URL('http://auth.test/auth/x/callback');
+  callback.searchParams.set('code', 'auth-code');
+  callback.searchParams.set('state', new URL(authUrl).searchParams.get('state'));
+  callback.searchParams.set('handle', '@attacker');
+  callback.searchParams.set('code_verifier', 'attacker-verifier');
+  return handleXOauth(new Request(callback), env, now);
+}
+
+function xlinkFrom(res) {
+  assert.equal(res.status, 302);
+  const loc = new URL(res.headers.get('location'));
+  assert.equal(loc.origin, 'https://bard.is');
+  assert.equal(loc.pathname, '/dashboard.html');
+  assert.equal(loc.search, '');
+  assert.equal(loc.hash.startsWith('#xlink='), true);
+  const token = new URLSearchParams(loc.hash.slice(1)).get('xlink');
+  assert.ok(token);
+  return { loc, token };
+}
+
+function assertError(res) {
+  assert.equal(res.status, 302);
+  const loc = new URL(res.headers.get('location'));
+  assert.equal(loc.searchParams.get('auth'), 'error');
+  assert.equal(loc.hash, '');
+  return loc;
+}
+
+async function confirm(env, addr, token, now) {
+  const headers = await bearer(addr, now);
+  headers['content-type'] = 'application/json';
+  const res = await handleXOauth(new Request('http://auth.test/auth/x/confirm', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ token }),
+  }), env, now);
+  let data = null;
+  try { data = await res.json(); } catch { data = null; }
   return { res, data };
 }
 
@@ -89,62 +155,116 @@ test('normalizeXHandle accepts an X username and rejects anything else', () => {
   assert.equal(normalizeXHandle('@'), null);
 });
 
-test('the auth callback writes the X username with the service key and ignores the query handle', async () => {
+test('start requires the wallet JWT and ignores the query wallet', async () => {
   const restore = installFetchGuard();
   try {
-    const addr = wallet();
+    const addrA = wallet();
+    const addrB = wallet();
     const { env, calls } = scriptedFetch(xRoutes());
-    const started = await start(env, addr);
+    const none = await handleXOauth(new Request('http://auth.test/auth/x/start?wallet=' + addrA), env, NOW);
+    assert.equal(none.status, 401);
+    const bad = await handleXOauth(new Request('http://auth.test/auth/x/start', {
+      headers: { authorization: 'Bearer not-a-jwt' },
+    }), env, NOW);
+    assert.equal(bad.status, 401);
+    const wrongKey = await signJwt(SECRET, addrA, NOW);
+    const wrong = await handleXOauth(new Request('http://auth.test/auth/x/start', {
+      headers: { authorization: 'Bearer ' + wrongKey.token },
+    }), env, NOW);
+    assert.equal(wrong.status, 401);
+    assert.equal(calls.length, 0);
+
+    const started = await start(env, addrA, NOW, addrB);
     assert.equal(started.res.status, 200);
     assert.equal(started.res.headers.get('access-control-allow-origin'), 'https://bard.is');
-    assert.equal(calls.length, 0);
+    assert.deepEqual(Object.keys(started.data), ['authUrl']);
     const authUrl = new URL(started.data.authUrl);
     assert.equal(authUrl.origin, 'https://x.com');
     assert.equal(authUrl.pathname, '/i/oauth2/authorize');
     assert.equal(authUrl.searchParams.get('code_challenge_method'), 'S256');
-    assert.equal(authUrl.searchParams.get('code_challenge'), s256(started.data.codeVerifier));
+    assert.equal(authUrl.searchParams.get('scope'), 'tweet.read users.read');
     assert.equal(authUrl.searchParams.get('redirect_uri'), 'https://bard-auth.bardsoltoken.workers.dev/auth/x/callback');
     assert.equal(authUrl.searchParams.get('client_id'), 'test-client');
+    const state = decodePayload(authUrl.searchParams.get('state'));
+    assert.equal(state.typ, 'xstate');
+    assert.equal(state.wallet, addrA);
+    assert.equal(state.wallet === addrB, false);
+    assert.equal(state.cv, undefined);
+    const verifier = derivedVerifier(state.nonce);
+    assert.equal(authUrl.searchParams.get('code_challenge'), s256(verifier));
+    assert.equal(JSON.stringify(state).includes(verifier), false);
+    assert.equal(JSON.stringify(started.data).includes(verifier), false);
+  } finally {
+    restore();
+  }
+});
+
+test('the callback does not write, and confirm writes only for the same wallet', async () => {
+  const restore = installFetchGuard();
+  try {
+    const addrA = wallet();
+    const addrB = wallet();
+    const when = NOW + 60 * 1000;
+    const { env, calls } = scriptedFetch(xRoutes());
+    const started = await start(env, addrA, NOW, addrB);
+    const stateToken = new URL(started.data.authUrl).searchParams.get('state');
+    const res = await runCallback(env, started.data.authUrl, when);
+    const linked = xlinkFrom(res);
+    const xlink = decodePayload(linked.token);
+    assert.equal(xlink.typ, 'xlink');
+    assert.equal(xlink.wallet, addrA);
+    assert.equal(xlink.handle, '@real_user');
+    assert.equal(holderWrites(calls).length, 0);
+
+    const naked = await handleXOauth(new Request('http://auth.test/auth/x/confirm', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ token: linked.token }),
+    }), env, when);
+    assert.equal(naked.status, 401);
+    const other = await confirm(env, addrB, linked.token, when);
+    assert.equal(other.res.status, 403);
+    const asLink = await confirm(env, addrA, stateToken, when);
+    assert.equal(asLink.res.status, 400);
+    assert.equal(holderWrites(calls).length, 0);
 
     const callback = new URL('http://auth.test/auth/x/callback');
     callback.searchParams.set('code', 'auth-code');
-    callback.searchParams.set('state', authUrl.searchParams.get('state'));
-    callback.searchParams.set('handle', '@attacker');
-    callback.searchParams.set('code_verifier', 'attacker-verifier');
-    const res = await handleXOauth(new Request(callback), env, NOW + 60 * 1000);
-    assert.equal(res.status, 302);
-    const loc = new URL(res.headers.get('location'));
-    assert.equal(loc.origin, 'https://bard.is');
-    assert.equal(loc.pathname, '/dashboard.html');
-    assert.equal(loc.searchParams.get('auth'), 'success');
-    assert.equal(loc.searchParams.get('handle'), '@real_user');
-    assert.equal(loc.searchParams.get('wallet'), addr);
+    callback.searchParams.set('state', linked.token);
+    const reused = await handleXOauth(new Request(callback), env, when);
+    assertError(reused);
+    assert.equal(holderWrites(calls).length, 0);
 
+    const right = await confirm(env, addrA, linked.token, when);
+    assert.equal(right.res.status, 200);
+    assert.equal(right.data.handle, '@real_user');
     const token = calls.find((call) => call.href === 'https://api.x.com/2/oauth2/token');
     const me = calls.find((call) => call.href === 'https://api.x.com/2/users/me');
-    const write = calls.find((call) => call.href === 'http://supabase.test/rest/v1/holders');
+    const write = holderWrites(calls);
+    assert.equal(write.length, 1);
     assert.equal(token.method, 'POST');
     assert.match(token.headers.authorization, /^Basic /);
     assert.equal(token.headers.authorization.includes('service-role-test'), false);
     const form = new URLSearchParams(token.body);
     assert.equal(form.get('code'), 'auth-code');
-    assert.equal(form.get('code_verifier'), started.data.codeVerifier);
+    assert.equal(form.get('code_verifier'), derivedVerifier(decodePayload(stateToken).nonce));
     assert.equal(form.get('code_verifier') === 'attacker-verifier', false);
     assert.equal(form.get('grant_type'), 'authorization_code');
     assert.equal(me.headers.authorization, 'Bearer x-access-token');
-    assert.equal(write.method, 'POST');
-    assert.equal(write.search, '?on_conflict=wallet');
-    assert.equal(write.headers.authorization, 'Bearer service-role-test');
-    assert.equal(write.headers.apikey, 'service-role-test');
-    assert.match(write.headers.prefer, /resolution=merge-duplicates/);
-    const row = JSON.parse(write.body);
+    assert.equal(write[0].method, 'POST');
+    assert.equal(write[0].search, '?on_conflict=wallet');
+    assert.equal(write[0].headers.authorization, 'Bearer service-role-test');
+    assert.equal(write[0].headers.apikey, 'service-role-test');
+    assert.match(write[0].headers.prefer, /resolution=merge-duplicates/);
+    const row = JSON.parse(write[0].body);
     assert.deepEqual(Object.keys(row).sort(), ['wallet', 'x_handle', 'x_linked_at', 'x_via']);
-    assert.equal(row.wallet, addr);
+    assert.equal(row.wallet, addrA);
     assert.equal(row.x_handle, '@real_user');
     assert.equal(row.x_via, 'oauth');
-    assert.equal(row.x_linked_at, new Date(NOW + 60 * 1000).toISOString());
+    assert.equal(row.x_linked_at, new Date(when).toISOString());
     assert.equal(JSON.stringify(row).includes('@attacker'), false);
     assert.equal(JSON.stringify(row).includes('x-access-token'), false);
+    assert.equal(row.wallet === addrB, false);
   } finally {
     restore();
   }
@@ -164,7 +284,7 @@ test('a bad state, a bad username, or a failed X exchange does not write a handl
     const badWallet = await handleXOauth(new Request('http://auth.test/auth/x/start?wallet=not-a-wallet'), oauthEnv(async () => {
       throw new Error('fetch should not run');
     }), NOW);
-    assert.equal(badWallet.status, 400);
+    assert.equal(badWallet.status, 401);
 
     const expiredFetch = scriptedFetch(xRoutes());
     const expiredStart = await start(expiredFetch.env, addr, NOW - 11 * 60 * 1000);
@@ -173,8 +293,7 @@ test('a bad state, a bad username, or a failed X exchange does not write a handl
     expiredCallback.searchParams.set('code', 'auth-code');
     expiredCallback.searchParams.set('state', expiredUrl.searchParams.get('state'));
     const expired = await handleXOauth(new Request(expiredCallback), expiredFetch.env, NOW);
-    assert.equal(expired.status, 302);
-    assert.equal(new URL(expired.headers.get('location')).searchParams.get('auth'), 'error');
+    assertError(expired);
     assert.equal(expiredFetch.calls.length, 0);
 
     const tamperFetch = scriptedFetch(xRoutes());
@@ -186,7 +305,7 @@ test('a bad state, a bad username, or a failed X exchange does not write a handl
     tamperCallback.searchParams.set('state', flipped);
     tamperCallback.searchParams.set('handle', '@attacker');
     const tampered = await handleXOauth(new Request(tamperCallback), tamperFetch.env, NOW);
-    assert.equal(new URL(tampered.headers.get('location')).searchParams.get('auth'), 'error');
+    assertError(tampered);
     assert.equal(tamperFetch.calls.some((call) => call.href.endsWith('/holders')), false);
 
     const badName = scriptedFetch(xRoutes({ username: 'not a handle' }));
@@ -195,22 +314,45 @@ test('a bad state, a bad username, or a failed X exchange does not write a handl
     nameCallback.searchParams.set('code', 'auth-code');
     nameCallback.searchParams.set('state', new URL(named.data.authUrl).searchParams.get('state'));
     const rejected = await handleXOauth(new Request(nameCallback), badName.env, NOW);
-    assert.equal(new URL(rejected.headers.get('location')).searchParams.get('auth'), 'error');
+    assertError(rejected);
     assert.equal(badName.calls.some((call) => call.href.endsWith('/holders')), false);
 
     const failedWrite = scriptedFetch(xRoutes({ writeStatus: 500 }));
     const wrote = await start(failedWrite.env, addr);
-    const writeCallback = new URL('http://auth.test/auth/x/callback');
-    writeCallback.searchParams.set('code', 'auth-code');
-    writeCallback.searchParams.set('state', new URL(wrote.data.authUrl).searchParams.get('state'));
-    const failed = await handleXOauth(new Request(writeCallback), failedWrite.env, NOW);
-    assert.equal(new URL(failed.headers.get('location')).searchParams.get('auth'), 'error');
+    const failedCallback = await runCallback(failedWrite.env, wrote.data.authUrl, NOW);
+    assert.equal(holderWrites(failedWrite.calls).length, 0);
+    const failedLink = xlinkFrom(failedCallback);
+    const failed = await confirm(failedWrite.env, addr, failedLink.token, NOW);
+    assert.equal(failed.res.status, 502);
+    assert.equal(failed.data.ok, undefined);
 
     const viaWorker = await worker.fetch(new Request('http://auth.test/nope'), oauthEnv(async () => {
       throw new Error('fetch should not run');
     }));
     assert.equal(viaWorker.status, 404);
+
+    const lateFetch = scriptedFetch(xRoutes());
+    const lateStart = await start(lateFetch.env, addr, NOW);
+    const lateCallback = await runCallback(lateFetch.env, lateStart.data.authUrl, NOW);
+    const lateLink = xlinkFrom(lateCallback);
+    const late = await confirm(lateFetch.env, addr, lateLink.token, NOW + 11 * 60 * 1000);
+    assert.equal(late.res.status, 400);
+    assert.equal(holderWrites(lateFetch.calls).length, 0);
   } finally {
     restore();
   }
+});
+
+test('the dashboard sends the session token and confirms the fragment', () => {
+  const html = readFileSync(new URL('../../dashboard.html', import.meta.url), 'utf8');
+  const platform = readFileSync(new URL('../../platform.js', import.meta.url), 'utf8');
+  assert.match(platform, /getSessionToken: function \(\) \{ return sessionToken; \}/);
+  assert.match(html, /BardPlatform\.getSessionToken\(\)/);
+  assert.match(html, /Authorization: 'Bearer ' \+ token/);
+  assert.match(html, /Authorization: 'Bearer ' \+ session/);
+  assert.match(html, /\/auth\/x\/confirm/);
+  assert.match(html, /xlinkTokenFromHash/);
+  assert.equal(html.includes('bard_cv'), false);
+  assert.equal(html.includes('/auth/x/start?wallet='), false);
+  assert.equal(html.includes("params.get('handle')"), false);
 });

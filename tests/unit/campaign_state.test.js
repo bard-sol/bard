@@ -625,6 +625,7 @@ test('a manual handle is not published and an oauth handle is', async () => {
     const hidden = keypair();
     const plain = keypair();
     const shouted = keypair();
+    const stale = keypair();
     const { env } = createEnv({
       campaigns: [campaignRow()],
       projects: [projectRow(mint, vault)],
@@ -634,6 +635,7 @@ test('a manual handle is not published and an oauth handle is', async () => {
         { campaign_id: CID, wallet: hidden, qualified: false, status: 'approved', progress: 3 },
         { campaign_id: CID, wallet: plain, qualified: false, status: 'approved', progress: 2 },
         { campaign_id: CID, wallet: shouted, qualified: false, status: 'approved', progress: 1 },
+        { campaign_id: CID, wallet: stale, qualified: false, status: 'approved', progress: 1 },
       ],
       holders: [
         { wallet: manual, x_handle: '@stranger', x_via: 'manual', show_handle: true },
@@ -641,6 +643,7 @@ test('a manual handle is not published and an oauth handle is', async () => {
         { wallet: hidden, x_handle: '@secret', x_via: 'oauth', show_handle: false },
         { wallet: plain, x_handle: '@typed', show_handle: true },
         { wallet: shouted, x_handle: '@loud', x_via: 'OAUTH', show_handle: 'true' },
+        { wallet: stale, x_handle: '@stale', x_via: 'unverified', show_handle: true },
       ],
     });
     const body = await buildCampaignState(env, CID, NOW, async () => ({ raw: '0', decimals: 6, tokenProgram: TOKEN_PROGRAM }));
@@ -650,8 +653,9 @@ test('a manual handle is not published and an oauth handle is', async () => {
     assert.equal(byHash.get(sha256Hex(hidden)), null);
     assert.equal(byHash.get(sha256Hex(plain)), null);
     assert.equal(byHash.get(sha256Hex(shouted)), null);
+    assert.equal(byHash.get(sha256Hex(stale)), null);
     const dumped = JSON.stringify(body);
-    for (const secret of ['@stranger', '@secret', '@typed', '@loud', manual, oauth, hidden, plain, shouted]) {
+    for (const secret of ['@stranger', '@secret', '@typed', '@loud', '@stale', manual, oauth, hidden, plain, shouted, stale]) {
       assert.equal(dumped.includes(secret), false, secret);
     }
     assert.equal(dumped.includes('@real'), true);

@@ -1,4 +1,4 @@
-import { b64urlDecode, b64urlEncode, isBase58Address } from './auth.js';
+import { b64urlDecode, b64urlEncode, isBase58Address, verifyJwt } from './auth.js';
 
 const textEncoder = new TextEncoder();
 const STATE_TTL_MS = 10 * 60 * 1000;
@@ -89,10 +89,20 @@ function failRedirect(env) {
   }
 }
 
-function randomVerifier() {
+function bearerToken(request) {
+  const header = request.headers.get('authorization') || '';
+  const match = /^Bearer\s+(\S+)\s*$/i.exec(header);
+  return match ? match[1] : '';
+}
+
+function randomNonce() {
   const bytes = new Uint8Array(32);
   crypto.getRandomValues(bytes);
   return b64urlEncode(bytes);
+}
+
+async function pkceVerifier(secret, nonce) {
+  return b64urlEncode(await hmacSign(secret, 'pkce:' + nonce));
 }
 
 async function codeChallenge(verifier) {
@@ -106,9 +116,9 @@ async function signState(secret, payload) {
   return body + '.' + sig;
 }
 
-export async function readXState(secret, state, now = Date.now()) {
+async function readSigned(secret, token) {
   if (!secret) return { ok: false };
-  const parts = String(state || '').split('.');
+  const parts = String(token || '').split('.');
   if (parts.length !== 2 || !parts[0] || !parts[1]) return { ok: false };
   const expected = await hmacSign(secret, parts[0]);
   let got;
@@ -116,12 +126,37 @@ export async function readXState(secret, state, now = Date.now()) {
   if (!timingSafeEqual(expected, got)) return { ok: false };
   let payload;
   try { payload = JSON.parse(new TextDecoder().decode(b64urlDecode(parts[0]))); } catch { return { ok: false }; }
-  if (!payload || payload.v !== 1 || !isBase58Address(payload.wallet)) return { ok: false };
-  if (typeof payload.ts !== 'number' || typeof payload.cv !== 'string') return { ok: false };
-  if (payload.cv.length < 43 || payload.cv.length > 128) return { ok: false };
-  if (payload.ts - now > 60 * 1000) return { ok: false };
-  if (now - payload.ts > STATE_TTL_MS) return { ok: false };
+  if (!payload || typeof payload !== 'object') return { ok: false };
   return { ok: true, payload };
+}
+
+function freshTimestamp(ts, now) {
+  if (typeof ts !== 'number' || !Number.isFinite(ts)) return false;
+  if (ts - now > 60 * 1000) return false;
+  if (now - ts > STATE_TTL_MS) return false;
+  return true;
+}
+
+export async function readXState(secret, state, now = Date.now()) {
+  const read = await readSigned(secret, state);
+  if (!read.ok) return { ok: false };
+  const payload = read.payload;
+  // typ separates this from an xlink token. The verifier is not stored here.
+  if (payload.v !== 1 || payload.typ !== 'xstate' || !isBase58Address(payload.wallet)) return { ok: false };
+  if (typeof payload.nonce !== 'string' || !/^[A-Za-z0-9_-]{43,128}$/.test(payload.nonce)) return { ok: false };
+  if (!freshTimestamp(payload.ts, now)) return { ok: false };
+  return { ok: true, payload };
+}
+
+export async function readXLink(secret, token, now = Date.now()) {
+  const read = await readSigned(secret, token);
+  if (!read.ok) return { ok: false };
+  const payload = read.payload;
+  if (payload.typ !== 'xlink' || !isBase58Address(payload.wallet)) return { ok: false };
+  const handle = normalizeXHandle(payload.handle);
+  if (!handle || handle !== payload.handle) return { ok: false };
+  if (!freshTimestamp(payload.ts, now)) return { ok: false };
+  return { ok: true, payload: { typ: 'xlink', wallet: payload.wallet, handle, ts: payload.ts } };
 }
 
 export async function writeVerifiedHandle(env, wallet, handle, now = new Date()) {
@@ -180,25 +215,35 @@ async function fetchUsername(env, accessToken) {
 }
 
 export async function handleXStart(request, env, now = Date.now()) {
-  const url = new URL(request.url);
-  const wallet = url.searchParams.get('wallet') || '';
-  if (!isBase58Address(wallet)) return json({ error: 'invalid wallet' }, 400);
   const secret = stateSecret(env);
-  if (!secret || !env.X_CLIENT_ID) return json({ error: 'x oauth is not configured' }, 503);
+  const jwtSecret = env.SUPABASE_JWT_SECRET || '';
+  if (!secret || !jwtSecret || !env.X_CLIENT_ID) return json({ error: 'x oauth is not configured' }, 503);
   let redirectUri;
   try { redirectUri = redirectUriOf(env); } catch { return json({ error: 'x oauth is not configured' }, 503); }
-  const verifier = randomVerifier();
+  // The wallet comes from the Bard session. A ?wallet= query is ignored.
+  const claims = await verifyJwt(jwtSecret, bearerToken(request), now);
+  if (!claims) return json({ error: 'sign in required' }, 401);
+  const wallet = claims.wallet;
+  const nonce = randomNonce();
+  const verifier = await pkceVerifier(secret, nonce);
   const challenge = await codeChallenge(verifier);
-  const state = await signState(secret, { v: 1, wallet, ts: now, cv: verifier });
+  const state = await signState(secret, { v: 1, typ: 'xstate', wallet, ts: now, nonce });
   const auth = new URL(X_AUTHORIZE);
   auth.searchParams.set('response_type', 'code');
   auth.searchParams.set('client_id', env.X_CLIENT_ID);
   auth.searchParams.set('redirect_uri', redirectUri);
-  auth.searchParams.set('scope', 'tweet.read users.read offline.access');
+  auth.searchParams.set('scope', 'tweet.read users.read');
   auth.searchParams.set('state', state);
   auth.searchParams.set('code_challenge', challenge);
   auth.searchParams.set('code_challenge_method', 'S256');
-  return json({ authUrl: auth.toString(), codeVerifier: verifier });
+  return json({ authUrl: auth.toString() });
+}
+
+function xlinkRedirect(env, token) {
+  const url = new URL('/dashboard.html', appOrigin(env));
+  // Fragment, not query: the handle must not land in a server log or a Referer.
+  url.hash = 'xlink=' + token;
+  return Response.redirect(url.toString(), 302);
 }
 
 export async function handleXCallback(request, env, now = Date.now()) {
@@ -207,23 +252,46 @@ export async function handleXCallback(request, env, now = Date.now()) {
   const stateToken = url.searchParams.get('state') || '';
   try {
     const secret = stateSecret(env);
-    if (!secret || !env.X_CLIENT_ID || !env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) return failRedirect(env);
+    if (!secret || !env.X_CLIENT_ID) return failRedirect(env);
     const read = await readXState(secret, stateToken, now);
     if (!read.ok || !code) return failRedirect(env);
-    const accessToken = await exchangeCode(env, code, read.payload.cv);
+    const verifier = await pkceVerifier(secret, read.payload.nonce);
+    const accessToken = await exchangeCode(env, code, verifier);
     if (!accessToken) return failRedirect(env);
     const username = await fetchUsername(env, accessToken);
     const handle = normalizeXHandle(username);
     if (!handle) return failRedirect(env);
-    // The handle comes from X. A handle in the query string is ignored.
-    await writeVerifiedHandle(env, read.payload.wallet, handle, new Date(now));
-    return Response.redirect(dashboardUrl(env, {
-      auth: 'success',
-      handle,
+    // Do not write here. Whoever approved on X may not own this wallet.
+    const xlink = await signState(secret, {
+      typ: 'xlink',
       wallet: read.payload.wallet,
-    }), 302);
+      handle,
+      ts: now,
+    });
+    return xlinkRedirect(env, xlink);
   } catch {
     return failRedirect(env);
+  }
+}
+
+export async function handleXConfirm(request, env, now = Date.now()) {
+  const secret = stateSecret(env);
+  const jwtSecret = env.SUPABASE_JWT_SECRET || '';
+  if (!secret || !jwtSecret || !env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) {
+    return json({ error: 'x oauth is not configured' }, 503);
+  }
+  const claims = await verifyJwt(jwtSecret, bearerToken(request), now);
+  if (!claims) return json({ error: 'sign in required' }, 401);
+  let body;
+  try { body = await request.json(); } catch { return json({ error: 'invalid token' }, 400); }
+  const read = await readXLink(secret, body && body.token, now);
+  if (!read.ok) return json({ error: 'invalid token' }, 400);
+  if (read.payload.wallet !== claims.wallet) return json({ error: 'wallet mismatch' }, 403);
+  try {
+    const written = await writeVerifiedHandle(env, claims.wallet, read.payload.handle, new Date(now));
+    return json({ ok: true, handle: written.x_handle });
+  } catch {
+    return json({ error: 'holder write failed' }, 502);
   }
 }
 
@@ -233,5 +301,6 @@ export async function handleXOauth(request, env, now = Date.now()) {
   if (method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
   if (url.pathname === '/auth/x/start' && method === 'GET') return handleXStart(request, env, now);
   if (url.pathname === '/auth/x/callback' && method === 'GET') return handleXCallback(request, env, now);
+  if (url.pathname === '/auth/x/confirm' && method === 'POST') return handleXConfirm(request, env, now);
   return new Response('not found', { status: 404, headers: CORS });
 }

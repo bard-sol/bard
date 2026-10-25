@@ -1053,7 +1053,9 @@
   function linkedXHandle(holder) {
     if (!holder || !holder.x_handle) return null;
     if (holder.x_via === 'oauth') return String(holder.x_handle);
-    if (holder.x_via == null && holder.x_linked_at == null) return String(holder.x_handle);
+    // Local mode stores a typed handle with both fields empty. A database row
+    // in that shape was not proved, so it must not open a needsX join.
+    if (mode !== 'supabase' && holder.x_via == null && holder.x_linked_at == null) return String(holder.x_handle);
     return null;
   }
 
@@ -1523,6 +1525,7 @@
     signIn: signIn,
     signOut: signOut,
     getSessionWallet: function () { return sessionWallet; },
+    getSessionToken: function () { return sessionToken; },
     isPremiumType: isPremiumType,
     isPremiumReward: isPremiumReward,
     isPremiumPlan: isPremiumPlan,

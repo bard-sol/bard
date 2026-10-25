@@ -61,8 +61,12 @@ function memoryClient(tables) {
   };
 }
 
-function loadPlatform(client) {
+function loadPlatform(client, sessionItems) {
   const store = new Map();
+  const session = new Map();
+  if (sessionItems) {
+    for (const [key, value] of Object.entries(sessionItems)) session.set(key, value);
+  }
   const sandbox = {
     console,
     URL,
@@ -88,6 +92,11 @@ function loadPlatform(client) {
       getItem(key) { return store.has(key) ? store.get(key) : null; },
       setItem(key, value) { store.set(key, String(value)); },
       removeItem(key) { store.delete(key); },
+    },
+    sessionStorage: {
+      getItem(key) { return session.has(key) ? session.get(key) : null; },
+      setItem(key, value) { session.set(key, String(value)); },
+      removeItem(key) { session.delete(key); },
     },
     document: {
       querySelector() { return null; },
@@ -223,4 +232,24 @@ test('only an oauth handle counts as linked when the row came from the database'
   assert.equal(BP.linkedXHandle({ x_handle: '@local', x_via: null, x_linked_at: null }), '@local');
   assert.equal(BP.linkedXHandle({ x_handle: '@old', x_via: null, x_linked_at: LINKED_AT }), null);
   assert.equal(BP.linkedXHandle(null), null);
+});
+
+test('supabase mode does not treat an empty x_via as a linked handle', async () => {
+  const BP = loadPlatform(memoryClient({ projects: [{ id: 'p' }] }));
+  await BP.init();
+  assert.equal(BP.getMode(), 'supabase');
+  assert.equal(BP.linkedXHandle({ x_handle: '@local', x_via: null, x_linked_at: null }), null);
+  assert.equal(BP.linkedXHandle({ x_handle: '@old', x_via: 'unverified', x_linked_at: LINKED_AT }), null);
+  assert.equal(BP.linkedXHandle({ x_handle: '@a', x_via: 'oauth', x_linked_at: LINKED_AT }), '@a');
+});
+
+test('getSessionToken returns the saved Bard session', async () => {
+  const exp = Math.floor(Date.now() / 1000) + 3600;
+  const sessionWallet = 'Wallet111111111111111111111111111111111';
+  const BP = loadPlatform(memoryClient({ projects: [{ id: 'p' }] }), {
+    bard_session: JSON.stringify({ token: 'jwt-token', wallet: sessionWallet, exp }),
+  });
+  await BP.init();
+  assert.equal(BP.getSessionToken(), 'jwt-token');
+  assert.equal(BP.getSessionWallet(), sessionWallet);
 });
