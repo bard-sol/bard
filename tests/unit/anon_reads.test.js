@@ -110,8 +110,17 @@ async function makeCampaign(db, admin, projectId, title) {
 }
 
 async function hold(db, wallet, handle, via) {
+  // x_handle and x_via are service-role columns after the verified-X migration.
   await withRole(db, 'authenticated', wallet, () => db.query(
-    `INSERT INTO public.holders (wallet, x_handle, x_via) VALUES ($1, $2, $3)`,
+    `INSERT INTO public.holders (wallet) VALUES ($1)`,
+    [wallet]
+  ));
+  await withRole(db, 'service_role', '', () => db.query(
+    `UPDATE public.holders
+        SET x_handle = $2,
+            x_via = $3,
+            x_linked_at = CASE WHEN $3 = 'oauth' THEN now() ELSE NULL END
+      WHERE wallet = $1`,
     [wallet, handle, via]
   ));
 }
