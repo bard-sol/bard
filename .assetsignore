@@ -3,6 +3,7 @@ wrangler.toml
 auth-worker.js
 wrangler.auth.toml
 .assetsignore
+.git
 .git/
 .claude/
 .wrangler/
