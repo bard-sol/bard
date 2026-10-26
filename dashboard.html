@@ -269,7 +269,7 @@ h1{
       <button type="button" class="is-on" data-page="overview">Overview</button>
       <button type="button" data-page="mine">My campaigns</button>
       <button type="button" data-page="explore">Explore</button>
-      <button type="button" data-page="claims">Claims</button>
+      <button type="button" data-page="claims">Payouts</button>
     </nav>
     <div class="side__foot">
       <button class="btn btn--ghost btn--sm" style="width:100%" id="btn-disc">Disconnect</button>
@@ -293,10 +293,10 @@ h1{
       <section class="page is-on" id="page-overview">
         <p class="kicker">Overview</p>
         <h1>Your activity on Bard</h1>
-        <p class="lead">Joined campaigns, open claims, and live projects. Link X only when a campaign scores posts or raids.</p>
+        <p class="lead">Joined campaigns, payouts, and live projects. Link X only when a campaign scores posts or raids.</p>
         <div class="grid-3" style="margin-bottom:18px">
           <div class="stat"><div class="stat__lbl">Joined</div><div class="stat__val p num" id="ov-joined">0</div></div>
-          <div class="stat"><div class="stat__lbl">Claimable</div><div class="stat__val num" id="ov-claimable">0</div></div>
+          <div class="stat"><div class="stat__lbl">Qualified</div><div class="stat__val num" id="ov-claimable">0</div></div>
           <div class="stat"><div class="stat__lbl">Live on Bard</div><div class="stat__val num" id="ov-live">0</div></div>
         </div>
         <div class="item" style="justify-content:space-between;margin-bottom:10px">
@@ -321,9 +321,9 @@ h1{
       </section>
 
       <section class="page" id="page-claims">
-        <p class="kicker">Claims</p>
-        <h1>Rewards</h1>
-        <p class="lead">Qualified entries you can settle. Each settled claim is <span class="num">0.1 SOL</span> in platform fees — 0% of any token.</p>
+        <p class="kicker">Payouts</p>
+        <h1>Payouts</h1>
+        <p class="lead">Payouts from executed vault settlements. Each row links to the transaction.</p>
         <div id="claims-list"></div>
       </section>
 
@@ -396,6 +396,7 @@ h1{
   var liveCache = [];
   var joinsCache = [];
   var claimsCache = [];
+  var payoutsCache = [];
 
   function needsX(type){
     return !!(window.BardPlatform && BardPlatform.needsX(type));
@@ -431,6 +432,11 @@ h1{
       joinsCache = [];
       claimsCache = [];
     }
+    try {
+      payoutsCache = await BardPlatform.listExecutedSettlements();
+    } catch (e) {
+      payoutsCache = [];
+    }
   }
 
   function isJoined(pid, cid){
@@ -440,8 +446,22 @@ h1{
     var j = joinsCache.find(function(x){ return x.project_id === pid && x.campaign_id === cid; });
     return j && j.qualified;
   }
+  function payoutRows(settlement){
+    var rows = settlement && settlement.payouts;
+    if (typeof rows === 'string') {
+      try { rows = JSON.parse(rows); } catch (e) { rows = []; }
+    }
+    return Array.isArray(rows) ? rows : [];
+  }
+  function payoutLine(settlement, w){
+    return payoutRows(settlement).find(function(row){ return row && row.wallet === w; });
+  }
   function isSettled(pid, cid){
-    return claimsCache.some(function(c){ return c.project_id === pid && c.campaign_id === cid && c.settled; });
+    if (claimsCache.some(function(c){ return c.project_id === pid && c.campaign_id === cid && c.settled; })) return true;
+    if (!wallet) return false;
+    return payoutsCache.some(function(s){
+      return s.project_id === pid && s.campaign_id === cid && payoutLine(s, wallet);
+    });
   }
 
   function updateXUI(){
@@ -486,8 +506,8 @@ h1{
       overview: ['Overview', 'Campaigns across Bard'],
       mine: ['My campaigns', 'Joined across projects'],
       explore: ['Explore', 'Live campaigns on Bard'],
-      claims: ['Claims', 'Settle what you earned'],
-      detail: ['Campaign', 'Rule, rank, and claims']
+      claims: ['Payouts', 'Paid from the vault'],
+      detail: ['Campaign', 'Rule, rank, and payout']
     };
     var t = titles[name] || titles.overview;
     document.getElementById('top-title').textContent = t[0];
@@ -656,7 +676,7 @@ h1{
     var pill = c.status === 'active'
       ? '<span class="pill pill--live">Active</span>'
       : '<span class="pill pill--muted">Ended</span>';
-    if(claimed) pill = '<span class="pill pill--done">Claimed <img class="stamp" src="/transparentbardsmile.png" alt=""></span>';
+    if(claimed) pill = '<span class="pill pill--done">Paid <img class="stamp" src="/transparentbardsmile.png" alt=""></span>';
     else if(joined) pill = '<span class="pill pill--live">Joined</span>';
     var xBadge = needsX(c.type) ? ' · needs X' : '';
 
@@ -746,66 +766,44 @@ h1{
 
   function renderClaims(){
     var rows = [];
-    liveCache.forEach(function(x){
-      if(isQualified(x.projectId, x.campaign.id) || isSettled(x.projectId, x.campaign.id)){
-        rows.push({ x: x, settled: isSettled(x.projectId, x.campaign.id) });
-      }
-    });
+    if (wallet) {
+      payoutsCache.forEach(function(s){
+        var line = payoutLine(s, wallet);
+        if (!line) return;
+        var live = liveCache.find(function(x){ return x.campaign.id === s.campaign_id; });
+        rows.push({ settlement: s, line: line, live: live });
+      });
+    }
     var list = document.getElementById('claims-list');
     if(!rows.length){
       list.innerHTML =
         '<div class="empty">' +
-          '<h3>No claims yet</h3>' +
-          '<p>Join a campaign. Qualified rewards show up here after the team marks you.</p>' +
+          '<h3>No payouts yet</h3>' +
+          '<p>A row appears here after the vault pays this wallet.</p>' +
         '</div>';
       return;
     }
     list.innerHTML = rows.map(function(r){
-      var c = r.x.campaign;
-      var reward = (c.reward || '—') + (c.unit ? ' ' + c.unit : '');
-      if(r.settled){
-        return (
-          '<div class="card"><div class="item">' +
-            '<span class="item__ava">' + BardPlatform.escapeHtml(initials(r.x.ticker)) + '</span>' +
-            '<div class="item__body">' +
-              '<div class="item__title">' + BardPlatform.escapeHtml(c.title) + '</div>' +
-              '<div class="item__sub">$' + BardPlatform.escapeHtml(r.x.ticker) + ' · ' + BardPlatform.escapeHtml(reward) + '</div>' +
-            '</div>' +
-            '<div class="item__right"><span class="pill pill--done">Settled <img class="stamp" src="/transparentbardsmile.png" alt=""></span></div>' +
-          '</div></div>'
-        );
-      }
+      var title = (r.live && r.live.campaign && r.live.campaign.title) || 'Payout';
+      var ticker = (r.live && r.live.ticker) || '';
+      var amount = r.line.amount != null ? String(r.line.amount) : String(r.line.amountRaw || '');
+      var txHref = r.settlement.tx_signature
+        ? BardPlatform.safeHttpUrl('https://solscan.io/tx/' + encodeURIComponent(r.settlement.tx_signature))
+        : '';
+      var tx = txHref
+        ? '<a class="btn btn--ghost btn--sm" href="' + BardPlatform.escapeHtml(txHref) + '" target="_blank" rel="noopener">Transaction</a>'
+        : '<span class="muted">No transaction</span>';
       return (
-        '<div class="card"><div class="item" style="flex-wrap:wrap">' +
-          '<span class="item__ava">' + BardPlatform.escapeHtml(initials(r.x.ticker)) + '</span>' +
+        '<div class="card"><div class="item">' +
+          '<span class="item__ava">' + BardPlatform.escapeHtml(initials(ticker || title)) + '</span>' +
           '<div class="item__body">' +
-            '<div class="item__title">' + BardPlatform.escapeHtml(c.title) + '</div>' +
-            '<div class="item__sub">$' + BardPlatform.escapeHtml(r.x.ticker) + ' · ' + BardPlatform.escapeHtml(reward) + ' · fee 0.1 SOL</div>' +
+            '<div class="item__title">' + BardPlatform.escapeHtml(title) + '</div>' +
+            '<div class="item__sub">' + (ticker ? '$' + BardPlatform.escapeHtml(ticker) + ' · ' : '') + BardPlatform.escapeHtml(amount) + '</div>' +
           '</div>' +
-          '<div class="item__right">' +
-            '<button class="btn btn--solid btn--sm" data-claim="' + BardPlatform.escapeHtml(r.x.projectId) + '|' + BardPlatform.escapeHtml(c.id) + '">Claim</button>' +
-          '</div>' +
+          '<div class="item__right">' + tx + '</div>' +
         '</div></div>'
       );
     }).join('');
-    list.querySelectorAll('[data-claim]').forEach(function(btn){
-      btn.addEventListener('click', async function(){
-        if(!wallet){ toast('Connect a wallet to claim', 'err'); return; }
-        var parts = btn.getAttribute('data-claim').split('|');
-        try {
-          if (window.BardPlatform) {
-            await BardPlatform.settleClaim(parts[0], parts[1], wallet, xHandle, null, 'SOL');
-            try { await BardPlatform.recordFee('claim', wallet, { projectId: parts[0], campaignId: parts[1] }); } catch(fe){}
-          }
-          toast('Claim settled · smile marked', 'ok');
-          await refreshCampaignCache();
-          renderAll();
-        } catch(e) {
-          console.error(e);
-          toast('Claim failed', 'err');
-        }
-      });
-    });
   }
 
   async function tryJoin(projectId, campaignId){
@@ -897,7 +895,7 @@ h1{
     }
 
     var you = 'Not joined';
-    if(settled) you = 'Claimed';
+    if(settled) you = 'Paid';
     else if(qualified) you = 'Qualified';
     else if(joined) you = 'Joined';
     document.getElementById('detail-you').textContent = you;
@@ -907,12 +905,12 @@ h1{
 
     if(settled){
       joinBtn.style.display = 'none';
-      hint.textContent = 'This reward was settled. The smile marks a real claim.';
+      hint.textContent = 'This reward was paid from the vault.';
     } else if(qualified){
       joinBtn.style.display = '';
-      joinBtn.textContent = 'Go to claims';
+      joinBtn.textContent = 'See payouts';
       joinBtn.onclick = function(){ showPage('claims'); renderClaims(); };
-      hint.textContent = 'You’re marked qualified. Claim from the Claims tab.';
+      hint.textContent = 'The payout shows here after the vault pays.';
     } else if(joined){
       joinBtn.style.display = 'none';
       joinBtn.onclick = null;

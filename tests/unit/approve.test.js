@@ -247,6 +247,7 @@ test('bard sign checks the vault transaction and does not sign', async () => {
   const built = await matchingCase();
   const signer = keypair().publicKey;
   const projectId = crypto.randomUUID();
+  const campaignId = crypto.randomUUID();
   const settlementId = crypto.randomUUID();
   const transactionPda = await squadsTransactionAddress(built.multisig, 7n);
   const account = (vaultIndex, amountByte) => {
@@ -272,9 +273,19 @@ test('bard sign checks the vault transaction and does not sign', async () => {
       vault_mint: built.mint,
       mint: built.mint,
     }],
+    campaigns: [{
+      id: campaignId,
+      project_id: projectId,
+      status: 'active',
+      locked_raw: '1',
+      prize_raw: '1',
+      prize_mint: built.mint,
+      cut_bps: 0,
+    }],
     vault_settlements: [{
       id: settlementId,
       project_id: projectId,
+      campaign_id: campaignId,
       payouts: built.settlement.payouts,
       payout_hash: built.settlement.payout_hash,
       vault_multisig: built.multisig,

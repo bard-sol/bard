@@ -120,17 +120,17 @@ test('computePayouts fixed, top3, growing, and shared pool', () => {
   assert.equal(shared.total, '9');
 });
 
-test('plan gating', () => {
-  assert.equal(BP.isPremiumPlan('pro'), true);
-  assert.equal(BP.isPremiumPlan('starter'), false);
-  assert.equal(BP.isPremiumPlan('free'), false);
-  assert.equal(BP.planLabel('pro'), 'Premium');
-  assert.equal(BP.planLabel('starter'), 'Starter');
-  assert.equal(BP.isPremiumType('hold'), true);
-  assert.equal(BP.isPremiumType('raid'), false);
-  assert.equal(BP.isPremiumReward('growing'), true);
-  assert.equal(BP.isPremiumReward('top3'), true);
-  assert.equal(BP.isPremiumReward('fixed'), false);
+test('cut config is readable and not a plan gate', () => {
+  assert.equal(typeof BP.getCutBps(), 'number');
+  assert.equal(BP.getCutBps(), 500);
+  assert.equal(typeof BP.getCutWallet(), 'string');
+  assert.equal(BP.getCutWallet().length > 30, true);
+  assert.equal(BP.isPremiumPlan, undefined);
+  assert.equal(BP.isPremiumType, undefined);
+  assert.equal(BP.isPremiumReward, undefined);
+  assert.equal(BP.payFee, undefined);
+  assert.equal(BP.setProjectPlan, undefined);
+  assert.equal(BP.recordFee, undefined);
 });
 
 test('dashboard cannot qualify or score itself', () => {
@@ -165,10 +165,10 @@ test('sign-in is required and the treasury is not the vault signer', () => {
 test('team writes refuse local mode', () => {
   const src = readFileSync(path.join(root, 'platform.js'), 'utf8');
   const names = [
-    'createProject', 'createCampaign', 'updateProjectVault', 'reserveVault', 'setProjectPlan',
+    'createProject', 'createCampaign', 'updateProjectVault', 'reserveVault',
     'updateCampaignStatus', 'proposeSettlement', 'signSettlement', 'cosignSettlement', 'executeSettlement',
-    'upsertRoster', 'removeRoster', 'drawAirdrop', 'commitDraw', 'finalizeDraw', 'recordFee', 'markFeeConfirmed', 'markFeeFailed',
-    'payFee', 'setJoinStatus', 'setJoinProgress', 'markQualified',
+    'upsertRoster', 'removeRoster', 'drawAirdrop', 'commitDraw', 'finalizeDraw',
+    'setJoinStatus', 'setJoinProgress', 'markQualified',
   ];
   for (const name of names) {
     const at = src.indexOf('async function ' + name + '(');

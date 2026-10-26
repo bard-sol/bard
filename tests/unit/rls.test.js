@@ -197,7 +197,40 @@ test('RLS isolates two wallets and blocks privileged columns', { timeout: 120000
     `, [project.id]));
     assert.equal(campaign.fee_paid, false);
     assert.equal(Number(campaign.settled_count), 0);
-    assert.equal(campaign.status, 'active');
+    assert.equal(campaign.status, 'draft');
+    const unlocked = await one(db, `SELECT prize_raw, locked_raw, cut_bps FROM public.campaigns WHERE id = $1`, [campaign.id]);
+    assert.equal(unlocked.prize_raw, null);
+    assert.equal(unlocked.locked_raw, null);
+    assert.equal(unlocked.cut_bps, null);
+
+    await db.exec('GRANT INSERT (prize_raw, locked_raw, cut_bps, cut_raw, status) ON public.campaigns TO authenticated');
+    const forgedLock = await withRole(db, 'authenticated', walletA, () => one(db, `
+      INSERT INTO public.campaigns (project_id, title, type, rule_text, reward_mode, access_mode, status, prize_raw, locked_raw, cut_bps, cut_raw)
+      VALUES ($1, 'Forged lock', 'hold', 'hold', 'fixed', 'open', 'active', 100, 105, 500, 5)
+      RETURNING status, prize_raw, locked_raw, cut_bps
+    `, [project.id]));
+    await db.exec('REVOKE INSERT (prize_raw, locked_raw, cut_bps, cut_raw, status) ON public.campaigns FROM authenticated');
+    assert.equal(forgedLock.status, 'draft');
+    assert.equal(forgedLock.prize_raw, null);
+    assert.equal(forgedLock.locked_raw, null);
+    assert.equal(forgedLock.cut_bps, null);
+
+    const workerLock = await withRole(db, 'service_role', '', () => one(db, `
+      INSERT INTO public.campaigns (project_id, title, type, rule_text, reward_mode, access_mode, status, prize_raw, locked_raw, cut_bps, cut_raw, cut_wallet)
+      VALUES ($1, 'Worker lock', 'hold', 'hold', 'fixed', 'open', 'active', 100, 105, 500, 5, 'cut-wallet')
+      RETURNING id, status, locked_raw
+    `, [project.id]));
+    assert.equal(workerLock.status, 'active');
+    assert.equal(String(workerLock.locked_raw), '105');
+    await db.exec('GRANT UPDATE (status) ON public.campaigns TO authenticated');
+    await withRole(db, 'authenticated', walletA, () => db.query(
+      `UPDATE public.campaigns SET status = 'paid' WHERE id = $1`,
+      [workerLock.id]
+    ));
+    await db.exec('REVOKE UPDATE (status) ON public.campaigns FROM authenticated');
+    const paidBlocked = await one(db, `SELECT status, locked_raw FROM public.campaigns WHERE id = $1`, [workerLock.id]);
+    assert.equal(paidBlocked.status, 'active');
+    assert.equal(String(paidBlocked.locked_raw), '105');
 
     await db.exec('GRANT INSERT (fee_paid, settled_count) ON public.campaigns TO authenticated');
     const forced = await withRole(db, 'authenticated', walletA, () => one(db, `
@@ -334,6 +367,10 @@ test('RLS isolates two wallets and blocks privileged columns', { timeout: 120000
     assert.equal(wiped.payout_hash, null);
     assert.equal(wiped.vault_multisig, null);
     assert.equal(wiped.status, 'proposed');
+    await withRole(db, 'service_role', '', () => db.query(
+      `UPDATE public.vault_settlements SET status = 'cancelled' WHERE campaign_id = $1 AND status <> 'cancelled'`,
+      [campaign.id]
+    ));
 
     const settlement = await withRole(db, 'service_role', '', () => one(db, `
       INSERT INTO public.vault_settlements (project_id, campaign_id, payouts, total, unit, payout_hash)
@@ -346,6 +383,12 @@ test('RLS isolates two wallets and blocks privileged columns', { timeout: 120000
     assert.equal(settlement.tx_signature, null);
     assert.equal(settlement.payout_hash, 'honest-hash');
     assert.equal(settlement.vault_multisig, null);
+    const secondOpen = await withRole(db, 'service_role', '', () =>
+      denied(db, `
+        INSERT INTO public.vault_settlements (project_id, campaign_id, payouts, total, unit, payout_hash)
+        VALUES ($1, $2, '[]'::jsonb, 1, 'TOKEN', 'second-hash')
+      `, [project.id, campaign.id]));
+    assert.match(secondOpen, /vault_settlements_one_open_per_campaign|duplicate key|unique/i);
 
     await db.exec('GRANT UPDATE (payout_hash, vault_multisig) ON public.vault_settlements TO authenticated');
     await withRole(db, 'authenticated', walletA, () => db.query(
@@ -606,6 +649,22 @@ test('RLS isolates two wallets and blocks privileged columns', { timeout: 120000
       [walletA]
     ));
 
+    await withRole(db, 'service_role', '', () => db.query(
+      `UPDATE public.vault_settlements SET status = 'cancelled' WHERE campaign_id = $1 AND status <> 'cancelled'`,
+      [campaign.id]
+    ));
+    await db.exec('GRANT INSERT (project_id, campaign_id, payouts, total, unit, cut_raw, cut_waived, holder_total_raw) ON public.vault_settlements TO authenticated');
+    const forgedCut = await withRole(db, 'authenticated', walletA, () => one(db, `
+      INSERT INTO public.vault_settlements (project_id, campaign_id, payouts, total, unit, cut_raw, cut_waived, holder_total_raw)
+      VALUES ($1, $2, '[]'::jsonb, 1, 'TOKEN', 9, true, 99)
+      RETURNING cut_raw, cut_waived, holder_total_raw, status
+    `, [project.id, campaign.id]));
+    await db.exec('REVOKE INSERT (project_id, campaign_id, payouts, total, unit, cut_raw, cut_waived, holder_total_raw) ON public.vault_settlements FROM authenticated');
+    assert.equal(forgedCut.cut_raw, null);
+    assert.equal(forgedCut.cut_waived, false);
+    assert.equal(forgedCut.holder_total_raw, null);
+    assert.equal(forgedCut.status, 'proposed');
+
     const tables = [
       'projects', 'campaigns', 'campaign_joins', 'holders', 'platform_claims',
       'fee_payments', 'vault_settlements', 'vault_reservations', 'project_roster', 'auth_nonces',
@@ -623,6 +682,100 @@ test('RLS isolates two wallets and blocks privileged columns', { timeout: 120000
       const visible = await db.query(`SELECT id FROM public.projects WHERE id = $1`, [project.id]);
       assert.equal(visible.rows.length, 1);
     });
+  } finally {
+    restore();
+    await db.close();
+  }
+});
+
+test('vault reservation is raw, locked, and refused when the balance is short', async () => {
+  const restore = installFetchGuard();
+  const db = await boot();
+  const wallet = 'wallet-reserve';
+  try {
+    await withRole(db, 'service_role', '', () => db.query(`
+      INSERT INTO public.projects (name, ticker, mint, chain, admin_wallet, created_by, vault_reserved)
+      VALUES ('Alpha', 'ALP', 'mint-a', 'solana', $1, $1, 10.5)
+    `, [wallet]));
+    const project = await one(db, `SELECT id, vault_reserved, vault_reserved_raw FROM public.projects LIMIT 1`);
+    assert.equal(Number(project.vault_reserved), 10.5);
+    assert.equal(String(project.vault_reserved_raw), '0');
+    const campaign = await withRole(db, 'service_role', '', () => one(db, `
+      INSERT INTO public.campaigns (project_id, title, type, rule_text, status, locked_raw, vault_reserved_raw)
+      VALUES ($1, 'Hold', 'hold', 'hold', 'active', 60, 0)
+      RETURNING id
+    `, [project.id]));
+    const first = await withRole(db, 'service_role', '', () => one(db, `
+      SELECT public.reserve_vault_raw($1, 100, 60, NULL) AS result
+    `, [project.id]));
+    assert.equal(first.result.ok, true);
+    assert.equal(first.result.vault_reserved_raw, '60');
+    const second = await withRole(db, 'service_role', '', () => one(db, `
+      SELECT public.reserve_vault_raw($1, 100, 60, NULL) AS result
+    `, [project.id]));
+    assert.equal(second.result.ok, false);
+    assert.equal(second.result.reason, 'short_balance');
+    const kept = await one(db, `SELECT vault_reserved_raw FROM public.projects WHERE id = $1`, [project.id]);
+    assert.equal(String(kept.vault_reserved_raw), '60');
+    const added = await withRole(db, 'service_role', '', () => one(db, `
+      SELECT public.reserve_vault_raw($1, 200, 40, $2) AS result
+    `, [project.id, campaign.id]));
+    assert.equal(added.result.ok, true);
+    assert.equal(added.result.vault_reserved_raw, '100');
+    assert.equal(added.result.campaign_reserved_raw, '40');
+    const released = await withRole(db, 'service_role', '', () => one(db, `
+      SELECT public.release_campaign_vault($1, $2) AS result
+    `, [project.id, campaign.id]));
+    assert.equal(released.result.ok, true);
+    assert.equal(released.result.released_raw, '40');
+    assert.equal(released.result.vault_reserved_raw, '60');
+    const deniedReserve = await withRole(db, 'authenticated', wallet, () =>
+      denied(db, `SELECT public.reserve_vault_raw($1, 1000, 1, NULL)`, [project.id]));
+    assert.match(deniedReserve, /permission denied/i);
+    const frozen = await one(db, `SELECT vault_reserved_raw FROM public.projects WHERE id = $1`, [project.id]);
+    assert.equal(String(frozen.vault_reserved_raw), '60');
+  } finally {
+    restore();
+    await db.close();
+  }
+});
+
+test('locked prize rollback drops the new columns and restores the old status check', async () => {
+  const restore = installFetchGuard();
+  const db = await boot();
+  try {
+    const down = await readFile(path.join(root, 'supabase/rollback/20261025200000_locked_prize_and_cut.sql'), 'utf8');
+    await db.exec(down);
+    const columns = await db.query(`
+      SELECT column_name FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'campaigns' AND column_name = 'locked_raw'
+    `);
+    assert.equal(columns.rows.length, 0);
+    const cut = await db.query(`
+      SELECT column_name FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'vault_settlements' AND column_name = 'cut_raw'
+    `);
+    assert.equal(cut.rows.length, 0);
+    const raw = await db.query(`
+      SELECT column_name FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'projects' AND column_name = 'vault_reserved_raw'
+    `);
+    assert.equal(raw.rows.length, 0);
+    const fn = await db.query(`
+      SELECT proname FROM pg_proc WHERE proname = 'reserve_vault_raw'
+    `);
+    assert.equal(fn.rows.length, 0);
+    await withRole(db, 'service_role', '', () => db.query(`
+      INSERT INTO public.projects (name, ticker, mint, chain, admin_wallet, created_by)
+      VALUES ('Alpha', 'ALP', 'mint-a', 'solana', 'wallet', 'wallet')
+    `));
+    const project = await one(db, `SELECT id FROM public.projects LIMIT 1`);
+    const rejected = await withRole(db, 'service_role', '', () =>
+      denied(db, `
+        INSERT INTO public.campaigns (project_id, title, type, rule_text, status)
+        VALUES ($1, 'Paid', 'hold', 'hold', 'paid')
+      `, [project.id]));
+    assert.match(rejected, /campaigns_status_chk|check constraint/i);
   } finally {
     restore();
     await db.close();

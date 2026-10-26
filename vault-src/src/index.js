@@ -143,7 +143,7 @@ export async function createTwoOfTwo(rpc, signer, wallet, bard) {
   return { vault: vaultPda.toBase58(), multisig: multisigPda.toBase58(), signature: signature };
 }
 
-export async function createPayoutProposal(rpc, signer, wallet, multisigAddress, mintAddress, payouts) {
+export async function createPayoutProposal(rpc, signer, wallet, multisigAddress, mintAddress, payouts, cut) {
   var connection = connectionFrom(rpc);
   var team = pubkeyOf(wallet, signer);
   var multisigPda = new PublicKey(String(multisigAddress));
@@ -159,7 +159,12 @@ export async function createPayoutProposal(rpc, signer, wallet, multisigAddress,
     createAssociatedTokenAccountIdempotentInstruction(vaultPda, vaultAta, vaultPda, mint, tokenProgram),
   ];
   // The signer accepts payouts only in wallet order, the same order as payoutHash.
-  var ordered = (payouts || []).slice().sort(function (a, b) {
+  // The cut is one more transfer in that order, not an instruction after the holders.
+  var ordered = (payouts || []).slice();
+  if (cut && cut.wallet && payoutRaw(cut, decimals) > 0n) {
+    ordered.push({ wallet: String(cut.wallet), amountRaw: String(cut.amountRaw) });
+  }
+  ordered.sort(function (a, b) {
     var aw = String(a && a.wallet || '');
     var bw = String(b && b.wallet || '');
     if (aw < bw) return -1;
@@ -230,8 +235,10 @@ export async function teamApprove(rpc, signer, wallet, multisigAddress, transact
   return signAndSend(connection, tx, signer, block);
 }
 
-export async function proposePayouts(rpc, signer, wallet, multisigAddress, mintAddress, payouts) {
-  var created = await createPayoutProposal(rpc, signer, wallet, multisigAddress, mintAddress, payouts);
+export const bardApprove = teamApprove;
+
+export async function proposePayouts(rpc, signer, wallet, multisigAddress, mintAddress, payouts, cut) {
+  var created = await createPayoutProposal(rpc, signer, wallet, multisigAddress, mintAddress, payouts, cut);
   var signature = await teamApprove(rpc, signer, wallet, multisigAddress, created.transactionIndex);
   return {
     signature: signature,

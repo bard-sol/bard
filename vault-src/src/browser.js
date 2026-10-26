@@ -4,6 +4,7 @@ export {
   proposePayouts,
   createPayoutProposal,
   teamApprove,
+  bardApprove,
   executePayout,
   vaultPdaFor,
 } from './index.js';

@@ -77,6 +77,18 @@ function canonicalPayouts(settlement, decimals) {
     if (raw === 0n) continue;
     positive.push({ wallet: String(row.wallet), amountRaw: raw });
   }
+  const cutText = settlement && settlement.cut_waived === true
+    ? ''
+    : String(settlement && (settlement.cut_raw != null ? settlement.cut_raw : settlement.cutRaw) || '').trim();
+  if (cutText) {
+    if (!/^\d+$/.test(cutText)) return null;
+    const cut = BigInt(cutText);
+    if (cut > 0n) {
+      const cutWallet = settlement.cut_wallet || settlement.cutWallet;
+      if (!cutWallet) return null;
+      positive.push({ wallet: String(cutWallet), amountRaw: cut });
+    }
+  }
   positive.sort((a, b) => {
     if (a.wallet < b.wallet) return -1;
     if (a.wallet > b.wallet) return 1;
@@ -297,9 +309,7 @@ async function verifyInner(decodedMessage, settlement, options) {
   if (!payouts || !payouts.length) return fail('no_payouts');
   let storedHash = '';
   try {
-    const source = settlement && settlement.payouts;
-    const list = typeof source === 'string' ? JSON.parse(source) : source;
-    storedHash = payoutHash(list || []);
+    storedHash = payoutHash(payouts.map((row) => ({ wallet: row.wallet, amountRaw: row.amountRaw.toString() })));
   } catch {
     return fail('payout_hash');
   }
