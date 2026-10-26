@@ -1,0 +1,88 @@
+# Nightly off-Supabase copy of the Bard database (TRAA-452).
+# Details, restore steps and rollback: scripts/db-backup/README.md
+name: Database copy
+
+on:
+  schedule:
+    - cron: "30 23 * * *" # nightly, 03:30 Dubai (23:30 UTC)
+    - cron: "0 3 * * 0" # Sundays 03:00 UTC: full round trip of the newest copy
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "backup = take a copy now; restore-latest = download, decrypt and restore the newest copy"
+        type: choice
+        options: [backup, restore-latest]
+        default: backup
+
+permissions:
+  contents: read
+
+concurrency:
+  group: db-backup
+  cancel-in-progress: false
+
+env:
+  # postgres:17.6-bookworm. Client must be the server's major version or newer.
+  PG_IMAGE: postgres@sha256:f3bd19c606e442c3d7bdfa8002e03fe260a1023351e0ea4598032022b68dd6e3
+  SCRATCH_PORT: "54329"
+  SCRATCH_USER: supabase_admin
+  SCRATCH_PASSWORD: scratch-only-not-a-secret
+
+jobs:
+  backup:
+    if: github.event_name == 'workflow_dispatch' && inputs.mode == 'backup' || github.event.schedule == '30 23 * * *'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment: db-backup
+    services:
+      scratch:
+        # supabase/postgres:17.6.1.084, the live project's exact version.
+        image: supabase/postgres@sha256:95d92e9563121189086690a4b7f8f2b711a4809a2499f45592199aae68ebae5f
+        env:
+          POSTGRES_PASSWORD: scratch-only-not-a-secret
+        ports: ["54329:5432"]
+        options: >-
+          --health-cmd "pg_isready -h 127.0.0.1 -p 5432 -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 60
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          persist-credentials: false
+      - run: docker pull --quiet "$PG_IMAGE"
+      - name: Copy, restore check, encrypt, upload
+        run: scripts/db-backup/backup.sh
+        env:
+          SRC_HOST: ${{ vars.DB_BACKUP_SRC_HOST }}
+          SRC_PORT: ${{ vars.DB_BACKUP_SRC_PORT }}
+          SRC_USER: ${{ vars.DB_BACKUP_SRC_USER }}
+          SRC_DB: postgres
+          DROP_URL: ${{ vars.DB_BACKUP_DROP_URL }}
+          SRC_PASSWORD: ${{ secrets.DB_BACKUP_SRC_PASSWORD }}
+          DROP_UPLOAD_TOKEN: ${{ secrets.DB_BACKUP_UPLOAD_TOKEN }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+  restore-latest:
+    if: github.event_name == 'workflow_dispatch' && inputs.mode == 'restore-latest' || github.event.schedule == '0 3 * * 0'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment: db-backup-restore
+    services:
+      scratch:
+        image: supabase/postgres@sha256:95d92e9563121189086690a4b7f8f2b711a4809a2499f45592199aae68ebae5f
+        env:
+          POSTGRES_PASSWORD: scratch-only-not-a-secret
+        ports: ["54329:5432"]
+        options: >-
+          --health-cmd "pg_isready -h 127.0.0.1 -p 5432 -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 60
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          persist-credentials: false
+      - run: docker pull --quiet "$PG_IMAGE"
+      - name: Download, decrypt, restore check
+        run: scripts/db-backup/restore-latest.sh
+        env:
+          DROP_URL: ${{ vars.DB_BACKUP_DROP_URL }}
+          DROP_READ_TOKEN: ${{ secrets.DB_BACKUP_READ_TOKEN }}
+          BACKUP_PRIVATE_KEY: ${{ secrets.DB_BACKUP_PRIVATE_KEY }}

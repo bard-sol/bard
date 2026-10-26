@@ -1,0 +1,14 @@
+// The backup drop worker only; the site worker is configured in /wrangler.jsonc.
+// Deploy: npx wrangler deploy -c scripts/db-backup/wrangler.jsonc
+// Secrets (SHA-256 hex of each token, from stdin):
+//   npx wrangler secret put UPLOAD_TOKEN_SHA256 -c scripts/db-backup/wrangler.jsonc
+//   npx wrangler secret put READ_TOKEN_SHA256 -c scripts/db-backup/wrangler.jsonc
+{
+  "name": "bard-db-backup",
+  "main": "drop-worker.js",
+  "compatibility_date": "2026-10-01",
+  "account_id": "f566c450ea43115474ed72570b573e83",
+  "workers_dev": true,
+  "preview_urls": false,
+  "r2_buckets": [{ "binding": "BUCKET", "bucket_name": "bard-db-backups" }]
+}
