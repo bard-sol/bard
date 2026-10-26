@@ -690,8 +690,12 @@ async function handleMemberSigned(request, env, settlementId, kind) {
   } else {
     row.bard_signed_at = new Date().toISOString();
   }
-  const updated = await patch(env, 'vault_settlements', 'id=eq.' + encodeURIComponent(settlementId), row);
+  let query = 'id=eq.' + encodeURIComponent(settlementId) + '&tx_signature=is.null';
+  if (boundIndex == null) query += '&tx_index=is.null';
+  else query += '&tx_index=eq.' + encodeURIComponent(boundIndex);
+  const updated = await patch(env, 'vault_settlements', query, row);
   const settlement = firstRow(updated);
+  if (!settlement) return json({ error: 'settlement changed while signing; reload and retry' }, 409);
   return json({ settlement });
 }
 

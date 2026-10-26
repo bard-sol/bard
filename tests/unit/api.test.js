@@ -218,12 +218,22 @@ function createEnv({ signer, accounts, txs, tokenAccounts, chain }) {
         filters.push({ key, op: value.slice(0, dot), val: value.slice(dot + 1) });
       }
       const matches = (row) => filters.every((filter) => {
+        if (filter.op === 'is' && filter.val === 'null') return row[filter.key] == null;
         const got = row[filter.key] == null ? '' : String(row[filter.key]);
         if (filter.op === 'eq') return got === filter.val;
         if (filter.op === 'lt') return got < filter.val;
         return false;
       });
-      if (opts.method === 'GET') return Response.json(rows.filter(matches));
+      if (opts.method === 'GET') {
+        let found = rows.filter(matches);
+        if (table === 'vault_settlements' && typeof tables.afterSettlementRead === 'function') {
+          found = found.map((row) => Object.assign({}, row));
+          const hook = tables.afterSettlementRead;
+          tables.afterSettlementRead = null;
+          hook();
+        }
+        return Response.json(found);
+      }
       if (opts.method === 'DELETE') {
         for (let i = rows.length - 1; i >= 0; i--) if (matches(rows[i])) rows.splice(i, 1);
         return new Response(null, { status: 204 });
@@ -1564,6 +1574,69 @@ test('a bound vault transaction index cannot be pointed at a second payout', asy
     assert.equal(teamSame.data.settlement.team_signed, true);
     assert.equal(tables.vault_settlements[0].tx_index, '4');
     assert.equal(tables.vault_settlements[0].bard_signed, false);
+  } finally {
+    restore();
+  }
+});
+
+test('a concurrent first write keeps the tx_index it stored', async () => {
+  const restore = installFetchGuard();
+  try {
+    const ready = await prepareLockedSettlement();
+    const { env, tables, accounts, token, project, settlement, multisig } = ready;
+    const settlementId = settlement.id;
+    const linked = tables.projects[0];
+    tables.vault_settlements[0].tx_index = null;
+    const txIndex = 6n;
+    const transactionPda = await squadsTransactionAddress(multisig, txIndex);
+    const proposalPda = await squadsProposalAddress(multisig, txIndex);
+    const honest = await vaultAccountFor({
+      multisig,
+      vault: linked.vault_address,
+      mint: linked.vault_mint || linked.mint,
+      lines: [
+        { wallet: settlement.payouts[0].wallet, amountRaw: settlement.payouts[0].amountRaw },
+        { wallet: FEE_TREASURY, amountRaw: String(settlement.cut_raw) },
+      ],
+      creator: project.admin_wallet,
+      index: txIndex,
+      decimals: 6,
+    });
+    accounts[transactionPda] = account(toBase64(honest));
+    accounts[proposalPda] = account(toBase64(proposalAccount(multisig, txIndex, [project.admin_wallet])));
+    tables.afterSettlementRead = () => {
+      tables.vault_settlements[0].tx_index = '4';
+    };
+    const raced = await call(env, 'POST', '/api/settlements/' + settlementId + '/team-signed', { txIndex: 6 }, token);
+    assert.equal(raced.status, 409, JSON.stringify(raced.data));
+    assert.equal(raced.data.error, 'settlement changed while signing; reload and retry');
+    assert.equal(tables.vault_settlements[0].tx_index, '4');
+    assert.equal(tables.vault_settlements[0].team_signed, false);
+  } finally {
+    restore();
+  }
+});
+
+test('a signature stored during signing refuses the sign write', async () => {
+  const restore = installFetchGuard();
+  try {
+    const ready = await prepareLockedSettlement();
+    const { env, tables, accounts, token, project, settlement, multisig } = ready;
+    const settlementId = settlement.id;
+    const txIndex = 4n;
+    const proposalPda = await squadsProposalAddress(multisig, txIndex);
+    accounts[proposalPda] = account(toBase64(proposalAccount(multisig, txIndex, [project.admin_wallet])));
+    tables.afterSettlementRead = () => {
+      tables.vault_settlements[0].tx_signature = 'race-signature';
+      tables.vault_settlements[0].status = 'executed';
+    };
+    const raced = await call(env, 'POST', '/api/settlements/' + settlementId + '/team-signed', { txIndex: '4' }, token);
+    assert.equal(raced.status, 409, JSON.stringify(raced.data));
+    assert.equal(raced.data.error, 'settlement changed while signing; reload and retry');
+    assert.equal(tables.vault_settlements[0].status, 'executed');
+    assert.equal(tables.vault_settlements[0].tx_signature, 'race-signature');
+    assert.equal(tables.vault_settlements[0].tx_index, '4');
+    assert.equal(tables.vault_settlements[0].team_signed, false);
   } finally {
     restore();
   }
