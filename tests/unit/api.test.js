@@ -1341,7 +1341,7 @@ async function prepareLockedSettlement() {
     }
     return originalFetch(url, opts);
   };
-  return { env, tables, token, project, campaign, settlement, paySig, multisig, signer };
+  return { env, tables, accounts, token, project, campaign, settlement, paySig, multisig, signer };
 }
 
 test('a draft campaign with pool_size gets 409 from propose', async () => {
@@ -1530,6 +1530,40 @@ test('a repeat executed re-runs the payout writes', async () => {
     assert.equal(tables.campaigns[0].vault_reserved_raw, '0');
     assert.equal(tables.vault_reservations[0].status, 'settled');
     assert.equal(tables.projects[0].vault_reserved_raw, '0');
+  } finally {
+    restore();
+  }
+});
+
+test('a bound vault transaction index cannot be pointed at a second payout', async () => {
+  const restore = installFetchGuard();
+  try {
+    const ready = await prepareLockedSettlement();
+    const { env, tables, accounts, token, project, settlement, multisig, signer } = ready;
+    const settlementId = settlement.id;
+    const before = structuredClone(tables.vault_settlements[0]);
+    assert.equal(before.tx_index, '4');
+
+    const teamMoved = await call(env, 'POST', '/api/settlements/' + settlementId + '/team-signed', { txIndex: 6 }, token);
+    assert.equal(teamMoved.status, 409, JSON.stringify(teamMoved.data));
+    assert.equal(teamMoved.data.error, 'settlement is bound to vault transaction 4');
+    assert.deepEqual(tables.vault_settlements[0], before);
+
+    const signerToken = (await signJwt(SECRET, signer.publicKey)).token;
+    const bardMoved = await call(env, 'POST', '/api/settlements/' + settlementId + '/bard-signed', { txIndex: '6' }, signerToken);
+    assert.equal(bardMoved.status, 409, JSON.stringify(bardMoved.data));
+    assert.equal(bardMoved.data.error, 'settlement is bound to vault transaction 4');
+    assert.deepEqual(tables.vault_settlements[0], before);
+
+    const txIndex = 4n;
+    const proposalPda = await squadsProposalAddress(multisig, txIndex);
+    accounts[proposalPda] = account(toBase64(proposalAccount(multisig, txIndex, [project.admin_wallet])));
+    const teamSame = await call(env, 'POST', '/api/settlements/' + settlementId + '/team-signed', { txIndex: '4' }, token);
+    assert.equal(teamSame.status, 200, JSON.stringify(teamSame.data));
+    assert.equal(teamSame.data.settlement.tx_index, '4');
+    assert.equal(teamSame.data.settlement.team_signed, true);
+    assert.equal(tables.vault_settlements[0].tx_index, '4');
+    assert.equal(tables.vault_settlements[0].bard_signed, false);
   } finally {
     restore();
   }

@@ -618,6 +618,15 @@ async function vaultMessageVerdict(env, settlement, project) {
   return { multisig, txIndex };
 }
 
+function sameVaultIndex(left, right) {
+  if (String(left).trim() === String(right).trim()) return true;
+  try {
+    return BigInt(String(left).trim()) === BigInt(String(right).trim());
+  } catch {
+    return false;
+  }
+}
+
 async function memberApproved(env, multisig, txIndex, wallet) {
   if (!isBase58Address(wallet)) return null;
   const proposalAddress = await squadsProposalAddress(multisig, txIndex);
@@ -647,9 +656,14 @@ async function handleMemberSigned(request, env, settlementId, kind) {
   }
   if (String(current.tx_signature || '').trim()) return json({ error: 'settlement is closed' }, 400);
   if (current.status === 'executed' || current.status === 'cancelled') return json({ error: 'settlement is closed' }, 400);
+  const boundIndex = current.tx_index == null || String(current.tx_index).trim() === '' ? null : String(current.tx_index).trim();
+  const requestedIndex = body.txIndex == null || String(body.txIndex).trim() === '' ? null : String(body.txIndex).trim();
+  if (boundIndex != null && requestedIndex != null && !sameVaultIndex(boundIndex, requestedIndex)) {
+    return json({ error: 'settlement is bound to vault transaction ' + boundIndex }, 409);
+  }
   const linkedMultisig = project.vault_multisig || '';
   if (!isBase58Address(linkedMultisig)) return json({ error: 'project vault is not linked' }, 400);
-  const txIndexText = body.txIndex == null || String(body.txIndex).trim() === '' ? current.tx_index : body.txIndex;
+  const txIndexText = requestedIndex == null ? current.tx_index : body.txIndex;
   const pending = Object.assign({}, current, { tx_index: txIndexText, vault_multisig: linkedMultisig });
   let checked;
   try {
