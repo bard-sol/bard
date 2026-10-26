@@ -11,10 +11,31 @@ function readU32(view, offset) {
   return view.getUint32(offset, true);
 }
 
-export async function squadsMultisigDiscriminator() {
-  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('account:Multisig'));
+async function accountDiscriminator(name) {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('account:' + name));
   return new Uint8Array(digest).slice(0, 8);
 }
+
+export async function squadsMultisigDiscriminator() {
+  return accountDiscriminator('Multisig');
+}
+
+export async function squadsProposalDiscriminator() {
+  return accountDiscriminator('Proposal');
+}
+
+export async function squadsSpendingLimitDiscriminator() {
+  return accountDiscriminator('SpendingLimit');
+}
+
+export const SQUADS_PERMISSION_INITIATE = 1;
+export const SQUADS_PERMISSION_VOTE = 2;
+export const SQUADS_PERMISSION_EXECUTE = 4;
+
+export const SQUADS_PROPOSAL_REJECTED = 2;
+export const SQUADS_PROPOSAL_APPROVED = 3;
+export const SQUADS_PROPOSAL_EXECUTED = 5;
+export const SQUADS_PROPOSAL_CANCELLED = 6;
 
 export async function parseSquadsMultisig(data) {
   const bytes = data instanceof Uint8Array ? data : new Uint8Array(data);
@@ -24,9 +45,16 @@ export async function parseSquadsMultisig(data) {
     if (bytes[i] !== expected[i]) return null;
   }
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const configAuthority = bs58.encode(bytes.subarray(40, 72));
   let offset = 8 + 32 + 32;
   const threshold = readU16(view, offset);
-  offset += 2 + 4 + 8 + 8;
+  offset += 2;
+  if (offset + 4 + 8 + 8 > bytes.length) return null;
+  offset += 4;
+  const transactionIndex = view.getBigUint64(offset, true);
+  offset += 8;
+  const staleTransactionIndex = view.getBigUint64(offset, true);
+  offset += 8;
   if (offset >= bytes.length) return null;
   const rentTag = bytes[offset];
   offset += 1;
@@ -40,16 +68,45 @@ export async function parseSquadsMultisig(data) {
   const members = [];
   for (let i = 0; i < count; i++) {
     if (offset + 33 > bytes.length) return null;
-    members.push(bs58.encode(bytes.subarray(offset, offset + 32)));
+    members.push({
+      key: bs58.encode(bytes.subarray(offset, offset + 32)),
+      permissions: bytes[offset + 32],
+    });
     offset += 33;
   }
-  return { threshold, members };
+  return { threshold, configAuthority, members, transactionIndex, staleTransactionIndex };
+}
+
+export async function parseSquadsProposal(data) {
+  const bytes = data instanceof Uint8Array ? data : new Uint8Array(data);
+  const expected = await squadsProposalDiscriminator();
+  if (bytes.length < expected.length + 32 + 8 + 1) return null;
+  for (let i = 0; i < expected.length; i++) {
+    if (bytes[i] !== expected[i]) return null;
+  }
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const multisig = bs58.encode(bytes.subarray(8, 40));
+  const transactionIndex = view.getBigUint64(40, true);
+  const status = bytes[48];
+  return { multisig, transactionIndex, status };
+}
+
+export function proposalStatusIsClosed(status) {
+  return status === SQUADS_PROPOSAL_REJECTED
+    || status === SQUADS_PROPOSAL_EXECUTED
+    || status === SQUADS_PROPOSAL_CANCELLED;
+}
+
+function memberKey(member) {
+  if (typeof member === 'string') return member;
+  if (member && typeof member.key === 'string') return member.key;
+  return '';
 }
 
 export function sameMemberSet(members, expected) {
-  if (members.length !== expected.length) return false;
-  const got = new Set(members);
-  return expected.every((key) => got.has(key));
+  if (!members || !expected || members.length !== expected.length) return false;
+  const got = new Set(members.map(memberKey));
+  return expected.every((key) => got.has(memberKey(key)));
 }
 
 export function decodeBase64(value) {

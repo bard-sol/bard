@@ -457,6 +457,54 @@ test('RLS isolates two wallets and blocks privileged columns', { timeout: 120000
     const insertVia = await withRole(db, 'authenticated', holder, () =>
       denied(db, `INSERT INTO public.holders (wallet, x_via) VALUES ($1, 'oauth')`, [holder]));
     assert.match(insertVia, /permission denied/i);
+    const sigIndex = await one(db, `SELECT indexdef FROM pg_indexes WHERE indexname = 'vault_settlements_tx_uidx'`);
+    assert.match(sigIndex.indexdef, /UNIQUE/i);
+    assert.match(sigIndex.indexdef, /tx_signature IS NOT NULL/i);
+    const bindIndex = await one(db, `SELECT indexdef FROM pg_indexes WHERE indexname = 'vault_settlements_vault_tx_uidx'`);
+    assert.match(bindIndex.indexdef, /UNIQUE/i);
+    assert.match(bindIndex.indexdef, /vault_multisig/);
+    assert.match(bindIndex.indexdef, /tx_index/);
+    await withRole(db, 'service_role', '', () => db.query(`
+      UPDATE public.vault_settlements
+      SET tx_signature = 'sig-once', tx_index = '4', status = 'executed'
+      WHERE id = $1
+    `, [settlement.id]));
+    const dupSig = await withRole(db, 'service_role', '', () =>
+      denied(db, `
+        INSERT INTO public.vault_settlements (project_id, campaign_id, payouts, total, unit, tx_signature, status, vault_multisig, tx_index)
+        VALUES ($1, $2, '[]'::jsonb, 1, 'TOKEN', 'sig-once', 'cancelled', 'other-vault', '9')
+      `, [project.id, campaign.id]));
+    assert.match(dupSig, /duplicate|unique/i);
+    const otherSig = await withRole(db, 'service_role', '', () => one(db, `
+      INSERT INTO public.vault_settlements (project_id, campaign_id, payouts, total, unit, tx_signature, status, vault_multisig, tx_index)
+      VALUES ($1, $2, '[]'::jsonb, 1, 'TOKEN', 'sig-other', 'cancelled', 'other-vault', '4')
+      RETURNING id
+    `, [project.id, campaign.id]));
+    const dupUpdate = await withRole(db, 'service_role', '', () =>
+      denied(db, `UPDATE public.vault_settlements SET tx_signature = 'sig-once' WHERE id = $1`, [otherSig.id]));
+    assert.match(dupUpdate, /duplicate|unique/i);
+    const dupBind = await withRole(db, 'service_role', '', () =>
+      denied(db, `
+        INSERT INTO public.vault_settlements (project_id, campaign_id, payouts, total, unit, status, vault_multisig, tx_index)
+        VALUES ($1, $2, '[]'::jsonb, 1, 'TOKEN', 'cancelled', 'squads-key', '4')
+      `, [project.id, campaign.id]));
+    assert.match(dupBind, /duplicate|unique/i);
+    await withRole(db, 'service_role', '', async () => {
+      await db.query(`
+        INSERT INTO public.vault_settlements (project_id, campaign_id, payouts, total, unit, status)
+        VALUES ($1, $2, '[]'::jsonb, 1, 'TOKEN', 'cancelled')
+      `, [project.id, campaign.id]);
+      await db.query(`
+        INSERT INTO public.vault_settlements (project_id, campaign_id, payouts, total, unit, status)
+        VALUES ($1, $2, '[]'::jsonb, 1, 'TOKEN', 'cancelled')
+      `, [project.id, campaign.id]);
+    });
+    const nullSigs = await db.query(`
+      SELECT count(*)::int AS n FROM public.vault_settlements
+      WHERE project_id = $1 AND tx_signature IS NULL
+    `, [project.id]);
+    assert.ok(nullSigs.rows[0].n >= 2);
+
     await withRole(db, 'authenticated', holder, () => db.query(
       `INSERT INTO public.holders (wallet) VALUES ($1)`,
       [holder]

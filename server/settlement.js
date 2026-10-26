@@ -218,7 +218,9 @@ export function payoutRawAmount(payout, decimals) {
   if (payout && payout.amountRaw != null && String(payout.amountRaw).trim() !== '') {
     const raw = String(payout.amountRaw).trim();
     if (!/^\d+$/.test(raw)) throw new Error('amountRaw must be an integer string');
-    return BigInt(raw);
+    const value = BigInt(raw);
+    if (value > 18446744073709551615n) throw new Error('amountRaw is larger than u64');
+    return value;
   }
   return decimalToRaw(payout && payout.amount, decimals);
 }

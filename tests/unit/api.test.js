@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import nacl from 'tweetnacl';
 import bs58 from 'bs58';
 import { signJwt } from '../../server/auth.js';
-import { handleRequest } from '../../server/api.js';
+import { handleRequest, verifyExecutedPayout } from '../../server/api.js';
 import {
   ASSOCIATED_TOKEN_PROGRAM,
   FEE_TREASURY,
@@ -12,10 +12,20 @@ import {
   TOKEN_PROGRAM,
   associatedTokenAddress,
   decodeBase64,
+  SQUADS_PERMISSION_EXECUTE,
+  SQUADS_PERMISSION_INITIATE,
+  SQUADS_PERMISSION_VOTE,
+  SQUADS_PROPOSAL_APPROVED,
+  SQUADS_PROPOSAL_CANCELLED,
+  SQUADS_PROPOSAL_EXECUTED,
+  SQUADS_PROPOSAL_REJECTED,
   parseSquadsMultisig,
+  parseSquadsProposal,
   sameMemberSet,
   squadsMultisigDiscriminator,
   squadsProposalAddress,
+  squadsProposalDiscriminator,
+  squadsSpendingLimitDiscriminator,
   squadsTransactionAddress,
   squadsVaultAddress,
 } from '../../server/chain.js';
@@ -61,25 +71,44 @@ function toBase64(bytes) {
   return btoa(bin);
 }
 
-async function craftMultisig(threshold, members) {
+async function craftMultisig(threshold, members, options = {}) {
   const disc = await squadsMultisigDiscriminator();
+  const authority = options.configAuthority ? bs58.decode(options.configAuthority) : new Uint8Array(32);
+  const defaultMask = options.permissions == null
+    ? (SQUADS_PERMISSION_INITIATE | SQUADS_PERMISSION_VOTE | SQUADS_PERMISSION_EXECUTE)
+    : options.permissions;
   const parts = [
     disc,
     new Uint8Array(32),
-    new Uint8Array(32),
+    authority,
     leBytes(2, 'setUint16', threshold),
     leBytes(4, 'setUint32', 0),
-    leBytes(8, 'setBigUint64', 0n),
-    leBytes(8, 'setBigUint64', 0n),
+    leBytes(8, 'setBigUint64', BigInt(options.transactionIndex == null ? 0 : options.transactionIndex)),
+    leBytes(8, 'setBigUint64', BigInt(options.staleTransactionIndex == null ? 0 : options.staleTransactionIndex)),
     new Uint8Array([0]),
     new Uint8Array([1]),
     leBytes(4, 'setUint32', members.length),
   ];
   for (const member of members) {
-    parts.push(bs58.decode(member));
-    parts.push(new Uint8Array([0]));
+    const key = typeof member === 'string' ? member : member.key;
+    const mask = member && typeof member === 'object' && member.permissions != null
+      ? member.permissions
+      : defaultMask;
+    parts.push(bs58.decode(key));
+    parts.push(new Uint8Array([mask]));
   }
   return toBase64(concat(parts));
+}
+
+async function craftProposal(multisig, index, status) {
+  const disc = await squadsProposalDiscriminator();
+  return toBase64(concat([
+    disc,
+    bs58.decode(multisig),
+    leBytes(8, 'setBigUint64', BigInt(index)),
+    Uint8Array.of(status),
+    leBytes(8, 'setBigInt64', 0n),
+  ]));
 }
 
 function account(data) {
@@ -158,7 +187,7 @@ function applyVaultRpc(tables, name, body) {
   return { ok: false, reason: 'missing' };
 }
 
-function createEnv({ signer, accounts, txs, tokenAccounts, chain }) {
+function createEnv({ signer, accounts, txs, tokenAccounts, chain, programAccounts }) {
   const tables = {
     projects: [],
     campaigns: [],
@@ -170,6 +199,7 @@ function createEnv({ signer, accounts, txs, tokenAccounts, chain }) {
     auth_nonces: [],
   };
   const calls = [];
+  const rpcLog = [];
   const env = {
     SUPABASE_URL: 'http://supabase.test',
     SUPABASE_SERVICE_ROLE_KEY: 'service-role-test',
@@ -187,8 +217,14 @@ function createEnv({ signer, accounts, txs, tokenAccounts, chain }) {
       }
       if (u.hostname === 'rpc.test') {
         const payload = JSON.parse(opts.body);
+        rpcLog.push(payload);
         if (payload.method === 'getAccountInfo') {
           return Response.json({ jsonrpc: '2.0', id: 1, result: accounts[payload.params[0]] || { value: null } });
+        }
+        if (payload.method === 'getProgramAccounts') {
+          const program = payload.params[0];
+          const rows = (programAccounts && programAccounts[program]) || [];
+          return Response.json({ jsonrpc: '2.0', id: 1, result: rows });
         }
         if (payload.method === 'getTransaction') {
           return Response.json({ jsonrpc: '2.0', id: 1, result: txs[payload.params[0]] || null });
@@ -214,6 +250,10 @@ function createEnv({ signer, accounts, txs, tokenAccounts, chain }) {
       const filters = [];
       for (const [key, value] of u.searchParams) {
         if (key === 'select' || key === 'on_conflict') continue;
+        if (value.startsWith('not.in.')) {
+          filters.push({ key, op: 'not.in', val: value.slice('not.in.'.length) });
+          continue;
+        }
         const dot = value.indexOf('.');
         filters.push({ key, op: value.slice(0, dot), val: value.slice(dot + 1) });
       }
@@ -222,6 +262,11 @@ function createEnv({ signer, accounts, txs, tokenAccounts, chain }) {
         const got = row[filter.key] == null ? '' : String(row[filter.key]);
         if (filter.op === 'eq') return got === filter.val;
         if (filter.op === 'lt') return got < filter.val;
+        if (filter.op === 'is' && filter.val === 'null') return row[filter.key] == null;
+        if (filter.op === 'not.in') {
+          const list = filter.val.replace(/^\(/, '').replace(/\)$/, '').split(',');
+          return !list.includes(got);
+        }
         return false;
       });
       if (opts.method === 'GET') {
@@ -260,13 +305,19 @@ function createEnv({ signer, accounts, txs, tokenAccounts, chain }) {
         return Response.json([stored], { status: 201 });
       }
       if (opts.method === 'PATCH') {
-        const updated = rows.filter(matches).map((row) => Object.assign(row, body));
+        const updated = rows.filter(matches);
+        if (table === 'vault_settlements' && body.tx_signature) {
+          const ids = new Set(updated.map((row) => row.id));
+          const clash = rows.some((row) => row.tx_signature === body.tx_signature && !ids.has(row.id));
+          if (clash) return Response.json({ code: '23505', message: 'duplicate' }, { status: 409 });
+        }
+        updated.forEach((row) => Object.assign(row, body));
         return Response.json(updated);
       }
       return Response.json({ message: 'bad method' }, { status: 500 });
     },
   };
-  return { env, tables, calls };
+  return { env, tables, calls, rpcLog };
 }
 
 async function call(env, method, path, body, token) {
@@ -299,10 +350,34 @@ test('privileged writes require the project admin session', { timeout: 30000 }, 
   const wrongPayerSig = '3'.repeat(87);
   const deadSig = '4'.repeat(87);
   const campaignSig = '6'.repeat(87);
+  const configMultisig = keypair().publicKey;
+  const voteOnlyMultisig = keypair().publicKey;
+  const executeOnlyMultisig = keypair().publicKey;
   const goodAccount = await craftMultisig(2, [walletA.publicKey, signer.publicKey]);
   const wrongMembers = await craftMultisig(2, [walletA.publicKey, other]);
   const lowThreshold = await craftMultisig(1, [walletA.publicKey, signer.publicKey]);
-  assert.ok(sameMemberSet((await parseSquadsMultisig(decodeBase64(goodAccount))).members, [walletA.publicKey, signer.publicKey]));
+  const configAuthority = await craftMultisig(2, [walletA.publicKey, signer.publicKey], {
+    configAuthority: walletA.publicKey,
+  });
+  const voteOnly = await craftMultisig(2, [walletA.publicKey, signer.publicKey], {
+    permissions: SQUADS_PERMISSION_VOTE,
+  });
+  const executeOnly = await craftMultisig(2, [
+    { key: walletA.publicKey, permissions: SQUADS_PERMISSION_VOTE | SQUADS_PERMISSION_EXECUTE },
+    { key: signer.publicKey, permissions: SQUADS_PERMISSION_EXECUTE },
+  ]);
+  const parsedGood = await parseSquadsMultisig(decodeBase64(goodAccount));
+  assert.equal(parsedGood.configAuthority, bs58.encode(new Uint8Array(32)));
+  assert.deepEqual(parsedGood.members.map((member) => member.key), [walletA.publicKey, signer.publicKey]);
+  assert.deepEqual(parsedGood.members.map((member) => member.permissions), [
+    SQUADS_PERMISSION_INITIATE | SQUADS_PERMISSION_VOTE | SQUADS_PERMISSION_EXECUTE,
+    SQUADS_PERMISSION_INITIATE | SQUADS_PERMISSION_VOTE | SQUADS_PERMISSION_EXECUTE,
+  ]);
+  assert.ok(sameMemberSet(parsedGood.members, [walletA.publicKey, signer.publicKey]));
+  const parsedConfig = await parseSquadsMultisig(decodeBase64(configAuthority));
+  assert.equal(parsedConfig.configAuthority, walletA.publicKey);
+  const parsedVote = await parseSquadsMultisig(decodeBase64(voteOnly));
+  assert.deepEqual(parsedVote.members.map((member) => member.permissions), [SQUADS_PERMISSION_VOTE, SQUADS_PERMISSION_VOTE]);
   const { env, tables, calls } = createEnv({
     signer: signer.publicKey,
     accounts: {
@@ -310,6 +385,9 @@ test('privileged writes require the project admin session', { timeout: 30000 }, 
       [other]: account(wrongMembers),
       [walletB.publicKey]: account(lowThreshold),
       [mintA]: mintAccount(6),
+      [configMultisig]: account(configAuthority),
+      [voteOnlyMultisig]: account(voteOnly),
+      [executeOnlyMultisig]: account(executeOnly),
     },
     txs: {
       [goodSig]: transferTx(walletA.publicKey, 1_000_000_000),
@@ -395,6 +473,26 @@ test('privileged writes require the project admin session', { timeout: 30000 }, 
     assert.equal(fee.status, 404);
     assert.equal(tables.fee_payments.length, 0);
 
+    const configVault = await squadsVaultAddress(configMultisig);
+    const configLink = await call(env, 'POST', '/api/projects/' + project.id + '/vault', {
+      address: configVault, multisig: configMultisig, mint: mintA,
+    }, tokenA);
+    assert.equal(configLink.status, 400, JSON.stringify(configLink.data));
+    assert.equal(configLink.data.error, 'vault config authority must be unset');
+    const voteVault = await squadsVaultAddress(voteOnlyMultisig);
+    const voteLink = await call(env, 'POST', '/api/projects/' + project.id + '/vault', {
+      address: voteVault, multisig: voteOnlyMultisig, mint: mintA,
+    }, tokenA);
+    assert.equal(voteLink.status, 400, JSON.stringify(voteLink.data));
+    assert.equal(voteLink.data.error, 'vault members must be able to vote and execute');
+    const executeVault = await squadsVaultAddress(executeOnlyMultisig);
+    const executeLink = await call(env, 'POST', '/api/projects/' + project.id + '/vault', {
+      address: executeVault, multisig: executeOnlyMultisig, mint: mintA,
+    }, tokenA);
+    assert.equal(executeLink.status, 400, JSON.stringify(executeLink.data));
+    assert.equal(executeLink.data.error, 'vault members must be able to vote and execute');
+    assert.equal(tables.projects.find((row) => row.id === project.id).vault_multisig || null, null);
+
     const linked = await call(env, 'POST', '/api/projects/' + project.id + '/vault', {
       address: vaultAddress, multisig, mint: mintA,
     }, tokenA);
@@ -408,6 +506,45 @@ test('privileged writes require the project admin session', { timeout: 30000 }, 
     assert.equal(otherMint.status, 400);
     assert.match(otherMint.data.error, /project mint/);
     assert.equal(tables.projects[0].vault_mint, mintA);
+    const projectRow = () => tables.projects.find((row) => row.id === project.id);
+    const savedReserved = projectRow().vault_reserved;
+    projectRow().vault_reserved = '0.5';
+    const reservedLink = await call(env, 'POST', '/api/projects/' + project.id + '/vault', {
+      address: vaultAddress, multisig, mint: mintA,
+    }, tokenA);
+    assert.equal(reservedLink.status, 409, JSON.stringify(reservedLink.data));
+    assert.equal(reservedLink.data.error, 'vault cannot be re-linked while funds are reserved');
+    assert.equal(projectRow().vault_address, vaultAddress);
+    projectRow().vault_reserved = savedReserved;
+    const openSettlement = {
+      id: crypto.randomUUID(),
+      project_id: project.id,
+      status: 'proposed',
+    };
+    tables.vault_settlements.push(openSettlement);
+    const openLink = await call(env, 'POST', '/api/projects/' + project.id + '/vault', {
+      address: vaultAddress, multisig, mint: mintA,
+    }, tokenA);
+    assert.equal(openLink.status, 409, JSON.stringify(openLink.data));
+    assert.equal(openLink.data.error, 'vault cannot be re-linked while a settlement is open');
+    openSettlement.status = 'both_signed';
+    const bothOpen = await call(env, 'POST', '/api/projects/' + project.id + '/vault', {
+      address: vaultAddress, multisig, mint: mintA,
+    }, tokenA);
+    assert.equal(bothOpen.status, 409);
+    assert.equal(bothOpen.data.error, 'vault cannot be re-linked while a settlement is open');
+    openSettlement.status = 'executed';
+    const executedLink = await call(env, 'POST', '/api/projects/' + project.id + '/vault', {
+      address: vaultAddress, multisig, mint: mintA,
+    }, tokenA);
+    assert.equal(executedLink.status, 200, JSON.stringify(executedLink.data));
+    openSettlement.status = 'cancelled';
+    const cancelledLink = await call(env, 'POST', '/api/projects/' + project.id + '/vault', {
+      address: vaultAddress, multisig, mint: mintA,
+    }, tokenA);
+    assert.equal(cancelledLink.status, 200, JSON.stringify(cancelledLink.data));
+    tables.vault_settlements.splice(tables.vault_settlements.indexOf(openSettlement), 1);
+    assert.equal(projectRow().vault_multisig, multisig);
     const notVault = await call(env, 'POST', '/api/projects/' + project.id + '/vault', {
       address: wrongVault, multisig,
     }, tokenA);
@@ -517,19 +654,45 @@ test('privileged writes require the project admin session', { timeout: 30000 }, 
     assert.match(unlinked.data.error, /not linked/);
     assert.equal(tables.vault_settlements[0].team_signed, false);
     assert.equal(tables.vault_settlements[0].vault_multisig, other);
+    tables.vault_settlements[0].vault_multisig = null;
     tables.projects[0].vault_multisig = savedMultisig;
-    const team = await call(env, 'POST', '/api/settlements/' + settlementId + '/team-sign', { sig: 'sig', multisig: other }, tokenA);
+    const badIndex = await call(env, 'POST', '/api/settlements/' + settlementId + '/team-sign', { sig: 'sig', txIndex: '4a' }, tokenA);
+    assert.equal(badIndex.status, 400, JSON.stringify(badIndex.data));
+    assert.equal(badIndex.data.error, 'invalid tx index');
+    const blankIndex = await call(env, 'POST', '/api/settlements/' + settlementId + '/team-sign', { sig: 'sig', txIndex: '' }, tokenA);
+    assert.equal(blankIndex.status, 400);
+    assert.equal(blankIndex.data.error, 'invalid tx index');
+    const spacedIndex = await call(env, 'POST', '/api/settlements/' + settlementId + '/team-sign', { sig: 'sig', txIndex: '4 ' }, tokenA);
+    assert.equal(spacedIndex.status, 400);
+    assert.equal(tables.vault_settlements[0].team_signed, false);
+    const team = await call(env, 'POST', '/api/settlements/' + settlementId + '/team-sign', { sig: 'sig', multisig: other, txIndex: 4 }, tokenA);
     assert.equal(team.status, 400, JSON.stringify(team.data));
-    assert.match(team.data.error, /no vault transaction/);
+    assert.match(team.data.error, /vault transaction is missing/);
     assert.equal(tables.vault_settlements[0].team_signed, false);
     tables.vault_settlements[0].bard_signed = true;
     tables.vault_settlements[0].status = 'executed';
     const closed = await call(env, 'POST', '/api/settlements/' + settlementId + '/team-sign', { sig: 'sig3' }, tokenA);
     assert.equal(closed.status, 400);
     assert.match(closed.data.error, /closed/);
-    const bard = await call(env, 'POST', '/api/vault/bard-sign', { settlementId });
+    const anonBard = await call(env, 'POST', '/api/vault/bard-sign', { settlementId });
+    assert.equal(anonBard.status, 401, JSON.stringify(anonBard.data));
+    assert.equal(anonBard.data.error, 'missing session');
+    tables.vault_settlements[0].status = 'awaiting_bard';
+    tables.vault_settlements[0].team_signed = true;
+    tables.vault_settlements[0].vault_multisig = tables.projects[0].vault_multisig;
+    tables.vault_settlements[0].tx_index = '4';
+    tables.vault_settlements[0].campaign_id = raid.data.campaign.id;
+    const strangerBard = await call(env, 'POST', '/api/vault/bard-sign', { settlementId }, tokenB);
+    assert.equal(strangerBard.status, 403, JSON.stringify(strangerBard.data));
+    assert.equal(strangerBard.data.error, 'not the project admin');
+    const bard = await call(env, 'POST', '/api/vault/bard-sign', { settlementId }, tokenA);
     assert.equal(bard.status, 400, JSON.stringify(bard.data));
-    assert.equal(bard.data.reason, 'settlement has no vault transaction');
+    assert.equal(bard.data.reason, 'vault transaction is missing');
+    assert.equal(tables.vault_settlements[0].bard_signed, true);
+    tables.vault_settlements[0].tx_index = null;
+    const bardWithoutTx = await call(env, 'POST', '/api/vault/bard-sign', { settlementId }, tokenA);
+    assert.equal(bardWithoutTx.status, 400, JSON.stringify(bardWithoutTx.data));
+    assert.equal(bardWithoutTx.data.reason, 'settlement has no vault transaction');
     assert.equal(tables.vault_settlements[0].bard_signed, true);
     assert.equal(calls.some((line) => /supabase\.co|mainnet|publicnode/.test(line)), false);
   } finally {
@@ -702,6 +865,7 @@ test('settlement routes keep the canonical hash and reject the other wallet', { 
   const multisig = keypair().publicKey;
   const mint = keypair().publicKey;
   const vaultAddress = await squadsVaultAddress(multisig);
+  const secondSource = keypair().publicKey;
   const goodAccount = await craftMultisig(2, [walletA.publicKey, signer.publicKey]);
   const chain = {
     slot: 1000,
@@ -864,15 +1028,31 @@ test('settlement routes keep the canonical hash and reject the other wallet', { 
       { wallet: holder.publicKey, amountRaw: expected.payouts[0].amountRaw },
       { wallet: FEE_TREASURY, amountRaw: '100000' },
     ];
+    const tokenBalance = (accountIndex, owner, amount) => ({
+      accountIndex,
+      mint,
+      owner,
+      uiTokenAmount: { amount: String(amount), decimals: 6 },
+    });
     const payoutTx = {
       meta: {
         err: null,
         logMessages: ['Program log: Instruction: VaultTransactionExecute'],
         innerInstructions: [],
+        preTokenBalances: [
+          tokenBalance(4, vaultAddress, '10000000'),
+          tokenBalance(6, vaultAddress, '10000000'),
+        ],
+        postTokenBalances: [
+          tokenBalance(4, vaultAddress, '8000000'),
+          tokenBalance(5, holder.publicKey, expected.payouts[0].amountRaw),
+          tokenBalance(6, vaultAddress, '10000000'),
+        ],
       },
       transaction: {
         message: {
-          accountKeys: [SQUADS_PROGRAM, multisig, transactionPda, proposalPda],
+          accountKeys: [SQUADS_PROGRAM, multisig, transactionPda, proposalPda, vaultAta, holderAta, secondSource]
+            .map((pubkey) => ({ pubkey })),
           instructions: [{
             program: 'spl-token',
             programId: TOKEN_PROGRAM,
@@ -917,6 +1097,14 @@ test('settlement routes keep the canonical hash and reject the other wallet', { 
     assert.equal(tables.vault_settlements[0].team_signed, false);
     assert.equal(tables.vault_settlements[0].bard_signed, false);
     let shownTx = payoutTx;
+    const servedSigs = new Set([paySig]);
+    let injectDup = false;
+    let closeRace = false;
+    let wroteAfterEmpty = false;
+    let sawEmptyPatch = false;
+    let bookkeepingWrites = 0;
+    let armCrashAfterClaim = false;
+    let throwNextWrite = false;
     const originalFetch = env.fetch;
     env.fetch = async (url, opts = {}) => {
       const u = new URL(url);
@@ -924,10 +1112,46 @@ test('settlement routes keep the canonical hash and reject the other wallet', { 
         const payload = JSON.parse(opts.body);
         if (payload.method === 'getTransaction') {
           const sig = payload.params[0];
-          return Response.json({ jsonrpc: '2.0', id: 1, result: sig === paySig ? shownTx : null });
+          return Response.json({ jsonrpc: '2.0', id: 1, result: servedSigs.has(sig) ? shownTx : null });
         }
       }
-      return originalFetch(url, opts);
+      if (injectDup && opts.method === 'GET' && u.pathname.endsWith('/vault_settlements') && u.search.includes('tx_signature=eq.')) {
+        const res = await originalFetch(url, opts);
+        tables.vault_settlements.push({
+          id: crypto.randomUUID(),
+          project_id: project.id,
+          campaign_id: campaign.id,
+          tx_signature: new URL(url).searchParams.get('tx_signature').slice('eq.'.length),
+          status: 'executed',
+        });
+        injectDup = false;
+        return res;
+      }
+      if (closeRace && opts.method === 'PATCH' && u.pathname.endsWith('/vault_settlements') && u.search.includes('not.in')) {
+        const row = tables.vault_settlements.find((item) => item.id === closeRace);
+        if (row) row.status = 'cancelled';
+        closeRace = false;
+        sawEmptyPatch = true;
+      }
+      if (throwNextWrite && opts.method && opts.method !== 'GET') {
+        throwNextWrite = false;
+        throw new Error('crash between claim and close');
+      }
+      const res = await originalFetch(url, opts);
+      if (armCrashAfterClaim && opts.method === 'PATCH' && u.pathname.endsWith('/vault_settlements') && u.search.includes('is.null')) {
+        armCrashAfterClaim = false;
+        throwNextWrite = true;
+      }
+      if (opts.method === 'POST' && u.pathname.endsWith('/platform_claims')) bookkeepingWrites += 1;
+      if (opts.method === 'PATCH' && (
+        u.pathname.endsWith('/vault_reservations')
+        || u.pathname.endsWith('/projects')
+        || u.pathname.endsWith('/campaign_joins')
+      )) bookkeepingWrites += 1;
+      if (sawEmptyPatch && opts.method && opts.method !== 'GET' && !(u.pathname.endsWith('/vault_settlements') && u.search.includes('not.in'))) {
+        wroteAfterEmpty = true;
+      }
+      return res;
     };
 
     const executedTamper = await call(env, 'POST', '/api/settlements/' + settlementId + '/executed', { signature: paySig }, tokenA);
@@ -967,11 +1191,124 @@ test('settlement routes keep the canonical hash and reject the other wallet', { 
     emptyAuthority.transaction.message.instructions[0].parsed.info.authority = '';
     const emptyAuth = await refuseExecute(emptyAuthority);
     assert.match(emptyAuth.data.error, /authority/);
-    for (const field of ['mint', 'source', 'destination']) {
+    for (const field of ['source', 'destination']) {
       const tx = clonePayout();
       delete tx.transaction.message.instructions[0].parsed.info[field];
       await refuseExecute(tx);
     }
+    const strangerAta = await associatedTokenAddress(stranger.publicKey, mint, TOKEN_PROGRAM);
+    const plainExtra = clonePayout();
+    plainExtra.transaction.message.instructions.push({
+      program: 'spl-token',
+      programId: TOKEN_PROGRAM,
+      parsed: {
+        type: 'transfer',
+        info: {
+          source: vaultAta,
+          destination: strangerAta,
+          authority: vaultAddress,
+          amount: '1',
+        },
+      },
+    });
+    const refusedPlain = await refuseExecute(plainExtra);
+    assert.match(refusedPlain.data.error, /unexpected/);
+    const secondExtra = clonePayout();
+    secondExtra.transaction.message.instructions.push({
+      program: 'spl-token',
+      programId: TOKEN_PROGRAM,
+      parsed: {
+        type: 'transferChecked',
+        info: {
+          source: secondSource,
+          destination: strangerAta,
+          mint,
+          authority: vaultAddress,
+          tokenAmount: { amount: '1', decimals: 6 },
+        },
+      },
+    });
+    const refusedSecond = await refuseExecute(secondExtra);
+    assert.match(refusedSecond.data.error, /unexpected/);
+    const plainSecond = clonePayout();
+    plainSecond.transaction.message.instructions.push({
+      program: 'spl-token',
+      programId: TOKEN_PROGRAM,
+      parsed: {
+        type: 'transfer',
+        info: {
+          source: secondSource,
+          destination: strangerAta,
+          authority: vaultAddress,
+          amount: '1',
+        },
+      },
+    });
+    const refusedPlainSecond = await refuseExecute(plainSecond);
+    assert.match(refusedPlainSecond.data.error, /unexpected/);
+    const extraFromSecond = () => ({
+      program: 'spl-token',
+      programId: TOKEN_PROGRAM,
+      parsed: {
+        type: 'transferChecked',
+        info: {
+          source: secondSource,
+          destination: strangerAta,
+          mint,
+          authority: vaultAddress,
+          tokenAmount: { amount: '1', decimals: 6 },
+        },
+      },
+    });
+    const closedSource = clonePayout();
+    closedSource.transaction.message.instructions.push(extraFromSecond());
+    closedSource.meta.postTokenBalances = closedSource.meta.postTokenBalances.filter((entry) => entry.accountIndex !== 6);
+    const refusedClosed = await refuseExecute(closedSource);
+    assert.match(refusedClosed.data.error, /owner changed/);
+    const reownedSource = clonePayout();
+    reownedSource.transaction.message.instructions.push(extraFromSecond());
+    reownedSource.meta.postTokenBalances.find((entry) => entry.accountIndex === 6).owner = stranger.publicKey;
+    const refusedReowned = await refuseExecute(reownedSource);
+    assert.match(refusedReowned.data.error, /owner changed/);
+    const reownedAta = clonePayout();
+    reownedAta.meta.postTokenBalances.find((entry) => entry.accountIndex === 4).owner = stranger.publicKey;
+    const refusedAta = await refuseExecute(reownedAta);
+    assert.match(refusedAta.data.error, /owner changed/);
+    const missingPre = clonePayout();
+    delete missingPre.meta.preTokenBalances;
+    const refusedMissingPre = await refuseExecute(missingPre);
+    assert.match(refusedMissingPre.data.error, /pre-token balances/);
+    const strangerSource = keypair().publicKey;
+    const unrelated = clonePayout();
+    unrelated.transaction.message.instructions.push({
+      program: 'spl-token',
+      programId: TOKEN_PROGRAM,
+      parsed: {
+        type: 'transferChecked',
+        info: {
+          source: strangerSource,
+          destination: strangerAta,
+          mint,
+          authority: stranger.publicKey,
+          tokenAmount: { amount: '1', decimals: 6 },
+        },
+      },
+    });
+    shownTx = unrelated;
+    const payoutFetch = env.fetch;
+    let strangerLookups = 0;
+    env.fetch = async (url, opts = {}) => {
+      const u = new URL(url);
+      if (u.hostname === 'rpc.test') {
+        const payload = JSON.parse(opts.body);
+        if (payload.method === 'getAccountInfo' && payload.params[0] === strangerSource) strangerLookups += 1;
+      }
+      return payoutFetch(url, opts);
+    };
+    await verifyExecutedPayout(env, tables.vault_settlements[0], tables.projects[0], paySig);
+    assert.equal(strangerLookups, 0);
+    env.fetch = payoutFetch;
+    shownTx = payoutTx;
     const missingProgram = clonePayout();
     delete missingProgram.transaction.message.instructions[0].program;
     const missingProgramRes = await refuseExecute(missingProgram);
@@ -1059,6 +1396,116 @@ test('settlement routes keep the canonical hash and reject the other wallet', { 
     assert.match(secondFinal.data.error, /already finalized/);
     const bFinal = await call(env, 'POST', '/api/campaigns/' + campaign.id + '/draw/finalize', {}, tokenB);
     assert.equal(bFinal.status, 403);
+
+    const stageSettlement = () => {
+      const source = tables.vault_settlements[0];
+      const sourceCampaign = tables.campaigns.find((row) => row.id === source.campaign_id);
+      const campaignId = crypto.randomUUID();
+      const locked = String(sourceCampaign.locked_raw || '1000000');
+      tables.campaigns.push({
+        ...structuredClone(sourceCampaign),
+        id: campaignId,
+        status: 'active',
+        vault_reserved_raw: locked,
+        vault_reserved: '1',
+      });
+      tables.projects[0].vault_reserved = 'pending-release';
+      tables.vault_reservations.push({
+        id: crypto.randomUUID(),
+        project_id: source.project_id,
+        campaign_id: campaignId,
+        amount: '1',
+        status: 'reserved',
+      });
+      const id = crypto.randomUUID();
+      tables.vault_settlements.push({
+        id,
+        project_id: source.project_id,
+        campaign_id: campaignId,
+        payouts: source.payouts,
+        total: source.total,
+        unit: source.unit,
+        payout_hash: source.payout_hash,
+        status: 'proposed',
+        tx_index: source.tx_index,
+        vault_multisig: source.vault_multisig,
+        cut_raw: source.cut_raw,
+        cut_wallet: source.cut_wallet,
+        cut_waived: source.cut_waived,
+        cut_bps: source.cut_bps,
+      });
+      return id;
+    };
+    const raceSig = '7'.repeat(88);
+    const closedSig = '8'.repeat(88);
+    const crashSig = '9'.repeat(88);
+    servedSigs.add(raceSig);
+    servedSigs.add(closedSig);
+    servedSigs.add(crashSig);
+    shownTx = payoutTx;
+    const dupId = stageSettlement();
+    injectDup = true;
+    const writesBeforeDup = bookkeepingWrites;
+    const reservedBeforeDup = String(tables.projects[0].vault_reserved);
+    const claimsBeforeDup = JSON.stringify(tables.platform_claims);
+    const reservationBeforeDup = tables.vault_reservations[0].status;
+    const dup = await call(env, 'POST', '/api/settlements/' + dupId + '/execute', { signature: raceSig }, tokenA);
+    assert.equal(dup.status, 400, JSON.stringify(dup.data));
+    assert.equal(dup.data.error, 'signature already used');
+    const dupRow = tables.vault_settlements.find((row) => row.id === dupId);
+    assert.equal(dupRow.status, 'proposed');
+    assert.equal(dupRow.tx_signature || null, null);
+    assert.equal(bookkeepingWrites, writesBeforeDup);
+    assert.equal(String(tables.projects[0].vault_reserved), reservedBeforeDup);
+    assert.equal(JSON.stringify(tables.platform_claims), claimsBeforeDup);
+    assert.equal(tables.vault_reservations[0].status, reservationBeforeDup);
+    const closedId = stageSettlement();
+    closeRace = closedId;
+    wroteAfterEmpty = false;
+    sawEmptyPatch = false;
+    const writesBeforeClose = bookkeepingWrites;
+    const reservedBeforeClose = String(tables.projects[0].vault_reserved);
+    const claimsBeforeClose = JSON.stringify(tables.platform_claims);
+    const reservationBeforeClose = tables.vault_reservations[0].status;
+    const lost = await call(env, 'POST', '/api/settlements/' + closedId + '/execute', { signature: closedSig }, tokenA);
+    assert.equal(lost.status, 400, JSON.stringify(lost.data));
+    assert.equal(lost.data.error, 'settlement is closed');
+    assert.equal(wroteAfterEmpty, false);
+    const closedRow = tables.vault_settlements.find((row) => row.id === closedId);
+    assert.equal(closedRow.status, 'cancelled');
+    assert.equal(closedRow.tx_signature || null, null);
+    assert.equal(bookkeepingWrites, writesBeforeClose);
+    assert.equal(String(tables.projects[0].vault_reserved), reservedBeforeClose);
+    assert.equal(JSON.stringify(tables.platform_claims), claimsBeforeClose);
+    assert.equal(tables.vault_reservations[0].status, reservationBeforeClose);
+    const crashId = stageSettlement();
+    const writesBeforeCrash = bookkeepingWrites;
+    const reservedBeforeCrash = String(tables.projects[0].vault_reserved);
+    const claimsBeforeCrash = JSON.stringify(tables.platform_claims);
+    const reservationBeforeCrash = tables.vault_reservations[0].status;
+    armCrashAfterClaim = true;
+    const crashed = await call(env, 'POST', '/api/settlements/' + crashId + '/execute', { signature: crashSig }, tokenA);
+    assert.equal(crashed.status, 500, JSON.stringify(crashed.data));
+    assert.match(crashed.data.error, /crash between claim and close/);
+    const crashRow = tables.vault_settlements.find((row) => row.id === crashId);
+    assert.equal(crashRow.status, 'proposed');
+    assert.equal(crashRow.tx_signature, crashSig);
+    assert.equal(bookkeepingWrites, writesBeforeCrash);
+    assert.equal(String(tables.projects[0].vault_reserved), reservedBeforeCrash);
+    assert.equal(JSON.stringify(tables.platform_claims), claimsBeforeCrash);
+    assert.equal(tables.vault_reservations[0].status, reservationBeforeCrash);
+    const recovered = await call(env, 'POST', '/api/settlements/' + crashId + '/execute', { signature: crashSig }, tokenA);
+    assert.equal(recovered.status, 200, JSON.stringify(recovered.data));
+    assert.equal(recovered.data.settlement.status, 'executed');
+    assert.equal(recovered.data.settlement.tx_signature, crashSig);
+    assert.equal(bookkeepingWrites, writesBeforeCrash + 4);
+    const reservedAfterRecovery = String(tables.projects[0].vault_reserved);
+    assert.notEqual(reservedAfterRecovery, reservedBeforeCrash);
+    const replay = await call(env, 'POST', '/api/settlements/' + crashId + '/execute', { signature: crashSig }, tokenA);
+    assert.equal(replay.status, 200, JSON.stringify(replay.data));
+    assert.equal(replay.data.settlement.status, 'executed');
+    assert.equal(bookkeepingWrites, writesBeforeCrash + 8);
+    assert.equal(String(tables.projects[0].vault_reserved), reservedAfterRecovery);
   } finally {
     restore();
   }
@@ -1237,10 +1684,22 @@ function parsedPayoutTx(spec) {
       err: null,
       logMessages: ['Program log: Instruction: VaultTransactionExecute'],
       innerInstructions: [],
+      preTokenBalances: [{
+        accountIndex: 4,
+        mint: spec.mint,
+        owner: spec.vaultAddress,
+        uiTokenAmount: { amount: '10000000', decimals: 6 },
+      }],
+      postTokenBalances: [{
+        accountIndex: 4,
+        mint: spec.mint,
+        owner: spec.vaultAddress,
+        uiTokenAmount: { amount: '1', decimals: 6 },
+      }],
     },
     transaction: {
       message: {
-        accountKeys: [SQUADS_PROGRAM, spec.multisig, spec.transactionPda, spec.proposalPda],
+        accountKeys: [SQUADS_PROGRAM, spec.multisig, spec.transactionPda, spec.proposalPda, spec.vaultAta],
         instructions: spec.transfers.map((transfer) => ({
           program: 'spl-token',
           programId: TOKEN_PROGRAM,
@@ -1427,7 +1886,9 @@ test('a draft campaign with pool_size gets 409 from propose', async () => {
     assert.equal(shown.status, 200, JSON.stringify(shown.data));
     assert.equal(shown.data.matches, false);
     assert.equal(shown.data.reason, 'campaign_not_locked');
-    const bard = await call(env, 'POST', '/api/vault/bard-sign', { settlementId });
+    tables.vault_settlements[0].status = 'awaiting_bard';
+    tables.vault_settlements[0].team_signed = true;
+    const bard = await call(env, 'POST', '/api/vault/bard-sign', { settlementId }, token);
     assert.equal(bard.status, 200, JSON.stringify(bard.data));
     assert.equal(bard.data.matches, false);
     assert.equal(bard.data.reason, 'campaign_not_locked');
@@ -1480,7 +1941,9 @@ test('a second propose fails and a second executed fails', async () => {
     const shown = await call(env, 'GET', '/api/settlements/' + secondId + '/verify');
     assert.equal(shown.data.matches, false);
     assert.equal(shown.data.reason, 'campaign_already_paid');
-    const bard = await call(env, 'POST', '/api/vault/bard-sign', { settlementId: secondId });
+    tables.vault_settlements[1].status = 'awaiting_bard';
+    const bard = await call(env, 'POST', '/api/vault/bard-sign', { settlementId: secondId }, token);
+    assert.equal(bard.status, 200, JSON.stringify(bard.data));
     assert.equal(bard.data.matches, false);
     assert.equal(bard.data.reason, 'campaign_already_paid');
   } finally {
@@ -1637,6 +2100,243 @@ test('a signature stored during signing refuses the sign write', async () => {
     assert.equal(tables.vault_settlements[0].tx_signature, 'race-signature');
     assert.equal(tables.vault_settlements[0].tx_index, '4');
     assert.equal(tables.vault_settlements[0].team_signed, false);
+  } finally {
+    restore();
+  }
+});
+
+test('link checks prior proposals, spending limits, and the admin initiate bit', { timeout: 30000 }, async () => {
+  const restore = installFetchGuard();
+  const walletA = keypair();
+  const signer = keypair();
+  const mint = keypair().publicKey;
+  const full = SQUADS_PERMISSION_INITIATE | SQUADS_PERMISSION_VOTE | SQUADS_PERMISSION_EXECUTE;
+  const voteExecute = SQUADS_PERMISSION_VOTE | SQUADS_PERMISSION_EXECUTE;
+  const members = [walletA.publicKey, signer.publicKey];
+  const fresh = keypair().publicKey;
+  const approvedMs = keypair().publicKey;
+  const executedMs = keypair().publicKey;
+  const closedMs = keypair().publicKey;
+  const silentMs = keypair().publicKey;
+  const bardSilentMs = keypair().publicKey;
+  const limitedMs = keypair().publicKey;
+  const hugeMs = keypair().publicKey;
+  const freshAccount = await craftMultisig(2, members, { transactionIndex: 0n, staleTransactionIndex: 0n });
+  const approvedAccount = await craftMultisig(2, members, { transactionIndex: 3n, staleTransactionIndex: 3n });
+  const executedAccount = await craftMultisig(2, members, { transactionIndex: 3n, staleTransactionIndex: 1n });
+  const closedAccount = await craftMultisig(2, members, { transactionIndex: 3n, staleTransactionIndex: 3n });
+  const silentAccount = await craftMultisig(2, [
+    { key: walletA.publicKey, permissions: voteExecute },
+    { key: signer.publicKey, permissions: full },
+  ]);
+  const bardSilentAccount = await craftMultisig(2, [
+    { key: walletA.publicKey, permissions: full },
+    { key: signer.publicKey, permissions: voteExecute },
+  ]);
+  const limitedAccount = await craftMultisig(2, members);
+  const hugeAccount = await craftMultisig(2, members, { transactionIndex: 65n, staleTransactionIndex: 65n });
+  const parsedApproved = await parseSquadsMultisig(decodeBase64(approvedAccount));
+  assert.equal(parsedApproved.transactionIndex, 3n);
+  assert.equal(parsedApproved.staleTransactionIndex, 3n);
+  const parsedFresh = await parseSquadsMultisig(decodeBase64(freshAccount));
+  assert.equal(parsedFresh.transactionIndex, 0n);
+  assert.equal(parsedFresh.staleTransactionIndex, 0n);
+  const accounts = {
+    [fresh]: account(freshAccount),
+    [approvedMs]: account(approvedAccount),
+    [executedMs]: account(executedAccount),
+    [closedMs]: account(closedAccount),
+    [silentMs]: account(silentAccount),
+    [bardSilentMs]: account(bardSilentAccount),
+    [limitedMs]: account(limitedAccount),
+    [hugeMs]: account(hugeAccount),
+  };
+  const proposalSets = [
+    [approvedMs, [SQUADS_PROPOSAL_EXECUTED, SQUADS_PROPOSAL_APPROVED, SQUADS_PROPOSAL_EXECUTED]],
+    [executedMs, [SQUADS_PROPOSAL_EXECUTED, SQUADS_PROPOSAL_EXECUTED, SQUADS_PROPOSAL_EXECUTED]],
+    [closedMs, [SQUADS_PROPOSAL_EXECUTED, SQUADS_PROPOSAL_REJECTED, SQUADS_PROPOSAL_CANCELLED]],
+  ];
+  for (const [multisig, list] of proposalSets) {
+    for (let i = 0; i < list.length; i++) {
+      const index = i + 1;
+      const body = await craftProposal(multisig, index, list[i]);
+      const parsed = await parseSquadsProposal(decodeBase64(body));
+      assert.equal(parsed.multisig, multisig);
+      assert.equal(parsed.transactionIndex, BigInt(index));
+      assert.equal(parsed.status, list[i]);
+      accounts[await squadsProposalAddress(multisig, index)] = account(body);
+    }
+  }
+  const spendingLimit = [{
+    pubkey: keypair().publicKey,
+    account: { lamports: 1, owner: SQUADS_PROGRAM, data: ['', 'base64'] },
+  }];
+  const open = createEnv({ signer: signer.publicKey, accounts, txs: {}, programAccounts: {} });
+  const limited = createEnv({
+    signer: signer.publicKey,
+    accounts,
+    txs: {},
+    programAccounts: { [SQUADS_PROGRAM]: spendingLimit },
+  });
+  const token = (await signJwt(SECRET, walletA.publicKey)).token;
+  const disc = bs58.encode(await squadsSpendingLimitDiscriminator());
+  async function projectOf(env) {
+    const created = await call(env, 'POST', '/api/projects', {
+      name: 'Alpha', ticker: 'ALP', mint, plan: 'starter',
+    }, token);
+    assert.equal(created.status, 200, JSON.stringify(created.data));
+    return created.data.project.id;
+  }
+  async function link(env, projectId, multisig) {
+    return call(env, 'POST', '/api/projects/' + projectId + '/vault', {
+      address: await squadsVaultAddress(multisig),
+      multisig,
+      mint,
+    }, token);
+  }
+  try {
+    const projectId = await projectOf(open.env);
+    const freshLink = await link(open.env, projectId, fresh);
+    assert.equal(freshLink.status, 200, JSON.stringify(freshLink.data));
+    const freshGpa = open.rpcLog.filter((payload) => payload.method === 'getProgramAccounts');
+    assert.equal(freshGpa.length, 1);
+    assert.equal(freshGpa[0].params[0], SQUADS_PROGRAM);
+    assert.deepEqual(freshGpa[0].params[1].filters, [
+      { memcmp: { offset: 0, bytes: disc } },
+      { memcmp: { offset: 8, bytes: fresh } },
+    ]);
+
+    const approvedLink = await link(open.env, projectId, approvedMs);
+    assert.equal(approvedLink.status, 400, JSON.stringify(approvedLink.data));
+    assert.equal(approvedLink.data.error, 'vault has prior transactions; create a fresh Squads with both members');
+
+    const executedLink = await link(open.env, projectId, executedMs);
+    assert.equal(executedLink.status, 200, JSON.stringify(executedLink.data));
+    const closedLink = await link(open.env, projectId, closedMs);
+    assert.equal(closedLink.status, 200, JSON.stringify(closedLink.data));
+
+    const beforeHuge = open.rpcLog.length;
+    const hugeLink = await link(open.env, projectId, hugeMs);
+    assert.equal(hugeLink.status, 400, JSON.stringify(hugeLink.data));
+    assert.equal(hugeLink.data.error, 'vault has prior transactions; create a fresh Squads with both members');
+    const hugeRpc = open.rpcLog.slice(beforeHuge);
+    assert.equal(hugeRpc.filter((payload) => payload.method === 'getProgramAccounts').length, 0);
+    assert.equal(hugeRpc.filter((payload) => payload.method === 'getAccountInfo').length, 1);
+
+    const silentLink = await link(open.env, projectId, silentMs);
+    assert.equal(silentLink.status, 400, JSON.stringify(silentLink.data));
+    assert.equal(silentLink.data.error, 'project admin must be able to propose');
+    const bardSilentLink = await link(open.env, projectId, bardSilentMs);
+    assert.equal(bardSilentLink.status, 200, JSON.stringify(bardSilentLink.data));
+
+    const limitedProject = await projectOf(limited.env);
+    const limitedLink = await link(limited.env, limitedProject, limitedMs);
+    assert.equal(limitedLink.status, 400, JSON.stringify(limitedLink.data));
+    assert.equal(limitedLink.data.error, 'vault has a spending limit');
+    const limitedGpa = limited.rpcLog.filter((payload) => payload.method === 'getProgramAccounts');
+    assert.equal(limitedGpa.length, 1);
+    assert.deepEqual(limitedGpa[0].params[1].filters, [
+      { memcmp: { offset: 0, bytes: disc } },
+      { memcmp: { offset: 8, bytes: limitedMs } },
+    ]);
+  } finally {
+    restore();
+  }
+});
+
+test('TRAA-338 refuses a config-controlled vault and a rebuilt transaction on a new vault', { timeout: 30000 }, async () => {
+  const restore = installFetchGuard();
+  try {
+    const ready = await prepareLockedSettlement();
+    const { env, tables, accounts, token, project, settlement, multisig, signer } = ready;
+    assert.equal(settlement.vault_multisig, multisig);
+    assert.equal(tables.vault_settlements[0].tx_index, '4');
+    const v2 = keypair().publicKey;
+    const v2Vault = await squadsVaultAddress(v2);
+    const controlled = keypair().publicKey;
+    accounts[v2] = account(await craftMultisig(2, [project.admin_wallet, signer.publicKey]));
+    accounts[controlled] = account(await craftMultisig(2, [project.admin_wallet, signer.publicKey], {
+      configAuthority: project.admin_wallet,
+    }));
+    accounts[await squadsProposalAddress(v2, 4)] = account(await craftProposal(v2, 4, SQUADS_PROPOSAL_APPROVED));
+    const controlledLink = await call(env, 'POST', '/api/projects/' + project.id + '/vault', {
+      address: await squadsVaultAddress(controlled), multisig: controlled, mint: project.mint,
+    }, token);
+    assert.equal(controlledLink.status, 400, JSON.stringify(controlledLink.data));
+    assert.equal(controlledLink.data.error, 'vault config authority must be unset');
+    assert.equal(tables.projects[0].vault_multisig, multisig);
+
+    const reservedLink = await call(env, 'POST', '/api/projects/' + project.id + '/vault', {
+      address: v2Vault, multisig: v2, mint: project.mint,
+    }, token);
+    assert.equal(reservedLink.status, 409, JSON.stringify(reservedLink.data));
+    assert.equal(reservedLink.data.error, 'vault cannot be re-linked while funds are reserved');
+    tables.projects[0].vault_reserved = '0';
+    tables.projects[0].vault_reserved_raw = '0';
+    tables.campaigns[0].status = 'cancelled';
+    const openLink = await call(env, 'POST', '/api/projects/' + project.id + '/vault', {
+      address: v2Vault, multisig: v2, mint: project.mint,
+    }, token);
+    assert.equal(openLink.status, 409, JSON.stringify(openLink.data));
+    assert.equal(openLink.data.error, 'vault cannot be re-linked while a settlement is open');
+    assert.equal(tables.projects[0].vault_multisig, multisig);
+    assert.equal(tables.vault_settlements[0].vault_multisig, multisig);
+
+    tables.projects[0].vault_multisig = v2;
+    tables.projects[0].vault_address = v2Vault;
+    const moved = await call(env, 'POST', '/api/settlements/' + settlement.id + '/team-signed', { txIndex: '4' }, token);
+    assert.equal(moved.status, 409, JSON.stringify(moved.data));
+    assert.equal(moved.data.error, 'settlement is bound to vault ' + multisig);
+    assert.equal(tables.vault_settlements[0].vault_multisig, multisig);
+    assert.equal(tables.vault_settlements[0].team_signed, false);
+    const executed = await call(env, 'POST', '/api/settlements/' + settlement.id + '/execute', {
+      signature: '6'.repeat(88),
+    }, token);
+    assert.equal(executed.status, 409, JSON.stringify(executed.data));
+    assert.equal(executed.data.error, 'settlement is bound to vault ' + multisig);
+    assert.equal(tables.vault_settlements[0].status, 'proposed');
+    assert.equal(tables.vault_settlements[0].vault_multisig, multisig);
+    assert.equal(tables.vault_settlements[0].tx_signature || null, null);
+  } finally {
+    restore();
+  }
+});
+
+test('a prize at or above 2^53 is refused before it can round', async () => {
+  const restore = installFetchGuard();
+  const wallet = keypair();
+  const signer = keypair();
+  const multisig = keypair().publicKey;
+  const mint = keypair().publicKey;
+  const vaultAddress = await squadsVaultAddress(multisig);
+  const goodAccount = await craftMultisig(2, [wallet.publicKey, signer.publicKey]);
+  const { env, tables } = createEnv({
+    signer: signer.publicKey,
+    accounts: { [multisig]: account(goodAccount), [mint]: mintAccount(0) },
+    txs: {},
+    tokenAccounts: { [vaultAddress + '|' + mint]: ownedTokens(mint, 10, 0) },
+  });
+  const token = (await signJwt(SECRET, wallet.publicKey)).token;
+  try {
+    const created = await call(env, 'POST', '/api/projects', {
+      name: 'Alpha', ticker: 'ALP', mint, plan: 'starter',
+    }, token);
+    assert.equal(created.status, 200, JSON.stringify(created.data));
+    const linked = await call(env, 'POST', '/api/projects/' + created.data.project.id + '/vault', {
+      address: vaultAddress, multisig, mint,
+    }, token);
+    assert.equal(linked.status, 200, JSON.stringify(linked.data));
+    const huge = await call(env, 'POST', '/api/campaigns', {
+      projectId: created.data.project.id,
+      title: 'Huge',
+      rule: 'hold',
+      type: 'hold',
+      rewardMode: 'fixed',
+      reward: '9007199254740992',
+    }, token);
+    assert.equal(huge.status, 400, JSON.stringify(huge.data));
+    assert.match(huge.data.error, /too large to settle safely/);
+    assert.equal(tables.campaigns.length, 0);
   } finally {
     restore();
   }

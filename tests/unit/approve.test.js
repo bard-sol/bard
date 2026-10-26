@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import nacl from 'tweetnacl';
 import bs58 from 'bs58';
 import { handleRequest } from '../../server/api.js';
+import { signJwt } from '../../server/auth.js';
 import {
   decodeVaultTransactionAccount,
   encodeVaultTransactionAccount,
@@ -20,6 +21,7 @@ import {
 import { payoutHash } from '../../server/settlement.js';
 
 const SYSTEM_PROGRAM = '11111111111111111111111111111111';
+const SECRET = 'test-secret-test-secret-test-secret';
 
 function keypair() {
   const pair = nacl.sign.keyPair();
@@ -206,6 +208,63 @@ test('a different token program fails', async () => {
   assert.notEqual(verdict.reason, '');
 });
 
+test('message instructions in a different wallet order are refused', async () => {
+  const built = await matchingCase();
+  const amounts = new Map(built.settlement.payouts.map((row) => [row.wallet, row.amountRaw]));
+  const reversed = built.wallets.slice().reverse();
+  assert.notDeepEqual(reversed, built.wallets);
+  const instructions = [createAta(built.vault, built.vaultAta, built.vault, built.mint, TOKEN_PROGRAM)];
+  for (const wallet of reversed) {
+    const ata = await associatedTokenAddress(wallet, built.mint, TOKEN_PROGRAM);
+    instructions.push(createAta(built.vault, ata, wallet, built.mint, TOKEN_PROGRAM));
+    instructions.push(transferChecked(built.vaultAta, built.mint, ata, built.vault, amounts.get(wallet), 6, TOKEN_PROGRAM));
+  }
+  const message = compile(built.vault, instructions);
+  const verdict = await verifyVaultTransactionMessage(message, built.settlement, built.options);
+  assert.equal(verdict.ok, false);
+  assert.equal(verdict.reason, 'instruction');
+});
+
+test('a vault pda other than multisig index 0 fails', async () => {
+  const built = await matchingCase();
+  const otherIndex = await squadsVaultAddress(built.multisig, 1);
+  assert.notEqual(otherIndex, built.options.vaultAddress);
+  const verdict = await verifyVaultTransactionMessage(built.message, built.settlement, {
+    ...built.options,
+    vaultAddress: otherIndex,
+  });
+  assert.equal(verdict.ok, false);
+  assert.equal(verdict.reason, 'vault');
+  const missing = await verifyVaultTransactionMessage(built.message, built.settlement, {
+    ...built.options,
+    multisig: '',
+  });
+  assert.equal(missing.ok, false);
+  assert.equal(missing.reason, 'vault');
+});
+
+test('a payout row without a positive amountRaw fails closed', async () => {
+  const built = await matchingCase();
+  const wallet = built.wallets[0];
+  const rows = [
+    [{ wallet, amount: '2.5' }],
+    [{ wallet, amountRaw: '0' }],
+    [{ wallet, amountRaw: '00' }],
+    [{ wallet, amountRaw: '01' }],
+    [{ wallet, amountRaw: '1.5' }],
+    [{ wallet, amountRaw: '' }],
+    [{ wallet, amountRaw: '-5' }],
+    [{ wallet, amountRaw: '18446744073709551616' }],
+    built.settlement.payouts.concat([{ wallet: keypair().publicKey, amountRaw: '0' }]),
+  ];
+  for (const payouts of rows) {
+    const settlement = { payouts, payout_hash: payoutHash(payouts) };
+    const verdict = await verifyVaultTransactionMessage(built.message, settlement, built.options);
+    assert.equal(verdict.ok, false, JSON.stringify(payouts));
+    assert.equal(verdict.reason, 'amount', JSON.stringify(payouts));
+  }
+});
+
 test('reordered payouts still pass', async () => {
   const built = await matchingCase();
   const settlement = { payouts: built.payouts, payout_hash: payoutHash(built.payouts) };
@@ -277,10 +336,11 @@ test('bard sign checks the vault transaction and does not sign', async () => {
       id: campaignId,
       project_id: projectId,
       status: 'active',
-      locked_raw: '1',
-      prize_raw: '1',
+      locked_raw: '10000000',
+      prize_raw: '10000000',
       prize_mint: built.mint,
       cut_bps: 0,
+      cut_raw: '0',
     }],
     vault_settlements: [{
       id: settlementId,
@@ -291,9 +351,14 @@ test('bard sign checks the vault transaction and does not sign', async () => {
       vault_multisig: built.multisig,
       tx_index: '7',
       bard_signed: false,
+      team_signed: true,
       status: 'awaiting_bard',
     }],
   };
+  const adminWallet = keypair().publicKey;
+  tables.projects[0].admin_wallet = adminWallet;
+  const adminToken = (await signJwt(SECRET, adminWallet)).token;
+  const strangerToken = (await signJwt(SECRET, keypair().publicKey)).token;
   const accounts = {
     [built.mint]: mintAccount(6, TOKEN_PROGRAM),
     [transactionPda]: { value: { owner: SQUADS_PROGRAM, data: [toBase64(account(0)), 'base64'] } },
@@ -301,6 +366,7 @@ test('bard sign checks the vault transaction and does not sign', async () => {
   const env = {
     SUPABASE_URL: 'http://supabase.test',
     SUPABASE_SERVICE_ROLE_KEY: 'service-role-test',
+    SUPABASE_JWT_SECRET: SECRET,
     BARD_SIGNER_PUBKEY: signer,
     SOLANA_RPC: 'http://rpc.test/solana',
     fetch: async (url, opts = {}) => {
@@ -326,22 +392,46 @@ test('bard sign checks the vault transaction and does not sign', async () => {
       return Response.json({ message: 'bad method' }, { status: 500 });
     },
   };
-  const call = async (body) => {
+  const call = async (body, token) => {
+    const headers = { 'content-type': 'application/json' };
+    if (token) headers.authorization = 'Bearer ' + token;
     const res = await handleRequest(new Request('http://127.0.0.1/api/vault/bard-sign', {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers,
       body: JSON.stringify(body),
     }), env);
     return { status: res.status, data: await res.json() };
   };
-  const pass = await call({ settlementId });
+  const anon = await call({ settlementId });
+  assert.equal(anon.status, 401, JSON.stringify(anon.data));
+  assert.equal(anon.data.error, 'missing session');
+  const wrongCaller = await call({ settlementId }, strangerToken);
+  assert.equal(wrongCaller.status, 403, JSON.stringify(wrongCaller.data));
+  assert.equal(wrongCaller.data.error, 'not the project admin');
+  tables.vault_settlements[0].status = 'both_signed';
+  const wrongStatus = await call({ settlementId }, adminToken);
+  assert.equal(wrongStatus.status, 400, JSON.stringify(wrongStatus.data));
+  assert.equal(wrongStatus.data.reason, 'settlement is not awaiting bard');
+  tables.vault_settlements[0].status = 'awaiting_bard';
+  tables.vault_settlements[0].team_signed = false;
+  const unsigned = await call({ settlementId }, adminToken);
+  assert.equal(unsigned.status, 400, JSON.stringify(unsigned.data));
+  assert.equal(unsigned.data.reason, 'settlement is not awaiting bard');
+  tables.vault_settlements[0].team_signed = true;
+  const savedMultisig = tables.projects[0].vault_multisig;
+  tables.projects[0].vault_multisig = keypair().publicKey;
+  const mismatch = await call({ settlementId }, adminToken);
+  assert.equal(mismatch.status, 400, JSON.stringify(mismatch.data));
+  assert.equal(mismatch.data.reason, 'project vault is not linked');
+  tables.projects[0].vault_multisig = savedMultisig;
+  const pass = await call({ settlementId }, adminToken);
   assert.equal(pass.status, 200, JSON.stringify(pass.data));
   assert.equal(pass.data.waiting, true);
   assert.equal(pass.data.reason, 'bard_signer_not_wired');
   assert.equal(tables.vault_settlements[0].bard_signed, false);
 
   accounts[transactionPda] = { value: { owner: SQUADS_PROGRAM, data: [toBase64(account(0, 9)), 'base64'] } };
-  const fail = await call({ settlementId });
+  const fail = await call({ settlementId }, adminToken);
   assert.equal(fail.status, 400, JSON.stringify(fail.data));
   assert.equal(fail.data.reason, 'amount');
   assert.equal(tables.vault_settlements[0].bard_signed, false);
@@ -349,7 +439,7 @@ test('bard sign checks the vault transaction and does not sign', async () => {
   const unwired = { ...env, BARD_SIGNER_PUBKEY: '' };
   const waiting = await handleRequest(new Request('http://127.0.0.1/api/vault/bard-sign', {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json', authorization: 'Bearer ' + adminToken },
     body: JSON.stringify({ settlementId }),
   }), unwired);
   const waitingBody = await waiting.json();

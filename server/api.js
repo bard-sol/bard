@@ -8,17 +8,24 @@ import {
   verifyJwt,
   isBase58Address,
 } from './auth.js';
+import bs58 from 'bs58';
 import {
   FEE_TREASURY,
   SQUADS_PROGRAM,
+  SQUADS_PERMISSION_INITIATE,
+  SQUADS_PERMISSION_VOTE,
+  SQUADS_PERMISSION_EXECUTE,
   TOKEN_PROGRAM,
   TOKEN_2022_PROGRAM,
   parseSquadsMultisig,
+  parseSquadsProposal,
+  proposalStatusIsClosed,
   sameMemberSet,
   decodeBase64,
   squadsVaultAddress,
   squadsTransactionAddress,
   squadsProposalAddress,
+  squadsSpendingLimitDiscriminator,
   associatedTokenAddress,
 } from './chain.js';
 import {
@@ -39,7 +46,7 @@ import {
 import { handleCampaignState } from './campaign_state.js';
 import { decodeVaultTransactionAccount, verifyVaultTransactionMessage } from './approve.js';
 import { decodeProposal, decodeVaultTransaction, diffTransfers } from './accounts.js';
-import { lockNeed, resolvePrizeRaw, settlementCut } from './money.js';
+import { assertJsonSafeRaw, lockNeed, resolvePrizeRaw, settlementCut } from './money.js';
 const CAMPAIGN_PAGE = /^\/c\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i;
 const RECEIPT_PAGE = /^\/c\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/receipt$/i;
 
@@ -239,6 +246,13 @@ function campaignLocked(campaign, project) {
   const status = String(campaign.status || '');
   if (status !== 'active' && status !== 'ended') return false;
   if (!fieldSet(campaign.locked_raw) || !fieldSet(campaign.prize_raw)) return false;
+  try {
+    assertJsonSafeRaw(campaign.prize_raw, 'prize_raw');
+    assertJsonSafeRaw(campaign.locked_raw, 'locked_raw');
+    if (fieldSet(campaign.cut_raw)) assertJsonSafeRaw(campaign.cut_raw, 'cut_raw');
+  } catch {
+    return false;
+  }
   if (campaign.cut_bps == null || String(campaign.cut_bps).trim() === '') return false;
   const prizeMint = String(campaign.prize_mint || '').trim();
   return prizeMint !== '' && prizeMint === projectVaultMint(project);
@@ -379,6 +393,13 @@ async function handleCreateCampaign(request, env) {
     return badRequest(err);
   }
   const lock = lockNeed(prizeRaw, settings.cutBps);
+  try {
+    assertJsonSafeRaw(lock.prizeRaw, 'prize_raw');
+    assertJsonSafeRaw(lock.lockedRaw, 'locked_raw');
+    assertJsonSafeRaw(lock.cutRaw, 'cut_raw');
+  } catch (err) {
+    return badRequest(err);
+  }
   const reserved = await sbRpc(env, 'reserve_vault_raw', {
     p_project_id: project.id,
     p_balance_raw: balance.raw,
@@ -481,6 +502,94 @@ async function handleCreateProject(request, env) {
   return json({ project });
 }
 
+function isZeroPubkey(key) {
+  try {
+    const bytes = bs58.decode(key);
+    return bytes.length === 32 && bytes.every((byte) => byte === 0);
+  } catch {
+    return false;
+  }
+}
+
+function memberCanVoteAndExecute(mask) {
+  const bits = Number(mask);
+  return (bits & SQUADS_PERMISSION_VOTE) === SQUADS_PERMISSION_VOTE
+    && (bits & SQUADS_PERMISSION_EXECUTE) === SQUADS_PERMISSION_EXECUTE;
+}
+
+function memberCanInitiate(mask) {
+  return (Number(mask) & SQUADS_PERMISSION_INITIATE) === SQUADS_PERMISSION_INITIATE;
+}
+
+// A link scans one proposal account per historical transaction. Above this
+// the multisig is refused instead of issuing an unbounded RPC scan.
+const MAX_LINK_TRANSACTION_INDEX = 64n;
+
+async function priorProposalsAreClosed(env, multisig, transactionIndex) {
+  if (transactionIndex === 0n) return true;
+  if (transactionIndex < 0n || transactionIndex > MAX_LINK_TRANSACTION_INDEX) return false;
+  for (let index = 1n; index <= transactionIndex; index++) {
+    const pda = await squadsProposalAddress(multisig, index);
+    const result = await rpc(env, 'getAccountInfo', [pda, { encoding: 'base64', commitment: 'confirmed' }]);
+    const value = result && result.value;
+    if (!value || value.owner !== SQUADS_PROGRAM || !value.data || !value.data[0]) return false;
+    const proposal = await parseSquadsProposal(decodeBase64(value.data[0]));
+    if (!proposal || proposal.multisig !== multisig || proposal.transactionIndex !== index) return false;
+    if (!proposalStatusIsClosed(proposal.status)) return false;
+  }
+  return true;
+}
+
+async function multisigHasSpendingLimit(env, multisig) {
+  const discriminator = await squadsSpendingLimitDiscriminator();
+  const result = await rpc(env, 'getProgramAccounts', [
+    SQUADS_PROGRAM,
+    {
+      commitment: 'confirmed',
+      encoding: 'base64',
+      filters: [
+        { memcmp: { offset: 0, bytes: bs58.encode(discriminator) } },
+        { memcmp: { offset: 8, bytes: multisig } },
+      ],
+    },
+  ]);
+  return !Array.isArray(result) || result.length > 0;
+}
+
+function hasReservedFunds(value) {
+  const text = String(value == null ? '' : value).trim();
+  if (!text || text.startsWith('-')) return false;
+  const match = text.match(/^(\d+)(?:\.(\d+))?$/);
+  if (!match) return Number(text) > 0;
+  if (match[1].replace(/0/g, '') !== '') return true;
+  return match[2] != null && /[1-9]/.test(match[2]);
+}
+
+async function projectHasOpenSettlement(env, projectId) {
+  const rows = await select(env, 'vault_settlements', 'project_id=eq.' + encodeURIComponent(projectId) + '&select=status');
+  if (!Array.isArray(rows)) return false;
+  return rows.some((row) => row && row.status !== 'executed' && row.status !== 'cancelled');
+}
+
+async function projectHasOpenLock(env, project) {
+  if (hasReservedFunds(project.vault_reserved)) return true;
+  const reservedRaw = String(project.vault_reserved_raw == null ? '' : project.vault_reserved_raw).trim();
+  if (/^\d+$/.test(reservedRaw) && BigInt(reservedRaw) > 0n) return true;
+  const rows = await select(env, 'campaigns', 'project_id=eq.' + encodeURIComponent(project.id) + '&select=status,locked_raw');
+  if (!Array.isArray(rows)) return false;
+  return rows.some((row) => {
+    if (!row || row.status === 'paid' || row.status === 'cancelled') return false;
+    const text = String(row.locked_raw == null ? '' : row.locked_raw).trim();
+    return /^\d+$/.test(text) && BigInt(text) > 0n;
+  });
+}
+
+function pinnedMultisig(settlement, project) {
+  const pinned = String((settlement && settlement.vault_multisig) || '').trim();
+  if (pinned) return pinned;
+  return String((project && project.vault_multisig) || '').trim();
+}
+
 async function handleLinkVault(request, env, projectId) {
   const session = await sessionWallet(request, env);
   if (session.error) return session.error;
@@ -503,11 +612,33 @@ async function handleLinkVault(request, env, projectId) {
     return json({ error: 'vault is not a Squads multisig' }, 400);
   }
   const parsed = await parseSquadsMultisig(decodeBase64(value.data[0]));
-  if (!parsed || parsed.threshold !== 2 || !sameMemberSet(parsed.members, [admin.project.admin_wallet, signer])) {
+  if (!parsed || !isZeroPubkey(parsed.configAuthority)) {
+    return json({ error: 'vault config authority must be unset' }, 400);
+  }
+  if (parsed.threshold !== 2 || !sameMemberSet(parsed.members, [admin.project.admin_wallet, signer])) {
     return json({ error: 'vault must be 2-of-2 with the project admin and the Bard signer' }, 400);
+  }
+  if (!parsed.members.every((member) => memberCanVoteAndExecute(member.permissions))) {
+    return json({ error: 'vault members must be able to vote and execute' }, 400);
+  }
+  const adminMember = parsed.members.find((member) => member.key === admin.project.admin_wallet);
+  if (!adminMember || !memberCanInitiate(adminMember.permissions)) {
+    return json({ error: 'project admin must be able to propose' }, 400);
   }
   const vault = await squadsVaultAddress(multisig);
   if (address !== vault) return json({ error: 'deposit address is not the Squads vault' }, 400);
+  if (!(await priorProposalsAreClosed(env, multisig, parsed.transactionIndex))) {
+    return json({ error: 'vault has prior transactions; create a fresh Squads with both members' }, 400);
+  }
+  if (await multisigHasSpendingLimit(env, multisig)) {
+    return json({ error: 'vault has a spending limit' }, 400);
+  }
+  if (await projectHasOpenLock(env, admin.project)) {
+    return json({ error: 'vault cannot be re-linked while funds are reserved' }, 409);
+  }
+  if (await projectHasOpenSettlement(env, projectId)) {
+    return json({ error: 'vault cannot be re-linked while a settlement is open' }, 409);
+  }
   const updated = await patch(env, 'projects', 'id=eq.' + encodeURIComponent(projectId), {
     vault_address: address,
     vault_multisig: multisig,
@@ -586,7 +717,7 @@ async function readSquadsAccount(env, address) {
 }
 
 async function vaultMessageVerdict(env, settlement, project) {
-  const multisig = String((project && project.vault_multisig) || settlement.vault_multisig || '').trim();
+  const multisig = pinnedMultisig(settlement, project);
   if (!isBase58Address(multisig)) throw new Error('project vault is not linked');
   if (settlement.tx_index == null || String(settlement.tx_index).trim() === '') {
     throw new Error('settlement has no vault transaction');
@@ -657,13 +788,27 @@ async function handleMemberSigned(request, env, settlementId, kind) {
   if (String(current.tx_signature || '').trim()) return json({ error: 'settlement is closed' }, 400);
   if (current.status === 'executed' || current.status === 'cancelled') return json({ error: 'settlement is closed' }, 400);
   const boundIndex = current.tx_index == null || String(current.tx_index).trim() === '' ? null : String(current.tx_index).trim();
-  const requestedIndex = body.txIndex == null || String(body.txIndex).trim() === '' ? null : String(body.txIndex).trim();
+  let requestedIndex = null;
+  if (body.txIndex != null) {
+    if (typeof body.txIndex === 'number' && Number.isInteger(body.txIndex) && body.txIndex >= 0) {
+      requestedIndex = String(body.txIndex);
+    } else if (typeof body.txIndex === 'string' && /^\d+$/.test(body.txIndex)) {
+      requestedIndex = body.txIndex;
+    } else {
+      return json({ error: 'invalid tx index' }, 400);
+    }
+  }
   if (boundIndex != null && requestedIndex != null && !sameVaultIndex(boundIndex, requestedIndex)) {
     return json({ error: 'settlement is bound to vault transaction ' + boundIndex }, 409);
   }
-  const linkedMultisig = project.vault_multisig || '';
-  if (!isBase58Address(linkedMultisig)) return json({ error: 'project vault is not linked' }, 400);
-  const txIndexText = requestedIndex == null ? current.tx_index : body.txIndex;
+  const pinned = String(current.vault_multisig || '').trim();
+  const projectMultisig = String(project.vault_multisig || '').trim();
+  if (!isBase58Address(projectMultisig)) return json({ error: 'project vault is not linked' }, 400);
+  if (pinned && pinned !== projectMultisig) {
+    return json({ error: 'settlement is bound to vault ' + pinned }, 409);
+  }
+  const linkedMultisig = pinned || projectMultisig;
+  const txIndexText = requestedIndex == null ? current.tx_index : requestedIndex;
   const pending = Object.assign({}, current, { tx_index: txIndexText, vault_multisig: linkedMultisig });
   let checked;
   try {
@@ -681,8 +826,8 @@ async function handleMemberSigned(request, env, settlementId, kind) {
     bard_signed: bardSigned,
     status,
     tx_index: String(checked.txIndex),
-    vault_multisig: linkedMultisig,
   };
+  if (!pinned) row.vault_multisig = linkedMultisig;
   if (kind === 'team') {
     row.team_signed_at = new Date().toISOString();
     row.cosigned_wallet = session.wallet;
@@ -708,15 +853,26 @@ function signerReject(reason, status = 400) {
 }
 
 async function handleBardSign(request, env) {
-  if (!isBase58Address(env.BARD_SIGNER_PUBKEY || '')) return signerWaiting();
+  const session = await sessionWallet(request, env);
+  if (session.error) return session.error;
   const body = await readJson(request);
   if (body == null) return signerReject('invalid json');
   const settlementId = body.settlementId ? String(body.settlementId) : '';
   if (!settlementId) return signerReject('settlement not found', 404);
   const current = firstRow(await select(env, 'vault_settlements', 'id=eq.' + encodeURIComponent(settlementId) + '&select=*'));
   if (!current) return signerReject('settlement not found', 404);
+  const admin = await projectForAdmin(env, current.project_id, session.wallet);
+  if (admin.error) return admin.error;
+  const project = admin.project;
+  if (current.status !== 'awaiting_bard' || current.team_signed !== true) {
+    return signerReject('settlement is not awaiting bard');
+  }
   const multisig = String(current.vault_multisig || '').trim();
-  if (!isBase58Address(multisig)) return signerReject('project vault is not linked');
+  const linkedMultisig = String(project.vault_multisig || '').trim();
+  if (!isBase58Address(multisig) || !isBase58Address(linkedMultisig) || linkedMultisig !== multisig) {
+    return signerReject('project vault is not linked');
+  }
+  if (!isBase58Address(env.BARD_SIGNER_PUBKEY || '')) return signerWaiting();
   if (current.tx_index == null || String(current.tx_index).trim() === '') {
     return signerReject('settlement has no vault transaction');
   }
@@ -726,8 +882,7 @@ async function handleBardSign(request, env) {
   } catch {
     return signerReject('settlement has no vault transaction');
   }
-  const project = firstRow(await select(env, 'projects', 'id=eq.' + encodeURIComponent(current.project_id) + '&select=*'));
-  if (!project || !project.vault_address) return signerReject('project vault is not linked');
+  if (!project.vault_address) return signerReject('project vault is not linked');
   const mint = project.vault_mint || project.mint;
   if (!mint) return signerReject('Vault mint is missing');
   const block = await settlementPayoutBlock(env, current, project);
@@ -900,6 +1055,32 @@ async function handlePropose(request, env) {
   return json({ settlement });
 }
 
+function tokenAccountPubkey(tx, accountIndex) {
+  if (!Number.isInteger(accountIndex) || accountIndex < 0) return '';
+  const keys = accountKeysOf(tx);
+  return keys[accountIndex] || '';
+}
+
+// Scope comes from pre-token balances. A closed or re-owned source is still in
+// that list, and the post-balance owner must still be the vault.
+function vaultOwnedSources(tx, vault, mint) {
+  const pre = tx && tx.meta && tx.meta.preTokenBalances;
+  if (!Array.isArray(pre)) throw new Error('transaction is missing pre-token balances');
+  const post = tx.meta && Array.isArray(tx.meta.postTokenBalances) ? tx.meta.postTokenBalances : [];
+  const owned = new Set();
+  for (const entry of pre) {
+    if (!entry || entry.owner !== vault || entry.mint !== mint) continue;
+    const pubkey = tokenAccountPubkey(tx, entry.accountIndex);
+    if (!pubkey) throw new Error('transaction is missing pre-token balances');
+    const match = post.find((item) => item && item.accountIndex === entry.accountIndex);
+    if (!match || match.owner !== vault || match.mint !== mint) {
+      throw new Error('vault token account owner changed');
+    }
+    owned.add(pubkey);
+  }
+  return owned;
+}
+
 function parsedTokenProgramOk(transfer, tokenProgram) {
   const program = transfer.program || '';
   const programId = transfer.programId || '';
@@ -909,7 +1090,7 @@ function parsedTokenProgramOk(transfer, tokenProgram) {
 }
 
 export async function verifyExecutedPayout(env, settlement, project, signature) {
-  const multisig = project.vault_multisig || settlement.vault_multisig || '';
+  const multisig = pinnedMultisig(settlement, project);
   if (!multisig) throw new Error('project vault is not linked');
   if (settlement.tx_index == null || String(settlement.tx_index).trim() === '') {
     throw new Error('settlement has no vault transaction');
@@ -946,7 +1127,7 @@ export async function verifyExecutedPayout(env, settlement, project, signature) 
     const cutText = String(settlement.cut_raw == null ? '' : settlement.cut_raw).trim();
     if (cutText) {
       if (!/^\d+$/.test(cutText)) throw new Error('Cut amount is invalid');
-      const cut = BigInt(cutText);
+      const cut = assertJsonSafeRaw(cutText, 'cut_raw');
       if (cut > 0n) {
         const cutWallet = settlement.cut_wallet;
         if (!cutWallet) throw new Error('Cut wallet is missing');
@@ -956,10 +1137,16 @@ export async function verifyExecutedPayout(env, settlement, project, signature) 
     }
   }
   if (!expected.size) throw new Error('settlement has no payout amounts');
+  const vaultOwned = vaultOwnedSources(tx, project.vault_address, mint);
+  const sourceInScope = (source) => {
+    if (!source) return false;
+    if (source === vaultAta) return true;
+    return vaultOwned.has(source);
+  };
   const actual = new Map();
   for (const transfer of parsedTransfers(tx)) {
-    if (!transfer.mint || transfer.mint !== mint) continue;
-    if (!transfer.source || transfer.source !== vaultAta) continue;
+    if (!sourceInScope(transfer.source)) continue;
+    if (transfer.mint && transfer.mint !== mint) throw new Error('payout mint is not the vault mint');
     if (!parsedTokenProgramOk(transfer, mintInfo.tokenProgram)) {
       throw new Error('payout program is not the vault token program');
     }
@@ -993,6 +1180,11 @@ async function handleExecute(request, env, settlementId) {
   if (current.status === 'cancelled') return json({ error: 'settlement is closed' }, 400);
   const sameReplay = current.status === 'executed' && current.tx_signature === signature;
   if (current.status === 'executed' && !sameReplay) return json({ error: 'settlement is closed' }, 400);
+  const pinnedVault = String(current.vault_multisig || '').trim();
+  const projectVault = String(admin.project.vault_multisig || '').trim();
+  if (pinnedVault && projectVault && pinnedVault !== projectVault) {
+    return json({ error: 'settlement is bound to vault ' + pinnedVault }, 409);
+  }
   const campaignGate = await loadCampaign(env, current.campaign_id);
   if (!sameReplay) {
     if (campaignGate && campaignGate.status === 'paid') return json({ error: 'campaign is already paid' }, 409);
@@ -1003,24 +1195,57 @@ async function handleExecute(request, env, settlementId) {
       }
     }
   }
-  const used = await select(env, 'vault_settlements', 'tx_signature=eq.' + encodeURIComponent(signature) + '&select=id');
-  if (Array.isArray(used) && used.some((row) => row.id !== current.id)) return json({ error: 'signature already used' }, 400);
-  try {
-    await verifyExecutedPayout(env, current, admin.project, signature);
-    await vaultMessageVerdict(env, current, admin.project);
-  } catch (err) {
-    return badRequest(err);
+  if (campaignGate) {
+    try {
+      if (fieldSet(campaignGate.prize_raw)) assertJsonSafeRaw(campaignGate.prize_raw, 'prize_raw');
+      if (fieldSet(campaignGate.locked_raw)) assertJsonSafeRaw(campaignGate.locked_raw, 'locked_raw');
+      if (fieldSet(campaignGate.cut_raw)) assertJsonSafeRaw(campaignGate.cut_raw, 'cut_raw');
+    } catch (err) {
+      return badRequest(err);
+    }
+  }
+  if (current.tx_signature && current.tx_signature !== signature) {
+    return json({ error: 'settlement is closed' }, 400);
+  }
+  // Claim the signature before any bookkeeping. A retry that already holds it
+  // resumes at the writes, then the status patch closes the settlement.
+  const resume = !sameReplay && current.tx_signature === signature;
+  if (!sameReplay && !resume) {
+    const used = await select(env, 'vault_settlements', 'tx_signature=eq.' + encodeURIComponent(signature) + '&select=id');
+    if (Array.isArray(used) && used.some((row) => row.id !== current.id)) return json({ error: 'signature already used' }, 400);
+    try {
+      await verifyExecutedPayout(env, current, admin.project, signature);
+      await vaultMessageVerdict(env, current, admin.project);
+    } catch (err) {
+      return badRequest(err);
+    }
+    let claimed;
+    try {
+      claimed = await patch(
+        env,
+        'vault_settlements',
+        'id=eq.' + encodeURIComponent(settlementId) + '&status=not.in.(executed,cancelled)&tx_signature=is.null',
+        { tx_signature: signature }
+      );
+    } catch (err) {
+      if (err.code === '23505') return json({ error: 'signature already used' }, 400);
+      throw err;
+    }
+    if (!firstRow(claimed)) {
+      const again = firstRow(await select(env, 'vault_settlements', 'id=eq.' + encodeURIComponent(settlementId) + '&select=*'));
+      if (!again || again.tx_signature !== signature || again.status === 'executed' || again.status === 'cancelled') {
+        return json({ error: 'settlement is closed' }, 400);
+      }
+    }
+  } else {
+    try {
+      await verifyExecutedPayout(env, current, admin.project, signature);
+      await vaultMessageVerdict(env, current, admin.project);
+    } catch (err) {
+      return badRequest(err);
+    }
   }
   const now = new Date().toISOString();
-  let marked = current;
-  if (!sameReplay) {
-    const markedRows = await patch(env, 'vault_settlements', 'id=eq.' + encodeURIComponent(settlementId), {
-      status: 'executed',
-      tx_signature: signature,
-      executed_at: now,
-    });
-    marked = firstRow(markedRows) || Object.assign({}, current, { status: 'executed', tx_signature: signature, executed_at: now });
-  }
   const payouts = Array.isArray(current.payouts) ? current.payouts : [];
   for (const payout of payouts) {
     if (!payout || !payout.wallet) continue;
@@ -1070,7 +1295,18 @@ async function handleExecute(request, env, settlementId) {
       vault_reserved: subDecimal(admin.project.vault_reserved || 0, current.total),
     });
   }
-  return json({ settlement: marked });
+  const updated = await patch(
+    env,
+    'vault_settlements',
+    'id=eq.' + encodeURIComponent(settlementId) + '&tx_signature=eq.' + encodeURIComponent(signature),
+    {
+      status: 'executed',
+      executed_at: now,
+    }
+  );
+  const settlement = firstRow(updated);
+  if (!settlement) return json({ error: 'settlement is closed' }, 400);
+  return json({ settlement });
 }
 
 async function handleDrawCommit(request, env, campaignId) {

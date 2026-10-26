@@ -37,6 +37,7 @@ import {
 } from '../src/index.js';
 import { verifyExecutedPayout } from '../../server/api.js';
 import { decodeVaultTransactionAccount, verifyVaultTransactionMessage } from '../../server/approve.js';
+import { parseSquadsMultisig } from '../../server/chain.js';
 import { loadSquadsCache, SQUADS_PROGRAM_ID } from './litesvm-cache.mjs';
 import { applyComputeBudget, createLiteSvmConnection } from './litesvm-connection.mjs';
 
@@ -203,8 +204,29 @@ function proofEnv(parsedTx, tokenProgram) {
   };
 }
 
+// A confirmed jsonParsed transaction carries pre and post token balances.
+// The execute check refuses a missing list, and it refuses a vault-owned
+// account of this mint whose owner changes. Record the vault ATA both times.
+function attachVaultTokenBalances(parsed, project, tokenProgram) {
+  var program = tokenProgram === TOKEN_2022_PROGRAM_ID.toBase58() ? TOKEN_2022_PROGRAM_ID : TOKEN_PROGRAM_ID;
+  var mint = project.vault_mint || project.mint;
+  var vaultAta = getAssociatedTokenAddressSync(
+    new PublicKey(mint),
+    new PublicKey(project.vault_address),
+    true,
+    program
+  ).toBase58();
+  var keys = parsed.transaction.message.accountKeys;
+  var accountIndex = keys.indexOf(vaultAta);
+  if (accountIndex < 0) throw new Error('simulated execute is missing the vault token account');
+  var entry = { accountIndex: accountIndex, mint: mint, owner: project.vault_address };
+  parsed.meta.preTokenBalances = [entry];
+  parsed.meta.postTokenBalances = [{ accountIndex: accountIndex, mint: mint, owner: project.vault_address }];
+}
+
 async function assertRealExecute(sent, signature, settlement, project, tokenProgram, minTransfers) {
   var built = jsonParsedFromSent(sent);
+  attachVaultTokenBalances(built.parsed, project, tokenProgram);
   assert.ok(
     built.logs.some(function (line) { return String(line).includes('VaultTransactionExecute'); }),
     'real execute logs did not include VaultTransactionExecute\n' + built.logs.join('\n')
@@ -580,6 +602,7 @@ async function runMint(connection, svm, label, tokenProgram, team, bard, cutBps)
   );
   var extraSent = connection.lastSent;
   var extraParsed = jsonParsedFromSent(extraSent);
+  attachVaultTokenBalances(extraParsed.parsed, project, tokenProgram.toBase58());
   assert.ok(extraParsed.logs.some(function (line) { return String(line).includes('VaultTransactionExecute'); }));
   var extraFailed = false;
   try {
@@ -619,13 +642,279 @@ async function runMint(connection, svm, label, tokenProgram, team, bard, cutBps)
   };
 }
 
+async function proveStaleApprovedExecute(connection, svm) {
+  console.log('\n=== stale approved vault transaction ===');
+  var team = Keypair.generate();
+  var bard = Keypair.generate();
+  await fund(svm, team.publicKey, 2);
+  await fund(svm, bard.publicKey, 1);
+  var tokenProgram = TOKEN_PROGRAM_ID;
+  var mint = await createMint(
+    connection, team, team.publicKey, null, DECIMALS, Keypair.generate(),
+    { commitment: 'confirmed' }, tokenProgram
+  );
+  var createKey = Keypair.generate();
+  var multisigPda = multisig.getMultisigPda({ createKey: createKey.publicKey })[0];
+  var vaultPda = multisig.getVaultPda({ multisigPda: multisigPda, index: 0 })[0];
+  var configPda = multisig.getProgramConfigPda({})[0];
+  var programConfig = await multisig.accounts.ProgramConfig.fromAccountAddress(connection, configPda);
+  var createBlock = await connection.getLatestBlockhash('confirmed');
+  var createTx = multisig.transactions.multisigCreateV2({
+    blockhash: createBlock.blockhash,
+    treasury: programConfig.treasury,
+    createKey: createKey.publicKey,
+    creator: team.publicKey,
+    multisigPda: multisigPda,
+    configAuthority: null,
+    threshold: 1,
+    members: [{ key: team.publicKey, permissions: multisig.types.Permissions.all() }],
+    timeLock: 0,
+    rentCollector: null,
+    memo: 'stale proof 1-of-1',
+  });
+  createTx.sign([createKey]);
+  var createSig = await sendSigned(connection, createTx, team);
+  console.log('create 1-of-1', createSig, multisigPda.toBase58());
+
+  var deposit = 1_000_000n;
+  var drain = 400_000n;
+  var teamAta = await getOrCreateAssociatedTokenAccount(
+    connection, team, mint, team.publicKey, false, 'confirmed', undefined, tokenProgram
+  );
+  await mintTo(
+    connection, team, mint, teamAta.address, team, deposit, [],
+    { commitment: 'confirmed' }, tokenProgram
+  );
+  var vaultAta = await getOrCreateAssociatedTokenAccount(
+    connection, team, mint, vaultPda, true, 'confirmed', undefined, tokenProgram
+  );
+  await transferChecked(
+    connection, team, teamAta.address, mint, vaultAta.address, team, deposit, DECIMALS, [],
+    { commitment: 'confirmed' }, tokenProgram
+  );
+
+  var ms0 = await multisig.accounts.Multisig.fromAccountAddress(connection, multisigPda);
+  var vaultTxIndex = BigInt(ms0.transactionIndex.toString()) + 1n;
+  assert.equal(vaultTxIndex, 1n);
+  var vaultMessageBlock = await connection.getLatestBlockhash('confirmed');
+  var vaultMessage = new TransactionMessage({
+    payerKey: vaultPda,
+    recentBlockhash: vaultMessageBlock.blockhash,
+    instructions: [
+      createTransferCheckedInstruction(
+        vaultAta.address, mint, teamAta.address, vaultPda, drain, DECIMALS, [], tokenProgram
+      ),
+    ],
+  });
+  var vaultCreateBlock = await connection.getLatestBlockhash('confirmed');
+  await sendSigned(connection, multisig.transactions.vaultTransactionCreate({
+    blockhash: vaultCreateBlock.blockhash,
+    feePayer: team.publicKey,
+    multisigPda: multisigPda,
+    transactionIndex: vaultTxIndex,
+    creator: team.publicKey,
+    vaultIndex: 0,
+    ephemeralSigners: 0,
+    transactionMessage: vaultMessage,
+    memo: 'preapproved drain',
+  }), team);
+  var proposalBlock = await connection.getLatestBlockhash('confirmed');
+  await sendSigned(connection, multisig.transactions.proposalCreate({
+    blockhash: proposalBlock.blockhash,
+    feePayer: team.publicKey,
+    multisigPda: multisigPda,
+    transactionIndex: vaultTxIndex,
+    creator: team.publicKey,
+    rentPayer: team.publicKey,
+    isDraft: false,
+  }), team);
+  var approveBlock = await connection.getLatestBlockhash('confirmed');
+  await sendSigned(connection, multisig.transactions.proposalApprove({
+    blockhash: approveBlock.blockhash,
+    feePayer: team.publicKey,
+    multisigPda: multisigPda,
+    transactionIndex: vaultTxIndex,
+    member: team.publicKey,
+  }), team);
+
+  var proposalPda = multisig.getProposalPda({
+    multisigPda: multisigPda,
+    transactionIndex: vaultTxIndex,
+  })[0];
+  var proposal = await multisig.accounts.Proposal.fromAccountAddress(connection, proposalPda);
+  console.log('proposal before config', proposal.status.__kind);
+  assert.equal(proposal.status.__kind, 'Approved');
+
+  var ms1 = await multisig.accounts.Multisig.fromAccountAddress(connection, multisigPda);
+  var configIndex = BigInt(ms1.transactionIndex.toString()) + 1n;
+  var configBlock = await connection.getLatestBlockhash('confirmed');
+  await sendSigned(connection, multisig.transactions.configTransactionCreate({
+    blockhash: configBlock.blockhash,
+    feePayer: team.publicKey,
+    creator: team.publicKey,
+    rentPayer: team.publicKey,
+    multisigPda: multisigPda,
+    transactionIndex: configIndex,
+    actions: [
+      {
+        __kind: 'AddMember',
+        newMember: { key: bard.publicKey, permissions: multisig.types.Permissions.all() },
+      },
+      { __kind: 'ChangeThreshold', newThreshold: 2 },
+    ],
+    memo: 'add bard threshold 2',
+  }), team);
+  var configProposalBlock = await connection.getLatestBlockhash('confirmed');
+  await sendSigned(connection, multisig.transactions.proposalCreate({
+    blockhash: configProposalBlock.blockhash,
+    feePayer: team.publicKey,
+    multisigPda: multisigPda,
+    transactionIndex: configIndex,
+    creator: team.publicKey,
+    rentPayer: team.publicKey,
+    isDraft: false,
+  }), team);
+  var configApproveBlock = await connection.getLatestBlockhash('confirmed');
+  await sendSigned(connection, multisig.transactions.proposalApprove({
+    blockhash: configApproveBlock.blockhash,
+    feePayer: team.publicKey,
+    multisigPda: multisigPda,
+    transactionIndex: configIndex,
+    member: team.publicKey,
+  }), team);
+  var configExecBlock = await connection.getLatestBlockhash('confirmed');
+  await sendSigned(connection, multisig.transactions.configTransactionExecute({
+    blockhash: configExecBlock.blockhash,
+    feePayer: team.publicKey,
+    multisigPda: multisigPda,
+    transactionIndex: configIndex,
+    member: team.publicKey,
+    rentPayer: team.publicKey,
+  }), team);
+
+  var ms2 = await multisig.accounts.Multisig.fromAccountAddress(connection, multisigPda);
+  var proposalAfter = await multisig.accounts.Proposal.fromAccountAddress(connection, proposalPda);
+  var staleIndex = BigInt(ms2.staleTransactionIndex.toString());
+  console.log('threshold', ms2.threshold);
+  console.log('members', ms2.members.length);
+  console.log('transactionIndex', ms2.transactionIndex.toString());
+  console.log('staleTransactionIndex', staleIndex.toString());
+  console.log('vault proposal after config', proposalAfter.status.__kind);
+  assert.equal(ms2.threshold, 2);
+  assert.equal(ms2.members.length, 2);
+  assert.equal(proposalAfter.status.__kind, 'Approved');
+  assert.ok(staleIndex >= vaultTxIndex, 'config execute did not mark the approved vault transaction stale');
+
+  var teamBefore = tokenBalance(await getAccount(connection, teamAta.address, 'confirmed', tokenProgram));
+  var vaultBefore = tokenBalance(await getAccount(connection, vaultAta.address, 'confirmed', tokenProgram));
+  var executed = false;
+  var refusal = '';
+  var execSig = '';
+  try {
+    var execBlock = await connection.getLatestBlockhash('confirmed');
+    execSig = await sendSigned(connection, await multisig.transactions.vaultTransactionExecute({
+      connection: connection,
+      blockhash: execBlock.blockhash,
+      feePayer: team.publicKey,
+      multisigPda: multisigPda,
+      transactionIndex: vaultTxIndex,
+      member: team.publicKey,
+    }), team);
+    executed = true;
+  } catch (err) {
+    refusal = err && err.message ? err.message : String(err);
+    console.log('execute refused');
+    console.log(refusal);
+  }
+  var teamAfter = tokenBalance(await getAccount(connection, teamAta.address, 'confirmed', tokenProgram));
+  var vaultAfter = tokenBalance(await getAccount(connection, vaultAta.address, 'confirmed', tokenProgram));
+  console.log('executed', executed);
+  console.log('executeSig', execSig);
+  console.log('team', teamBefore.toString(), teamAfter.toString());
+  console.log('vault', vaultBefore.toString(), vaultAfter.toString());
+  var proof = {
+    executed: executed,
+    refusal: refusal ? refusal.split('\n')[0] : '',
+    signersOnExecute: 1,
+    thresholdAfterConfig: ms2.threshold,
+    membersAfterConfig: ms2.members.length,
+    vaultTxIndex: vaultTxIndex.toString(),
+    configTxIndex: configIndex.toString(),
+    transactionIndex: ms2.transactionIndex.toString(),
+    staleTransactionIndex: staleIndex.toString(),
+    proposalStatus: proposalAfter.status.__kind,
+    drain: drain.toString(),
+    teamBefore: teamBefore.toString(),
+    teamAfter: teamAfter.toString(),
+    vaultBefore: vaultBefore.toString(),
+    vaultAfter: vaultAfter.toString(),
+    multisig: multisigPda.toBase58(),
+  };
+  console.log('stale-proof', JSON.stringify(proof));
+  assert.equal(executed, true, 'Squads refused the stale approved vault transaction: ' + proof.refusal);
+  assert.equal(teamAfter - teamBefore, drain);
+  assert.equal(vaultBefore - vaultAfter, drain);
+  return proof;
+}
+
+
+async function proveConfigAuthority(connection, svm) {
+  console.log('\n=== sdk multisig with a config authority ===');
+  var team = Keypair.generate();
+  var bard = Keypair.generate();
+  await fund(svm, team.publicKey, 2);
+  await fund(svm, bard.publicKey, 1);
+  var createKey = Keypair.generate();
+  var multisigPda = multisig.getMultisigPda({ createKey: createKey.publicKey })[0];
+  var configPda = multisig.getProgramConfigPda({})[0];
+  var programConfig = await multisig.accounts.ProgramConfig.fromAccountAddress(connection, configPda);
+  var createBlock = await connection.getLatestBlockhash('confirmed');
+  var createTx = multisig.transactions.multisigCreateV2({
+    blockhash: createBlock.blockhash,
+    treasury: programConfig.treasury,
+    createKey: createKey.publicKey,
+    creator: team.publicKey,
+    multisigPda: multisigPda,
+    configAuthority: team.publicKey,
+    threshold: 1,
+    members: [
+      { key: team.publicKey, permissions: multisig.types.Permissions.all() },
+      { key: bard.publicKey, permissions: multisig.types.Permissions.all() },
+    ],
+    timeLock: 0,
+    rentCollector: null,
+    memo: 'config authority proof',
+  });
+  createTx.sign([createKey]);
+  var createSig = await sendSigned(connection, createTx, team);
+  var info = await connection.getAccountInfo(multisigPda);
+  assert.ok(info && info.data, 'sdk multisig account is missing');
+  var parsed = await parseSquadsMultisig(info.data);
+  assert.ok(parsed, 'parser did not read the sdk multisig');
+  var zero = new PublicKey(new Uint8Array(32)).toBase58();
+  assert.equal(parsed.configAuthority, team.publicKey.toBase58());
+  assert.notEqual(parsed.configAuthority, zero);
+  console.log('config-authority', JSON.stringify({
+    signature: createSig,
+    multisig: multisigPda.toBase58(),
+    configAuthority: parsed.configAuthority,
+  }));
+  return {
+    multisig: multisigPda.toBase58(),
+    configAuthority: parsed.configAuthority,
+    signature: createSig,
+  };
+}
+
 async function main() {
   var svm = await bootSvm();
   var connection = createLiteSvmConnection(svm);
-  var team = Keypair.generate();
-  var bard = Keypair.generate();
   console.log('sim', 'litesvm@1.6.1');
   console.log('squads', SQUADS_PROGRAM_ID);
+  var staleProof = await proveStaleApprovedExecute(connection, svm);
+  var configProof = await proveConfigAuthority(connection, svm);
+  var team = Keypair.generate();
+  var bard = Keypair.generate();
   console.log('team', team.publicKey.toBase58());
   console.log('bard', bard.publicKey.toBase58());
   await fund(svm, team.publicKey, 2);
@@ -638,7 +927,13 @@ async function main() {
   await fund(svm, bard.publicKey, 1);
   var waived = await runMint(connection, svm, 'waived cut', TOKEN_PROGRAM_ID, team, bard, 0);
   console.log('\nsim e2e passed');
-  console.log(JSON.stringify({ classic: classic, token2022: token2022, waived: waived }, null, 2));
+  console.log(JSON.stringify({
+    staleProof: staleProof,
+    configProof: configProof,
+    classic: classic,
+    token2022: token2022,
+    waived: waived,
+  }, null, 2));
 }
 
 main().catch(function (e) {

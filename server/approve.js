@@ -4,8 +4,9 @@ import {
   TOKEN_PROGRAM,
   TOKEN_2022_PROGRAM,
   associatedTokenAddress,
+  squadsVaultAddress,
 } from './chain.js';
-import { payoutHash, payoutRawAmount } from './settlement.js';
+import { payoutHash } from './settlement.js';
 
 const SYSTEM_PROGRAM = '11111111111111111111111111111111';
 const VAULT_TX_DISC = Uint8Array.of(168, 250, 162, 100, 81, 14, 162, 207);
@@ -72,9 +73,18 @@ function canonicalPayouts(settlement, decimals) {
   if (!Array.isArray(list)) return null;
   const positive = [];
   for (const row of list) {
-    const raw = payoutRawAmount(row, decimals);
-    if (raw < 0n) return null;
-    if (raw === 0n) continue;
+    const rawText = row && row.amountRaw != null ? String(row.amountRaw).trim() : '';
+    if (!/^[1-9]\d*$/.test(rawText)) {
+      const err = new Error('amountRaw must be a positive integer string');
+      err.reason = 'amount';
+      throw err;
+    }
+    const raw = BigInt(rawText);
+    if (raw > 18446744073709551615n) {
+      const err = new Error('amountRaw is larger than u64');
+      err.reason = 'amount';
+      throw err;
+    }
     positive.push({ wallet: String(row.wallet), amountRaw: raw });
   }
   const cutText = settlement && settlement.cut_waived === true
@@ -293,8 +303,16 @@ async function verifyInner(decodedMessage, settlement, options) {
   const vaultAddress = pubkey(opts.vaultAddress);
   const mint = pubkey(opts.mint);
   const tokenProgram = pubkey(opts.tokenProgram);
+  const multisig = pubkey(opts.multisig);
   const decimals = Number(opts.decimals);
   if (!vaultAddress || !mint) return fail('bad_message');
+  let derivedVault = '';
+  try {
+    derivedVault = await squadsVaultAddress(multisig, 0);
+  } catch {
+    return fail('vault');
+  }
+  if (derivedVault !== vaultAddress) return fail('vault');
   if (!Number.isInteger(decimals) || decimals < 0 || decimals > 18) return fail('decimals');
   if (tokenProgram !== TOKEN_PROGRAM && tokenProgram !== TOKEN_2022_PROGRAM) return fail('token_program');
   const keys = message.accountKeys || [];
@@ -303,8 +321,8 @@ async function verifyInner(decodedMessage, settlement, options) {
   let payouts;
   try {
     payouts = canonicalPayouts(settlement, decimals);
-  } catch {
-    return fail('amount');
+  } catch (err) {
+    return fail(err && err.reason ? err.reason : 'amount');
   }
   if (!payouts || !payouts.length) return fail('no_payouts');
   let storedHash = '';

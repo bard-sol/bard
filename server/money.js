@@ -5,15 +5,33 @@
  * A cut that rounds to zero is waived. Holders are never shorted to make one.
  */
 
+export const JSON_SAFE_RAW_LIMIT = 9007199254740992n;
+export const U64_MAX = 18446744073709551615n;
+
 export function toRaw(value) {
   if (typeof value === 'bigint') {
     if (value < 0n) throw new Error('amount is invalid');
     return value;
   }
+  if (typeof value === 'number') {
+    if (!Number.isSafeInteger(value) || value < 0) throw new Error('amount is too large to settle safely');
+  }
   let text = String(value == null ? '' : value).trim();
   if (/^\d+\.0+$/.test(text)) text = text.slice(0, text.indexOf('.'));
   if (!/^\d+$/.test(text)) throw new Error('amount is invalid');
   return BigInt(text);
+}
+
+export function assertJsonSafeRaw(value, label) {
+  const raw = toRaw(value);
+  if (raw >= JSON_SAFE_RAW_LIMIT) throw new Error(label + ' is too large to settle safely');
+  return raw;
+}
+
+export function assertU64Raw(value, label) {
+  const raw = toRaw(value);
+  if (raw > U64_MAX) throw new Error(label + ' is larger than u64');
+  return raw;
 }
 
 export function decimalToRaw(value, decimals) {
