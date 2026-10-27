@@ -44,6 +44,7 @@ import {
   parsedTransfers,
 } from './settlement.js';
 import { handleCampaignState } from './campaign_state.js';
+import { handleCampaignReceipt } from './receipt.js';
 import { decodeVaultTransactionAccount, verifyVaultTransactionMessage } from './approve.js';
 import { decodeProposal, decodeVaultTransaction, diffTransfers } from './accounts.js';
 import { assertJsonSafeRaw, lockNeed, resolvePrizeRaw, settlementCut } from './money.js';
@@ -1491,6 +1492,8 @@ export async function handleRequest(request, env) {
     if (drawFinal && method === 'POST') return await handleDrawFinalize(request, env, decodeURIComponent(drawFinal[1]));
     const stateRoute = path.match(/^\/api\/campaigns\/([^/]+)\/state$/);
     if (stateRoute && method === 'GET') return await handleCampaignState(request, env, decodeURIComponent(stateRoute[1]), readVaultTokenRaw);
+    const receiptRoute = path.match(/^\/api\/campaigns\/([^/]+)\/receipt$/);
+    if (receiptRoute && method === 'GET') return await handleCampaignReceipt(request, env, decodeURIComponent(receiptRoute[1]));
     if (path.startsWith('/api/')) return json({ error: 'not found' }, 404);
     return null;
   } catch (err) {
