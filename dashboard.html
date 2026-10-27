@@ -397,6 +397,7 @@ h1{
   var joinsCache = [];
   var claimsCache = [];
   var payoutsCache = [];
+  var receiptLinks = {};
 
   function needsX(type){
     return !!(window.BardPlatform && BardPlatform.needsX(type));
@@ -437,6 +438,34 @@ h1{
     } catch (e) {
       payoutsCache = [];
     }
+    await loadReceiptLinks();
+  }
+
+  function receiptHref(id) {
+    var href = receiptLinks[id];
+    if (!href || !/^\/c\/[0-9a-f-]{36}\/receipt$/i.test(href)) return '';
+    return href;
+  }
+
+  async function loadReceiptLinks() {
+    var ids = {};
+    liveCache.forEach(function (x) {
+      if (x.campaign && isSettled(x.projectId, x.campaign.id)) ids[x.campaign.id] = true;
+    });
+    payoutsCache.forEach(function (row) {
+      if (row && row.campaign_id) ids[row.campaign_id] = true;
+    });
+    var list = Object.keys(ids);
+    await Promise.all(list.map(async function (id) {
+      try {
+        var res = await fetch('/api/campaigns/' + encodeURIComponent(id) + '/state');
+        if (!res.ok) { receiptLinks[id] = null; return; }
+        var data = await res.json();
+        receiptLinks[id] = data && data.links && data.links.receipt ? String(data.links.receipt) : null;
+      } catch (e) {
+        receiptLinks[id] = null;
+      }
+    }));
   }
 
   function isJoined(pid, cid){
@@ -673,10 +702,12 @@ h1{
     var c = x.campaign;
     var joined = isJoined(x.projectId, c.id);
     var claimed = isSettled(x.projectId, c.id);
+    var paidHref = receiptHref(c.id);
     var pill = c.status === 'active'
       ? '<span class="pill pill--live">Active</span>'
       : '<span class="pill pill--muted">Ended</span>';
-    if(claimed) pill = '<span class="pill pill--done">Paid <img class="stamp" src="/transparentbardsmile.png" alt=""></span>';
+    if (paidHref) pill = '<a class="pill pill--done" data-receipt href="' + BardPlatform.escapeHtml(paidHref) + '">Paid · receipt</a>';
+    else if (claimed) pill = '<span class="pill pill--muted">Paid</span>';
     else if(joined) pill = '<span class="pill pill--live">Joined</span>';
     var xBadge = needsX(c.type) ? ' · needs X' : '';
 
@@ -697,6 +728,9 @@ h1{
   }
 
   function bindOpen(root){
+    root.querySelectorAll('[data-receipt]').forEach(function (link) {
+      link.addEventListener('click', function (event) { event.stopPropagation(); });
+    });
     root.querySelectorAll('[data-open]').forEach(function(el){
       el.addEventListener('click', function(){
         var parts = el.getAttribute('data-open').split('|');
@@ -787,12 +821,15 @@ h1{
       var title = (r.live && r.live.campaign && r.live.campaign.title) || 'Payout';
       var ticker = (r.live && r.live.ticker) || '';
       var amount = r.line.amount != null ? String(r.line.amount) : String(r.line.amountRaw || '');
+      var href = receiptHref(r.settlement.campaign_id);
       var txHref = r.settlement.tx_signature
         ? BardPlatform.safeHttpUrl(BardPlatform.explorerUrl('tx', r.settlement.tx_signature))
         : '';
-      var tx = txHref
-        ? '<a class="btn btn--ghost btn--sm" href="' + BardPlatform.escapeHtml(txHref) + '" target="_blank" rel="noopener">Transaction</a>'
-        : '<span class="muted">' + (r.settlement.tx_signature ? 'Transaction recorded' : 'No transaction') + '</span>';
+      var proof = href
+        ? '<a class="pill pill--done" href="' + BardPlatform.escapeHtml(href) + '">Paid · receipt</a>'
+        : (txHref
+          ? '<a class="btn btn--ghost btn--sm" href="' + BardPlatform.escapeHtml(txHref) + '" target="_blank" rel="noopener">Transaction</a>'
+          : '<span class="muted">No verified receipt</span>');
       return (
         '<div class="card"><div class="item">' +
           '<span class="item__ava">' + BardPlatform.escapeHtml(initials(ticker || title)) + '</span>' +
@@ -800,7 +837,7 @@ h1{
             '<div class="item__title">' + BardPlatform.escapeHtml(title) + '</div>' +
             '<div class="item__sub">' + (ticker ? '$' + BardPlatform.escapeHtml(ticker) + ' · ' : '') + BardPlatform.escapeHtml(amount) + '</div>' +
           '</div>' +
-          '<div class="item__right">' + tx + '</div>' +
+          '<div class="item__right">' + proof + '</div>' +
         '</div></div>'
       );
     }).join('');
@@ -905,7 +942,17 @@ h1{
 
     if(settled){
       joinBtn.style.display = 'none';
-      hint.textContent = 'This reward was paid from the vault.';
+      var paidHref = receiptHref(campaignId);
+      hint.textContent = '';
+      if (paidHref) {
+        hint.append(document.createTextNode('Paid · '));
+        var paidLink = document.createElement('a');
+        paidLink.href = paidHref;
+        paidLink.textContent = 'receipt';
+        hint.append(paidLink);
+      } else {
+        hint.textContent = 'This reward was paid from the vault.';
+      }
     } else if(qualified){
       joinBtn.style.display = '';
       joinBtn.textContent = 'See payouts';

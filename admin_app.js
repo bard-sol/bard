@@ -383,7 +383,10 @@ function renderSettleBox(p,c,joins,sets){
   var done=sets.filter(function(s){ return s.status==='executed'; })[0];
   if(done && !live){
     var txHref=done.tx_signature?BardPlatform.safeHttpUrl(BardPlatform.explorerUrl('tx',done.tx_signature)):'';
-    box.innerHTML='<div class="signers"><div class="signer is-yes"><b>You</b><span>Signed</span></div><div class="signer is-yes"><b>Bard</b><span>Signed</span></div></div><p class="muted" style="margin:0">Paid'+(txHref?(' · <a href="'+BardPlatform.escapeHtml(txHref)+'" target="_blank" rel="noopener" style="color:var(--purple)">tx</a>'):'')+'.</p>';
+    var receiptHref='/c/'+encodeURIComponent(c.id)+'/receipt';
+    box.innerHTML='<div class="signers"><div class="signer is-yes"><b>You</b><span>Signed</span></div><div class="signer is-yes"><b>Bard</b><span>Signed</span></div></div><p class="muted" style="margin:0">Paid'
+      +(txHref?(' · <a href="'+BardPlatform.escapeHtml(txHref)+'" target="_blank" rel="noopener" style="color:var(--purple)">tx</a>'):'')
+      +' · <a href="'+BardPlatform.escapeHtml(receiptHref)+'" style="color:var(--purple)">receipt</a>.</p>';
     return;
   }
   if(!live){
@@ -401,6 +404,8 @@ function renderSettleBox(p,c,joins,sets){
     actions='<button class="btn btn--solid" type="button" id="btn-cosign">Sign this payout</button>';
   } else if(!bard){
     actions='<p class="muted" style="margin:0;font-size:.88rem">You signed. Waiting for Bard to sign the other key.</p>';
+  } else if(!(window.BardVault&&BardVault.executePayout)){
+    actions='<button class="btn btn--solid" type="button" id="btn-execute-payout" disabled>Execute payout</button><p class="muted" id="execute-sdk-reason">Vault toolkit failed to load — refresh</p>';
   } else {
     actions='<button class="btn btn--solid" type="button" id="btn-execute-payout">Execute payout</button>';
   }
@@ -448,7 +453,9 @@ async function renderBardSigns(p,c,sets){
     html+='<button type="button" class="btn btn--solid btn--sm" id="btn-bard-approve"'+(report.matches?'':' disabled')+'>Approve</button> ';
   }
   if(live.team_signed&&live.bard_signed){
-    html+='<button type="button" class="btn btn--solid btn--sm" id="btn-bard-execute"'+(report.matches?'':' disabled')+'>Execute</button>';
+    var sdkReady=!!(window.BardVault&&BardVault.executePayout);
+    html+='<button type="button" class="btn btn--solid btn--sm" id="btn-bard-execute"'+(report.matches&&sdkReady?'':' disabled')+'>Execute</button>';
+    if(!sdkReady) html+='<p class="muted">Vault toolkit failed to load — refresh</p>';
   }
   actions.innerHTML=html;
   var approve=document.getElementById('btn-bard-approve');

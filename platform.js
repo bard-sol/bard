@@ -1527,6 +1527,7 @@
     sha256Hex: sha256Hex,
     clockDate: clockDate,
     clockText: clockText,
+    formatRaw: formatRaw,
     campaignPublicCopy: campaignPublicCopy,
     publicBoardRow: publicBoardRow,
     loadPublicBoard: loadPublicBoard
