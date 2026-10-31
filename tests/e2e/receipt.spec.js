@@ -86,7 +86,7 @@ test('a verified receipt shows the frozen payout and highlights the connected ho
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      headers: { 'cache-control': 'public, max-age=31536000, immutable' },
+      headers: { 'cache-control': 'public, max-age=300' },
       body: JSON.stringify(receiptBody()),
     });
   });

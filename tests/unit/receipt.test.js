@@ -468,7 +468,8 @@ test('a verified payout returns the frozen receipt and ignores platform claims',
     const built = await seedPaid(world);
     const { res, body } = await call(world.env);
     assert.equal(res.status, 200, JSON.stringify(body));
-    assert.equal(res.headers.get('cache-control'), 'public, max-age=31536000, immutable');
+    assert.equal(res.headers.get('cache-control'), 'public, max-age=300');
+    assert.equal(world.store.get('http://127.0.0.1/api/campaigns/' + CID + '/receipt').headers['cache-control'], 'public, max-age=300');
     assert.equal(world.tables.platform_claims.length, 0);
     assert.equal(world.paths.some((item) => item.includes('platform_claims')), false);
     assert.equal(body.campaign.id, CID);
@@ -551,7 +552,7 @@ test('a refusal is not served from the cache after the payout verifies', async (
     world.tx.current = { slot: 123, blockTime: 1700000000, meta: { err: null } };
     const paid = await call(world.env);
     assert.equal(paid.res.status, 200, JSON.stringify(paid.body));
-    assert.equal(paid.res.headers.get('cache-control'), 'public, max-age=31536000, immutable');
+    assert.equal(paid.res.headers.get('cache-control'), 'public, max-age=300');
     assert.equal(world.store.size, 1);
   });
 });
