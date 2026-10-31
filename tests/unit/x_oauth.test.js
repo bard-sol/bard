@@ -299,7 +299,9 @@ test('a bad state, a bad username, or a failed X exchange does not write a handl
     const tamperFetch = scriptedFetch(xRoutes());
     const tamperStart = await start(tamperFetch.env, addr);
     const state = new URL(tamperStart.data.authUrl).searchParams.get('state');
-    const flipped = state.slice(0, -1) + (state.endsWith('a') ? 'b' : 'a');
+    // The last base64url character of a 32-byte MAC carries 2 unused bits, so flip the first one.
+    const sigAt = state.lastIndexOf('.') + 1;
+    const flipped = state.slice(0, sigAt) + (state[sigAt] === 'A' ? 'B' : 'A') + state.slice(sigAt + 1);
     const tamperCallback = new URL('http://auth.test/auth/x/callback');
     tamperCallback.searchParams.set('code', 'auth-code');
     tamperCallback.searchParams.set('state', flipped);
