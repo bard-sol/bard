@@ -319,8 +319,7 @@ h1{
     var mint = (next.prize && next.prize.mint) || '';
     token.append(document.createTextNode(symbol + ' · ' + BardPlatform.shortWallet(mint)));
     if (mint) {
-      var cluster = href && href.indexOf('cluster=devnet') >= 0 ? '?cluster=devnet' : '';
-      var tokenHref = BardPlatform.safeHttpUrl('https://solscan.io/token/' + encodeURIComponent(mint) + cluster);
+      var tokenHref = BardPlatform.safeHttpUrl(BardPlatform.explorerUrl('token', mint));
       if (tokenHref) {
         token.append(document.createTextNode(' · '));
         var tokenLink = document.createElement('a');

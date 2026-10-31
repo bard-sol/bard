@@ -21,6 +21,15 @@ async function walletSol(addr){
     return lam/1e9;
   }catch(e){ console.warn(e); return null; }
 }
+function vaultConfigProblem(){
+  var net=BardPlatform.getSolanaProblem?BardPlatform.getSolanaProblem():'';
+  if(net) return net;
+  var sig=BardPlatform.getSignerProblem?BardPlatform.getSignerProblem():'';
+  if(sig) return 'Bard signer is not usable: '+sig;
+  var bard=BardPlatform.getVaultBardMember?BardPlatform.getVaultBardMember():'';
+  if(!bard) return 'Bard has not set its signer key yet, so a 2-of-2 vault cannot be created.';
+  return '';
+}
 
 function formatDate(iso){try{return new Date(iso).toLocaleDateString(undefined,{year:'numeric',month:'short',day:'numeric'});}catch(e){return'—';}}
 function findProject(id){return state.projects.find(function(p){return p.id===id;});}
@@ -72,7 +81,7 @@ function vaultBadgeHtml(p, extra){
   var body=locked
     ? 'Squads 2-of-2 (your key + Bard). Balance is on-chain — holders can verify on Solscan.'
     : 'Deposit once. Neither you nor Bard can move funds alone. Example: lock 10M $'+BardPlatform.escapeHtml(p.ticker||'TOKEN')+' before the board goes live.';
-  var solHref=addr?BardPlatform.safeHttpUrl('https://solscan.io/account/'+encodeURIComponent(addr)):'';
+  var solHref=addr?BardPlatform.safeHttpUrl(BardPlatform.explorerUrl('account',addr)):'';
   var link=solHref?'<a class="btn btn--ghost btn--sm" href="'+BardPlatform.escapeHtml(solHref)+'" target="_blank" rel="noopener">View on Solscan</a>':'';
   return '<div class="vault-badge"><div class="vault-badge__mark"><img src="/transparentbardsmile.png" alt=""></div><div style="flex:1;min-width:0"><strong>'+title+'</strong><p>'+body+'</p>'+(extra||'')+'</div>'+link+'</div>';
 }
@@ -84,11 +93,12 @@ async function renderVaultPanel(p){
   var mint=p.vaultMint||p.mint||'';
   var reserved=Number(p.vaultReserved||0);
   var hasSdk=!!(window.BardVault&&BardVault.createTwoOfTwo);
+  var configProblem=vaultConfigProblem();
   el.innerHTML=vaultBadgeHtml(p)+
     '<div class="card" style="margin-bottom:12px"><p class="kicker">How it works</p>'+
     '<p style="margin:0;color:var(--body)">You and Bard each hold one key. Threshold 2. Example: lock 10M $'+BardPlatform.escapeHtml(p.ticker)+'. When an airdrop is ready, you get a sign notice. You sign. Bard signs. Then it pays. Neither of us can move funds alone.</p></div>'+
     '<div class="card" style="margin-bottom:12px"><div class="form">'+
-    (addr?'':'<button type="button" class="btn btn--solid" id="btn-create-vault">Create 2-of-2 vault</button><span class="hint" id="vault-create-hint">One Phantom signature. Your connected wallet pays ~0.05 SOL of rent (not the prize). We add your wallet + Bard as the two members.</span><p class="hint" id="vault-sol-line" style="margin-top:8px">Checking SOL in the connected wallet…</p>')+
+    (addr?'':'<button type="button" class="btn btn--solid" id="btn-create-vault">Create 2-of-2 vault</button><span class="hint" id="vault-create-hint">One Phantom signature. Your connected wallet pays ~0.05 SOL of rent (not the prize). We add your wallet + Bard as the two members.</span><p class="hint" id="vault-sol-line" style="margin-top:8px'+(configProblem?';color:#f87171':'')+'">'+(configProblem?BardPlatform.escapeHtml(configProblem):'Checking SOL in the connected wallet…')+'</p>')+
     (addr?'<p class="muted" style="margin:0 0 12px;font-size:.88rem">Vault is live. Deposit $'+BardPlatform.escapeHtml(p.ticker)+' to this address. Holders can verify on Solscan.</p>':'')+
     '<div class="field"><label>Vault address</label><div class="copy-row"><input class="inp num" id="vault-addr" value="'+BardPlatform.escapeHtml(addr)+'" placeholder="Created here, or paste a Squads vault"><button type="button" class="btn btn--ghost btn--sm" id="btn-save-vault">Save</button></div></div>'+
     '<div class="field"><label>Token mint</label><input class="inp num" id="vault-mint" value="'+BardPlatform.escapeHtml(mint)+'"></div>'+
@@ -105,6 +115,7 @@ async function renderVaultPanel(p){
   (function(){
     var line=document.getElementById('vault-sol-line');
     if(!line) return;
+    if(configProblem) return;
     if(!wallet){ line.textContent='Connect the team wallet in the header first. That wallet pays the ~0.05 SOL rent.'; return; }
     walletSol(wallet).then(function(sol){
       if(sol==null){ line.textContent='Could not read SOL for '+shortAddr(wallet)+'.'; return; }
@@ -114,6 +125,8 @@ async function renderVaultPanel(p){
   })();
 var createBtn=document.getElementById('btn-create-vault');
   if(createBtn) createBtn.onclick=async function(){
+    var blocked=vaultConfigProblem();
+    if(blocked){ toast(blocked,'err'); return; }
     if(!wallet||!provider){ toast('Connect the team wallet first','err'); await connectWallet(); return; }
     if(!hasSdk){ toast('Vault toolkit failed to load — refresh','err'); return; }
     var btn=this;
@@ -369,7 +382,7 @@ function renderSettleBox(p,c,joins,sets){
   var live=sets.filter(function(s){ return s.status!=='cancelled' && s.status!=='executed'; })[0];
   var done=sets.filter(function(s){ return s.status==='executed'; })[0];
   if(done && !live){
-    var txHref=done.tx_signature?BardPlatform.safeHttpUrl('https://solscan.io/tx/'+encodeURIComponent(done.tx_signature)):'';
+    var txHref=done.tx_signature?BardPlatform.safeHttpUrl(BardPlatform.explorerUrl('tx',done.tx_signature)):'';
     box.innerHTML='<div class="signers"><div class="signer is-yes"><b>You</b><span>Signed</span></div><div class="signer is-yes"><b>Bard</b><span>Signed</span></div></div><p class="muted" style="margin:0">Paid'+(txHref?(' · <a href="'+BardPlatform.escapeHtml(txHref)+'" target="_blank" rel="noopener" style="color:var(--purple)">tx</a>'):'')+'.</p>';
     return;
   }

@@ -10,7 +10,6 @@ import {
 } from './auth.js';
 import bs58 from 'bs58';
 import {
-  FEE_TREASURY,
   SQUADS_PROGRAM,
   SQUADS_PERMISSION_INITIATE,
   SQUADS_PERMISSION_VOTE,
@@ -47,6 +46,8 @@ import { handleCampaignState } from './campaign_state.js';
 import { decodeVaultTransactionAccount, verifyVaultTransactionMessage } from './approve.js';
 import { decodeProposal, decodeVaultTransaction, diffTransfers } from './accounts.js';
 import { assertJsonSafeRaw, lockNeed, resolvePrizeRaw, settlementCut } from './money.js';
+import { bardSigner, cutSettings, signerConfigProblem } from './config.js';
+import { resolveSolanaConfig } from './network.js';
 const CAMPAIGN_PAGE = /^\/c\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i;
 const RECEIPT_PAGE = /^\/c\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/receipt$/i;
 
@@ -333,20 +334,15 @@ async function handleVerify(request, env) {
   return json({ token: jwt.token, expiresAt: jwt.exp, wallet: body.wallet });
 }
 
-function cutSettings(env) {
-  const bpsText = String(env.BARD_CUT_BPS == null || env.BARD_CUT_BPS === '' ? '500' : env.BARD_CUT_BPS).trim();
-  if (!/^\d+$/.test(bpsText) || BigInt(bpsText) > 10000n) throw new Error('BARD_CUT_BPS is invalid');
-  const wallet = String(env.BARD_CUT_WALLET || FEE_TREASURY).trim();
-  if (!isBase58Address(wallet)) throw new Error('BARD_CUT_WALLET is invalid');
-  return { cutBps: bpsText, cutWallet: wallet };
-}
-
-function handleConfig(env) {
+async function handleConfig(env) {
   const cut = cutSettings(env);
+  const signerError = signerConfigProblem(env);
   return json({
-    bardSignerPubkey: env.BARD_SIGNER_PUBKEY || '',
+    bardSignerPubkey: signerError ? '' : bardSigner(env),
+    signerError,
     cutBps: Number(cut.cutBps),
     cutWallet: cut.cutWallet,
+    solana: await resolveSolanaConfig(env),
   });
 }
 
@@ -595,9 +591,8 @@ async function handleLinkVault(request, env, projectId) {
   if (session.error) return session.error;
   const admin = await projectForAdmin(env, projectId, session.wallet);
   if (admin.error) return admin.error;
-  const signer = env.BARD_SIGNER_PUBKEY || '';
+  const signer = bardSigner(env);
   if (!isBase58Address(signer)) return json({ error: 'BARD_SIGNER_PUBKEY is not set' }, 500);
-  if (signer === FEE_TREASURY) return json({ error: 'bard signer must not be the fee treasury' }, 500);
   const body = await readJson(request);
   if (body == null) return json({ error: 'invalid json' }, 400);
   const multisig = String(body.multisig || '').trim();
@@ -780,7 +775,7 @@ async function handleMemberSigned(request, env, settlementId, kind) {
   const project = firstRow(await select(env, 'projects', 'id=eq.' + encodeURIComponent(current.project_id) + '&select=*'));
   if (!project) return json({ error: 'project not found' }, 404);
   if (kind === 'bard') {
-    const signer = env.BARD_SIGNER_PUBKEY || '';
+    const signer = bardSigner(env);
     if (!isBase58Address(signer) || session.wallet !== signer) return json({ error: 'not the Bard signer' }, 403);
   } else if (project.admin_wallet !== session.wallet) {
     return json({ error: 'not the project admin' }, 403);
@@ -872,7 +867,7 @@ async function handleBardSign(request, env) {
   if (!isBase58Address(multisig) || !isBase58Address(linkedMultisig) || linkedMultisig !== multisig) {
     return signerReject('project vault is not linked');
   }
-  if (!isBase58Address(env.BARD_SIGNER_PUBKEY || '')) return signerWaiting();
+  if (!isBase58Address(bardSigner(env))) return signerWaiting();
   if (current.tx_index == null || String(current.tx_index).trim() === '') {
     return signerReject('settlement has no vault transaction');
   }
@@ -1455,14 +1450,32 @@ async function handleSettlementVerify(env, settlementId) {
   return json({ matches: verdict.ok === true, diff, transaction: txAddress });
 }
 
+// Every route that links a vault, freezes a cut onto a campaign, reserves funds or moves a
+// settlement forward. Read-only verification and the public campaign state are not listed.
+const SIGNER_GUARDED_ROUTES = [
+  /^\/api\/campaigns$/,
+  /^\/api\/projects\/[^/]+\/vault$/,
+  /^\/api\/vault\/(?:bard-sign|reserve)$/,
+  /^\/api\/settlements\/propose$/,
+  /^\/api\/settlements\/[^/]+\/(?:team-signed|team-sign|bard-signed|executed|execute)$/,
+];
+
+function needsSafeSigner(path, method) {
+  return method === 'POST' && SIGNER_GUARDED_ROUTES.some((route) => route.test(path));
+}
+
 export async function handleRequest(request, env) {
   const url = new URL(request.url);
   const path = url.pathname;
   const method = request.method.toUpperCase();
   try {
+    if (needsSafeSigner(path, method)) {
+      const problem = signerConfigProblem(env);
+      if (problem) return json({ error: problem }, 500);
+    }
     if (path === '/api/auth/nonce' && method === 'POST') return await handleNonce(request, env);
     if (path === '/api/auth/verify' && method === 'POST') return await handleVerify(request, env);
-    if (path === '/api/config' && method === 'GET') return handleConfig(env);
+    if (path === '/api/config' && method === 'GET') return await handleConfig(env);
     if (path === '/api/projects' && method === 'POST') return await handleCreateProject(request, env);
     if (path === '/api/campaigns' && method === 'POST') return await handleCreateCampaign(request, env);
     if (path === '/api/joins/status' && method === 'POST') return await handleJoinStatus(request, env);

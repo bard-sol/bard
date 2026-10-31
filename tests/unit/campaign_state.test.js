@@ -10,6 +10,7 @@ import bs58 from 'bs58';
 import { handleRequest, readVaultTokenRaw, rewriteCampaignRequest } from '../../server/api.js';
 import { TOKEN_PROGRAM, TOKEN_2022_PROGRAM } from '../../server/chain.js';
 import { buildCampaignState, shortWallet } from '../../server/campaign_state.js';
+import { DEVNET_GENESIS, MAINNET_GENESIS, TESTNET_GENESIS } from '../../server/network.js';
 import { sha256Hex } from '../../server/settlement.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
@@ -82,6 +83,10 @@ function createEnv(opts = {}) {
         const payload = JSON.parse(requestOpts.body);
         rpcCalls.push(payload.method);
         if (payload.method === 'getBalance') throw new Error('SOL balance must not be read');
+        if (payload.method === 'getGenesisHash') {
+          if (opts.genesis === null) return Response.json({ jsonrpc: '2.0', id: 1, error: { message: 'node is unhealthy' } });
+          return Response.json({ jsonrpc: '2.0', id: 1, result: opts.genesis || MAINNET_GENESIS });
+        }
         if (payload.method === 'getAccountInfo') {
           return Response.json({ jsonrpc: '2.0', id: 1, result: accounts[payload.params[0]] || { value: null } });
         }
@@ -233,6 +238,7 @@ test('campaign state matches the public shape for every payout sentence and cloc
     async function build(campaignExtra, opts = {}) {
       const { env, rpcCalls } = createEnv({
         rpc: opts.rpc,
+        genesis: opts.genesis,
         campaigns: [campaignRow(campaignExtra)],
         projects: [projectRow(mint, vault, { admin_wallet: admin, ...(opts.project || {}) })],
         joins: opts.joins || [],
@@ -318,8 +324,17 @@ test('campaign state matches the public shape for every payout sentence and cloc
     assert.equal(statusPaid.body.clock.state, 'paid');
     assert.equal(statusPaid.body.links.receipt, null);
 
-    const devnet = await build({}, { rpc: 'http://rpc.test/devnet' });
+    const devnet = await build({}, { genesis: DEVNET_GENESIS });
     assert.equal(devnet.body.vault.explorer_url, 'https://solscan.io/account/' + vault + '?cluster=devnet');
+    const testnet = await build({}, { genesis: TESTNET_GENESIS });
+    assert.equal(testnet.body.vault.explorer_url, 'https://solscan.io/account/' + vault + '?cluster=testnet');
+    const mainnetNamedDevnet = await build({}, { rpc: 'http://rpc.test/devnet', genesis: MAINNET_GENESIS });
+    assert.equal(mainnetNamedDevnet.body.vault.explorer_url, 'https://solscan.io/account/' + vault);
+    const unknownChain = await build({}, { genesis: keypair() });
+    assert.equal(unknownChain.body.vault.explorer_url, null);
+    const unreadableChain = await build({}, { genesis: null });
+    assert.equal(unreadableChain.body.vault.explorer_url, null);
+    assert.equal(unreadableChain.body.vault.balance_raw, '1500000');
 
     const prizeMint = keypair();
     const named = await build({ prize_mint: prizeMint }, {

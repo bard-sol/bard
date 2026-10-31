@@ -24,7 +24,6 @@
 
   var TEAM_KEY = 'bard_team_v1';
   var HOLDER_KEY = 'bard_holder_v1';
-  var RPC = 'https://api.devnet.solana.com';
   var SUPABASE_SCRIPT = '/vendor/supabase/supabase.js';
   var LOCAL_MODE_MSG = 'NOT SAVED — local demo mode. Nothing you do here is stored on Bard.';
 
@@ -34,6 +33,9 @@
   var sessionToken = null;
   var sessionWallet = null;
   var bardSignerPubkey = '';
+  var signerProblem = '';
+  var NO_SOLANA_CONFIG = 'Solana network settings did not load from Bard. Reload the page.';
+  var solanaConfig = { network: null, rpc: null, explorerCluster: null, error: NO_SOLANA_CONFIG };
   var B58 = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
 
   function needsX(type) {
@@ -206,8 +208,10 @@
         if (cfgRes && cfgRes.ok) {
           var cfg = await cfgRes.json();
           bardSignerPubkey = (cfg && cfg.bardSignerPubkey) || '';
+          signerProblem = (cfg && cfg.signerError) ? String(cfg.signerError) : '';
           if (cfg && cfg.cutBps != null && cfg.cutBps !== '') cutBps = Number(cfg.cutBps);
           if (cfg && cfg.cutWallet) cutWallet = String(cfg.cutWallet);
+          solanaConfig = readSolanaConfig(cfg && cfg.solana);
         }
       } catch (cfgErr) {}
       if (mode === 'local') showLocalBanner();
@@ -231,6 +235,46 @@
   function getVaultBardMember() { return bardSignerPubkey; }
   function getCutBps() { return cutBps; }
   function getCutWallet() { return cutWallet; }
+  function getSignerProblem() { return signerProblem; }
+
+  /** Network and RPC come from GET /api/config only; the page never picks a cluster itself. */
+  function readSolanaConfig(raw) {
+    var out = { network: null, rpc: null, explorerCluster: null, error: null };
+    if (!raw || typeof raw !== 'object') {
+      out.error = 'Bard did not send Solana network settings';
+      return out;
+    }
+    out.network = raw.network ? String(raw.network) : null;
+    out.explorerCluster = typeof raw.explorerCluster === 'string' ? raw.explorerCluster : null;
+    if (raw.error) {
+      out.error = String(raw.error);
+      return out;
+    }
+    var rpc = typeof raw.rpc === 'string' ? raw.rpc.trim() : '';
+    out.rpc = safeHttpUrl(rpc) ? rpc : null;
+    if (!out.rpc) out.error = 'Bard did not send a Solana RPC';
+    return out;
+  }
+  function getSolanaProblem() {
+    return solanaConfig.error ? 'Solana network is not available: ' + solanaConfig.error : '';
+  }
+  function getSolanaConfig() {
+    return { network: solanaConfig.network, rpc: solanaConfig.rpc, explorerCluster: solanaConfig.explorerCluster, error: solanaConfig.error };
+  }
+  function getRpc() {
+    if (!solanaConfig.rpc) throw new Error(getSolanaProblem());
+    return solanaConfig.rpc;
+  }
+  function solanaConnection(commitment) {
+    if (!global.solanaWeb3) throw new Error('Solana web3 not loaded');
+    return new global.solanaWeb3.Connection(getRpc(), commitment || 'confirmed');
+  }
+  /** Explorer link on the cluster the server resolved; empty when the cluster is unknown. */
+  function explorerUrl(kind, id) {
+    var cluster = solanaConfig.explorerCluster;
+    if (cluster == null || !id || ['account', 'tx', 'token'].indexOf(kind) < 0) return '';
+    return 'https://solscan.io/' + kind + '/' + encodeURIComponent(id) + (cluster ? '?cluster=' + encodeURIComponent(cluster) : '');
+  }
 
   function parseTweetId(url) {
     if (!url) return null;
@@ -259,10 +303,8 @@
 
   async function fetchVaultOnchain(address, mint) {
     if (!isBase58Addr(address)) throw new Error('Invalid vault address');
-    if (!global.solanaWeb3) throw new Error('Solana web3 not loaded');
-    var Connection = global.solanaWeb3.Connection;
-    var PublicKey = global.solanaWeb3.PublicKey;
-    var conn = new Connection(RPC, 'confirmed');
+    var PublicKey = global.solanaWeb3 && global.solanaWeb3.PublicKey;
+    var conn = solanaConnection('confirmed');
     var owner = new PublicKey(address);
     var TOKEN_PROGRAM = new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
     var uiAmount = 0;
@@ -277,7 +319,7 @@
         raw = String(parsed.info.tokenAmount.amount || '0');
         decimals = parsed.info.tokenAmount.decimals || 0;
         source = 'token-account';
-        return { address: address, mint: parsed.info.mint || mint || null, uiAmount: uiAmount, raw: raw, decimals: decimals, source: source, solscan: 'https://solscan.io/account/' + address + '?cluster=devnet' };
+        return { address: address, mint: parsed.info.mint || mint || null, uiAmount: uiAmount, raw: raw, decimals: decimals, source: source, solscan: explorerUrl('account', address) };
       }
     } catch (e) {}
     var filter = mint && isBase58Addr(mint) ? { mint: new PublicKey(mint) } : { programId: TOKEN_PROGRAM };
@@ -301,7 +343,7 @@
         source = 'sol';
       } catch (e3) {}
     }
-    return { address: address, mint: mint || null, uiAmount: uiAmount, raw: String(raw), decimals: decimals, source: source, solscan: 'https://solscan.io/account/' + address + '?cluster=devnet' };
+    return { address: address, mint: mint || null, uiAmount: uiAmount, raw: String(raw), decimals: decimals, source: source, solscan: explorerUrl('account', address) };
   }
 
 
@@ -740,10 +782,8 @@
 
   async function readVaultTokenRaw(address, mint) {
     if (!isBase58Addr(address) || !isBase58Addr(mint)) throw new Error('Vault address or mint looks invalid');
-    if (!global.solanaWeb3) throw new Error('Solana web3 not loaded');
-    var Connection = global.solanaWeb3.Connection;
-    var PublicKey = global.solanaWeb3.PublicKey;
-    var conn = new Connection(RPC, 'confirmed');
+    var PublicKey = global.solanaWeb3 && global.solanaWeb3.PublicKey;
+    var conn = solanaConnection('confirmed');
     var mintPk = new PublicKey(mint);
     var info = await conn.getAccountInfo(mintPk, 'confirmed');
     if (!info) throw new Error('Mint account not found');
@@ -838,8 +878,6 @@
     if (!res.ok) throw new Error((data && data.error) || 'Could not read the vault transaction');
     return data;
   }
-
-  function getRpc() { return RPC; }
 
   async function listSettlements(campaignId) {
     await init();
@@ -1263,8 +1301,7 @@
     });
     if (!camp) throw new Error('Campaign not found');
     assertDrawStep(camp, 'finalize');
-    if (!global.solanaWeb3) throw new Error('Solana web3 not loaded');
-    var conn = new global.solanaWeb3.Connection(RPC, 'finalized');
+    var conn = solanaConnection('finalized');
     var found = await resolveDrawSeed(conn, Number(camp.drawSlot));
     var winners = deriveWinners(joins, found.blockhash, camp.drawCount || 0);
     camp.drawSeed = found.blockhash;
@@ -1480,6 +1517,10 @@
     cosignSettlement: cosignSettlement,
     executeSettlement: executeSettlement,
     getRpc: getRpc,
+    getSolanaConfig: getSolanaConfig,
+    getSolanaProblem: getSolanaProblem,
+    getSignerProblem: getSignerProblem,
+    explorerUrl: explorerUrl,
     escapeHtml: escapeHtml,
     safeHttpUrl: safeHttpUrl,
     shortWallet: shortWallet,

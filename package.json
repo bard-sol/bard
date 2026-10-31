@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "test": "node --test tests/unit/*.test.js",
+    "check:signer": "node scripts/check-signer-config.mjs",
     "e2e": "playwright install chromium && playwright test",
     "devnet:e2e": "node vault-src/scripts/devnet-e2e.mjs",
     "sim:e2e": "node vault-src/scripts/sim-e2e.mjs",

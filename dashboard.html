@@ -788,11 +788,11 @@ h1{
       var ticker = (r.live && r.live.ticker) || '';
       var amount = r.line.amount != null ? String(r.line.amount) : String(r.line.amountRaw || '');
       var txHref = r.settlement.tx_signature
-        ? BardPlatform.safeHttpUrl('https://solscan.io/tx/' + encodeURIComponent(r.settlement.tx_signature))
+        ? BardPlatform.safeHttpUrl(BardPlatform.explorerUrl('tx', r.settlement.tx_signature))
         : '';
       var tx = txHref
         ? '<a class="btn btn--ghost btn--sm" href="' + BardPlatform.escapeHtml(txHref) + '" target="_blank" rel="noopener">Transaction</a>'
-        : '<span class="muted">No transaction</span>';
+        : '<span class="muted">' + (r.settlement.tx_signature ? 'Transaction recorded' : 'No transaction') + '</span>';
       return (
         '<div class="card"><div class="item">' +
           '<span class="item__ava">' + BardPlatform.escapeHtml(initials(ticker || title)) + '</span>' +
@@ -873,7 +873,7 @@ h1{
     var v = match.vault || {};
     if (vbox) {
       if (v.address) {
-        var solHref = BardPlatform.safeHttpUrl('https://solscan.io/account/' + encodeURIComponent(v.address));
+        var solHref = BardPlatform.safeHttpUrl(BardPlatform.explorerUrl('account', v.address));
         vbox.innerHTML = solHref ? (
           '<div class="vault-badge">' +
             '<img src="/transparentbardsmile.png" alt="">' +

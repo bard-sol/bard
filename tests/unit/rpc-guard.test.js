@@ -43,7 +43,7 @@ test('vault source is unserved and settlement writes go through the worker', () 
   const platform = readFileSync(path.join(root, 'platform.js'), 'utf8');
   const api = readFileSync(path.join(root, 'server/api.js'), 'utf8');
   assert.equal(platform.includes('(h << 5)'), false);
-  assert.match(platform, /var RPC = 'https:\/\/api\.devnet\.solana\.com'/);
+  assert.equal(platform.includes('api.devnet.solana.com'), false);
   assert.equal(platform.includes('solana-rpc.publicnode.com'), false);
   assert.equal(platform.includes('api.mainnet-beta.solana.com'), false);
   assert.match(platform, /\/api\/settlements\/propose/);

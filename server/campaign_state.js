@@ -1,4 +1,5 @@
 import { sha256Hex } from './settlement.js';
+import { resolveSolanaConfig } from './network.js';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const CHAIN_SIGNATURE = /^[1-9A-HJ-NP-Za-km-z]{87,88}$/;
@@ -163,10 +164,9 @@ function boardEntry(rank, wallet, holder, progress, qualified) {
   };
 }
 
-function explorerAccount(address, rpc) {
-  if (!address) return null;
-  const devnet = String(rpc || '').includes('devnet');
-  return 'https://solscan.io/account/' + address + (devnet ? '?cluster=devnet' : '');
+function explorerAccount(address, cluster) {
+  if (!address || cluster == null) return null;
+  return 'https://solscan.io/account/' + address + (cluster ? '?cluster=' + cluster : '');
 }
 
 function belowLocked(balanceRaw, lockedRaw) {
@@ -230,6 +230,7 @@ export async function buildCampaignState(env, campaignId, now = new Date(), read
   const lockedRaw = integerString(campaign, 'locked_raw');
   const verified = project.vault_status === 'verified' && !!project.vault_address;
   const address = verified ? project.vault_address : null;
+  const solana = address ? await resolveSolanaConfig(env) : null;
   const ticker = project.ticker || '';
   const who = whoGetsPaid(campaign, ticker);
   const receipt = executed && isChainSignature(executed.tx_signature);
@@ -262,7 +263,7 @@ export async function buildCampaignState(env, campaignId, now = new Date(), read
     },
     vault: {
       address,
-      explorer_url: explorerAccount(address, env.SOLANA_RPC),
+      explorer_url: explorerAccount(address, solana && solana.explorerCluster),
       balance_raw: balanceRaw,
       balance_as_of: balanceAsOf,
       below_locked: belowLocked(balanceRaw, lockedRaw),
