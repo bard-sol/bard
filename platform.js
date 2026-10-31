@@ -987,9 +987,19 @@
     };
   }
 
-  async function joinCampaign(projectId, campaignId, wallet, xHandle, showHandle) {
+  function cleanEvidenceUrl(value) {
+    if (value == null) return null;
+    var raw = String(value).trim();
+    if (!raw || raw.length > 300) return null;
+    var href = safeHttpUrl(raw);
+    if (!href || href.length > 300) return null;
+    return href;
+  }
+
+  async function joinCampaign(projectId, campaignId, wallet, xHandle, showHandle, evidenceUrl, referrer) {
     await init();
     if (typeof showHandle === 'boolean') await setShowHandle(wallet, showHandle);
+    var clean = cleanEvidenceUrl(evidenceUrl);
     var rosterRole = null;
     if (mode === 'supabase' && sb) {
       try {
@@ -1002,21 +1012,29 @@
       if (!campRes.data) throw new Error('Campaign not found');
       var existingJoin = await sb.from('campaign_joins').select('id').eq('campaign_id', campaignId).eq('wallet', wallet).maybeSingle();
       if (existingJoin.error) throw existingJoin.error;
+      var patch = { x_handle: xHandle || null };
+      if (clean) patch.evidence_url = clean;
+      var insertRow = { project_id: projectId, campaign_id: campaignId, wallet: wallet, x_handle: xHandle || null, joined_at: new Date().toISOString() };
+      if (clean) insertRow.evidence_url = clean;
       var write = existingJoin.data
-        ? sb.from('campaign_joins').update({ x_handle: xHandle || null }).eq('campaign_id', campaignId).eq('wallet', wallet)
-        : sb.from('campaign_joins').insert({ project_id: projectId, campaign_id: campaignId, wallet: wallet, x_handle: xHandle || null, joined_at: new Date().toISOString() });
+        ? sb.from('campaign_joins').update(patch).eq('campaign_id', campaignId).eq('wallet', wallet)
+        : sb.from('campaign_joins').insert(insertRow);
       var res = await write.select('id, project_id, campaign_id, wallet, qualified, qualified_at, joined_at, status, progress, note').single();
       if (res.error) throw res.error;
       var joined = mapJoinRow(res.data);
       if (!joined.x_handle) joined.x_handle = xHandle || null;
+      if (sessionToken && referrer) {
+        try { await apiPost('/api/campaigns/' + encodeURIComponent(campaignId) + '/referred-by', { referrer: String(referrer) }); }
+        catch (e) {}
+      }
       return joined;
     }
     var h = localHolder(); var key = projectId + '::' + campaignId; var localCamp = null;
     (localTeam().projects || []).forEach(function (pr) { (pr.campaigns || []).forEach(function (c) { if (c.id === campaignId) localCamp = c; }); });
     var st = (localCamp && localCamp.accessMode === 'approval') ? 'pending' : 'approved';
-    h.joined[key] = { at: new Date().toISOString(), qualified: false, wallet: wallet, xHandle: xHandle || null, status: st, progress: 0 };
+    h.joined[key] = { at: new Date().toISOString(), qualified: false, wallet: wallet, xHandle: xHandle || null, status: st, progress: 0, evidenceUrl: clean || null };
     saveLocalHolder(h);
-    return { project_id: projectId, campaign_id: campaignId, wallet: wallet, x_handle: xHandle || null, qualified: false, status: st, progress: 0 };
+    return { project_id: projectId, campaign_id: campaignId, wallet: wallet, x_handle: xHandle || null, qualified: false, status: st, progress: 0, evidence_url: clean || null };
   }
 
   async function listJoinsForCampaign(campaignId) {
@@ -1059,6 +1077,23 @@
     }
     var h = localHolder(); var key = projectId + '::' + campaignId;
     if (h.joined[key]) { h.joined[key].qualified = true; saveLocalHolder(h); }
+  }
+
+  async function fetchJoinQueue(campaignId) {
+    await init();
+    if (!sessionToken) throw new Error('Sign in with your wallet first');
+    var res = await authedFetch('/api/campaigns/' + encodeURIComponent(campaignId) + '/queue', { headers: { accept: 'application/json' } });
+    var data = {};
+    try { data = await res.json(); } catch (e) { data = {}; }
+    if (!res.ok) throw new Error((data && data.error) || 'request failed');
+    return data;
+  }
+
+  async function qualifyMatching(campaignId) {
+    await init();
+    refuseLocalTeamWrite();
+    if (!sessionToken) throw new Error('Sign in with your wallet first');
+    return apiPost('/api/campaigns/' + encodeURIComponent(campaignId) + '/qualify-matching', {});
   }
 
   async function settleClaim() {
@@ -1462,7 +1497,7 @@
     canonicalPayoutText: canonicalPayoutText,
     payoutHash: payoutHash,
     planReservation: planReservation,
-    markQualified: markQualified, settleClaim: settleClaim,
+    markQualified: markQualified, fetchJoinQueue: fetchJoinQueue, qualifyMatching: qualifyMatching, settleClaim: settleClaim,
     listJoinsForWallet: listJoinsForWallet, listClaimsForWallet: listClaimsForWallet,
     localHolder: localHolder, saveLocalHolder: saveLocalHolder,
     parseTweetId: parseTweetId, xIntentUrls: xIntentUrls,

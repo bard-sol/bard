@@ -45,6 +45,7 @@ import {
 } from './settlement.js';
 import { handleCampaignState } from './campaign_state.js';
 import { handleCampaignReceipt } from './receipt.js';
+import { handleJoinQueue, handleQualifyMatching, handleSetReferrer } from './queue.js';
 import { decodeVaultTransactionAccount, verifyVaultTransactionMessage } from './approve.js';
 import { decodeProposal, decodeVaultTransaction, diffTransfers } from './accounts.js';
 import { assertJsonSafeRaw, lockNeed, resolvePrizeRaw, settlementCut } from './money.js';
@@ -1490,6 +1491,12 @@ export async function handleRequest(request, env) {
     if (drawCommit && method === 'POST') return await handleDrawCommit(request, env, decodeURIComponent(drawCommit[1]));
     const drawFinal = path.match(/^\/api\/campaigns\/([^/]+)\/draw\/finalize$/);
     if (drawFinal && method === 'POST') return await handleDrawFinalize(request, env, decodeURIComponent(drawFinal[1]));
+    const queueRoute = path.match(/^\/api\/campaigns\/([^/]+)\/queue$/);
+    if (queueRoute && method === 'GET') return await handleJoinQueue(request, env, decodeURIComponent(queueRoute[1]), readVaultTokenRaw);
+    const qualifyMatching = path.match(/^\/api\/campaigns\/([^/]+)\/qualify-matching$/);
+    if (qualifyMatching && method === 'POST') return await handleQualifyMatching(request, env, decodeURIComponent(qualifyMatching[1]), readVaultTokenRaw);
+    const referredBy = path.match(/^\/api\/campaigns\/([^/]+)\/referred-by$/);
+    if (referredBy && method === 'POST') return await handleSetReferrer(request, env, decodeURIComponent(referredBy[1]));
     const stateRoute = path.match(/^\/api\/campaigns\/([^/]+)\/state$/);
     if (stateRoute && method === 'GET') return await handleCampaignState(request, env, decodeURIComponent(stateRoute[1]), readVaultTokenRaw);
     const receiptRoute = path.match(/^\/api\/campaigns\/([^/]+)\/receipt$/);

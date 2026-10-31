@@ -241,17 +241,144 @@ function openCampaign(cid){var c=findCampaign(currentProjectId,cid);var p=findPr
     }
     loadCampaignOps(p, c);
     document.getElementById('btn-end-campaign').style.display=c.status==='active'?'':'none';show('campaign');}
+function numericHoldMin(c){
+  if(!c||String(c.type||'')!=='hold') return null;
+  var cfg=c.config;
+  if(typeof cfg==='string'){ try{ cfg=JSON.parse(cfg);}catch(e){ cfg={}; } }
+  cfg=cfg||{};
+  if(cfg.minBalance==null) return null;
+  var text=String(cfg.minBalance).trim();
+  if(!/^\d+(\.\d+)?$/.test(text)) return null;
+  return text;
+}
+function humanAmount(text){
+  var parts=String(text).split('.');
+  var whole=(parts[0]||'0').replace(/^0+(?=\d)/,'')||'0';
+  var frac=(parts[1]||'').replace(/0+$/,'');
+  return frac?whole+'.'+frac:whole;
+}
+function asOfLabel(iso){
+  if(!iso||!window.BardPlatform||!BardPlatform.clockDate) return '';
+  var date=BardPlatform.clockDate(iso);
+  var d=new Date(iso);
+  if(!date||isNaN(d.getTime())) return '';
+  var hh=String(d.getUTCHours()).padStart(2,'0');
+  var mm=String(d.getUTCMinutes()).padStart(2,'0');
+  return date+' '+hh+':'+mm+' UTC';
+}
+function evidenceCell(p,c,join,queueRow,decimals){
+  if(!join||join.status==='rejected') return '—';
+  var ev=queueRow&&queueRow.evidence;
+  if(!ev) return '<span class="muted">—</span>';
+  var kind=String(ev.kind||c.type||'');
+  if(kind==='raid'){
+    var href=BardPlatform.safeHttpUrl(ev.post_url);
+    if(!href) return '<span class="muted">no link submitted</span>';
+    return '<a href="'+BardPlatform.escapeHtml(href)+'" target="_blank" rel="noopener">open post</a>';
+  }
+  if(kind==='refer'){
+    var count=Number(ev.referral_count);
+    if(!isFinite(count)||count<0) count=0;
+    return BardPlatform.escapeHtml(String(count))+' referrals';
+  }
+  if(kind==='hold'){
+    if(ev.balance_raw==null||decimals==null) return '<span class="muted">balance unavailable</span>';
+    var amount=BardPlatform.formatRaw(ev.balance_raw, decimals);
+    if(amount==='—') return '<span class="muted">balance unavailable</span>';
+    var ticker=p&&p.ticker?String(p.ticker):'TOKEN';
+    var text='holds '+amount+' '+ticker;
+    var when=asOfLabel(ev.balance_as_of);
+    if(when) text+=' · as of '+when;
+    var html=BardPlatform.escapeHtml(text);
+    if(ev.meets_min===true) html+=' <span class="muted">≥ minimum</span>';
+    else if(ev.meets_min===false) html+=' <span class="muted">below minimum</span>';
+    return html;
+  }
+  return '<span class="muted">—</span>';
+}
+function renderQualifyMatching(p,c,queue){
+  var host=document.getElementById('camp-qualify-matching');
+  if(!host) return;
+  host.style.display='none';
+  host.textContent='';
+  var min=numericHoldMin(c);
+  if(!queue||!Array.isArray(queue.joins)||!min) return;
+  var amount=humanAmount(min);
+  var ticker=p&&p.ticker?String(p.ticker):'TOKEN';
+  var count=(queue.joins||[]).filter(function(row){
+    return row&&row.evidence&&row.evidence.meets_min===true&&!row.qualified&&row.status!=='rejected';
+  }).length;
+  host.style.display='block';
+  var btn=document.createElement('button');
+  btn.type='button';
+  btn.className='btn btn--ghost btn--sm';
+  btn.id='btn-qualify-matching';
+  btn.textContent='Qualify everyone at or above '+amount+' '+ticker;
+  var panel=document.createElement('div');
+  panel.id='qualify-matching-confirm';
+  panel.style.display='none';
+  panel.style.marginTop='8px';
+  var line=document.createElement('p');
+  line.className='muted';
+  line.style.margin='0 0 8px';
+  line.textContent='Qualify '+count+' holder'+(count===1?'':'s')+' at or above '+amount+' '+ticker+'.';
+  var actions=document.createElement('div');
+  actions.style.display='flex';
+  actions.style.gap='8px';
+  var confirm=document.createElement('button');
+  confirm.type='button';
+  confirm.className='btn btn--solid btn--sm';
+  confirm.textContent='Confirm';
+  var cancel=document.createElement('button');
+  cancel.type='button';
+  cancel.className='btn btn--ghost btn--sm';
+  cancel.textContent='Cancel';
+  actions.appendChild(confirm);
+  actions.appendChild(cancel);
+  panel.appendChild(line);
+  panel.appendChild(actions);
+  host.appendChild(btn);
+  host.appendChild(panel);
+  btn.addEventListener('click', function(){ panel.style.display='block'; });
+  cancel.addEventListener('click', function(){ panel.style.display='none'; });
+  confirm.addEventListener('click', async function(){
+    confirm.disabled=true;
+    try{
+      await BardPlatform.qualifyMatching(c.id);
+      await refreshState();
+      openCampaign(c.id);
+    }catch(err){
+      confirm.disabled=false;
+      toast((err&&err.message)||'Update failed','err');
+    }
+  });
+}
 async function loadCampaignOps(p,c){
   var tbody=document.getElementById('camp-lb');
   var box=document.getElementById('camp-settle');
-  tbody.innerHTML='<tr><td class="muted" colspan="5">Loading holders…</td></tr>';
+  var bulk=document.getElementById('camp-qualify-matching');
+  if(bulk){ bulk.style.display='none'; bulk.textContent=''; }
+  tbody.innerHTML='<tr><td class="muted" colspan="6">Loading holders…</td></tr>';
   if(box) box.innerHTML='';
   var joins=[];
   try{ joins = await BardPlatform.listJoinsForCampaign(c.id); }catch(e){ console.error(e); }
-  if(!joins.length){
-    tbody.innerHTML='<tr><td class="muted" colspan="5">No joins yet. Holders enter from the dashboard.</td></tr>';
+  var queue=null;
+  try{ if(BardPlatform.fetchJoinQueue) queue=await BardPlatform.fetchJoinQueue(c.id); }catch(e){ queue=null; }
+  var evidenceByWallet={};
+  var decimals=queue&&queue.decimals!=null?queue.decimals:null;
+  if(queue&&Array.isArray(queue.joins)){
+    queue.joins.forEach(function(row){ if(row&&row.wallet) evidenceByWallet[row.wallet]=row; });
+  }
+  var rows=joins.slice();
+  if(!rows.length&&queue&&Array.isArray(queue.joins)&&queue.joins.length){
+    rows=queue.joins.map(function(row){
+      return { wallet: row.wallet, x_handle: row.x_handle, qualified: !!row.qualified, status: row.status||'approved', progress: row.progress||0, note: null };
+    });
+  }
+  if(!rows.length){
+    tbody.innerHTML='<tr><td class="muted" colspan="6">No joins yet. Holders enter from the dashboard.</td></tr>';
   } else {
-    tbody.innerHTML=joins.map(function(j){
+    tbody.innerHTML=rows.map(function(j){
       var st=j.qualified?'Qualified':(j.status||'approved');
       var pill=j.qualified?'pill--paid':(j.status==='pending'?'pill--pending':(j.status==='rejected'?'pill--ended':'pill--live'));
       var acts='';
@@ -259,7 +386,7 @@ async function loadCampaignOps(p,c){
       if(j.status==='approved'||j.qualified) acts+='<button class="btn btn--ghost btn--sm" data-js="plus" data-w="'+BardPlatform.escapeHtml(j.wallet)+'" data-p="'+BardPlatform.escapeHtml(j.progress||0)+'">+1</button> <button class="btn btn--ghost btn--sm" data-js="minus" data-w="'+BardPlatform.escapeHtml(j.wallet)+'" data-p="'+BardPlatform.escapeHtml(j.progress||0)+'">−1</button> ';
       if(!j.qualified && j.status!=='rejected') acts+='<button class="btn btn--solid btn--sm" data-js="qual" data-w="'+BardPlatform.escapeHtml(j.wallet)+'">Qualify</button> ';
       acts+='<button class="btn btn--ghost btn--sm" data-js="trust" data-w="'+BardPlatform.escapeHtml(j.wallet)+'">Remember</button> <button class="btn btn--ghost btn--sm" data-js="whale" data-w="'+BardPlatform.escapeHtml(j.wallet)+'">Whale</button> <button class="btn btn--ghost btn--sm" data-js="block" data-w="'+BardPlatform.escapeHtml(j.wallet)+'">Block</button>';
-      return '<tr><td class="num">'+BardPlatform.escapeHtml(shortAddr(j.wallet))+'</td><td>'+(function(){var h=BardPlatform.escapeHtml(j.x_handle||'—');if(j.note)h+='<div class="muted">'+BardPlatform.escapeHtml(j.note)+'</div>';return h;})()+'</td><td class="num">'+BardPlatform.escapeHtml(j.progress||0)+'</td><td><span class="pill '+pill+'">'+BardPlatform.escapeHtml(st)+'</span></td><td style="white-space:nowrap">'+acts+'</td></tr>';
+      return '<tr><td class="num">'+BardPlatform.escapeHtml(shortAddr(j.wallet))+'</td><td>'+(function(){var h=BardPlatform.escapeHtml(j.x_handle||'—');if(j.note)h+='<div class="muted">'+BardPlatform.escapeHtml(j.note)+'</div>';return h;})()+'</td><td class="num">'+BardPlatform.escapeHtml(j.progress||0)+'</td><td><span class="pill '+pill+'">'+BardPlatform.escapeHtml(st)+'</span></td><td>'+evidenceCell(p,c,j,evidenceByWallet[j.wallet],decimals)+'</td><td style="white-space:nowrap">'+acts+'</td></tr>';
     }).join('');
     tbody.querySelectorAll('[data-js]').forEach(function(btn){
       btn.addEventListener('click', async function(){
@@ -279,11 +406,12 @@ async function loadCampaignOps(p,c){
       });
     });
   }
+  renderQualifyMatching(p,c,queue);
   var sets=[];
   try{ sets = await BardPlatform.listSettlements(c.id); }catch(e){ console.error(e); }
-  renderSettleBox(p,c,joins,sets);
+  renderSettleBox(p,c,rows,sets);
   renderBardSigns(p,c,sets);
-  renderDrawBox(p,c,joins);
+  renderDrawBox(p,c,rows);
 }
 function renderDrawBox(p,c,joins){
   var host=document.getElementById('camp-settle');
