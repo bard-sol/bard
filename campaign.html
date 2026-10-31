@@ -123,6 +123,7 @@ h1{
     <p class="line" id="cut-line"></p>
     <p class="line warn" id="below-line"></p>
     <p class="who" id="who-line"></p>
+    <p class="line" id="qualify-line"></p>
     <p class="line num" id="qualified-count">Qualified: 0</p>
     <p class="line" id="clock-line">—</p>
     <p class="line" id="token-row">—</p>
@@ -309,6 +310,7 @@ h1{
     setText('cut-line', copy.cut);
     setText('below-line', copy.warning);
     setText('who-line', (next.prize && next.prize.who_gets_paid_text) || '');
+    setText('qualify-line', copy.qualify);
     setText('qualified-count', copy.qualified);
     var clock = document.getElementById('clock-line');
     clock.textContent = copy.clock;

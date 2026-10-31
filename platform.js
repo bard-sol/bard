@@ -22,6 +22,12 @@
   // campaigns score X activity, so Join stays closed until a handle is linked.
   var X_LINK_TYPES = { raid: true, post: true, reply: true, social: true };
 
+  // The builder and the server both offer only these. Raid is hidden, not removed:
+  // add 'raid' here and in server/api.js to bring it back.
+  var OFFERED_CAMPAIGN_TYPES = ['hold', 'refer', 'custom'];
+
+  var HOLD_QUALIFY_NOTE = 'The team checks balances and decides who qualifies.';
+
   var TEAM_KEY = 'bard_team_v1';
   var HOLDER_KEY = 'bard_holder_v1';
   var RPC = 'https://api.devnet.solana.com';
@@ -38,6 +44,14 @@
 
   function needsX(type) {
     return !!X_LINK_TYPES[String(type || '').toLowerCase()];
+  }
+
+  function isOfferedCampaignType(type) {
+    return OFFERED_CAMPAIGN_TYPES.indexOf(String(type || '').trim()) >= 0;
+  }
+
+  function holdQualifyNote(type) {
+    return String(type || '').toLowerCase() === 'hold' ? HOLD_QUALIFY_NOTE : '';
   }
 
   function escapeHtml(s) {
@@ -369,22 +383,23 @@
   async function createProject(input) {
     await init();
     refuseLocalTeamWrite();
-    var payload = { name: input.name, ticker: input.ticker, mint: input.mint, chain: input.chain || 'solana', admin_wallet: input.admin || null, created_by: input.createdBy || input.admin || null, fee_paid: true, fee_amount_sol: 0, plan: input.plan || 'starter' };
+    var payload = { name: input.name, ticker: input.ticker, mint: input.mint, chain: input.chain || 'solana', admin_wallet: input.admin || null, created_by: input.createdBy || input.admin || null, fee_paid: true, fee_amount_sol: 0 };
     if (mode === 'supabase' && sb) {
       if (!sessionToken) throw new Error('Sign in with your wallet first');
       var created = await apiPost('/api/projects', {
-        name: input.name, ticker: input.ticker, mint: input.mint, chain: input.chain || 'solana', plan: input.plan || 'starter'
+        name: input.name, ticker: input.ticker, mint: input.mint, chain: input.chain || 'solana'
       });
       return mapProjectRow(created.project, []);
     }
     var state = localTeam();
-    var project = { id: 'id_' + Math.random().toString(36).slice(2, 10), name: payload.name, ticker: payload.ticker, mint: payload.mint, admin: payload.admin_wallet || '', chain: payload.chain, feePaid: true, createdAt: new Date().toISOString(), campaigns: [], plan: payload.plan || 'starter' };
+    var project = { id: 'id_' + Math.random().toString(36).slice(2, 10), name: payload.name, ticker: payload.ticker, mint: payload.mint, admin: payload.admin_wallet || '', chain: payload.chain, feePaid: true, createdAt: new Date().toISOString(), campaigns: [] };
     state.projects.push(project); saveLocalTeam(state); return project;
   }
 
   async function createCampaign(projectId, input) {
     await init();
     refuseLocalTeamWrite();
+    if (!isOfferedCampaignType(input.type)) throw new Error('That campaign type is not offered.');
     if (mode === 'supabase' && sb) {
       if (!sessionToken) throw new Error('Sign in with your wallet first');
       var createdCamp = await apiPost('/api/campaigns', {
@@ -1462,6 +1477,7 @@
       cut: cut,
       warning: vault.below_locked === true ? 'The vault holds less than the locked total right now.' : '',
       who: prize.who_gets_paid_text || '',
+      qualify: holdQualifyNote(state && state.campaign && state.campaign.type),
       clock: clockText(state && state.clock),
       qualified: 'Qualified: ' + (((state && state.counts) || {}).qualified || 0)
     };
@@ -1483,6 +1499,9 @@
     listProjects: listProjects, createProject: createProject, createCampaign: createCampaign,
     updateCampaignStatus: updateCampaignStatus, listLiveCampaigns: listLiveCampaigns,
     needsX: needsX,
+    OFFERED_CAMPAIGN_TYPES: Object.freeze(OFFERED_CAMPAIGN_TYPES.slice()),
+    isOfferedCampaignType: isOfferedCampaignType,
+    holdQualifyNote: holdQualifyNote,
     upsertHolder: upsertHolder, linkedXHandle: linkedXHandle, setShowHandle: setShowHandle, getHolder: getHolder, joinCampaign: joinCampaign,
     listJoinsForCampaign: listJoinsForCampaign, setJoinStatus: setJoinStatus, setJoinProgress: setJoinProgress,
     listRoster: listRoster, upsertRoster: upsertRoster, removeRoster: removeRoster,

@@ -86,7 +86,7 @@ async function renderVaultPanel(p){
   var hasSdk=!!(window.BardVault&&BardVault.createTwoOfTwo);
   el.innerHTML=vaultBadgeHtml(p)+
     '<div class="card" style="margin-bottom:12px"><p class="kicker">How it works</p>'+
-    '<p style="margin:0;color:var(--body)">You and Bard each hold one key. Threshold 2. Example: lock 10M $'+BardPlatform.escapeHtml(p.ticker)+'. When an airdrop is ready, you get a sign notice. You sign. Bard signs. Then it pays. Neither of us can move funds alone.</p></div>'+
+    '<p style="margin:0;color:var(--body)">You and Bard each hold one key. Threshold 2. Example: lock 10M $'+BardPlatform.escapeHtml(p.ticker)+'. When an airdrop is ready, you get a sign notice. You sign. Then Bard signs. For now Bard’s signature is a manual check by a person, not an automatic one. Then it pays. Neither of us can move funds alone.</p></div>'+
     '<div class="card" style="margin-bottom:12px"><div class="form">'+
     (addr?'':'<button type="button" class="btn btn--solid" id="btn-create-vault">Create 2-of-2 vault</button><span class="hint" id="vault-create-hint">One Phantom signature. Your connected wallet pays ~0.05 SOL of rent (not the prize). We add your wallet + Bard as the two members.</span><p class="hint" id="vault-sol-line" style="margin-top:8px">Checking SOL in the connected wallet…</p>')+
     (addr?'<p class="muted" style="margin:0 0 12px;font-size:.88rem">Vault is live. Deposit $'+BardPlatform.escapeHtml(p.ticker)+' to this address. Holders can verify on Solscan.</p>':'')+
@@ -99,9 +99,6 @@ async function renderVaultPanel(p){
     '<div class="stat"><div class="stat__lbl">Reserved for campaigns</div><div class="stat__val num" id="vault-res">'+BardPlatform.escapeHtml(fmtAmt(reserved))+'</div></div>'+
     '</div>'+
     '<p class="muted" style="margin:12px 0 0;font-size:.82rem" id="vault-bal-meta">Reading chain…</p>';
-  var goS=document.getElementById('vault-go-starter');
-  if(goS) goS.onclick=function(){ renderProjectTabs('settings'); };
-  
   (function(){
     var line=document.getElementById('vault-sol-line');
     if(!line) return;
@@ -222,7 +219,7 @@ function renderSettingsPanel(p){
     '<span class="hint">The percentage freezes on a campaign when it goes live. Changing it later does not change a running campaign.</span></div>'+
     '</div></div>';
 }
-function renderProjectTabs(tab){var p=findProject(currentProjectId);if(!p)return;document.querySelectorAll('#page-project .tab').forEach(function(t){t.classList.toggle('is-on',t.getAttribute('data-tab')===tab);});var campsEl=document.getElementById('proj-campaigns');var setEl=document.getElementById('proj-settings');var vaultEl=document.getElementById('proj-vault');var rosterEl=document.getElementById('proj-roster');if(tab==='roster'){campsEl.style.display='none';if(setEl)setEl.style.display='none';if(vaultEl)vaultEl.style.display='none';if(rosterEl){rosterEl.style.display='block';renderRosterPanel(p);}return;}if(tab==='vault'){campsEl.style.display='none';setEl.style.display='none';vaultEl.style.display='block';renderVaultPanel(p);return;}if(tab==='settings'){campsEl.style.display='none';if(vaultEl)vaultEl.style.display='none';if(rosterEl)rosterEl.style.display='none';setEl.style.display='block';renderSettingsPanel(p);return;}if(vaultEl)vaultEl.style.display='none';if(rosterEl)rosterEl.style.display='none';setEl.style.display='none';campsEl.style.display='block';var camps=p.campaigns||[];if(!camps.length){campsEl.innerHTML='<div class="empty"><h3>No campaigns yet</h3><p>Create a hold, raid, refer, or custom campaign for $'+BardPlatform.escapeHtml(p.ticker)+'.</p><button class="btn btn--solid" id="empty-camp">New campaign</button></div>';document.getElementById('empty-camp').onclick=function(){resetCampaignBuilder();show('new-campaign');};return;}campsEl.innerHTML=camps.slice().reverse().map(function(c){var pill=c.status==='active'?'pill--live':(c.status==='paid'?'pill--paid':(c.status==='ended'?'pill--ended':'pill--draft'));var lockPill=(c.lockedRaw||c.locked_raw)?'<span class="pill pill--paid">prize locked</span>':'';var sub=[c.type,(c.accessMode||c.access_mode)==='approval'?'approval':'open',c.rewardMode||c.reward_mode||'fixed',(c.rule||'').slice(0,48)].filter(Boolean).join(' · ');return'<div class="card card--hover" data-open-camp="'+BardPlatform.escapeHtml(c.id)+'"><div class="item" style="padding:0;border:none"><div class="item__body"><div class="item__title">'+BardPlatform.escapeHtml(c.title)+'</div><div class="item__sub">'+BardPlatform.escapeHtml(sub)+((c.rule||'').length>48?'…':'')+'</div></div><div class="item__right" style="display:flex;flex-direction:column;align-items:flex-end;gap:6px"><span class="pill '+pill+'">'+BardPlatform.escapeHtml(c.status)+'</span>'+lockPill+'</div></div></div>';}).join('');campsEl.querySelectorAll('[data-open-camp]').forEach(function(el){el.addEventListener('click',function(){openCampaign(el.getAttribute('data-open-camp'));});});}
+function renderProjectTabs(tab){var p=findProject(currentProjectId);if(!p)return;document.querySelectorAll('#page-project .tab').forEach(function(t){t.classList.toggle('is-on',t.getAttribute('data-tab')===tab);});var campsEl=document.getElementById('proj-campaigns');var setEl=document.getElementById('proj-settings');var vaultEl=document.getElementById('proj-vault');var rosterEl=document.getElementById('proj-roster');if(tab==='roster'){campsEl.style.display='none';if(setEl)setEl.style.display='none';if(vaultEl)vaultEl.style.display='none';if(rosterEl){rosterEl.style.display='block';renderRosterPanel(p);}return;}if(tab==='vault'){campsEl.style.display='none';setEl.style.display='none';vaultEl.style.display='block';renderVaultPanel(p);return;}if(tab==='settings'){campsEl.style.display='none';if(vaultEl)vaultEl.style.display='none';if(rosterEl)rosterEl.style.display='none';setEl.style.display='block';renderSettingsPanel(p);return;}if(vaultEl)vaultEl.style.display='none';if(rosterEl)rosterEl.style.display='none';setEl.style.display='none';campsEl.style.display='block';var camps=p.campaigns||[];if(!camps.length){campsEl.innerHTML='<div class="empty"><h3>No campaigns yet</h3><p>Create your first campaign for $'+BardPlatform.escapeHtml(p.ticker)+'.</p><button class="btn btn--solid" id="empty-camp">New campaign</button></div>';document.getElementById('empty-camp').onclick=function(){resetCampaignBuilder();show('new-campaign');};return;}campsEl.innerHTML=camps.slice().reverse().map(function(c){var pill=c.status==='active'?'pill--live':(c.status==='paid'?'pill--paid':(c.status==='ended'?'pill--ended':'pill--draft'));var lockPill=(c.lockedRaw||c.locked_raw)?'<span class="pill pill--paid">prize locked</span>':'';var sub=[c.type,(c.accessMode||c.access_mode)==='approval'?'approval':'open',c.rewardMode||c.reward_mode||'fixed',(c.rule||'').slice(0,48)].filter(Boolean).join(' · ');return'<div class="card card--hover" data-open-camp="'+BardPlatform.escapeHtml(c.id)+'"><div class="item" style="padding:0;border:none"><div class="item__body"><div class="item__title">'+BardPlatform.escapeHtml(c.title)+'</div><div class="item__sub">'+BardPlatform.escapeHtml(sub)+((c.rule||'').length>48?'…':'')+'</div></div><div class="item__right" style="display:flex;flex-direction:column;align-items:flex-end;gap:6px"><span class="pill '+pill+'">'+BardPlatform.escapeHtml(c.status)+'</span>'+lockPill+'</div></div></div>';}).join('');campsEl.querySelectorAll('[data-open-camp]').forEach(function(el){el.addEventListener('click',function(){openCampaign(el.getAttribute('data-open-camp'));});});}
 function openCampaign(cid){var c=findCampaign(currentProjectId,cid);var p=findProject(currentProjectId);if(!c||!p)return;currentCampaignId=cid;document.getElementById('camp-kicker').textContent=p.name+' · $'+p.ticker;document.getElementById('camp-title').textContent=c.title;document.getElementById('camp-rule').textContent=c.rule;var st=document.getElementById('camp-status');st.textContent=c.status;st.className='pill '+(c.status==='active'?'pill--live':'pill--ended');var access=c.accessMode||c.access_mode||'open';var rewardMode=c.rewardMode||c.reward_mode||'fixed';var raidMode=c.raidMode||c.raid_mode||null;document.getElementById('camp-access-pill').textContent=access==='approval'?'Approval required':'Open join';document.getElementById('camp-reward-pill').textContent=({fixed:'Fixed payout',top3:'Top 3',pool:'Shared pool',growing:'Growing pool'})[rewardMode]||rewardMode;var raidPill=document.getElementById('camp-raid-pill');if(c.type==='raid'&&raidMode){raidPill.style.display='';raidPill.textContent=({open:'Open raid',post:'Specific post',kol_list:'KOL targets'})[raidMode]||raidMode;}else{raidPill.style.display='none';}var poolLabel=(c.pool||'—')+(c.unit?' '+c.unit:'');if(c.reward)poolLabel=(c.reward+' '+(c.unit||'')+' · pool '+poolLabel).trim();
     var poolLblEl=document.getElementById('camp-pool').parentElement.querySelector('.stat__lbl');
     if((c.rewardMode||c.reward_mode)==='growing' && BardPlatform.growingMeta){
@@ -621,7 +618,17 @@ async function cosignCurrent(p,c,live){
     else toast((e&&e.message)||'Sign failed','err');
   }
 }
-function setChoiceGroup(selector,attr,value,hiddenId){document.querySelectorAll(selector).forEach(function(btn){btn.classList.toggle('is-on',btn.getAttribute(attr)===value);});if(hiddenId)document.getElementById(hiddenId).value=value;}
+function setChoiceGroup(selector,attr,value,hiddenId){document.querySelectorAll(selector).forEach(function(btn){btn.classList.toggle('is-on',btn.getAttribute(attr)===value);});var hidden=hiddenId?document.getElementById(hiddenId):null;if(hidden)hidden.value=value;}
+function fieldValue(id,fallback){var el=document.getElementById(id);return el?el.value:fallback;}
+function toggleOn(id,on){var el=document.getElementById(id);if(el)el.classList.toggle('is-on',on);}
+function applyOfferedTypes(){
+  var offered=BardPlatform.OFFERED_CAMPAIGN_TYPES||[];
+  var sel=document.getElementById('c-type');
+  Array.prototype.slice.call(sel.options).forEach(function(opt){if(offered.indexOf(opt.value)<0)sel.removeChild(opt);});
+  var raid=document.getElementById('mod-raid');
+  if(offered.indexOf('raid')<0&&raid&&raid.parentNode)raid.parentNode.removeChild(raid);
+}
+applyOfferedTypes();
 function syncTop3Total(){
   var a=Number(document.getElementById('c-top3-1').value||0);
   var b=Number(document.getElementById('c-top3-2').value||0);
@@ -698,14 +705,15 @@ function syncGrowPreview(){
 }
 function syncCampaignBuilder(){
   var type=document.getElementById('c-type').value;
-  var raidMode=document.getElementById('c-raid-mode').value;
+  var raidMode=fieldValue('c-raid-mode','open');
   var rewardMode=document.getElementById('c-reward-mode').value;
   var access=document.getElementById('c-access').value;
   var days=document.getElementById('c-days').value||'7';
-  document.getElementById('mod-raid').classList.toggle('is-on',type==='raid');
-  document.getElementById('mod-hold').classList.toggle('is-on',type==='hold');
-  document.getElementById('mod-post-url').classList.toggle('is-on',type==='raid'&&raidMode==='post');
-  document.getElementById('mod-targets').classList.toggle('is-on',type==='raid'&&raidMode==='kol_list');
+  toggleOn('mod-raid',type==='raid');
+  toggleOn('mod-hold',type==='hold');
+  toggleOn('rule-qualify-hint',type==='hold');
+  toggleOn('mod-post-url',type==='raid'&&raidMode==='post');
+  toggleOn('mod-targets',type==='raid'&&raidMode==='kol_list');
   var top3=document.getElementById('mod-top3');
   if(top3) top3.classList.toggle('is-on',rewardMode==='top3');
   var grow=document.getElementById('mod-growing');
@@ -779,7 +787,6 @@ function resetCampaignBuilder(){
   document.getElementById('form-campaign').reset();
   document.getElementById('c-type').value='hold';
   document.getElementById('c-access').value='open';
-  document.getElementById('c-raid-mode').value='open';
   document.getElementById('c-reward-mode').value='fixed';
   document.getElementById('c-days').value='7';
   if(document.getElementById('c-top3-1')){
@@ -827,11 +834,10 @@ document.getElementById('form-onboard').addEventListener('submit',async function
   btn.disabled=true;
   btn.textContent='Creating…';
   try{
-    var project=await BardPlatform.createProject({name:name,ticker:ticker,mint:mint,admin:wallet||null,plan:'starter'});
+    var project=await BardPlatform.createProject({name:name,ticker:ticker,mint:mint,admin:wallet||null});
     await refreshState();
     toast('Project created','ok');
     document.getElementById('form-onboard').reset();
-    if(document.getElementById('p-plan')) document.getElementById('p-plan').value='starter';
     openProject(project.id);
   }catch(err){
     console.error(err);
@@ -854,10 +860,10 @@ document.getElementById('form-campaign').addEventListener('submit',async functio
   var days=parseInt(document.getElementById('c-days').value,10)||7;
   var accessMode=document.getElementById('c-access').value||'open';
   var rewardMode=document.getElementById('c-reward-mode').value||'fixed';
-  var raidMode=type==='raid'?(document.getElementById('c-raid-mode').value||'open'):null;
-  var postUrl=document.getElementById('c-post-url').value.trim();
-  var targets=document.getElementById('c-targets').value.trim();
-  var bonusHandle=document.getElementById('c-bonus').value.trim().replace(/^@/,'');
+  var raidMode=type==='raid'?(fieldValue('c-raid-mode','open')||'open'):null;
+  var postUrl=fieldValue('c-post-url','').trim();
+  var targets=fieldValue('c-targets','').trim();
+  var bonusHandle=fieldValue('c-bonus','').trim().replace(/^@/,'');
   if(bonusHandle) bonusHandle='@'+bonusHandle;
   var minBal=document.getElementById('c-min-bal').value.trim();
   var holdDays=document.getElementById('c-hold-days').value.trim();

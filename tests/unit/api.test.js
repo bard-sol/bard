@@ -405,7 +405,7 @@ test('privileged writes require the project admin session', { timeout: 30000 }, 
   try {
     const locked = [
       ['/api/projects', { name: 'Nope', ticker: 'NO', mint: mintA }],
-      ['/api/campaigns', { projectId: 'x', title: 'T', rule: 'R', type: 'raid' }],
+      ['/api/campaigns', { projectId: 'x', title: 'T', rule: 'R', type: 'hold' }],
       ['/api/projects/x/vault', { address: vaultAddress, multisig }],
       ['/api/joins/status', { campaignId: 'c', wallet: holder.publicKey, status: 'approved' }],
       ['/api/joins/progress', { campaignId: 'c', wallet: holder.publicKey, progress: 1 }],
@@ -445,18 +445,26 @@ test('privileged writes require the project admin session', { timeout: 30000 }, 
     assert.equal(created.status, 200, JSON.stringify(created.data));
     const project = created.data.project;
     assert.equal(project.admin_wallet, walletA.publicKey);
-    assert.equal(project.plan, 'starter');
+    assert.equal(Object.prototype.hasOwnProperty.call(project, 'plan'), false, 'a plan sent by the browser is ignored');
+    assert.equal(Object.prototype.hasOwnProperty.call(tables.projects[0], 'plan'), false);
     assert.equal(project.fee_paid, true);
 
     const bPlan = await call(env, 'POST', '/api/projects/' + project.id + '/plan', { plan: 'pro' }, tokenB);
     assert.equal(bPlan.status, 404);
-    assert.equal(tables.projects[0].plan, 'starter');
+    assert.equal(Object.prototype.hasOwnProperty.call(tables.projects[0], 'plan'), false);
 
     const raidEarly = await call(env, 'POST', '/api/campaigns', {
-      projectId: project.id, title: 'Raid', rule: 'reply', type: 'raid', rewardMode: 'fixed', reward: '1',
+      projectId: project.id, title: 'Hold', rule: 'hold', type: 'hold', rewardMode: 'fixed', reward: '1',
     }, tokenA);
     assert.equal(raidEarly.status, 409);
     assert.match(raidEarly.data.error, /Link a vault/);
+    assert.equal(tables.campaigns.length, 0);
+
+    const raidHidden = await call(env, 'POST', '/api/campaigns', {
+      projectId: project.id, title: 'Raid', rule: 'reply', type: 'raid', rewardMode: 'fixed', reward: '1',
+    }, tokenA);
+    assert.equal(raidHidden.status, 400, JSON.stringify(raidHidden.data));
+    assert.equal(raidHidden.data.error, 'that campaign type is not offered');
     assert.equal(tables.campaigns.length, 0);
 
     const own = await call(env, 'POST', '/api/projects', {
@@ -465,7 +473,7 @@ test('privileged writes require the project admin session', { timeout: 30000 }, 
     assert.equal(own.status, 200);
     const cross = await call(env, 'POST', '/api/projects/' + own.data.project.id + '/plan', { plan: 'pro' }, tokenA);
     assert.equal(cross.status, 404);
-    assert.equal(tables.projects.find((row) => row.id === own.data.project.id).plan, 'starter');
+    assert.equal(Object.prototype.hasOwnProperty.call(tables.projects.find((row) => row.id === own.data.project.id), 'plan'), false);
 
     const fee = await call(env, 'POST', '/api/fees/confirm', {
       kind: 'starter', signature: goodSig, projectId: project.id,
@@ -575,9 +583,10 @@ test('privileged writes require the project admin session', { timeout: 30000 }, 
     assert.match(treasury.data.error, /fee treasury/);
 
     const raid = await call(env, 'POST', '/api/campaigns', {
-      projectId: project.id, title: 'Raid', rule: 'reply', type: 'raid', rewardMode: 'fixed', reward: '1',
+      projectId: project.id, title: 'Hold', rule: 'hold', type: 'hold', rewardMode: 'fixed', reward: '1',
     }, tokenA);
     assert.equal(raid.status, 200, JSON.stringify(raid.data));
+    assert.equal(raid.data.campaign.type, 'hold');
     assert.equal(raid.data.campaign.status, 'active');
     assert.equal(raid.data.campaign.fee_paid, true);
     assert.equal(raid.data.campaign.cut_bps, 500);
@@ -585,14 +594,35 @@ test('privileged writes require the project admin session', { timeout: 30000 }, 
     assert.equal(raid.data.campaign.locked_raw, '1050000');
     assert.equal(tables.projects[0].vault_reserved, '1.05');
     const hold = await call(env, 'POST', '/api/campaigns', {
-      projectId: project.id, title: 'Hold', rule: 'hold', type: 'hold', rewardMode: 'fixed', reward: '1',
+      projectId: project.id, title: 'Refer', rule: 'refer', type: 'refer', rewardMode: 'fixed', reward: '1',
     }, tokenA);
     assert.equal(hold.status, 200, JSON.stringify(hold.data));
+    assert.equal(hold.data.campaign.type, 'refer');
+    const custom = await call(env, 'POST', '/api/campaigns', {
+      projectId: project.id, title: 'Custom', rule: 'do the thing', type: 'custom', rewardMode: 'fixed', reward: '1',
+      raidMode: 'targeted', postUrl: 'https://x.com/a/status/1', targets: '@a', bonusHandle: '@b',
+    }, tokenA);
+    assert.equal(custom.status, 200, JSON.stringify(custom.data));
+    assert.equal(custom.data.campaign.type, 'custom');
+    for (const made of [raid, hold, custom]) {
+      assert.equal(made.data.campaign.raid_mode, null);
+      assert.equal(made.data.campaign.post_url, null);
+      assert.equal(made.data.campaign.targets, null);
+      assert.equal(made.data.campaign.bonus_handle, null);
+      assert.equal(made.data.campaign.reward_unit, 'TOKEN');
+    }
+    for (const hidden of ['raid', 'post', 'reply', 'social']) {
+      const refused = await call(env, 'POST', '/api/campaigns', {
+        projectId: project.id, title: 'Hidden', rule: 'x', type: hidden, rewardMode: 'fixed', reward: '1',
+        raidMode: 'open', postUrl: 'https://x.com/a/status/1', targets: '@a', bonusHandle: '@b',
+      }, tokenA);
+      assert.equal(refused.status, 400, hidden + ' ' + JSON.stringify(refused.data));
+    }
     const stolen = await call(env, 'POST', '/api/campaigns', {
-      projectId: project.id, title: 'Stolen', rule: 'no', type: 'raid', rewardMode: 'fixed', reward: '1',
+      projectId: project.id, title: 'Stolen', rule: 'no', type: 'hold', rewardMode: 'fixed', reward: '1',
     }, tokenB);
     assert.equal(stolen.status, 403);
-    assert.equal(tables.campaigns.length, 2);
+    assert.equal(tables.campaigns.length, 3);
 
     tables.campaign_joins.push({
       id: crypto.randomUUID(),
@@ -894,12 +924,12 @@ test('settlement routes keep the canonical hash and reject the other wallet', { 
   const otherSig = '6'.repeat(88);
   try {
     const created = await call(env, 'POST', '/api/projects', {
-      name: 'Alpha', ticker: 'ALP', mint, plan: 'starter',
+      name: 'Alpha', ticker: 'ALP', mint,
     }, tokenA);
     assert.equal(created.status, 200, JSON.stringify(created.data));
     const project = created.data.project;
     const missingVault = await call(env, 'POST', '/api/campaigns', {
-      projectId: project.id, title: 'Raid', rule: 'reply', type: 'raid', rewardMode: 'fixed', reward: '2', unit: 'TOKEN',
+      projectId: project.id, title: 'Hold', rule: 'hold', type: 'hold', rewardMode: 'fixed', reward: '2', unit: 'TOKEN',
     }, tokenA);
     assert.equal(missingVault.status, 409);
     assert.match(missingVault.data.error, /Link a vault/);
@@ -912,7 +942,7 @@ test('settlement routes keep the canonical hash and reject the other wallet', { 
 
     tokenAccounts[vaultAddress + '|' + mint] = ownedTokens(mint, 1000, 6);
     const short = await call(env, 'POST', '/api/campaigns', {
-      projectId: project.id, title: 'Raid', rule: 'reply', type: 'raid', rewardMode: 'fixed', reward: '2', unit: 'TOKEN',
+      projectId: project.id, title: 'Hold', rule: 'hold', type: 'hold', rewardMode: 'fixed', reward: '2', unit: 'TOKEN',
     }, tokenA);
     assert.equal(short.status, 409, JSON.stringify(short.data));
     assert.match(short.data.error, /does not cover/);
@@ -920,7 +950,7 @@ test('settlement routes keep the canonical hash and reject the other wallet', { 
     tokenAccounts[vaultAddress + '|' + mint] = ownedTokens(mint, 10_000_000, 6);
 
     const raid = await call(env, 'POST', '/api/campaigns', {
-      projectId: project.id, title: 'Raid', rule: 'reply', type: 'raid', rewardMode: 'fixed', reward: '2', unit: 'TOKEN',
+      projectId: project.id, title: 'Hold', rule: 'hold', type: 'hold', rewardMode: 'fixed', reward: '2', unit: 'TOKEN',
     }, tokenA);
     assert.equal(raid.status, 200, JSON.stringify(raid.data));
     const campaign = raid.data.campaign;
@@ -1528,7 +1558,7 @@ test('two creates at once reserve only what the vault can cover', async () => {
   const token = (await signJwt(SECRET, wallet.publicKey)).token;
   try {
     const created = await call(env, 'POST', '/api/projects', {
-      name: 'Alpha', ticker: 'ALP', mint, plan: 'starter',
+      name: 'Alpha', ticker: 'ALP', mint,
     }, token);
     assert.equal(created.status, 200, JSON.stringify(created.data));
     const linked = await call(env, 'POST', '/api/projects/' + created.data.project.id + '/vault', {
@@ -1579,7 +1609,7 @@ test('a second campaign succeeds after a fractional reservation', async () => {
   const token = (await signJwt(SECRET, wallet.publicKey)).token;
   try {
     const created = await call(env, 'POST', '/api/projects', {
-      name: 'Alpha', ticker: 'ALP', mint, plan: 'starter',
+      name: 'Alpha', ticker: 'ALP', mint,
     }, token);
     const projectId = created.data.project.id;
     const linked = await call(env, 'POST', '/api/projects/' + projectId + '/vault', {
@@ -1600,7 +1630,7 @@ test('a second campaign succeeds after a fractional reservation', async () => {
     assert.equal(tables.campaigns.length, 2);
 
     const nine = await call(env, 'POST', '/api/projects', {
-      name: 'Nine', ticker: 'NIN', mint: fine, plan: 'starter',
+      name: 'Nine', ticker: 'NIN', mint: fine,
     }, token);
     assert.equal(nine.status, 200, JSON.stringify(nine.data));
     const linkedFine = await call(env, 'POST', '/api/projects/' + nine.data.project.id + '/vault', {
@@ -1639,7 +1669,7 @@ test('a fixed reward pays only the holders the lock covers', async () => {
   const token = (await signJwt(SECRET, wallet.publicKey)).token;
   try {
     const created = await call(env, 'POST', '/api/projects', {
-      name: 'Alpha', ticker: 'ALP', mint, plan: 'starter',
+      name: 'Alpha', ticker: 'ALP', mint,
     }, token);
     const projectId = created.data.project.id;
     const linked = await call(env, 'POST', '/api/projects/' + projectId + '/vault', {
@@ -1740,7 +1770,7 @@ async function prepareLockedSettlement() {
   });
   const token = (await signJwt(SECRET, wallet.publicKey)).token;
   const created = await call(env, 'POST', '/api/projects', {
-    name: 'Alpha', ticker: 'ALP', mint, plan: 'starter',
+    name: 'Alpha', ticker: 'ALP', mint,
   }, token);
   assert.equal(created.status, 200, JSON.stringify(created.data));
   const project = created.data.project;
@@ -1749,7 +1779,7 @@ async function prepareLockedSettlement() {
   }, token);
   assert.equal(linked.status, 200, JSON.stringify(linked.data));
   const raid = await call(env, 'POST', '/api/campaigns', {
-    projectId: project.id, title: 'Raid', rule: 'reply', type: 'raid', rewardMode: 'fixed', reward: '2', unit: 'TOKEN',
+    projectId: project.id, title: 'Hold', rule: 'hold', type: 'hold', rewardMode: 'fixed', reward: '2', unit: 'TOKEN',
   }, token);
   assert.equal(raid.status, 200, JSON.stringify(raid.data));
   const campaign = raid.data.campaign;
@@ -1831,7 +1861,7 @@ test('a draft campaign with pool_size gets 409 from propose', async () => {
   const token = (await signJwt(SECRET, wallet.publicKey)).token;
   try {
     const created = await call(env, 'POST', '/api/projects', {
-      name: 'Alpha', ticker: 'ALP', mint, plan: 'starter',
+      name: 'Alpha', ticker: 'ALP', mint,
     }, token);
     assert.equal(created.status, 200, JSON.stringify(created.data));
     const project = created.data.project;
@@ -2182,7 +2212,7 @@ test('link checks prior proposals, spending limits, and the admin initiate bit',
   const disc = bs58.encode(await squadsSpendingLimitDiscriminator());
   async function projectOf(env) {
     const created = await call(env, 'POST', '/api/projects', {
-      name: 'Alpha', ticker: 'ALP', mint, plan: 'starter',
+      name: 'Alpha', ticker: 'ALP', mint,
     }, token);
     assert.equal(created.status, 200, JSON.stringify(created.data));
     return created.data.project.id;
@@ -2319,7 +2349,7 @@ test('a prize at or above 2^53 is refused before it can round', async () => {
   const token = (await signJwt(SECRET, wallet.publicKey)).token;
   try {
     const created = await call(env, 'POST', '/api/projects', {
-      name: 'Alpha', ticker: 'ALP', mint, plan: 'starter',
+      name: 'Alpha', ticker: 'ALP', mint,
     }, token);
     assert.equal(created.status, 200, JSON.stringify(created.data));
     const linked = await call(env, 'POST', '/api/projects/' + created.data.project.id + '/vault', {

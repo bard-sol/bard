@@ -120,13 +120,12 @@ h1{margin:0 0 10px;font-size:clamp(1.7rem,3.5vw,2.3rem);line-height:1.15;font-va
 <section class="page" id="page-onboard">
 <button class="back" data-go="home">← Back to projects</button>
 <p class="kicker">Onboarding</p><h1>Add a project</h1>
-<p class="lead">One-time setup per token. Every campaign type is available once a vault is linked.</p>
+<p class="lead">One-time setup per token. You can create campaigns once a vault is linked.</p>
 <div class="card" style="max-width:720px"><form class="form" id="form-onboard">
 <div class="field"><label for="p-name">Project name</label><input class="inp" id="p-name" required maxlength="48" placeholder="e.g. Frogz"></div>
 <div class="grid-2"><div class="field"><label for="p-ticker">Ticker</label><input class="inp" id="p-ticker" required maxlength="12" placeholder="FROGZ"></div>
 <div class="field"><label for="p-chain">Chain</label><select class="sel" id="p-chain"><option value="solana">Solana</option></select></div></div>
-<div class="field"><label for="p-mint">Token mint address</label><input class="inp" id="p-mint" required minlength="32" maxlength="64" placeholder="Solana mint address"><span class="hint">Your token’s mint from Pump.fun / Solscan. We use it to see who holds.</span></div>
-<input type="hidden" id="p-plan" value="starter">
+<div class="field"><label for="p-mint">Token mint address</label><input class="inp" id="p-mint" required minlength="32" maxlength="64" placeholder="Solana mint address"><span class="hint">Your token’s mint from Pump.fun / Solscan. The review screen reads balances for this token so your team can check holders.</span></div>
 <p class="hint" style="margin:0" id="onboard-wallet-hint">Connect the wallet that will be the team key on the vault.</p>
 <button class="btn btn--solid" type="submit" id="btn-submit-onboard">Create project</button>
 </form></div></section>
@@ -145,10 +144,10 @@ h1{margin:0 0 10px;font-size:clamp(1.7rem,3.5vw,2.3rem);line-height:1.15;font-va
 <p class="lead">Mix access, rule style, and reward model. Holders see a clear rule — you keep the controls.</p>
 <div class="card" style="max-width:720px"><form class="form" id="form-campaign">
 <div class="builder-sec"><p class="builder-sec__title">Basics</p>
-<div class="field"><label for="c-title">Campaign name</label><input class="inp" id="c-title" required maxlength="64" placeholder="e.g. Diamond Week · KOL Raid"></div>
+<div class="field"><label for="c-title">Campaign name</label><input class="inp" id="c-title" required maxlength="64" placeholder="e.g. Diamond Week"></div>
 <div class="field" style="margin-top:12px"><label for="c-type">Campaign type</label>
 <select class="sel" id="c-type">
-<option value="hold" selected>Hold — stay in, get paid.</option>
+<option value="hold" selected>Hold — keep the token. The team checks balances.</option>
 <option value="raid">Raid — optional. Smash a call. We count.</option>
 <option value="refer">Refer — invite wallets that hold.</option>
 <option value="custom">Board / custom — any rule you write.</option>
@@ -164,9 +163,10 @@ h1{margin:0 0 10px;font-size:clamp(1.7rem,3.5vw,2.3rem);line-height:1.15;font-va
 <div class="field mod-block" id="mod-targets" style="margin-top:12px"><label for="c-targets">Targets</label><textarea class="area" id="c-targets" style="min-height:72px" placeholder="@kol1"></textarea></div>
 <div class="field" style="margin-top:12px"><label for="c-bonus">Bonus handle (optional)</label><input class="inp" id="c-bonus" placeholder="@elonmusk"><span class="hint">Extra pool if this handle engages</span></div></div>
 <div class="builder-sec mod-block is-on" id="mod-hold"><p class="builder-sec__title">Hold parameters</p>
-<div class="grid-2"><div class="field"><label for="c-min-bal">Min balance</label><input class="inp" id="c-min-bal" placeholder="100000"></div><div class="field"><label for="c-hold-days">Hold days</label><input class="inp" id="c-hold-days" type="number" min="1" max="365" placeholder="7"></div></div></div>
+<div class="grid-2"><div class="field"><label for="c-min-bal">Min balance</label><input class="inp" id="c-min-bal" placeholder="100000"></div><div class="field"><label for="c-hold-days">Hold days</label><input class="inp" id="c-hold-days" type="number" min="1" max="365" placeholder="7"></div></div>
+<p class="hint" id="hold-team-hint" style="margin:10px 0 0">Your team checks balances on the review screen and decides who qualifies. Bard does not do it for you.</p></div>
 <div class="builder-sec"><p class="builder-sec__title">The rule (public)</p>
-<div class="field"><label for="c-rule">What holders must do</label><textarea class="area" id="c-rule" required placeholder="Hold 100k for 7 days"></textarea></div></div>
+<div class="field"><label for="c-rule">What holders must do</label><textarea class="area" id="c-rule" required placeholder="Hold 100k for 7 days"></textarea><span class="hint mod-block is-on" id="rule-qualify-hint">Holders also see: “The team checks balances and decides who qualifies.”</span></div></div>
 <div class="builder-sec"><p class="builder-sec__title">Reward model</p>
 <div class="choice-row">
 <button type="button" class="choice is-on" data-reward="fixed"><strong>Fixed</strong><span>Same amount each</span></button>
@@ -174,11 +174,11 @@ h1{margin:0 0 10px;font-size:clamp(1.7rem,3.5vw,2.3rem);line-height:1.15;font-va
 <button type="button" class="choice" data-reward="pool"><strong>Shared pool</strong><span>Split</span></button>
 <button type="button" class="choice" data-reward="growing"><strong>Growing</strong><span>Accumulates</span></button>
 </div><input type="hidden" id="c-reward-mode" value="fixed">
-<p class="teach" id="reward-teach"><b>Fixed.</b> Every qualified holder gets the same payout. Starter can run this.</p>
+<p class="teach" id="reward-teach"><b>Fixed.</b> Every qualified holder gets the same payout.</p>
 <div id="mod-reward-amount" class="grid-2" style="margin-top:12px">
   <div class="field"><label for="c-reward" id="c-reward-label">Payout per winner</label><input class="inp" id="c-reward" placeholder="1"></div>
   <div class="field"><label for="c-holder-count">Expected holders</label><input class="inp" id="c-holder-count" inputmode="numeric" placeholder="10"><span class="hint">Fixed prizes lock this count times the payout.</span></div>
-  <div class="field"><label for="c-unit">Paid in</label><select class="sel" id="c-unit"><option value="TOKEN">Project token</option><option value="SOL">SOL</option></select></div>
+  <div class="field"><label for="c-unit">Paid in</label><select class="sel" id="c-unit"><option value="TOKEN">Project token</option></select></div>
 </div>
 <div id="mod-pool-row" class="grid-2" style="margin-top:12px">
   <div class="field"><label for="c-pool" id="c-pool-label">Max budget (optional)</label><input class="inp" id="c-pool" placeholder="12"><span class="hint" id="c-pool-hint">Stop paying once this is gone.</span></div>

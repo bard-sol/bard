@@ -353,6 +353,8 @@ function handleConfig(env) {
 }
 
 const CAMPAIGN_TYPES = ['hold', 'raid', 'refer', 'custom'];
+// Raid is hidden, not removed. To bring it back, add 'raid' here and in platform.js.
+export const OFFERED_CAMPAIGN_TYPES = ['hold', 'refer', 'custom'];
 
 async function handleCreateCampaign(request, env) {
   const session = await sessionWallet(request, env);
@@ -367,6 +369,7 @@ async function handleCreateCampaign(request, env) {
   const rewardMode = body.rewardMode || 'fixed';
   if (!title || !rule) return json({ error: 'title and rule are required' }, 400);
   if (CAMPAIGN_TYPES.indexOf(type) < 0) return json({ error: 'unknown campaign type' }, 400);
+  if (OFFERED_CAMPAIGN_TYPES.indexOf(type) < 0) return json({ error: 'that campaign type is not offered' }, 400);
   if (['fixed', 'top3', 'pool', 'growing'].indexOf(rewardMode) < 0) return json({ error: 'unknown reward mode' }, 400);
   const project = admin.project;
   if (project.vault_status !== 'linked' || !isBase58Address(project.vault_address || '') || !isBase58Address(project.vault_mint || project.mint || '')) {
@@ -433,9 +436,9 @@ async function handleCreateCampaign(request, env) {
       access_mode: body.accessMode || 'open',
       raid_mode: type === 'raid' ? (body.raidMode || null) : null,
       reward_mode: rewardMode,
-      post_url: body.postUrl || null,
-      targets: body.targets || null,
-      bonus_handle: body.bonusHandle || null,
+      post_url: type === 'raid' ? (body.postUrl || null) : null,
+      targets: type === 'raid' ? (body.targets || null) : null,
+      bonus_handle: type === 'raid' ? (body.bonusHandle || null) : null,
       config: body.config || {},
       prize_raw: lock.prizeRaw.toString(),
       cut_bps: Number(settings.cutBps),
@@ -484,9 +487,7 @@ async function handleCreateProject(request, env) {
   const name = String(body.name || '').trim();
   const ticker = String(body.ticker || '').trim();
   const mint = String(body.mint || '').trim();
-  const plan = body.plan === 'pro' ? 'pro' : 'starter';
   if (!name || !ticker || !isBase58Address(mint)) return json({ error: 'name, ticker, and mint are required' }, 400);
-  const now = new Date().toISOString();
   const row = {
     name,
     ticker,
@@ -494,10 +495,8 @@ async function handleCreateProject(request, env) {
     chain: body.chain || 'solana',
     admin_wallet: session.wallet,
     created_by: session.wallet,
-    plan,
     fee_paid: true,
     fee_amount_sol: 0,
-    plan_paid_at: now,
   };
   const created = await insert(env, 'projects', row);
   const project = Array.isArray(created) ? created[0] : created;
