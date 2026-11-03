@@ -66,6 +66,9 @@ const OPEN_POST_ROUTES = [
   '/api/joins/qualify',
   '/api/campaigns/x1/draw/commit',
   '/api/campaigns/x1/draw/finalize',
+  // Qualification and a referrer do not move vault funds. The payout routes stay guarded.
+  '/api/campaigns/x1/qualify-matching',
+  '/api/campaigns/x1/referred-by',
 ];
 
 function blockedEnv(extra) {
