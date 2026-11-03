@@ -22,6 +22,12 @@
   // campaigns score X activity, so Join stays closed until a handle is linked.
   var X_LINK_TYPES = { raid: true, post: true, reply: true, social: true };
 
+  // The builder and the server both offer only these. Raid is hidden, not removed:
+  // add 'raid' here and in server/api.js to bring it back.
+  var OFFERED_CAMPAIGN_TYPES = ['hold', 'refer', 'custom'];
+
+  var HOLD_QUALIFY_NOTE = 'The team checks balances and decides who qualifies.';
+
   var TEAM_KEY = 'bard_team_v1';
   var HOLDER_KEY = 'bard_holder_v1';
   var SUPABASE_SCRIPT = '/vendor/supabase/supabase.js';
@@ -40,6 +46,14 @@
 
   function needsX(type) {
     return !!X_LINK_TYPES[String(type || '').toLowerCase()];
+  }
+
+  function isOfferedCampaignType(type) {
+    return OFFERED_CAMPAIGN_TYPES.indexOf(String(type || '').trim()) >= 0;
+  }
+
+  function holdQualifyNote(type) {
+    return String(type || '').toLowerCase() === 'hold' ? HOLD_QUALIFY_NOTE : '';
   }
 
   function escapeHtml(s) {
@@ -411,22 +425,23 @@
   async function createProject(input) {
     await init();
     refuseLocalTeamWrite();
-    var payload = { name: input.name, ticker: input.ticker, mint: input.mint, chain: input.chain || 'solana', admin_wallet: input.admin || null, created_by: input.createdBy || input.admin || null, fee_paid: true, fee_amount_sol: 0, plan: input.plan || 'starter' };
+    var payload = { name: input.name, ticker: input.ticker, mint: input.mint, chain: input.chain || 'solana', admin_wallet: input.admin || null, created_by: input.createdBy || input.admin || null, fee_paid: true, fee_amount_sol: 0 };
     if (mode === 'supabase' && sb) {
       if (!sessionToken) throw new Error('Sign in with your wallet first');
       var created = await apiPost('/api/projects', {
-        name: input.name, ticker: input.ticker, mint: input.mint, chain: input.chain || 'solana', plan: input.plan || 'starter'
+        name: input.name, ticker: input.ticker, mint: input.mint, chain: input.chain || 'solana'
       });
       return mapProjectRow(created.project, []);
     }
     var state = localTeam();
-    var project = { id: 'id_' + Math.random().toString(36).slice(2, 10), name: payload.name, ticker: payload.ticker, mint: payload.mint, admin: payload.admin_wallet || '', chain: payload.chain, feePaid: true, createdAt: new Date().toISOString(), campaigns: [], plan: payload.plan || 'starter' };
+    var project = { id: 'id_' + Math.random().toString(36).slice(2, 10), name: payload.name, ticker: payload.ticker, mint: payload.mint, admin: payload.admin_wallet || '', chain: payload.chain, feePaid: true, createdAt: new Date().toISOString(), campaigns: [] };
     state.projects.push(project); saveLocalTeam(state); return project;
   }
 
   async function createCampaign(projectId, input) {
     await init();
     refuseLocalTeamWrite();
+    if (!isOfferedCampaignType(input.type)) throw new Error('That campaign type is not offered.');
     if (mode === 'supabase' && sb) {
       if (!sessionToken) throw new Error('Sign in with your wallet first');
       var createdCamp = await apiPost('/api/campaigns', {
@@ -1025,9 +1040,19 @@
     };
   }
 
-  async function joinCampaign(projectId, campaignId, wallet, xHandle, showHandle) {
+  function cleanEvidenceUrl(value) {
+    if (value == null) return null;
+    var raw = String(value).trim();
+    if (!raw || raw.length > 300) return null;
+    var href = safeHttpUrl(raw);
+    if (!href || href.length > 300) return null;
+    return href;
+  }
+
+  async function joinCampaign(projectId, campaignId, wallet, xHandle, showHandle, evidenceUrl, referrer) {
     await init();
     if (typeof showHandle === 'boolean') await setShowHandle(wallet, showHandle);
+    var clean = cleanEvidenceUrl(evidenceUrl);
     var rosterRole = null;
     if (mode === 'supabase' && sb) {
       try {
@@ -1040,21 +1065,29 @@
       if (!campRes.data) throw new Error('Campaign not found');
       var existingJoin = await sb.from('campaign_joins').select('id').eq('campaign_id', campaignId).eq('wallet', wallet).maybeSingle();
       if (existingJoin.error) throw existingJoin.error;
+      var patch = { x_handle: xHandle || null };
+      if (clean) patch.evidence_url = clean;
+      var insertRow = { project_id: projectId, campaign_id: campaignId, wallet: wallet, x_handle: xHandle || null, joined_at: new Date().toISOString() };
+      if (clean) insertRow.evidence_url = clean;
       var write = existingJoin.data
-        ? sb.from('campaign_joins').update({ x_handle: xHandle || null }).eq('campaign_id', campaignId).eq('wallet', wallet)
-        : sb.from('campaign_joins').insert({ project_id: projectId, campaign_id: campaignId, wallet: wallet, x_handle: xHandle || null, joined_at: new Date().toISOString() });
+        ? sb.from('campaign_joins').update(patch).eq('campaign_id', campaignId).eq('wallet', wallet)
+        : sb.from('campaign_joins').insert(insertRow);
       var res = await write.select('id, project_id, campaign_id, wallet, qualified, qualified_at, joined_at, status, progress, note').single();
       if (res.error) throw res.error;
       var joined = mapJoinRow(res.data);
       if (!joined.x_handle) joined.x_handle = xHandle || null;
+      if (sessionToken && referrer) {
+        try { await apiPost('/api/campaigns/' + encodeURIComponent(campaignId) + '/referred-by', { referrer: String(referrer) }); }
+        catch (e) {}
+      }
       return joined;
     }
     var h = localHolder(); var key = projectId + '::' + campaignId; var localCamp = null;
     (localTeam().projects || []).forEach(function (pr) { (pr.campaigns || []).forEach(function (c) { if (c.id === campaignId) localCamp = c; }); });
     var st = (localCamp && localCamp.accessMode === 'approval') ? 'pending' : 'approved';
-    h.joined[key] = { at: new Date().toISOString(), qualified: false, wallet: wallet, xHandle: xHandle || null, status: st, progress: 0 };
+    h.joined[key] = { at: new Date().toISOString(), qualified: false, wallet: wallet, xHandle: xHandle || null, status: st, progress: 0, evidenceUrl: clean || null };
     saveLocalHolder(h);
-    return { project_id: projectId, campaign_id: campaignId, wallet: wallet, x_handle: xHandle || null, qualified: false, status: st, progress: 0 };
+    return { project_id: projectId, campaign_id: campaignId, wallet: wallet, x_handle: xHandle || null, qualified: false, status: st, progress: 0, evidence_url: clean || null };
   }
 
   async function listJoinsForCampaign(campaignId) {
@@ -1097,6 +1130,23 @@
     }
     var h = localHolder(); var key = projectId + '::' + campaignId;
     if (h.joined[key]) { h.joined[key].qualified = true; saveLocalHolder(h); }
+  }
+
+  async function fetchJoinQueue(campaignId) {
+    await init();
+    if (!sessionToken) throw new Error('Sign in with your wallet first');
+    var res = await authedFetch('/api/campaigns/' + encodeURIComponent(campaignId) + '/queue', { headers: { accept: 'application/json' } });
+    var data = {};
+    try { data = await res.json(); } catch (e) { data = {}; }
+    if (!res.ok) throw new Error((data && data.error) || 'request failed');
+    return data;
+  }
+
+  async function qualifyMatching(campaignId) {
+    await init();
+    refuseLocalTeamWrite();
+    if (!sessionToken) throw new Error('Sign in with your wallet first');
+    return apiPost('/api/campaigns/' + encodeURIComponent(campaignId) + '/qualify-matching', {});
   }
 
   async function settleClaim() {
@@ -1464,6 +1514,7 @@
       cut: cut,
       warning: vault.below_locked === true ? 'The vault holds less than the locked total right now.' : '',
       who: prize.who_gets_paid_text || '',
+      qualify: holdQualifyNote(state && state.campaign && state.campaign.type),
       clock: clockText(state && state.clock),
       qualified: 'Qualified: ' + (((state && state.counts) || {}).qualified || 0)
     };
@@ -1485,6 +1536,9 @@
     listProjects: listProjects, createProject: createProject, createCampaign: createCampaign,
     updateCampaignStatus: updateCampaignStatus, listLiveCampaigns: listLiveCampaigns,
     needsX: needsX,
+    OFFERED_CAMPAIGN_TYPES: Object.freeze(OFFERED_CAMPAIGN_TYPES.slice()),
+    isOfferedCampaignType: isOfferedCampaignType,
+    holdQualifyNote: holdQualifyNote,
     upsertHolder: upsertHolder, linkedXHandle: linkedXHandle, setShowHandle: setShowHandle, getHolder: getHolder, joinCampaign: joinCampaign,
     listJoinsForCampaign: listJoinsForCampaign, setJoinStatus: setJoinStatus, setJoinProgress: setJoinProgress,
     listRoster: listRoster, upsertRoster: upsertRoster, removeRoster: removeRoster,
@@ -1499,7 +1553,7 @@
     canonicalPayoutText: canonicalPayoutText,
     payoutHash: payoutHash,
     planReservation: planReservation,
-    markQualified: markQualified, settleClaim: settleClaim,
+    markQualified: markQualified, fetchJoinQueue: fetchJoinQueue, qualifyMatching: qualifyMatching, settleClaim: settleClaim,
     listJoinsForWallet: listJoinsForWallet, listClaimsForWallet: listClaimsForWallet,
     localHolder: localHolder, saveLocalHolder: saveLocalHolder,
     parseTweetId: parseTweetId, xIntentUrls: xIntentUrls,

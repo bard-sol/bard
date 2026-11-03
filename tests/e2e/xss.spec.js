@@ -31,6 +31,13 @@ test('stored payload stays text on admin, dashboard, and explore', async ({ page
           handle: PAYLOAD,
           progress: 1,
           qualified: false,
+        }, {
+          rank: 2,
+          wallet_short: 'Hold…2222',
+          wallet_hash: 'also-not-the-browser-wallet',
+          handle: null,
+          progress: 0,
+          qualified: false,
         }],
       }),
     });
@@ -43,7 +50,7 @@ test('stored payload stays text on admin, dashboard, and explore', async ({ page
   await assertPayloadLiteral(page, page.locator('#detail-title'));
   await assertPayloadLiteral(page, page.locator('#detail-rule'));
   await assertPayloadLiteral(page, page.locator('#detail-lb'));
-  await expect(page.locator('#detail-lb')).toContainText('Hold…1111');
+  await expect(page.locator('#detail-lb')).toContainText('Hold…2222');
   expect(feedCalls).toEqual([]);
 
   await page.goto('/explore.html');

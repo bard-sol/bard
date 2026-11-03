@@ -88,6 +88,10 @@ h1{
 .btn--solid:hover{background:#b9a3ff}
 .check{display:flex;align-items:flex-start;gap:10px;margin:14px 0;color:var(--body);font-size:.92rem}
 .check input{width:auto;margin-top:4px}
+#post-link{
+  width:100%;padding:10px 12px;border-radius:9px;
+  border:1px solid var(--line);background:var(--surface-2);color:var(--text);
+}
 .board__row{
   display:grid;grid-template-columns:48px 1fr 80px 120px;gap:10px;
   padding:10px 0;border-bottom:1px solid var(--line);font-size:.92rem;
@@ -119,12 +123,15 @@ h1{
     <p class="line" id="cut-line"></p>
     <p class="line warn" id="below-line"></p>
     <p class="who" id="who-line"></p>
+    <p class="line" id="qualify-line"></p>
     <p class="line num" id="qualified-count">Qualified: 0</p>
     <p class="line" id="clock-line">—</p>
     <p class="line" id="token-row">—</p>
     <div class="card stack">
       <p class="lbl">Your status</p>
       <p id="your-status">Not joined · progress 0 · not qualified · not paid</p>
+      <label class="lbl" id="post-link-label" for="post-link" hidden>Post link</label>
+      <input id="post-link" type="url" inputmode="url" maxlength="300" autocomplete="off" placeholder="https://" hidden>
       <label class="check" for="show-handle">
         <input id="show-handle" type="checkbox">
         <span>show my X handle on the public page</span>
@@ -303,6 +310,7 @@ h1{
     setText('cut-line', copy.cut);
     setText('below-line', copy.warning);
     setText('who-line', (next.prize && next.prize.who_gets_paid_text) || '');
+    setText('qualify-line', copy.qualify);
     setText('qualified-count', copy.qualified);
     var clock = document.getElementById('clock-line');
     clock.textContent = copy.clock;
@@ -331,7 +339,16 @@ h1{
       }
     }
     renderBoard(next.board);
+    paintPostLink();
     paintStatus();
+  }
+
+  function paintPostLink() {
+    var field = document.getElementById('post-link');
+    var label = document.getElementById('post-link-label');
+    var raid = !!(state && state.campaign && state.campaign.type === 'raid');
+    if (field) field.hidden = !raid;
+    if (label) label.hidden = !raid;
   }
 
   async function loadState() {
@@ -374,8 +391,25 @@ h1{
     }
     if (!state || !state.clock || state.clock.state !== 'live' || joined) return;
     if (BardPlatform.needsX(state.campaign && state.campaign.type) && !linkedHandle) return;
+    var evidenceUrl = null;
+    if (state.campaign && state.campaign.type === 'raid') {
+      var field = document.getElementById('post-link');
+      var raw = field ? String(field.value || '').trim() : '';
+      if (raw) {
+        var href = BardPlatform.safeHttpUrl(raw);
+        if (raw.length > 300 || !href || href.length > 300) {
+          var reason = document.getElementById('join-reason');
+          reason.hidden = false;
+          reason.textContent = 'Enter a post link that starts with http:// or https://.';
+          return;
+        }
+        evidenceUrl = href;
+      }
+    }
+    var ref = '';
+    try { ref = new URLSearchParams(location.search).get('ref') || ''; } catch (err) { ref = ''; }
     var show = !!document.getElementById('show-handle').checked;
-    await BardPlatform.joinCampaign(state.campaign.project.id, state.campaign.id, wallet, linkedHandle || null, show);
+    await BardPlatform.joinCampaign(state.campaign.project.id, state.campaign.id, wallet, linkedHandle || null, show, evidenceUrl, ref || null);
     await paintStatus();
   }
 

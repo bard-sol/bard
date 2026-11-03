@@ -125,3 +125,15 @@ test('joining with the box unticked keeps the linked handle and opts out', async
   expect(unticked.showHandle).toBe(false);
   expect(unticked.joined['proj-local::' + ID].xHandle).toBe('@a');
 });
+
+for (const type of ['hold', 'refer', 'custom']) {
+  test('a holder with no X handle can join a ' + type + ' campaign', async ({ page }) => {
+    test.setTimeout(120000);
+    await openLive(page, type, null);
+    await expect(page.locator('#join-btn')).toHaveText('Join');
+    await expect(page.locator('#join-reason')).not.toContainText('X account');
+    await expect(page.locator('#qualify-line')).toHaveText(
+      type === 'hold' ? 'The team checks balances and decides who qualifies.' : ''
+    );
+  });
+}

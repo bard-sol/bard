@@ -237,7 +237,7 @@ h1{
       <img src="/transparentbardsmile.png" alt="">
     </div>
     <h1>Every project you're in, one page</h1>
-    <p>Connect a Solana wallet to track campaigns, ranks, and claims. X is only needed for raid or post campaigns.</p>
+    <p>Connect a Solana wallet to track campaigns, ranks, and claims. Linking X is optional.</p>
     <div class="actions">
       <button class="btn btn--solid" id="btn-connect">Connect wallet</button>
       <button class="btn btn--ghost" id="btn-browse">Browse without connecting</button>
@@ -293,7 +293,7 @@ h1{
       <section class="page is-on" id="page-overview">
         <p class="kicker">Overview</p>
         <h1>Your activity on Bard</h1>
-        <p class="lead">Joined campaigns, payouts, and live projects. Link X only when a campaign scores posts or raids.</p>
+        <p class="lead">Joined campaigns, payouts, and live projects. Linking X is optional.</p>
         <div class="grid-3" style="margin-bottom:18px">
           <div class="stat"><div class="stat__lbl">Joined</div><div class="stat__val p num" id="ov-joined">0</div></div>
           <div class="stat"><div class="stat__lbl">Qualified</div><div class="stat__val num" id="ov-claimable">0</div></div>
@@ -316,7 +316,7 @@ h1{
       <section class="page" id="page-explore">
         <p class="kicker">Explore</p>
         <h1>Live campaigns</h1>
-        <p class="lead">Projects teams onboarded on Bard. Raid and post campaigns will ask you to link X.</p>
+        <p class="lead">Projects teams onboarded on Bard.</p>
         <div id="explore-list"></div>
       </section>
 
@@ -366,7 +366,7 @@ h1{
 <div class="modal-ov" id="x-modal" role="dialog" aria-modal="true" aria-labelledby="x-modal-title">
   <div class="modal">
     <h2 id="x-modal-title">Link X</h2>
-    <p>Required only for campaigns that score posts, replies, or raids. Hold and refer campaigns work with wallet alone.</p>
+    <p>Optional. Link X to show your handle on a campaign page. Hold, refer, and custom campaigns work with your wallet alone.</p>
     <button class="btn btn--solid" id="x-oauth" style="width:100%">Continue with X</button>
     <div class="hint">OAuth via the Bard auth worker when available.</div>
     <div style="margin:16px 0 8px;border-top:1px solid var(--line);padding-top:14px">
@@ -899,7 +899,7 @@ h1{
     document.getElementById('detail-title').textContent = c.title;
     var pub = document.getElementById('detail-public');
     if (pub && c.id) pub.setAttribute('href', '/c/' + encodeURIComponent(c.id));
-    document.getElementById('detail-rule').textContent = c.rule || '—';
+    document.getElementById('detail-rule').textContent = [c.rule, BardPlatform.holdQualifyNote(c.type)].filter(Boolean).join(' ') || '—';
     document.getElementById('detail-status').textContent = c.status;
     document.getElementById('detail-status').className = 'pill ' + (c.status === 'active' ? 'pill--live' : 'pill--muted');
     var xneed = document.getElementById('detail-xneed');
@@ -970,7 +970,7 @@ h1{
       joinBtn.onclick = function(){ tryJoin(projectId, campaignId); };
       hint.textContent = xRequired
         ? 'This campaign scores X activity. Link X once, then join.'
-        : 'Join to track this campaign under My campaigns. Wallet is enough for hold/refer.';
+        : 'Join to track this campaign under My campaigns. A wallet is enough.';
     }
 
     fillMission(match, joined, settled);
@@ -1006,7 +1006,7 @@ h1{
       html += '</div>';
     }
 
-    if (mode === 'growing' || mode === 'pool' || mode === 'vested') {
+    if (mode === 'growing' || mode === 'pool') {
       var unit = (c.unit==='SOL'?'SOL':('$'+match.ticker));
       var meta = (mode==='growing' && window.BardPlatform && BardPlatform.growingMeta) ? BardPlatform.growingMeta(c) : null;
       var pot = meta ? meta.now : (c.pool || c.reward || c.vaultReserved || '—');
@@ -1016,8 +1016,6 @@ h1{
         var growLine = meta ? meta.line : 'This pool grows on a schedule until someone wins it, or the team ends it. No 7-day timer.';
         html += '<p class="muted" style="margin:6px 0 0;font-size:.86rem">'+BardPlatform.escapeHtml(growLine)+'</p>';
         html += '<p class="muted" style="margin:6px 0 0;font-size:.78rem">First to lock the claim takes the current pot.</p>';
-      } else if (mode==='vested') {
-        html += '<p class="muted" style="margin:6px 0 0;font-size:.86rem">Unlocks over the window. Weekly vest.</p>';
       } else {
         html += '<p class="muted" style="margin:6px 0 0;font-size:.86rem">Split among everyone who met the rule.</p>';
       }

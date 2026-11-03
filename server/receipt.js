@@ -378,10 +378,11 @@ export async function handleCampaignReceipt(request, env, campaignId) {
     throw err;
   }
   if (built instanceof Response) return built;
+  // 300 s, not immutable: a holder can switch off an opted-in X handle after this is cached (cache.put reads this header).
   const response = Response.json(built, {
     headers: {
       'content-type': 'application/json; charset=utf-8',
-      'cache-control': 'public, max-age=31536000, immutable',
+      'cache-control': 'public, max-age=300',
     },
   });
   if (cache) {
