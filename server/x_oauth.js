@@ -1,10 +1,13 @@
 import { b64urlDecode, b64urlEncode, isBase58Address, verifyJwt } from './auth.js';
+import { walletInUnpaidScoredCampaign, writeScoreAudit } from './score_api.js';
+import { normalizeHandle } from '../scoring.js';
 
 const textEncoder = new TextEncoder();
 const STATE_TTL_MS = 10 * 60 * 1000;
 const X_AUTHORIZE = 'https://x.com/i/oauth2/authorize';
 const X_TOKEN = 'https://api.x.com/2/oauth2/token';
-const X_ME = 'https://api.x.com/2/users/me?user.fields=username';
+const X_ME = 'https://api.x.com/2/users/me?user.fields=id,username';
+const X_TAKEN = 'this X account is already linked to another wallet; unlink it there first';
 const DEFAULT_REDIRECT = 'https://bard-x-auth.bardsoltoken.workers.dev/auth/x/callback';
 
 const CORS = {
@@ -155,34 +158,62 @@ export async function readXLink(secret, token, now = Date.now()) {
   if (payload.typ !== 'xlink' || !isBase58Address(payload.wallet)) return { ok: false };
   const handle = normalizeXHandle(payload.handle);
   if (!handle || handle !== payload.handle) return { ok: false };
+  const id = String(payload.id == null ? '' : payload.id);
+  if (!/^\d{1,32}$/.test(id)) return { ok: false };
   if (!freshTimestamp(payload.ts, now)) return { ok: false };
-  return { ok: true, payload: { typ: 'xlink', wallet: payload.wallet, handle, ts: payload.ts } };
+  return { ok: true, payload: { typ: 'xlink', wallet: payload.wallet, handle, id, ts: payload.ts } };
 }
 
-export async function writeVerifiedHandle(env, wallet, handle, now = new Date()) {
+function supabaseHeaders(env, prefer) {
+  const headers = {
+    apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+    authorization: 'Bearer ' + env.SUPABASE_SERVICE_ROLE_KEY,
+    accept: 'application/json',
+  };
+  if (prefer) {
+    headers['content-type'] = 'application/json';
+    headers.prefer = prefer;
+  }
+  return headers;
+}
+
+async function holdersRequest(env, method, query, body, prefer) {
+  const base = String(env.SUPABASE_URL || '').replace(/\/$/, '');
+  if (!base || !env.SUPABASE_SERVICE_ROLE_KEY) throw new Error('supabase is not configured');
+  const usePrefer = prefer != null ? prefer : (body === undefined ? '' : 'return=representation');
+  const res = await fetcher(env)(base + '/rest/v1/holders' + query, {
+    method,
+    headers: supabaseHeaders(env, usePrefer),
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  const text = await res.text();
+  let data = null;
+  if (text) {
+    try { data = JSON.parse(text); } catch { data = { message: text }; }
+  }
+  return { res, data };
+}
+
+export async function writeVerifiedHandle(env, wallet, handle, xUserId, now = new Date()) {
   if (!isBase58Address(wallet)) throw new Error('invalid wallet');
   const normalized = normalizeXHandle(handle);
   if (!normalized) throw new Error('invalid handle');
-  const base = String(env.SUPABASE_URL || '').replace(/\/$/, '');
-  if (!base || !env.SUPABASE_SERVICE_ROLE_KEY) throw new Error('supabase is not configured');
-  const res = await fetcher(env)(base + '/rest/v1/holders?on_conflict=wallet', {
-    method: 'POST',
-    headers: {
-      apikey: env.SUPABASE_SERVICE_ROLE_KEY,
-      authorization: 'Bearer ' + env.SUPABASE_SERVICE_ROLE_KEY,
-      accept: 'application/json',
-      'content-type': 'application/json',
-      prefer: 'resolution=merge-duplicates,return=representation',
-    },
-    body: JSON.stringify({
-      wallet,
-      x_handle: normalized,
-      x_linked_at: now.toISOString(),
-      x_via: 'oauth',
-    }),
-  });
+  const id = String(xUserId == null ? '' : xUserId);
+  if (!/^\d{1,32}$/.test(id)) throw new Error('invalid x user id');
+  const { res, data } = await holdersRequest(env, 'POST', '?on_conflict=wallet', {
+    wallet,
+    x_handle: normalized,
+    x_linked_at: now.toISOString(),
+    x_via: 'oauth',
+    x_user_id: id,
+  }, 'resolution=merge-duplicates,return=representation');
+  if (res.status === 409 || (data && data.code === '23505')) {
+    const err = new Error(X_TAKEN);
+    err.status = 409;
+    throw err;
+  }
   if (!res.ok) throw new Error('holder write failed');
-  return { wallet, x_handle: normalized, x_via: 'oauth' };
+  return { wallet, x_handle: normalized, x_via: 'oauth', x_user_id: id };
 }
 
 async function exchangeCode(env, code, verifier) {
@@ -204,14 +235,17 @@ async function exchangeCode(env, code, verifier) {
   return data.access_token;
 }
 
-async function fetchUsername(env, accessToken) {
+async function fetchProfile(env, accessToken) {
   const res = await fetcher(env)(X_ME, {
     headers: { authorization: 'Bearer ' + accessToken },
   });
   if (!res.ok) return null;
   const data = await res.json();
-  const username = data && data.data && data.data.username;
-  return typeof username === 'string' ? username : null;
+  const user = data && data.data;
+  if (!user || typeof user.username !== 'string') return null;
+  const id = String(user.id == null ? '' : user.id);
+  if (!/^\d{1,32}$/.test(id)) return null;
+  return { id, username: user.username };
 }
 
 export async function handleXStart(request, env, now = Date.now()) {
@@ -258,14 +292,15 @@ export async function handleXCallback(request, env, now = Date.now()) {
     const verifier = await pkceVerifier(secret, read.payload.nonce);
     const accessToken = await exchangeCode(env, code, verifier);
     if (!accessToken) return failRedirect(env);
-    const username = await fetchUsername(env, accessToken);
-    const handle = normalizeXHandle(username);
-    if (!handle) return failRedirect(env);
+    const profile = await fetchProfile(env, accessToken);
+    const handle = normalizeXHandle(profile && profile.username);
+    if (!handle || !profile) return failRedirect(env);
     // Do not write here. Whoever approved on X may not own this wallet.
     const xlink = await signState(secret, {
       typ: 'xlink',
       wallet: read.payload.wallet,
       handle,
+      id: profile.id,
       ts: now,
     });
     return xlinkRedirect(env, xlink);
@@ -288,8 +323,59 @@ export async function handleXConfirm(request, env, now = Date.now()) {
   if (!read.ok) return json({ error: 'invalid token' }, 400);
   if (read.payload.wallet !== claims.wallet) return json({ error: 'wallet mismatch' }, 403);
   try {
-    const written = await writeVerifiedHandle(env, claims.wallet, read.payload.handle, new Date(now));
+    const found = await holdersRequest(
+      env,
+      'GET',
+      '?x_user_id=eq.' + encodeURIComponent(read.payload.id) + '&x_via=eq.oauth&select=wallet,x_user_id'
+    );
+    if (!found.res.ok) return json({ error: 'holder write failed' }, 502);
+    const rows = Array.isArray(found.data) ? found.data : [];
+    const other = rows.find((row) => row && row.wallet && row.wallet !== claims.wallet);
+    if (other) return json({ error: X_TAKEN }, 409);
+    const written = await writeVerifiedHandle(env, claims.wallet, read.payload.handle, read.payload.id, new Date(now));
     return json({ ok: true, handle: written.x_handle });
+  } catch (err) {
+    if (err && err.status === 409) return json({ error: X_TAKEN }, 409);
+    return json({ error: 'holder write failed' }, 502);
+  }
+}
+
+export async function handleXUnlink(request, env, now = Date.now()) {
+  const jwtSecret = env.SUPABASE_JWT_SECRET || '';
+  if (!jwtSecret || !env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) {
+    return json({ error: 'x oauth is not configured' }, 503);
+  }
+  const claims = await verifyJwt(jwtSecret, bearerToken(request), now);
+  if (!claims) return json({ error: 'sign in required' }, 401);
+  try {
+    if (await walletInUnpaidScoredCampaign(env, claims.wallet)) {
+      return json({ error: 'unlink this X account after the scored campaign is paid' }, 409);
+    }
+    const found = await holdersRequest(
+      env,
+      'GET',
+      '?wallet=eq.' + encodeURIComponent(claims.wallet) + '&select=wallet,x_handle,x_via,x_user_id'
+    );
+    if (!found.res.ok) return json({ error: 'holder write failed' }, 502);
+    const row = Array.isArray(found.data) ? found.data[0] : null;
+    if (!row) return json({ error: 'holder not found' }, 404);
+    const saved = await holdersRequest(env, 'PATCH', '?wallet=eq.' + encodeURIComponent(claims.wallet), {
+      x_via: 'unverified',
+      x_user_id: null,
+    });
+    if (!saved.res.ok) return json({ error: 'holder write failed' }, 502);
+    await writeScoreAudit(env, {
+      campaign_id: null,
+      action: 'unlink',
+      entity: 'holder',
+      before: { x_handle: row.x_handle || null, x_via: row.x_via || null, x_user_id: row.x_user_id || null },
+      after: { x_handle: row.x_handle || null, x_via: 'unverified', x_user_id: null },
+      reason: 'holder unlinked',
+      actor: claims.wallet,
+      subject_wallet: claims.wallet,
+      subject_handle: normalizeHandle(row.x_handle),
+    });
+    return json({ ok: true, handle: row.x_handle || null });
   } catch {
     return json({ error: 'holder write failed' }, 502);
   }
@@ -302,5 +388,6 @@ export async function handleXOauth(request, env, now = Date.now()) {
   if (url.pathname === '/auth/x/start' && method === 'GET') return handleXStart(request, env, now);
   if (url.pathname === '/auth/x/callback' && method === 'GET') return handleXCallback(request, env, now);
   if (url.pathname === '/auth/x/confirm' && method === 'POST') return handleXConfirm(request, env, now);
+  if (url.pathname === '/auth/x/unlink' && method === 'POST') return handleXUnlink(request, env, now);
   return new Response('not found', { status: 404, headers: CORS });
 }

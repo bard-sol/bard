@@ -1,0 +1,4024 @@
+{
+  "consentText": "On this campaign's public receipt anyone can see your X handle, your posts, the engagement on them and your payout, and can link your handle to your wallet. If you engage with another Bard campaign this season, that campaign's receipt shows your handle as a Bard member and counts your engagement at half weight.",
+  "inputs": {
+    "rule": {
+      "version": "bard-score-v1",
+      "bestN": 5,
+      "minAccountDays": 90,
+      "minFollowers": 50,
+      "minEngagerFollowers": 10,
+      "ageZeroDays": 30,
+      "ageSpanDays": 335,
+      "checkHours": 72,
+      "kinds": {
+        "quote": 3,
+        "reply": 3,
+        "repost": 2,
+        "like": 0
+      }
+    },
+    "campaign": {
+      "id": "fixture-campaign",
+      "starts_at": "2026-06-01T00:00:00.000Z",
+      "ends_at": "2026-06-15T00:00:00.000Z",
+      "season": "2026-Q2"
+    },
+    "accounts": [
+      {
+        "handle": "honest",
+        "created_on": "2025-04-28",
+        "followers": 800,
+        "following": 300,
+        "is_bot": false
+      },
+      {
+        "handle": "ring1",
+        "created_on": "2025-04-28",
+        "followers": 800,
+        "following": 300,
+        "is_bot": false
+      },
+      {
+        "handle": "ring2",
+        "created_on": "2025-04-28",
+        "followers": 800,
+        "following": 300,
+        "is_bot": false
+      },
+      {
+        "handle": "ring3",
+        "created_on": "2025-04-28",
+        "followers": 800,
+        "following": 300,
+        "is_bot": false
+      },
+      {
+        "handle": "newbie",
+        "created_on": "2026-05-23",
+        "followers": 800,
+        "following": 300,
+        "is_bot": false
+      },
+      {
+        "handle": "spammer",
+        "created_on": "2025-04-28",
+        "followers": 800,
+        "following": 300,
+        "is_bot": false
+      },
+      {
+        "handle": "deleter",
+        "created_on": "2025-04-28",
+        "followers": 800,
+        "following": 300,
+        "is_bot": false
+      },
+      {
+        "handle": "copier",
+        "created_on": "2025-04-28",
+        "followers": 800,
+        "following": 300,
+        "is_bot": false
+      },
+      {
+        "handle": "e1",
+        "created_on": "2025-04-28",
+        "followers": 800,
+        "following": 300,
+        "is_bot": false
+      },
+      {
+        "handle": "e2",
+        "created_on": "2025-04-28",
+        "followers": 800,
+        "following": 300,
+        "is_bot": false
+      },
+      {
+        "handle": "e3",
+        "created_on": "2025-04-28",
+        "followers": 800,
+        "following": 300,
+        "is_bot": false
+      },
+      {
+        "handle": "e4",
+        "created_on": "2025-04-28",
+        "followers": 800,
+        "following": 300,
+        "is_bot": false
+      },
+      {
+        "handle": "e5",
+        "created_on": "2025-04-28",
+        "followers": 800,
+        "following": 300,
+        "is_bot": false
+      },
+      {
+        "handle": "e6",
+        "created_on": "2025-04-28",
+        "followers": 800,
+        "following": 300,
+        "is_bot": false
+      },
+      {
+        "handle": "e7",
+        "created_on": "2025-04-28",
+        "followers": 800,
+        "following": 300,
+        "is_bot": false
+      },
+      {
+        "handle": "e8",
+        "created_on": "2025-04-28",
+        "followers": 800,
+        "following": 300,
+        "is_bot": false
+      },
+      {
+        "handle": "e9",
+        "created_on": "2025-04-28",
+        "followers": 800,
+        "following": 300,
+        "is_bot": false
+      },
+      {
+        "handle": "e10",
+        "created_on": "2025-04-28",
+        "followers": 800,
+        "following": 300,
+        "is_bot": false
+      },
+      {
+        "handle": "y1",
+        "created_on": "2026-05-28",
+        "followers": 3,
+        "following": 2000,
+        "is_bot": false
+      },
+      {
+        "handle": "y2",
+        "created_on": "2026-05-28",
+        "followers": 3,
+        "following": 2000,
+        "is_bot": false
+      },
+      {
+        "handle": "y3",
+        "created_on": "2026-05-28",
+        "followers": 3,
+        "following": 2000,
+        "is_bot": false
+      },
+      {
+        "handle": "y4",
+        "created_on": "2026-05-28",
+        "followers": 3,
+        "following": 2000,
+        "is_bot": false
+      },
+      {
+        "handle": "y5",
+        "created_on": "2026-05-28",
+        "followers": 3,
+        "following": 2000,
+        "is_bot": false
+      },
+      {
+        "handle": "l1",
+        "created_on": "2026-05-01",
+        "followers": 1,
+        "following": 1,
+        "is_bot": false
+      },
+      {
+        "handle": "l2",
+        "created_on": "2026-05-01",
+        "followers": 1,
+        "following": 1,
+        "is_bot": false
+      },
+      {
+        "handle": "l3",
+        "created_on": "2026-05-01",
+        "followers": 1,
+        "following": 1,
+        "is_bot": false
+      },
+      {
+        "handle": "l4",
+        "created_on": "2026-05-01",
+        "followers": 1,
+        "following": 1,
+        "is_bot": false
+      },
+      {
+        "handle": "l5",
+        "created_on": "2026-05-01",
+        "followers": 1,
+        "following": 1,
+        "is_bot": false
+      },
+      {
+        "handle": "l6",
+        "created_on": "2026-05-01",
+        "followers": 1,
+        "following": 1,
+        "is_bot": false
+      },
+      {
+        "handle": "l7",
+        "created_on": "2026-05-01",
+        "followers": 1,
+        "following": 1,
+        "is_bot": false
+      },
+      {
+        "handle": "l8",
+        "created_on": "2026-05-01",
+        "followers": 1,
+        "following": 1,
+        "is_bot": false
+      },
+      {
+        "handle": "l9",
+        "created_on": "2026-05-01",
+        "followers": 1,
+        "following": 1,
+        "is_bot": false
+      },
+      {
+        "handle": "l10",
+        "created_on": "2026-05-01",
+        "followers": 1,
+        "following": 1,
+        "is_bot": false
+      },
+      {
+        "handle": "l11",
+        "created_on": "2026-05-01",
+        "followers": 1,
+        "following": 1,
+        "is_bot": false
+      },
+      {
+        "handle": "l12",
+        "created_on": "2026-05-01",
+        "followers": 1,
+        "following": 1,
+        "is_bot": false
+      },
+      {
+        "handle": "l13",
+        "created_on": "2026-05-01",
+        "followers": 1,
+        "following": 1,
+        "is_bot": false
+      },
+      {
+        "handle": "l14",
+        "created_on": "2026-05-01",
+        "followers": 1,
+        "following": 1,
+        "is_bot": false
+      },
+      {
+        "handle": "l15",
+        "created_on": "2026-05-01",
+        "followers": 1,
+        "following": 1,
+        "is_bot": false
+      },
+      {
+        "handle": "l16",
+        "created_on": "2026-05-01",
+        "followers": 1,
+        "following": 1,
+        "is_bot": false
+      },
+      {
+        "handle": "l17",
+        "created_on": "2026-05-01",
+        "followers": 1,
+        "following": 1,
+        "is_bot": false
+      },
+      {
+        "handle": "l18",
+        "created_on": "2026-05-01",
+        "followers": 1,
+        "following": 1,
+        "is_bot": false
+      },
+      {
+        "handle": "l19",
+        "created_on": "2026-05-01",
+        "followers": 1,
+        "following": 1,
+        "is_bot": false
+      },
+      {
+        "handle": "l20",
+        "created_on": "2026-05-01",
+        "followers": 1,
+        "following": 1,
+        "is_bot": false
+      },
+      {
+        "handle": "l21",
+        "created_on": "2026-05-01",
+        "followers": 1,
+        "following": 1,
+        "is_bot": false
+      },
+      {
+        "handle": "l22",
+        "created_on": "2026-05-01",
+        "followers": 1,
+        "following": 1,
+        "is_bot": false
+      },
+      {
+        "handle": "l23",
+        "created_on": "2026-05-01",
+        "followers": 1,
+        "following": 1,
+        "is_bot": false
+      },
+      {
+        "handle": "l24",
+        "created_on": "2026-05-01",
+        "followers": 1,
+        "following": 1,
+        "is_bot": false
+      },
+      {
+        "handle": "l25",
+        "created_on": "2026-05-01",
+        "followers": 1,
+        "following": 1,
+        "is_bot": false
+      },
+      {
+        "handle": "l26",
+        "created_on": "2026-05-01",
+        "followers": 1,
+        "following": 1,
+        "is_bot": false
+      },
+      {
+        "handle": "l27",
+        "created_on": "2026-05-01",
+        "followers": 1,
+        "following": 1,
+        "is_bot": false
+      },
+      {
+        "handle": "l28",
+        "created_on": "2026-05-01",
+        "followers": 1,
+        "following": 1,
+        "is_bot": false
+      },
+      {
+        "handle": "l29",
+        "created_on": "2026-05-01",
+        "followers": 1,
+        "following": 1,
+        "is_bot": false
+      },
+      {
+        "handle": "l30",
+        "created_on": "2026-05-01",
+        "followers": 1,
+        "following": 1,
+        "is_bot": false
+      }
+    ],
+    "posts": [
+      {
+        "post_id": "2061779862942646273",
+        "wallet": "WalletHonest",
+        "handle": "honest",
+        "text": "alpha market note about shipping the public score rule this week with full receipts for every holder",
+        "deleted": false,
+        "checked_at": "2026-06-06T12:00:00.000Z",
+        "excluded": false
+      },
+      {
+        "post_id": "2061779862942646274",
+        "wallet": "WalletHonest",
+        "handle": "honest",
+        "text": "bravo writeup on vault signing and why two keys must both agree before any tokens move out",
+        "deleted": false,
+        "checked_at": "2026-06-06T12:00:00.000Z",
+        "excluded": false
+      },
+      {
+        "post_id": "2061779862942646275",
+        "wallet": "WalletHonest",
+        "handle": "honest",
+        "text": "charlie thread on holder consent and what a season means for the weight of an engagement",
+        "deleted": false,
+        "checked_at": "2026-06-06T12:00:00.000Z",
+        "excluded": false
+      },
+      {
+        "post_id": "2061779862942646276",
+        "wallet": "WalletHonest",
+        "handle": "honest",
+        "text": "delta recap of the shared pool split using whole numbers and the largest remainder method",
+        "deleted": false,
+        "checked_at": "2026-06-06T12:00:00.000Z",
+        "excluded": false
+      },
+      {
+        "post_id": "2061779862942646277",
+        "wallet": "WalletHonest",
+        "handle": "honest",
+        "text": "echo close on near duplicate posts and why the earliest one keeps the score it earned",
+        "deleted": false,
+        "checked_at": "2026-06-06T12:00:00.000Z",
+        "excluded": false
+      },
+      {
+        "post_id": "2061779862942646472",
+        "wallet": "WalletRing1",
+        "handle": "ring1",
+        "text": "ring1 ring post number 0 about a private circle and nothing like the honest notes",
+        "deleted": false,
+        "checked_at": "2026-06-06T12:00:00.000Z",
+        "excluded": false
+      },
+      {
+        "post_id": "2061779862942646473",
+        "wallet": "WalletRing1",
+        "handle": "ring1",
+        "text": "ring1 ring post number 1 about a private circle and nothing like the honest notes",
+        "deleted": false,
+        "checked_at": "2026-06-06T12:00:00.000Z",
+        "excluded": false
+      },
+      {
+        "post_id": "2061779862942646474",
+        "wallet": "WalletRing1",
+        "handle": "ring1",
+        "text": "ring1 ring post number 2 about a private circle and nothing like the honest notes",
+        "deleted": false,
+        "checked_at": "2026-06-06T12:00:00.000Z",
+        "excluded": false
+      },
+      {
+        "post_id": "2061779862942646475",
+        "wallet": "WalletRing1",
+        "handle": "ring1",
+        "text": "ring1 ring post number 3 about a private circle and nothing like the honest notes",
+        "deleted": false,
+        "checked_at": "2026-06-06T12:00:00.000Z",
+        "excluded": false
+      },
+      {
+        "post_id": "2061779862942646476",
+        "wallet": "WalletRing1",
+        "handle": "ring1",
+        "text": "ring1 ring post number 4 about a private circle and nothing like the honest notes",
+        "deleted": false,
+        "checked_at": "2026-06-06T12:00:00.000Z",
+        "excluded": false
+      },
+      {
+        "post_id": "2061779862942646482",
+        "wallet": "WalletRing2",
+        "handle": "ring2",
+        "text": "ring2 ring post number 0 about a private circle and nothing like the honest notes",
+        "deleted": false,
+        "checked_at": "2026-06-06T12:00:00.000Z",
+        "excluded": false
+      },
+      {
+        "post_id": "2061779862942646483",
+        "wallet": "WalletRing2",
+        "handle": "ring2",
+        "text": "ring2 ring post number 1 about a private circle and nothing like the honest notes",
+        "deleted": false,
+        "checked_at": "2026-06-06T12:00:00.000Z",
+        "excluded": false
+      },
+      {
+        "post_id": "2061779862942646484",
+        "wallet": "WalletRing2",
+        "handle": "ring2",
+        "text": "ring2 ring post number 2 about a private circle and nothing like the honest notes",
+        "deleted": false,
+        "checked_at": "2026-06-06T12:00:00.000Z",
+        "excluded": false
+      },
+      {
+        "post_id": "2061779862942646485",
+        "wallet": "WalletRing2",
+        "handle": "ring2",
+        "text": "ring2 ring post number 3 about a private circle and nothing like the honest notes",
+        "deleted": false,
+        "checked_at": "2026-06-06T12:00:00.000Z",
+        "excluded": false
+      },
+      {
+        "post_id": "2061779862942646486",
+        "wallet": "WalletRing2",
+        "handle": "ring2",
+        "text": "ring2 ring post number 4 about a private circle and nothing like the honest notes",
+        "deleted": false,
+        "checked_at": "2026-06-06T12:00:00.000Z",
+        "excluded": false
+      },
+      {
+        "post_id": "2061779862942646492",
+        "wallet": "WalletRing3",
+        "handle": "ring3",
+        "text": "ring3 ring post number 0 about a private circle and nothing like the honest notes",
+        "deleted": false,
+        "checked_at": "2026-06-06T12:00:00.000Z",
+        "excluded": false
+      },
+      {
+        "post_id": "2061779862942646493",
+        "wallet": "WalletRing3",
+        "handle": "ring3",
+        "text": "ring3 ring post number 1 about a private circle and nothing like the honest notes",
+        "deleted": false,
+        "checked_at": "2026-06-06T12:00:00.000Z",
+        "excluded": false
+      },
+      {
+        "post_id": "2061779862942646494",
+        "wallet": "WalletRing3",
+        "handle": "ring3",
+        "text": "ring3 ring post number 2 about a private circle and nothing like the honest notes",
+        "deleted": false,
+        "checked_at": "2026-06-06T12:00:00.000Z",
+        "excluded": false
+      },
+      {
+        "post_id": "2061779862942646495",
+        "wallet": "WalletRing3",
+        "handle": "ring3",
+        "text": "ring3 ring post number 3 about a private circle and nothing like the honest notes",
+        "deleted": false,
+        "checked_at": "2026-06-06T12:00:00.000Z",
+        "excluded": false
+      },
+      {
+        "post_id": "2061779862942646496",
+        "wallet": "WalletRing3",
+        "handle": "ring3",
+        "text": "ring3 ring post number 4 about a private circle and nothing like the honest notes",
+        "deleted": false,
+        "checked_at": "2026-06-06T12:00:00.000Z",
+        "excluded": false
+      },
+      {
+        "post_id": "2061779862942646572",
+        "wallet": "WalletNewbie",
+        "handle": "newbie",
+        "text": "newbie post number 0 from an account that is only ten days old and writes fresh lines",
+        "deleted": false,
+        "checked_at": "2026-06-06T12:00:00.000Z",
+        "excluded": false
+      },
+      {
+        "post_id": "2061779862942646573",
+        "wallet": "WalletNewbie",
+        "handle": "newbie",
+        "text": "newbie post number 1 from an account that is only ten days old and writes fresh lines",
+        "deleted": false,
+        "checked_at": "2026-06-06T12:00:00.000Z",
+        "excluded": false
+      },
+      {
+        "post_id": "2061779862942646574",
+        "wallet": "WalletNewbie",
+        "handle": "newbie",
+        "text": "newbie post number 2 from an account that is only ten days old and writes fresh lines",
+        "deleted": false,
+        "checked_at": "2026-06-06T12:00:00.000Z",
+        "excluded": false
+      },
+      {
+        "post_id": "2061779862942646575",
+        "wallet": "WalletNewbie",
+        "handle": "newbie",
+        "text": "newbie post number 3 from an account that is only ten days old and writes fresh lines",
+        "deleted": false,
+        "checked_at": "2026-06-06T12:00:00.000Z",
+        "excluded": false
+      },
+      {
+        "post_id": "2061779862942646576",
+        "wallet": "WalletNewbie",
+        "handle": "newbie",
+        "text": "newbie post number 4 from an account that is only ten days old and writes fresh lines",
+        "deleted": false,
+        "checked_at": "2026-06-06T12:00:00.000Z",
+        "excluded": false
+      },
+      {
+        "post_id": "2061779862942646672",
+        "wallet": "WalletSpammer",
+        "handle": "spammer",
+        "text": "repeated promotional line about guaranteed engagement growth today now please read the whole pitch before you scroll past this offer from the spammer account and keep reading the same pitch again so the pieces overlap",
+        "deleted": false,
+        "checked_at": "2026-06-06T12:00:00.000Z",
+        "excluded": false
+      },
+      {
+        "post_id": "2061779862942646673",
+        "wallet": "WalletSpammer",
+        "handle": "spammer",
+        "text": "repeated advertorial line about guaranteed engagement growth today now please read the whole pitch before you scroll past this offer from the spammer account and keep reading the same pitch again so the pieces overlap",
+        "deleted": false,
+        "checked_at": "2026-06-06T12:00:00.000Z",
+        "excluded": false
+      },
+      {
+        "post_id": "2061779862942646674",
+        "wallet": "WalletSpammer",
+        "handle": "spammer",
+        "text": "repeated promotional line about guaranteed engagement growth today now please read the whole pitch before you scroll past this offer from the spammer account and keep reading the same pitch again so the pieces overlap",
+        "deleted": false,
+        "checked_at": "2026-06-06T12:00:00.000Z",
+        "excluded": false
+      },
+      {
+        "post_id": "2061779862942646675",
+        "wallet": "WalletSpammer",
+        "handle": "spammer",
+        "text": "repeated promotional line about guaranteed engagement growth today now please read the whole pitch before you scroll past this offer from the spammer account and keep reading the same pitch again so the pieces overlap",
+        "deleted": false,
+        "checked_at": "2026-06-06T12:00:00.000Z",
+        "excluded": false
+      },
+      {
+        "post_id": "2061779862942646676",
+        "wallet": "WalletSpammer",
+        "handle": "spammer",
+        "text": "repeated promotional line about guaranteed engagement growth today now please read the whole pitch before you scroll past this offer from the spammer account and keep reading the same pitch again so the pieces overlap",
+        "deleted": false,
+        "checked_at": "2026-06-06T12:00:00.000Z",
+        "excluded": false
+      },
+      {
+        "post_id": "2061779862942646677",
+        "wallet": "WalletSpammer",
+        "handle": "spammer",
+        "text": "repeated promotional line about guaranteed engagement growth today now please read the whole pitch before you scroll past this offer from the spammer account and keep reading the same pitch again so the pieces overlap",
+        "deleted": false,
+        "checked_at": "2026-06-06T12:00:00.000Z",
+        "excluded": false
+      },
+      {
+        "post_id": "2061779862942646678",
+        "wallet": "WalletSpammer",
+        "handle": "spammer",
+        "text": "repeated promotional line about warrantied engagement growth today now please read the whole pitch before you scroll past this offer from the spammer account and keep reading the same pitch again so the pieces overlap",
+        "deleted": false,
+        "checked_at": "2026-06-06T12:00:00.000Z",
+        "excluded": false
+      },
+      {
+        "post_id": "2061779862942646679",
+        "wallet": "WalletSpammer",
+        "handle": "spammer",
+        "text": "repeated promotional line about guaranteed engagement growth today now please read the whole pitch before you scroll past this offer from the spammer account and keep reading the same pitch again so the pieces overlap",
+        "deleted": false,
+        "checked_at": "2026-06-06T12:00:00.000Z",
+        "excluded": false
+      },
+      {
+        "post_id": "2061779862942646680",
+        "wallet": "WalletSpammer",
+        "handle": "spammer",
+        "text": "repeated promotional line about guaranteed engagement growth today now please read the whole pitch before you scroll past this offer from the spammer account and keep reading the same pitch again so the pieces overlap",
+        "deleted": false,
+        "checked_at": "2026-06-06T12:00:00.000Z",
+        "excluded": false
+      },
+      {
+        "post_id": "2061779862942646681",
+        "wallet": "WalletSpammer",
+        "handle": "spammer",
+        "text": "repeated promotional line about guaranteed engagement growth today now please read the whole pitch before you scroll past this offer from the spammer account and keep reading the same pitch again so the pieces overlap",
+        "deleted": false,
+        "checked_at": "2026-06-06T12:00:00.000Z",
+        "excluded": false
+      },
+      {
+        "post_id": "2061779862942646682",
+        "wallet": "WalletSpammer",
+        "handle": "spammer",
+        "text": "repeated promotional line about guaranteed engagement growth today now please read the whole pitch before you scroll past this offer from the spammer account and keep reading the same pitch again so the pieces overlap",
+        "deleted": false,
+        "checked_at": "2026-06-06T12:00:00.000Z",
+        "excluded": false
+      },
+      {
+        "post_id": "2061779862942646683",
+        "wallet": "WalletSpammer",
+        "handle": "spammer",
+        "text": "repeated promotional line about guaranteed engagement growth today now please read the whole pitch before you scroll past this offer from the spammer account and keep reading the same pitch again so the pieces overlap",
+        "deleted": false,
+        "checked_at": "2026-06-06T12:00:00.000Z",
+        "excluded": false
+      },
+      {
+        "post_id": "2061779862942646684",
+        "wallet": "WalletSpammer",
+        "handle": "spammer",
+        "text": "repeated promotional line about guaranteed engagement growth today now please read the whole pitch before you scroll past this offer from the spammer account and keep reading the same pitch again so the pieces overlap",
+        "deleted": false,
+        "checked_at": "2026-06-06T12:00:00.000Z",
+        "excluded": false
+      },
+      {
+        "post_id": "2061779862942646685",
+        "wallet": "WalletSpammer",
+        "handle": "spammer",
+        "text": "repeated promotional line about guaranteed engagement growth today now please read the whole pitch before you scroll past this offer from the spammer account and keep reading the same pitch again so the pieces overlap",
+        "deleted": false,
+        "checked_at": "2026-06-06T12:00:00.000Z",
+        "excluded": false
+      },
+      {
+        "post_id": "2061779862942646686",
+        "wallet": "WalletSpammer",
+        "handle": "spammer",
+        "text": "repeated promotional line about guaranteed engagement boosts today now please read the whole pitch before you scroll past this offer from the spammer account and keep reading the same pitch again so the pieces overlap",
+        "deleted": false,
+        "checked_at": "2026-06-06T12:00:00.000Z",
+        "excluded": false
+      },
+      {
+        "post_id": "2061779862942646687",
+        "wallet": "WalletSpammer",
+        "handle": "spammer",
+        "text": "repeated promotional line about guaranteed engagement growth today now please read the whole pitch before you scroll past this offer from the spammer account and keep reading the same pitch again so the pieces overlap",
+        "deleted": false,
+        "checked_at": "2026-06-06T12:00:00.000Z",
+        "excluded": false
+      },
+      {
+        "post_id": "2061779862942646688",
+        "wallet": "WalletSpammer",
+        "handle": "spammer",
+        "text": "repeated promotional line about guaranteed engagement growth today now please read the whole pitch before you scroll past this offer from the spammer account and keep reading the same pitch again so the pieces overlap",
+        "deleted": false,
+        "checked_at": "2026-06-06T12:00:00.000Z",
+        "excluded": false
+      },
+      {
+        "post_id": "2061779862942646689",
+        "wallet": "WalletSpammer",
+        "handle": "spammer",
+        "text": "repeated promotional line about guaranteed engagement growth today now please read the whole pitch before you scroll past this offer from the spammer account and keep reading the same pitch again so the pieces overlap",
+        "deleted": false,
+        "checked_at": "2026-06-06T12:00:00.000Z",
+        "excluded": false
+      },
+      {
+        "post_id": "2061779862942646690",
+        "wallet": "WalletSpammer",
+        "handle": "spammer",
+        "text": "repeated promotional line about guaranteed engagement growth today now please read the whole pitch before you scroll past this offer from the spammer account and keep reading the same pitch again so the pieces overlap",
+        "deleted": false,
+        "checked_at": "2026-06-06T12:00:00.000Z",
+        "excluded": false
+      },
+      {
+        "post_id": "2061779862942646691",
+        "wallet": "WalletSpammer",
+        "handle": "spammer",
+        "text": "repeated promotional line about guaranteed engagement growth today now please read the whole pitch before you scroll past this offer from the spammer account and keep reading the same pitch again so the pieces overlap",
+        "deleted": false,
+        "checked_at": "2026-06-06T12:00:00.000Z",
+        "excluded": false
+      },
+      {
+        "post_id": "2061779862942646772",
+        "wallet": "WalletDeleter",
+        "handle": "deleter",
+        "text": "deleter wrote one long note that is not a copy of anyone else and then removed it",
+        "deleted": true,
+        "checked_at": "2026-06-06T12:00:00.000Z",
+        "excluded": false
+      },
+      {
+        "post_id": "2061794962437046273",
+        "wallet": "WalletCopier",
+        "handle": "copier",
+        "text": "alpha market note about shipping the public score rule this week with full receipts for every holder",
+        "deleted": false,
+        "checked_at": "2026-06-06T12:00:00.000Z",
+        "excluded": false
+      }
+    ],
+    "engagements": [
+      {
+        "post_id": "2061779862942646273",
+        "handle": "e1",
+        "kind": "reply"
+      },
+      {
+        "post_id": "2061779862942646273",
+        "handle": "e2",
+        "kind": "reply"
+      },
+      {
+        "post_id": "2061779862942646273",
+        "handle": "e3",
+        "kind": "reply"
+      },
+      {
+        "post_id": "2061779862942646273",
+        "handle": "e4",
+        "kind": "reply"
+      },
+      {
+        "post_id": "2061779862942646273",
+        "handle": "e5",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646273",
+        "handle": "e6",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646273",
+        "handle": "e7",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646273",
+        "handle": "e8",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646273",
+        "handle": "e9",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646273",
+        "handle": "e10",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646273",
+        "handle": "l1",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646273",
+        "handle": "l2",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646273",
+        "handle": "l3",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646273",
+        "handle": "l4",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646273",
+        "handle": "l5",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646273",
+        "handle": "l6",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646273",
+        "handle": "l7",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646273",
+        "handle": "l8",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646273",
+        "handle": "l9",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646273",
+        "handle": "l10",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646273",
+        "handle": "l11",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646273",
+        "handle": "l12",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646273",
+        "handle": "l13",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646273",
+        "handle": "l14",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646273",
+        "handle": "l15",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646273",
+        "handle": "l16",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646273",
+        "handle": "l17",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646273",
+        "handle": "l18",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646273",
+        "handle": "l19",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646273",
+        "handle": "l20",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646273",
+        "handle": "l21",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646273",
+        "handle": "l22",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646273",
+        "handle": "l23",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646273",
+        "handle": "l24",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646273",
+        "handle": "l25",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646273",
+        "handle": "l26",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646273",
+        "handle": "l27",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646273",
+        "handle": "l28",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646273",
+        "handle": "l29",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646273",
+        "handle": "l30",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646274",
+        "handle": "e1",
+        "kind": "reply"
+      },
+      {
+        "post_id": "2061779862942646274",
+        "handle": "e2",
+        "kind": "reply"
+      },
+      {
+        "post_id": "2061779862942646274",
+        "handle": "e3",
+        "kind": "reply"
+      },
+      {
+        "post_id": "2061779862942646274",
+        "handle": "e4",
+        "kind": "reply"
+      },
+      {
+        "post_id": "2061779862942646274",
+        "handle": "e5",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646274",
+        "handle": "e6",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646274",
+        "handle": "e7",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646274",
+        "handle": "e8",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646274",
+        "handle": "e9",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646274",
+        "handle": "e10",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646274",
+        "handle": "l1",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646274",
+        "handle": "l2",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646274",
+        "handle": "l3",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646274",
+        "handle": "l4",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646274",
+        "handle": "l5",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646274",
+        "handle": "l6",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646274",
+        "handle": "l7",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646274",
+        "handle": "l8",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646274",
+        "handle": "l9",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646274",
+        "handle": "l10",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646274",
+        "handle": "l11",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646274",
+        "handle": "l12",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646274",
+        "handle": "l13",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646274",
+        "handle": "l14",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646274",
+        "handle": "l15",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646274",
+        "handle": "l16",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646274",
+        "handle": "l17",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646274",
+        "handle": "l18",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646274",
+        "handle": "l19",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646274",
+        "handle": "l20",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646274",
+        "handle": "l21",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646274",
+        "handle": "l22",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646274",
+        "handle": "l23",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646274",
+        "handle": "l24",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646274",
+        "handle": "l25",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646274",
+        "handle": "l26",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646274",
+        "handle": "l27",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646274",
+        "handle": "l28",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646274",
+        "handle": "l29",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646274",
+        "handle": "l30",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646275",
+        "handle": "e1",
+        "kind": "reply"
+      },
+      {
+        "post_id": "2061779862942646275",
+        "handle": "e2",
+        "kind": "reply"
+      },
+      {
+        "post_id": "2061779862942646275",
+        "handle": "e3",
+        "kind": "reply"
+      },
+      {
+        "post_id": "2061779862942646275",
+        "handle": "e4",
+        "kind": "reply"
+      },
+      {
+        "post_id": "2061779862942646275",
+        "handle": "e5",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646275",
+        "handle": "e6",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646275",
+        "handle": "e7",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646275",
+        "handle": "e8",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646275",
+        "handle": "e9",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646275",
+        "handle": "e10",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646275",
+        "handle": "l1",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646275",
+        "handle": "l2",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646275",
+        "handle": "l3",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646275",
+        "handle": "l4",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646275",
+        "handle": "l5",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646275",
+        "handle": "l6",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646275",
+        "handle": "l7",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646275",
+        "handle": "l8",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646275",
+        "handle": "l9",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646275",
+        "handle": "l10",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646275",
+        "handle": "l11",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646275",
+        "handle": "l12",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646275",
+        "handle": "l13",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646275",
+        "handle": "l14",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646275",
+        "handle": "l15",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646275",
+        "handle": "l16",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646275",
+        "handle": "l17",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646275",
+        "handle": "l18",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646275",
+        "handle": "l19",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646275",
+        "handle": "l20",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646275",
+        "handle": "l21",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646275",
+        "handle": "l22",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646275",
+        "handle": "l23",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646275",
+        "handle": "l24",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646275",
+        "handle": "l25",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646275",
+        "handle": "l26",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646275",
+        "handle": "l27",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646275",
+        "handle": "l28",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646275",
+        "handle": "l29",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646275",
+        "handle": "l30",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646276",
+        "handle": "e1",
+        "kind": "reply"
+      },
+      {
+        "post_id": "2061779862942646276",
+        "handle": "e2",
+        "kind": "reply"
+      },
+      {
+        "post_id": "2061779862942646276",
+        "handle": "e3",
+        "kind": "reply"
+      },
+      {
+        "post_id": "2061779862942646276",
+        "handle": "e4",
+        "kind": "reply"
+      },
+      {
+        "post_id": "2061779862942646276",
+        "handle": "e5",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646276",
+        "handle": "e6",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646276",
+        "handle": "e7",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646276",
+        "handle": "e8",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646276",
+        "handle": "e9",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646276",
+        "handle": "e10",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646276",
+        "handle": "l1",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646276",
+        "handle": "l2",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646276",
+        "handle": "l3",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646276",
+        "handle": "l4",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646276",
+        "handle": "l5",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646276",
+        "handle": "l6",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646276",
+        "handle": "l7",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646276",
+        "handle": "l8",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646276",
+        "handle": "l9",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646276",
+        "handle": "l10",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646276",
+        "handle": "l11",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646276",
+        "handle": "l12",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646276",
+        "handle": "l13",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646276",
+        "handle": "l14",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646276",
+        "handle": "l15",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646276",
+        "handle": "l16",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646276",
+        "handle": "l17",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646276",
+        "handle": "l18",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646276",
+        "handle": "l19",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646276",
+        "handle": "l20",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646276",
+        "handle": "l21",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646276",
+        "handle": "l22",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646276",
+        "handle": "l23",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646276",
+        "handle": "l24",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646276",
+        "handle": "l25",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646276",
+        "handle": "l26",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646276",
+        "handle": "l27",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646276",
+        "handle": "l28",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646276",
+        "handle": "l29",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646276",
+        "handle": "l30",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646277",
+        "handle": "e1",
+        "kind": "reply"
+      },
+      {
+        "post_id": "2061779862942646277",
+        "handle": "e2",
+        "kind": "reply"
+      },
+      {
+        "post_id": "2061779862942646277",
+        "handle": "e3",
+        "kind": "reply"
+      },
+      {
+        "post_id": "2061779862942646277",
+        "handle": "e4",
+        "kind": "reply"
+      },
+      {
+        "post_id": "2061779862942646277",
+        "handle": "e5",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646277",
+        "handle": "e6",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646277",
+        "handle": "e7",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646277",
+        "handle": "e8",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646277",
+        "handle": "e9",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646277",
+        "handle": "e10",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646277",
+        "handle": "l1",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646277",
+        "handle": "l2",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646277",
+        "handle": "l3",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646277",
+        "handle": "l4",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646277",
+        "handle": "l5",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646277",
+        "handle": "l6",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646277",
+        "handle": "l7",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646277",
+        "handle": "l8",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646277",
+        "handle": "l9",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646277",
+        "handle": "l10",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646277",
+        "handle": "l11",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646277",
+        "handle": "l12",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646277",
+        "handle": "l13",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646277",
+        "handle": "l14",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646277",
+        "handle": "l15",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646277",
+        "handle": "l16",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646277",
+        "handle": "l17",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646277",
+        "handle": "l18",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646277",
+        "handle": "l19",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646277",
+        "handle": "l20",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646277",
+        "handle": "l21",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646277",
+        "handle": "l22",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646277",
+        "handle": "l23",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646277",
+        "handle": "l24",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646277",
+        "handle": "l25",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646277",
+        "handle": "l26",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646277",
+        "handle": "l27",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646277",
+        "handle": "l28",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646277",
+        "handle": "l29",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646277",
+        "handle": "l30",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646472",
+        "handle": "ring2",
+        "kind": "reply"
+      },
+      {
+        "post_id": "2061779862942646472",
+        "handle": "ring3",
+        "kind": "reply"
+      },
+      {
+        "post_id": "2061779862942646473",
+        "handle": "ring2",
+        "kind": "reply"
+      },
+      {
+        "post_id": "2061779862942646473",
+        "handle": "ring3",
+        "kind": "reply"
+      },
+      {
+        "post_id": "2061779862942646474",
+        "handle": "ring2",
+        "kind": "reply"
+      },
+      {
+        "post_id": "2061779862942646474",
+        "handle": "ring3",
+        "kind": "reply"
+      },
+      {
+        "post_id": "2061779862942646475",
+        "handle": "ring2",
+        "kind": "reply"
+      },
+      {
+        "post_id": "2061779862942646475",
+        "handle": "ring3",
+        "kind": "reply"
+      },
+      {
+        "post_id": "2061779862942646476",
+        "handle": "ring2",
+        "kind": "reply"
+      },
+      {
+        "post_id": "2061779862942646476",
+        "handle": "ring3",
+        "kind": "reply"
+      },
+      {
+        "post_id": "2061779862942646482",
+        "handle": "ring1",
+        "kind": "reply"
+      },
+      {
+        "post_id": "2061779862942646482",
+        "handle": "ring3",
+        "kind": "reply"
+      },
+      {
+        "post_id": "2061779862942646483",
+        "handle": "ring1",
+        "kind": "reply"
+      },
+      {
+        "post_id": "2061779862942646483",
+        "handle": "ring3",
+        "kind": "reply"
+      },
+      {
+        "post_id": "2061779862942646484",
+        "handle": "ring1",
+        "kind": "reply"
+      },
+      {
+        "post_id": "2061779862942646484",
+        "handle": "ring3",
+        "kind": "reply"
+      },
+      {
+        "post_id": "2061779862942646485",
+        "handle": "ring1",
+        "kind": "reply"
+      },
+      {
+        "post_id": "2061779862942646485",
+        "handle": "ring3",
+        "kind": "reply"
+      },
+      {
+        "post_id": "2061779862942646486",
+        "handle": "ring1",
+        "kind": "reply"
+      },
+      {
+        "post_id": "2061779862942646486",
+        "handle": "ring3",
+        "kind": "reply"
+      },
+      {
+        "post_id": "2061779862942646492",
+        "handle": "ring1",
+        "kind": "reply"
+      },
+      {
+        "post_id": "2061779862942646492",
+        "handle": "ring2",
+        "kind": "reply"
+      },
+      {
+        "post_id": "2061779862942646493",
+        "handle": "ring1",
+        "kind": "reply"
+      },
+      {
+        "post_id": "2061779862942646493",
+        "handle": "ring2",
+        "kind": "reply"
+      },
+      {
+        "post_id": "2061779862942646494",
+        "handle": "ring1",
+        "kind": "reply"
+      },
+      {
+        "post_id": "2061779862942646494",
+        "handle": "ring2",
+        "kind": "reply"
+      },
+      {
+        "post_id": "2061779862942646495",
+        "handle": "ring1",
+        "kind": "reply"
+      },
+      {
+        "post_id": "2061779862942646495",
+        "handle": "ring2",
+        "kind": "reply"
+      },
+      {
+        "post_id": "2061779862942646496",
+        "handle": "ring1",
+        "kind": "reply"
+      },
+      {
+        "post_id": "2061779862942646496",
+        "handle": "ring2",
+        "kind": "reply"
+      },
+      {
+        "post_id": "2061779862942646572",
+        "handle": "e1",
+        "kind": "reply"
+      },
+      {
+        "post_id": "2061779862942646572",
+        "handle": "e2",
+        "kind": "reply"
+      },
+      {
+        "post_id": "2061779862942646572",
+        "handle": "e3",
+        "kind": "reply"
+      },
+      {
+        "post_id": "2061779862942646572",
+        "handle": "e4",
+        "kind": "reply"
+      },
+      {
+        "post_id": "2061779862942646572",
+        "handle": "e5",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646572",
+        "handle": "e6",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646572",
+        "handle": "e7",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646572",
+        "handle": "e8",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646572",
+        "handle": "e9",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646572",
+        "handle": "e10",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646572",
+        "handle": "l1",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646572",
+        "handle": "l2",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646572",
+        "handle": "l3",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646572",
+        "handle": "l4",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646572",
+        "handle": "l5",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646572",
+        "handle": "l6",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646572",
+        "handle": "l7",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646572",
+        "handle": "l8",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646572",
+        "handle": "l9",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646572",
+        "handle": "l10",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646572",
+        "handle": "l11",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646572",
+        "handle": "l12",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646572",
+        "handle": "l13",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646572",
+        "handle": "l14",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646572",
+        "handle": "l15",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646572",
+        "handle": "l16",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646572",
+        "handle": "l17",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646572",
+        "handle": "l18",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646572",
+        "handle": "l19",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646572",
+        "handle": "l20",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646572",
+        "handle": "l21",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646572",
+        "handle": "l22",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646572",
+        "handle": "l23",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646572",
+        "handle": "l24",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646572",
+        "handle": "l25",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646572",
+        "handle": "l26",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646572",
+        "handle": "l27",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646572",
+        "handle": "l28",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646572",
+        "handle": "l29",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646572",
+        "handle": "l30",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646573",
+        "handle": "e1",
+        "kind": "reply"
+      },
+      {
+        "post_id": "2061779862942646573",
+        "handle": "e2",
+        "kind": "reply"
+      },
+      {
+        "post_id": "2061779862942646573",
+        "handle": "e3",
+        "kind": "reply"
+      },
+      {
+        "post_id": "2061779862942646573",
+        "handle": "e4",
+        "kind": "reply"
+      },
+      {
+        "post_id": "2061779862942646573",
+        "handle": "e5",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646573",
+        "handle": "e6",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646573",
+        "handle": "e7",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646573",
+        "handle": "e8",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646573",
+        "handle": "e9",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646573",
+        "handle": "e10",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646573",
+        "handle": "l1",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646573",
+        "handle": "l2",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646573",
+        "handle": "l3",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646573",
+        "handle": "l4",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646573",
+        "handle": "l5",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646573",
+        "handle": "l6",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646573",
+        "handle": "l7",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646573",
+        "handle": "l8",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646573",
+        "handle": "l9",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646573",
+        "handle": "l10",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646573",
+        "handle": "l11",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646573",
+        "handle": "l12",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646573",
+        "handle": "l13",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646573",
+        "handle": "l14",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646573",
+        "handle": "l15",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646573",
+        "handle": "l16",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646573",
+        "handle": "l17",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646573",
+        "handle": "l18",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646573",
+        "handle": "l19",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646573",
+        "handle": "l20",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646573",
+        "handle": "l21",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646573",
+        "handle": "l22",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646573",
+        "handle": "l23",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646573",
+        "handle": "l24",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646573",
+        "handle": "l25",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646573",
+        "handle": "l26",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646573",
+        "handle": "l27",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646573",
+        "handle": "l28",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646573",
+        "handle": "l29",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646573",
+        "handle": "l30",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646574",
+        "handle": "e1",
+        "kind": "reply"
+      },
+      {
+        "post_id": "2061779862942646574",
+        "handle": "e2",
+        "kind": "reply"
+      },
+      {
+        "post_id": "2061779862942646574",
+        "handle": "e3",
+        "kind": "reply"
+      },
+      {
+        "post_id": "2061779862942646574",
+        "handle": "e4",
+        "kind": "reply"
+      },
+      {
+        "post_id": "2061779862942646574",
+        "handle": "e5",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646574",
+        "handle": "e6",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646574",
+        "handle": "e7",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646574",
+        "handle": "e8",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646574",
+        "handle": "e9",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646574",
+        "handle": "e10",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646574",
+        "handle": "l1",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646574",
+        "handle": "l2",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646574",
+        "handle": "l3",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646574",
+        "handle": "l4",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646574",
+        "handle": "l5",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646574",
+        "handle": "l6",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646574",
+        "handle": "l7",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646574",
+        "handle": "l8",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646574",
+        "handle": "l9",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646574",
+        "handle": "l10",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646574",
+        "handle": "l11",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646574",
+        "handle": "l12",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646574",
+        "handle": "l13",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646574",
+        "handle": "l14",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646574",
+        "handle": "l15",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646574",
+        "handle": "l16",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646574",
+        "handle": "l17",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646574",
+        "handle": "l18",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646574",
+        "handle": "l19",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646574",
+        "handle": "l20",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646574",
+        "handle": "l21",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646574",
+        "handle": "l22",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646574",
+        "handle": "l23",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646574",
+        "handle": "l24",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646574",
+        "handle": "l25",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646574",
+        "handle": "l26",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646574",
+        "handle": "l27",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646574",
+        "handle": "l28",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646574",
+        "handle": "l29",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646574",
+        "handle": "l30",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646575",
+        "handle": "e1",
+        "kind": "reply"
+      },
+      {
+        "post_id": "2061779862942646575",
+        "handle": "e2",
+        "kind": "reply"
+      },
+      {
+        "post_id": "2061779862942646575",
+        "handle": "e3",
+        "kind": "reply"
+      },
+      {
+        "post_id": "2061779862942646575",
+        "handle": "e4",
+        "kind": "reply"
+      },
+      {
+        "post_id": "2061779862942646575",
+        "handle": "e5",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646575",
+        "handle": "e6",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646575",
+        "handle": "e7",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646575",
+        "handle": "e8",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646575",
+        "handle": "e9",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646575",
+        "handle": "e10",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646575",
+        "handle": "l1",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646575",
+        "handle": "l2",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646575",
+        "handle": "l3",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646575",
+        "handle": "l4",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646575",
+        "handle": "l5",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646575",
+        "handle": "l6",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646575",
+        "handle": "l7",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646575",
+        "handle": "l8",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646575",
+        "handle": "l9",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646575",
+        "handle": "l10",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646575",
+        "handle": "l11",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646575",
+        "handle": "l12",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646575",
+        "handle": "l13",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646575",
+        "handle": "l14",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646575",
+        "handle": "l15",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646575",
+        "handle": "l16",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646575",
+        "handle": "l17",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646575",
+        "handle": "l18",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646575",
+        "handle": "l19",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646575",
+        "handle": "l20",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646575",
+        "handle": "l21",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646575",
+        "handle": "l22",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646575",
+        "handle": "l23",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646575",
+        "handle": "l24",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646575",
+        "handle": "l25",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646575",
+        "handle": "l26",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646575",
+        "handle": "l27",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646575",
+        "handle": "l28",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646575",
+        "handle": "l29",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646575",
+        "handle": "l30",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646576",
+        "handle": "e1",
+        "kind": "reply"
+      },
+      {
+        "post_id": "2061779862942646576",
+        "handle": "e2",
+        "kind": "reply"
+      },
+      {
+        "post_id": "2061779862942646576",
+        "handle": "e3",
+        "kind": "reply"
+      },
+      {
+        "post_id": "2061779862942646576",
+        "handle": "e4",
+        "kind": "reply"
+      },
+      {
+        "post_id": "2061779862942646576",
+        "handle": "e5",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646576",
+        "handle": "e6",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646576",
+        "handle": "e7",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646576",
+        "handle": "e8",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646576",
+        "handle": "e9",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646576",
+        "handle": "e10",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646576",
+        "handle": "l1",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646576",
+        "handle": "l2",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646576",
+        "handle": "l3",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646576",
+        "handle": "l4",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646576",
+        "handle": "l5",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646576",
+        "handle": "l6",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646576",
+        "handle": "l7",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646576",
+        "handle": "l8",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646576",
+        "handle": "l9",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646576",
+        "handle": "l10",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646576",
+        "handle": "l11",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646576",
+        "handle": "l12",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646576",
+        "handle": "l13",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646576",
+        "handle": "l14",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646576",
+        "handle": "l15",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646576",
+        "handle": "l16",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646576",
+        "handle": "l17",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646576",
+        "handle": "l18",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646576",
+        "handle": "l19",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646576",
+        "handle": "l20",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646576",
+        "handle": "l21",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646576",
+        "handle": "l22",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646576",
+        "handle": "l23",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646576",
+        "handle": "l24",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646576",
+        "handle": "l25",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646576",
+        "handle": "l26",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646576",
+        "handle": "l27",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646576",
+        "handle": "l28",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646576",
+        "handle": "l29",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646576",
+        "handle": "l30",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646672",
+        "handle": "y1",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646672",
+        "handle": "y2",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646672",
+        "handle": "y3",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646672",
+        "handle": "y4",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646672",
+        "handle": "y5",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646673",
+        "handle": "y1",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646673",
+        "handle": "y2",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646673",
+        "handle": "y3",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646673",
+        "handle": "y4",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646673",
+        "handle": "y5",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646674",
+        "handle": "y1",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646674",
+        "handle": "y2",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646674",
+        "handle": "y3",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646674",
+        "handle": "y4",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646674",
+        "handle": "y5",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646675",
+        "handle": "y1",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646675",
+        "handle": "y2",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646675",
+        "handle": "y3",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646675",
+        "handle": "y4",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646675",
+        "handle": "y5",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646676",
+        "handle": "y1",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646676",
+        "handle": "y2",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646676",
+        "handle": "y3",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646676",
+        "handle": "y4",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646676",
+        "handle": "y5",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646677",
+        "handle": "y1",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646677",
+        "handle": "y2",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646677",
+        "handle": "y3",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646677",
+        "handle": "y4",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646677",
+        "handle": "y5",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646678",
+        "handle": "y1",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646678",
+        "handle": "y2",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646678",
+        "handle": "y3",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646678",
+        "handle": "y4",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646678",
+        "handle": "y5",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646678",
+        "handle": "e1",
+        "kind": "reply"
+      },
+      {
+        "post_id": "2061779862942646679",
+        "handle": "y1",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646679",
+        "handle": "y2",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646679",
+        "handle": "y3",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646679",
+        "handle": "y4",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646679",
+        "handle": "y5",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646680",
+        "handle": "y1",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646680",
+        "handle": "y2",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646680",
+        "handle": "y3",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646680",
+        "handle": "y4",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646680",
+        "handle": "y5",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646681",
+        "handle": "y1",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646681",
+        "handle": "y2",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646681",
+        "handle": "y3",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646681",
+        "handle": "y4",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646681",
+        "handle": "y5",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646682",
+        "handle": "y1",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646682",
+        "handle": "y2",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646682",
+        "handle": "y3",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646682",
+        "handle": "y4",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646682",
+        "handle": "y5",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646683",
+        "handle": "y1",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646683",
+        "handle": "y2",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646683",
+        "handle": "y3",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646683",
+        "handle": "y4",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646683",
+        "handle": "y5",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646684",
+        "handle": "y1",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646684",
+        "handle": "y2",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646684",
+        "handle": "y3",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646684",
+        "handle": "y4",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646684",
+        "handle": "y5",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646685",
+        "handle": "y1",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646685",
+        "handle": "y2",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646685",
+        "handle": "y3",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646685",
+        "handle": "y4",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646685",
+        "handle": "y5",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646686",
+        "handle": "y1",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646686",
+        "handle": "y2",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646686",
+        "handle": "y3",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646686",
+        "handle": "y4",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646686",
+        "handle": "y5",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646687",
+        "handle": "y1",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646687",
+        "handle": "y2",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646687",
+        "handle": "y3",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646687",
+        "handle": "y4",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646687",
+        "handle": "y5",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646688",
+        "handle": "y1",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646688",
+        "handle": "y2",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646688",
+        "handle": "y3",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646688",
+        "handle": "y4",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646688",
+        "handle": "y5",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646689",
+        "handle": "y1",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646689",
+        "handle": "y2",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646689",
+        "handle": "y3",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646689",
+        "handle": "y4",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646689",
+        "handle": "y5",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646690",
+        "handle": "y1",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646690",
+        "handle": "y2",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646690",
+        "handle": "y3",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646690",
+        "handle": "y4",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646690",
+        "handle": "y5",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646691",
+        "handle": "y1",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646691",
+        "handle": "y2",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646691",
+        "handle": "y3",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646691",
+        "handle": "y4",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646691",
+        "handle": "y5",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646772",
+        "handle": "e1",
+        "kind": "reply"
+      },
+      {
+        "post_id": "2061779862942646772",
+        "handle": "e2",
+        "kind": "reply"
+      },
+      {
+        "post_id": "2061779862942646772",
+        "handle": "e3",
+        "kind": "reply"
+      },
+      {
+        "post_id": "2061779862942646772",
+        "handle": "e4",
+        "kind": "reply"
+      },
+      {
+        "post_id": "2061779862942646772",
+        "handle": "e5",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646772",
+        "handle": "e6",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646772",
+        "handle": "e7",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646772",
+        "handle": "e8",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646772",
+        "handle": "e9",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646772",
+        "handle": "e10",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061779862942646772",
+        "handle": "l1",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646772",
+        "handle": "l2",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646772",
+        "handle": "l3",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646772",
+        "handle": "l4",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646772",
+        "handle": "l5",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646772",
+        "handle": "l6",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646772",
+        "handle": "l7",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646772",
+        "handle": "l8",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646772",
+        "handle": "l9",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646772",
+        "handle": "l10",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646772",
+        "handle": "l11",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646772",
+        "handle": "l12",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646772",
+        "handle": "l13",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646772",
+        "handle": "l14",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646772",
+        "handle": "l15",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646772",
+        "handle": "l16",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646772",
+        "handle": "l17",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646772",
+        "handle": "l18",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646772",
+        "handle": "l19",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646772",
+        "handle": "l20",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646772",
+        "handle": "l21",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646772",
+        "handle": "l22",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646772",
+        "handle": "l23",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646772",
+        "handle": "l24",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646772",
+        "handle": "l25",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646772",
+        "handle": "l26",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646772",
+        "handle": "l27",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646772",
+        "handle": "l28",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646772",
+        "handle": "l29",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061779862942646772",
+        "handle": "l30",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061794962437046273",
+        "handle": "e1",
+        "kind": "reply"
+      },
+      {
+        "post_id": "2061794962437046273",
+        "handle": "e2",
+        "kind": "reply"
+      },
+      {
+        "post_id": "2061794962437046273",
+        "handle": "e3",
+        "kind": "reply"
+      },
+      {
+        "post_id": "2061794962437046273",
+        "handle": "e4",
+        "kind": "reply"
+      },
+      {
+        "post_id": "2061794962437046273",
+        "handle": "e5",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061794962437046273",
+        "handle": "e6",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061794962437046273",
+        "handle": "e7",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061794962437046273",
+        "handle": "e8",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061794962437046273",
+        "handle": "e9",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061794962437046273",
+        "handle": "e10",
+        "kind": "repost"
+      },
+      {
+        "post_id": "2061794962437046273",
+        "handle": "l1",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061794962437046273",
+        "handle": "l2",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061794962437046273",
+        "handle": "l3",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061794962437046273",
+        "handle": "l4",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061794962437046273",
+        "handle": "l5",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061794962437046273",
+        "handle": "l6",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061794962437046273",
+        "handle": "l7",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061794962437046273",
+        "handle": "l8",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061794962437046273",
+        "handle": "l9",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061794962437046273",
+        "handle": "l10",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061794962437046273",
+        "handle": "l11",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061794962437046273",
+        "handle": "l12",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061794962437046273",
+        "handle": "l13",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061794962437046273",
+        "handle": "l14",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061794962437046273",
+        "handle": "l15",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061794962437046273",
+        "handle": "l16",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061794962437046273",
+        "handle": "l17",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061794962437046273",
+        "handle": "l18",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061794962437046273",
+        "handle": "l19",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061794962437046273",
+        "handle": "l20",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061794962437046273",
+        "handle": "l21",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061794962437046273",
+        "handle": "l22",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061794962437046273",
+        "handle": "l23",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061794962437046273",
+        "handle": "l24",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061794962437046273",
+        "handle": "l25",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061794962437046273",
+        "handle": "l26",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061794962437046273",
+        "handle": "l27",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061794962437046273",
+        "handle": "l28",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061794962437046273",
+        "handle": "l29",
+        "kind": "like"
+      },
+      {
+        "post_id": "2061794962437046273",
+        "handle": "l30",
+        "kind": "like"
+      }
+    ],
+    "joins": [
+      {
+        "wallet": "WalletHonest",
+        "handle": "honest",
+        "x_user_id": "1001",
+        "status": "approved",
+        "joined_at": "2026-06-01T00:00:00.000Z",
+        "score_override": null,
+        "override_at": null,
+        "override_by": null,
+        "consent": true
+      },
+      {
+        "wallet": "WalletRing1",
+        "handle": "ring1",
+        "x_user_id": "1002",
+        "status": "approved",
+        "joined_at": "2026-06-01T00:00:00.000Z",
+        "score_override": null,
+        "override_at": null,
+        "override_by": null,
+        "consent": true
+      },
+      {
+        "wallet": "WalletRing2",
+        "handle": "ring2",
+        "x_user_id": "1003",
+        "status": "approved",
+        "joined_at": "2026-06-01T00:00:00.000Z",
+        "score_override": null,
+        "override_at": null,
+        "override_by": null,
+        "consent": true
+      },
+      {
+        "wallet": "WalletRing3",
+        "handle": "ring3",
+        "x_user_id": "1004",
+        "status": "approved",
+        "joined_at": "2026-06-01T00:00:00.000Z",
+        "score_override": null,
+        "override_at": null,
+        "override_by": null,
+        "consent": true
+      },
+      {
+        "wallet": "WalletNewbie",
+        "handle": "newbie",
+        "x_user_id": "1005",
+        "status": "approved",
+        "joined_at": "2026-06-01T00:00:00.000Z",
+        "score_override": null,
+        "override_at": null,
+        "override_by": null,
+        "consent": true
+      },
+      {
+        "wallet": "WalletSpammer",
+        "handle": "spammer",
+        "x_user_id": "1006",
+        "status": "approved",
+        "joined_at": "2026-06-01T00:00:00.000Z",
+        "score_override": null,
+        "override_at": null,
+        "override_by": null,
+        "consent": true
+      },
+      {
+        "wallet": "WalletDeleter",
+        "handle": "deleter",
+        "x_user_id": "1007",
+        "status": "approved",
+        "joined_at": "2026-06-01T00:00:00.000Z",
+        "score_override": null,
+        "override_at": null,
+        "override_by": null,
+        "consent": true
+      },
+      {
+        "wallet": "WalletCopier",
+        "handle": "copier",
+        "x_user_id": "1008",
+        "status": "approved",
+        "joined_at": "2026-06-01T00:00:00.000Z",
+        "score_override": null,
+        "override_at": null,
+        "override_by": null,
+        "consent": true
+      }
+    ],
+    "season_joins": [],
+    "holders": [
+      {
+        "wallet": "WalletHonest",
+        "handle": "honest",
+        "x_user_id": "1001",
+        "x_via": "oauth"
+      },
+      {
+        "wallet": "WalletRing1",
+        "handle": "ring1",
+        "x_user_id": "1002",
+        "x_via": "oauth"
+      },
+      {
+        "wallet": "WalletRing2",
+        "handle": "ring2",
+        "x_user_id": "1003",
+        "x_via": "oauth"
+      },
+      {
+        "wallet": "WalletRing3",
+        "handle": "ring3",
+        "x_user_id": "1004",
+        "x_via": "oauth"
+      },
+      {
+        "wallet": "WalletNewbie",
+        "handle": "newbie",
+        "x_user_id": "1005",
+        "x_via": "oauth"
+      },
+      {
+        "wallet": "WalletSpammer",
+        "handle": "spammer",
+        "x_user_id": "1006",
+        "x_via": "oauth"
+      },
+      {
+        "wallet": "WalletDeleter",
+        "handle": "deleter",
+        "x_user_id": "1007",
+        "x_via": "oauth"
+      },
+      {
+        "wallet": "WalletCopier",
+        "handle": "copier",
+        "x_user_id": "1008",
+        "x_via": "oauth"
+      }
+    ],
+    "overrides": []
+  }
+}

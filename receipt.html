@@ -109,6 +109,7 @@ tr.is-you{background:var(--purple-soft)}
   </div>
 </main>
 <script src="/platform.js"></script>
+<script type="module" src="/scoring.js"></script>
 <script>
 (function () {
   function campaignId() {
@@ -222,12 +223,119 @@ tr.is-you{background:var(--purple-soft)}
     });
   }
 
+  function renderScores(body) {
+    if (document.getElementById('scores')) return;
+    var main = document.querySelector('.main');
+    if (!main || !body || !Array.isArray(body.results)) return;
+    var card = document.createElement('div');
+    card.className = 'card';
+    card.id = 'scores';
+    var title = document.createElement('p');
+    title.className = 'muted';
+    title.textContent = 'Scores';
+    card.append(title);
+    body.results.forEach(function (row) {
+      var block = document.createElement('div');
+      var head = document.createElement('p');
+      head.textContent = (row.handle || row.wallet || '—') + ' · ' + row.score_milli;
+      block.append(head);
+      var gate = row.gate || {};
+      var gateLine = document.createElement('p');
+      gateLine.className = 'muted';
+      gateLine.textContent = 'gate ' + (gate.ok ? 'ok' : (gate.reason || 'no'))
+        + ' · created ' + (gate.created_on || '—')
+        + ' · followers ' + (gate.followers == null ? '—' : gate.followers)
+        + ' · following ' + (gate.following == null ? '—' : gate.following)
+        + ' · ' + (gate.x_via || '—');
+      block.append(gateLine);
+      (row.posts || []).forEach(function (post) {
+        var line = document.createElement('p');
+        var link = document.createElement('a');
+        link.href = 'https://x.com/i/status/' + encodeURIComponent(post.post_id || '');
+        link.target = '_blank';
+        link.rel = 'noopener';
+        link.textContent = post.post_id || 'post';
+        line.append(link);
+        line.append(document.createTextNode(' · ' + (post.posted_at || '') + ' · ' + (post.kept ? ('kept ' + post.score_milli) : ('0 ' + (post.reason || '')))));
+        block.append(line);
+        (post.engagers || []).forEach(function (item) {
+          var eng = document.createElement('p');
+          eng.className = 'muted';
+          eng.textContent = (item.handle || '') + ' · ' + (item.kind || '') + ' · ' + (item.created_on || '')
+            + ' · ' + (item.followers == null ? '' : item.followers) + '/' + (item.following == null ? '' : item.following)
+            + ' · ' + (item.class || '') + ' · weight ' + (item.weight == null ? '' : item.weight)
+            + (item.label ? (' · ' + item.label) : '')
+            + ' · ' + (item.source || 'entered by the team');
+          block.append(eng);
+        });
+      });
+      var overs = (body.inputs && body.inputs.overrides) || [];
+      overs.forEach(function (item) {
+        if (item.wallet !== row.wallet && item.handle !== row.handle) return;
+        var over = document.createElement('p');
+        over.textContent = (item.action || 'override') + ' by the team · ' + (item.at || '');
+        block.append(over);
+      });
+      (body.reasons || []).forEach(function (item) {
+        if (item.wallet !== row.wallet && item.handle !== row.handle) return;
+        var reason = document.createElement('p');
+        reason.className = 'muted';
+        reason.textContent = (item.action || 'override') + ' reason: ' + (item.reason || '');
+        block.append(reason);
+      });
+      card.append(block);
+    });
+    (body.settlements || []).forEach(function (item) {
+      var line = document.createElement('p');
+      line.className = 'sig';
+      line.textContent = (item.status || 'settlement') + ' · payout ' + (item.payout_hash || '') + ' · score ' + (item.score_hash || '');
+      card.append(line);
+    });
+    var button = document.createElement('button');
+    button.type = 'button';
+    button.id = 'recompute-scores';
+    button.textContent = 'Recompute here';
+    var note = document.createElement('p');
+    note.id = 'recompute-note';
+    button.addEventListener('click', function () {
+      if (!window.BardScore || !BardScore.scoreCampaign) {
+        note.textContent = 'scoring.js did not load';
+        return;
+      }
+      var again = BardScore.scoreCampaign(body.inputs);
+      var bad = [];
+      body.results.forEach(function (row) {
+        var found = (again.results || []).filter(function (item) { return item.wallet === row.wallet; })[0];
+        if (!found || found.score_milli !== row.score_milli) bad.push(row.handle || row.wallet);
+      });
+      note.textContent = bad.length ? ('mismatch ' + bad.join(', ')) : ('all ' + body.results.length + ' scores match');
+    });
+    card.append(button, note);
+    main.append(card);
+  }
+
+  function loadScores(id) {
+    var ready = (window.BardPlatform && BardPlatform.init) ? BardPlatform.init() : Promise.resolve();
+    ready.then(function () {
+      var headers = {};
+      var token = window.BardPlatform && BardPlatform.getSessionToken && BardPlatform.getSessionToken();
+      if (token) headers.authorization = 'Bearer ' + token;
+      return fetch('/api/campaigns/' + encodeURIComponent(id) + '/score', { headers: headers });
+    }).then(function (res) {
+      if (!res || !res.ok) return null;
+      return res.json();
+    }).then(function (body) {
+      if (body) renderScores(body);
+    }).catch(function () {});
+  }
+
   async function load() {
     var id = campaignId();
     if (!id) {
       showUnverified('');
       return;
     }
+    loadScores(id);
     var res;
     try {
       res = await fetch('/api/campaigns/' + encodeURIComponent(id) + '/receipt');

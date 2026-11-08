@@ -184,6 +184,7 @@ h1{margin:0 0 10px;font-size:clamp(1.7rem,3.5vw,2.3rem);line-height:1.15;font-va
   <div class="field"><label for="c-pool" id="c-pool-label">Max budget (optional)</label><input class="inp" id="c-pool" placeholder="12"><span class="hint" id="c-pool-hint">Stop paying once this is gone.</span></div>
   <div class="field" id="mod-days"><label for="c-days">Length (days)</label><input class="inp" id="c-days" type="number" min="1" max="365" value="7"><span class="hint">You can end it early anytime.</span></div>
 </div>
+<div class="field" id="mod-best-n" style="display:none;margin-top:12px;max-width:240px"><label for="c-best-n">Best posts counted</label><input class="inp" id="c-best-n" type="number" min="1" max="10" value="5"><span class="hint">The public rule keeps this many posts. 1 to 10.</span></div>
 <div class="mod-block" id="mod-top3" style="margin-top:12px">
   <p class="hint" style="margin:0 0 8px">One prize pool. Type the cut for each place. They should add to 100.</p>
   <div class="place-row"><div><strong>1st place</strong><div class="muted">Winner</div></div><input class="inp num" id="c-top3-1" type="number" min="0" max="100" value="50"><span class="muted">%</span></div>
@@ -252,5 +253,6 @@ h1{margin:0 0 10px;font-size:clamp(1.7rem,3.5vw,2.3rem);line-height:1.15;font-va
 <script src="/vendor/solana-web3/index.iife.min.js"></script>
 <script src="/bard-vault.js"></script>
 <script src="/platform.js"></script>
+<script type="module" src="/scoring.js"></script>
 <script src="/admin_app.js"></script>
 </body></html>

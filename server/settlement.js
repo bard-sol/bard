@@ -169,6 +169,8 @@ export function asCampaign(row) {
     unit: source.reward_unit || source.unit || 'TOKEN',
     config: campaignConfig(source),
     createdAt: source.created_at || source.createdAt,
+    durationDays: source.duration_days != null ? source.duration_days : source.durationDays,
+    endsAt: source.ends_at || source.endsAt || null,
     drawSeed: source.draw_seed || source.drawSeed || null,
     drawWinners: source.draw_winners || source.drawWinners || null,
     drawSlot: source.draw_slot || source.drawSlot || null,
@@ -246,8 +248,143 @@ export function settlementLines(payouts, cutWallet, cutRaw) {
   return lines;
 }
 
+function scoredEndMs(campaign) {
+  if (campaign && campaign.endsAt) {
+    const at = new Date(campaign.endsAt).getTime();
+    if (Number.isFinite(at)) return at;
+  }
+  const days = Number(campaign && campaign.durationDays);
+  const created = campaign && campaign.createdAt ? new Date(campaign.createdAt).getTime() : NaN;
+  if (!Number.isInteger(days) || days < 1 || !Number.isFinite(created)) throw new Error('scored campaign needs an end');
+  return created + days * 86400000;
+}
+
+function growingRawAt(campaign, decimals, atMs) {
+  const cfg = campaignConfig(campaign);
+  const start = decimalToRaw(cfg.growStart != null && cfg.growStart !== '' ? cfg.growStart : (campaign && (campaign.pool || campaign.reward)) || 0, decimals);
+  const add = decimalToRaw(cfg.growAdd || 0, decimals);
+  const cap = cfg.growCap ? decimalToRaw(cfg.growCap, decimals) : 0n;
+  const created = campaign && campaign.createdAt ? new Date(campaign.createdAt).getTime() : atMs;
+  const ms = cfg.growEvery === 'day' ? 86400000 : 7 * 86400000;
+  const periods = BigInt(Math.max(0, Math.floor((atMs - created) / ms)));
+  let now = start + add * periods;
+  if (cap > 0n && now > cap) now = cap;
+  return now;
+}
+
+function scoredJoinScore(join) {
+  const n = Number(join && join.progress);
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  return Math.trunc(n);
+}
+
+function scoredJoinRows(joins) {
+  const best = new Map();
+  for (const join of joins || []) {
+    if (!join || !join.wallet || join.status !== 'approved') continue;
+    if (join.scoreExcluded === true || join.score_override === 'exclude') continue;
+    const score = scoredJoinScore(join);
+    const included = score <= 0 && (join.scoreIncluded === true || join.score_override === 'include');
+    if (score <= 0 && !included) continue;
+    const prev = best.get(join.wallet);
+    if (prev && prev.score >= score) continue;
+    best.set(join.wallet, { wallet: String(join.wallet), score, progress: score });
+  }
+  return [...best.values()].sort((a, b) => {
+    const aPos = a.score > 0 ? 1 : 0;
+    const bPos = b.score > 0 ? 1 : 0;
+    if (aPos !== bPos) return bPos - aPos;
+    if (a.score !== b.score) return b.score - a.score;
+    if (a.wallet < b.wallet) return -1;
+    if (a.wallet > b.wallet) return 1;
+    return 0;
+  });
+}
+
+function splitByWeight(poolRaw, rows, decimals) {
+  const total = rows.reduce((sum, row) => sum + row.weight, 0n);
+  if (total <= 0n) throw new Error('Shared pool needs a pool size');
+  const parts = rows.map((row) => {
+    const product = poolRaw * row.weight;
+    return { wallet: row.wallet, progress: row.progress, base: product / total, rem: product % total };
+  });
+  let left = poolRaw - parts.reduce((sum, row) => sum + row.base, 0n);
+  const order = parts.map((row, index) => index).sort((i, j) => {
+    if (parts[i].rem !== parts[j].rem) return parts[i].rem > parts[j].rem ? -1 : 1;
+    if (parts[i].wallet < parts[j].wallet) return -1;
+    if (parts[i].wallet > parts[j].wallet) return 1;
+    return 0;
+  });
+  const extra = new Map();
+  for (let n = 0; left > 0n && n < order.length; n += 1, left -= 1n) extra.set(order[n], 1n);
+  return parts.map((row, index) => payoutRow(row.wallet, row.base + (extra.get(index) || 0n), decimals, row.progress));
+}
+
+function computeScoredPayouts(view, joins, decimals) {
+  const d = decimals == null ? 0 : decimals;
+  const rows = scoredJoinRows(joins);
+  if (!rows.length) throw new Error('No scored holders to pay');
+  const rewardMode = view.rewardMode || 'fixed';
+  const unit = view.unit || 'TOKEN';
+  const positive = rows.filter((row) => row.score > 0);
+  const floorScore = positive.length ? Math.min(...positive.map((row) => row.score)) : 1;
+  let payouts = [];
+  if (rewardMode === 'fixed') {
+    let each = 0n;
+    if (view.reward != null && String(view.reward).trim() !== '') each = decimalToRaw(view.reward, d);
+    const lockedFixed = lockedPrizeRaw(view);
+    if (each <= 0n) {
+      const poolRawFixed = lockedFixed != null ? lockedFixed : decimalToRaw(view.vaultReserved || view.pool || view.reward || 0, d);
+      if (poolRawFixed <= 0n) throw new Error('Set a reward amount or pool first');
+      each = poolRawFixed / BigInt(rows.length);
+    }
+    if (each <= 0n) throw new Error('Set a reward amount or pool first');
+    let paying = rows;
+    if (lockedFixed != null) {
+      const slots = lockedFixed / each;
+      const count = slots > BigInt(rows.length) ? rows.length : Number(slots);
+      paying = rows.slice(0, count);
+    }
+    if (!paying.length) throw new Error('Locked prize does not cover one reward');
+    payouts = paying.map((row) => payoutRow(row.wallet, each, d, row.progress));
+  } else if (rewardMode === 'top3' || rewardMode === 'topn') {
+    const lockedTop = lockedPrizeRaw(view);
+    const poolRawTop = lockedTop != null ? lockedTop : decimalToRaw(view.pool || view.vaultReserved || 0, d);
+    if (poolRawTop <= 0n) throw new Error('Top N needs a pool size');
+    const top = rows.slice(0, 3);
+    const cfg = campaignConfig(view);
+    const parts = [
+      wholeNumber(cfg.top3First != null ? cfg.top3First : 50, 50),
+      wholeNumber(cfg.top3Second != null ? cfg.top3Second : 30, 30),
+      wholeNumber(cfg.top3Third != null ? cfg.top3Third : 20, 20),
+    ];
+    if (parts[0] + parts[1] + parts[2] !== 100n) throw new Error('Top 3 shares must sum to 100');
+    payouts = top.map((row, i) => payoutRow(row.wallet, poolRawTop * parts[i] / 100n, d, row.progress));
+  } else if (rewardMode === 'growing') {
+    let grow = growingRawAt(view, d, scoredEndMs(view));
+    const capRaw = lockedPrizeRaw(view);
+    if (capRaw != null && grow > capRaw) grow = capRaw;
+    if (grow <= 0n) throw new Error('Growing pool needs a starting size');
+    payouts = [payoutRow(rows[0].wallet, grow, d, rows[0].progress)];
+  } else {
+    const lockedPool = lockedPrizeRaw(view);
+    const poolRaw = lockedPool != null ? lockedPool : decimalToRaw(view.pool || view.vaultReserved || view.reward || 0, d);
+    if (poolRaw <= 0n) throw new Error('Shared pool needs a pool size');
+    const weighted = rows.map((row) => ({
+      wallet: row.wallet,
+      progress: row.progress,
+      weight: BigInt(positive.length ? (row.score > 0 ? row.score : floorScore) : 1),
+    }));
+    payouts = splitByWeight(poolRaw, weighted, d);
+  }
+  payouts = payouts.filter((row) => row.amountRaw !== '0' && row.wallet);
+  const totalRaw = payouts.reduce((sum, row) => sum + BigInt(row.amountRaw), 0n);
+  return { payouts, total: rawToDecimal(totalRaw, d), totalRaw: totalRaw.toString(), unit, hash: payoutHash(payouts) };
+}
+
 export function computePayouts(campaign, joins, decimals) {
   const view = asCampaign(campaign);
+  if (view.config && view.config.scoreRule) return computeScoredPayouts(view, joins, decimals);
   const d = decimals == null ? 0 : decimals;
   const rows = dedupeJoins(joins).filter((j) => {
     if (j.status === 'rejected') return false;

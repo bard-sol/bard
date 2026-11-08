@@ -1,6 +1,7 @@
 import { isBase58Address, verifyJwt } from './auth.js';
 import { normalizeConfig } from './money.js';
 import { decimalToRaw } from './settlement.js';
+import { scoreRuleFromCampaign } from '../scoring.js';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const BALANCE_TTL_MS = 60 * 1000;
@@ -304,6 +305,9 @@ export async function handleQualifyMatching(request, env, campaignId, readVaultT
   if (session.error) return session.error;
   const admin = await adminCampaign(env, campaignId, session.wallet);
   if (admin.error) return admin.error;
+  if (scoreRuleFromCampaign(admin.campaign)) {
+    return json({ error: 'a scored campaign has no hand score' }, 409);
+  }
   if (kindOf(admin.campaign.type) !== 'hold') {
     return json({ error: 'qualify matching is only for a hold campaign' }, 400);
   }

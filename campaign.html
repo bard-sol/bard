@@ -136,6 +136,10 @@ h1{
         <input id="show-handle" type="checkbox">
         <span>show my X handle on the public page</span>
       </label>
+      <label class="check" id="score-consent-label" for="score-consent" hidden>
+        <input id="score-consent" type="checkbox">
+        <span>On this campaign's public receipt anyone can see your X handle, your posts, the engagement on them and your payout, and can link your handle to your wallet. If you engage with another Bard campaign this season, that campaign's receipt shows your handle as a Bard member and counts your engagement at half weight.</span>
+      </label>
       <div>
         <button class="btn btn--solid" type="button" id="join-btn">Connect to join</button>
         <p class="muted" id="join-reason" hidden></p>
@@ -156,6 +160,8 @@ h1{
   var state = null;
   var joined = false;
   var linkedHandle = null;
+  var holderUserId = null;
+  var scoredJoin = false;
 
   function campaignId() {
     var match = location.pathname.match(/^\/c\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/?$/i);
@@ -241,6 +247,11 @@ h1{
       setReason('This campaign needs a linked X account.', '/dashboard.html', 'Link it on the dashboard');
       return;
     }
+    if (scoredJoin && linkedHandle && !holderUserId) {
+      btn.hidden = true;
+      setReason('Sign in with X again so this campaign can use your X account.', '/dashboard.html', 'Link it on the dashboard');
+      return;
+    }
     btn.textContent = 'Join';
   }
 
@@ -253,12 +264,15 @@ h1{
 
   async function paintStatus() {
     linkedHandle = null;
+    holderUserId = null;
     if (wallet) {
       try {
         var holder = await BardPlatform.getHolder(wallet);
         linkedHandle = BardPlatform.linkedXHandle(holder);
+        holderUserId = holder && holder.x_user_id ? String(holder.x_user_id) : null;
       } catch (err) {
         linkedHandle = null;
+        holderUserId = null;
       }
     }
     if (!wallet || !state) {
@@ -351,9 +365,23 @@ h1{
     if (label) label.hidden = !raid;
   }
 
+  async function loadScoreFlag(id) {
+    var label = document.getElementById('score-consent-label');
+    scoredJoin = false;
+    if (label) label.hidden = true;
+    try {
+      var res = await fetch('/api/campaigns/' + encodeURIComponent(id) + '/score');
+      if (!res.ok) return;
+      scoredJoin = true;
+      if (label) label.hidden = false;
+      paintJoin();
+    } catch (err) {}
+  }
+
   async function loadState() {
     var id = campaignId();
     if (!id) return;
+    loadScoreFlag(id);
     try {
       var res = await fetch('/api/campaigns/' + encodeURIComponent(id) + '/state');
       if (!res.ok) return;
@@ -409,7 +437,18 @@ h1{
     var ref = '';
     try { ref = new URLSearchParams(location.search).get('ref') || ''; } catch (err) { ref = ''; }
     var show = !!document.getElementById('show-handle').checked;
-    await BardPlatform.joinCampaign(state.campaign.project.id, state.campaign.id, wallet, linkedHandle || null, show, evidenceUrl, ref || null);
+    var consent = null;
+    if (scoredJoin) {
+      var agreed = document.getElementById('score-consent');
+      if (!agreed || !agreed.checked) {
+        var reason = document.getElementById('join-reason');
+        reason.hidden = false;
+        reason.textContent = 'Accept the public score receipt before you join.';
+        return;
+      }
+      consent = { at: new Date().toISOString(), version: 'bard-score-v1' };
+    }
+    await BardPlatform.joinCampaign(state.campaign.project.id, state.campaign.id, wallet, linkedHandle || null, show, evidenceUrl, ref || null, consent);
     await paintStatus();
   }
 

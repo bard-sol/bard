@@ -349,6 +349,10 @@ h1{
             <div>
               <div style="font-variation-settings:'wght' 600;margin-bottom:4px">Participation</div>
               <div class="muted" style="font-size:.86rem" id="detail-join-hint">Join to track this campaign on your dashboard.</div>
+              <label class="check" id="score-consent-label" for="score-consent" hidden style="display:none;margin-top:8px">
+                <input id="score-consent" type="checkbox">
+                <span>On this campaign's public receipt anyone can see your X handle, your posts, the engagement on them and your payout, and can link your handle to your wallet. If you engage with another Bard campaign this season, that campaign's receipt shows your handle as a Bard member and counts your engagement at half weight.</span>
+              </label>
             </div>
             <button class="btn btn--solid btn--sm" id="detail-join">Join campaign</button>
           </div>
@@ -368,7 +372,8 @@ h1{
     <h2 id="x-modal-title">Link X</h2>
     <p>Optional. Link X to show your handle on a campaign page. Hold, refer, and custom campaigns work with your wallet alone.</p>
     <button class="btn btn--solid" id="x-oauth" style="width:100%">Continue with X</button>
-    <div class="hint">OAuth via the Bard auth worker when available.</div>
+    <button class="btn btn--ghost" id="x-unlink" type="button" style="width:100%;margin-top:8px" hidden>Unlink this X account</button>
+    <div class="hint">OAuth via the Bard auth worker when available. Unlink releases the account from this wallet.</div>
     <div style="margin:16px 0 8px;border-top:1px solid var(--line);padding-top:14px">
       <div class="side__lbl" style="margin-bottom:8px">Or save a handle on this device</div>
       <input id="x-handle-input" placeholder="@yourhandle" autocomplete="off" spellcheck="false">
@@ -389,6 +394,7 @@ h1{
   var AUTH_WORKER = 'https://bard-x-auth.bardsoltoken.workers.dev';
   var wallet = null;
   var xHandle = null;
+  var xUserId = null;
   var browseOnly = false;
   var lastPage = 'overview';
   var detailCtx = null;
@@ -496,6 +502,7 @@ h1{
   function updateXUI(){
     var el = document.getElementById('side-x');
     var btn = document.getElementById('btn-link-x');
+    var unlink = document.getElementById('x-unlink');
     if(xHandle){
       el.innerHTML = '<span class="dot"></span>' + BardPlatform.escapeHtml(xHandle);
       btn.textContent = 'Change';
@@ -503,6 +510,7 @@ h1{
       el.innerHTML = '<span class="dot off"></span>Not linked';
       btn.textContent = 'Link';
     }
+    if(unlink) unlink.hidden = !xUserId;
   }
 
   function setXHandle(handle){
@@ -553,6 +561,7 @@ h1{
       BardPlatform.init().then(function () { return BardPlatform.getHolder(wallet); }).then(function (row) {
         if (row && row.x_via === 'oauth' && row.x_handle) {
           xHandle = normalizeHandle(row.x_handle);
+          xUserId = row.x_user_id ? String(row.x_user_id) : null;
           if (xHandle) localStorage.setItem('bard_holder_x', xHandle);
           updateXUI();
         }
@@ -663,11 +672,47 @@ h1{
       });
       var data = {};
       try { data = await res.json(); } catch (e) { data = {}; }
-      var verified = res.ok ? normalizeHandle(data.handle) : null;
-      finishXLink(verified);
+      if(!res.ok){
+        toast(data.error || 'X login did not verify a handle', 'err');
+        updateXUI();
+        if(wallet) enterApp();
+        return;
+      }
+      finishXLink(normalizeHandle(data.handle));
     }catch(e){
       console.error(e);
       finishXLink(null);
+    }
+  }
+
+  async function unlinkX(){
+    if(!wallet){
+      toast('Connect a wallet before unlinking X', 'err');
+      return;
+    }
+    var token = window.BardPlatform && BardPlatform.getSessionToken && BardPlatform.getSessionToken();
+    if(!token){
+      toast('Sign in with your wallet before unlinking X', 'err');
+      return;
+    }
+    try{
+      var res = await fetch(AUTH_WORKER + '/auth/x/unlink', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer ' + token }
+      });
+      var data = {};
+      try { data = await res.json(); } catch (e) { data = {}; }
+      if(!res.ok){
+        toast(data.error || 'Could not unlink X', 'err');
+        return;
+      }
+      xUserId = null;
+      toast('X account unlinked from this wallet', 'ok');
+      updateXUI();
+      closeXModal();
+    }catch(e){
+      console.error(e);
+      toast('Could not unlink X', 'err');
     }
   }
 
@@ -843,6 +888,14 @@ h1{
     }).join('');
   }
 
+  async function scoreBody(campaignId){
+    try {
+      var res = await fetch('/api/campaigns/' + encodeURIComponent(campaignId) + '/score');
+      if (!res.ok) return null;
+      return await res.json();
+    } catch (e) { return null; }
+  }
+
   async function tryJoin(projectId, campaignId){
     var match = liveCache.find(function(x){
       return x.projectId === projectId && x.campaign.id === campaignId;
@@ -851,16 +904,32 @@ h1{
     if(!wallet){ toast('Connect a wallet to join', 'err'); return; }
     if(match.campaign.status !== 'active'){ toast('Campaign is not active', 'err'); return; }
 
+    var score = await scoreBody(campaignId);
     if(needsX(match.campaign.type) && !xHandle){
       pendingJoin = { projectId: projectId, campaignId: campaignId };
       toast('This campaign scores X activity — link X to join', 'err');
       openXModal();
       return;
     }
+    if(score && !xUserId){
+      pendingJoin = { projectId: projectId, campaignId: campaignId };
+      toast('Sign in with X again so this campaign can use your X account', 'err');
+      openXModal();
+      return;
+    }
+    var consent = null;
+    if(score){
+      var agreed = document.getElementById('score-consent');
+      if(!agreed || !agreed.checked){
+        toast('Accept the public score receipt before you join', 'err');
+        return;
+      }
+      consent = { at: new Date().toISOString(), version: 'bard-score-v1' };
+    }
 
     try {
       if (window.BardPlatform) {
-        await BardPlatform.joinCampaign(projectId, campaignId, wallet, xHandle || null);
+        await BardPlatform.joinCampaign(projectId, campaignId, wallet, xHandle || null, undefined, undefined, undefined, consent);
       }
       toast('Joined ' + match.campaign.title, 'ok');
       await refreshCampaignCache();
@@ -939,6 +1008,14 @@ h1{
 
     var joinBtn = document.getElementById('detail-join');
     var hint = document.getElementById('detail-join-hint');
+    var consentLabel = document.getElementById('score-consent-label');
+    if (consentLabel) consentLabel.hidden = true;
+    scoreBody(campaignId).then(function (score) {
+      if (!score || !consentLabel) return;
+      if (detailCtx && detailCtx.campaign && detailCtx.campaign.id !== campaignId) return;
+      consentLabel.hidden = false;
+      consentLabel.style.display = '';
+    }).catch(function () {});
 
     if(settled){
       joinBtn.style.display = 'none';
@@ -1092,7 +1169,7 @@ h1{
     browseOnly = true; wallet = null; enterApp();
   };
   document.getElementById('btn-disc').onclick = function(){
-    wallet = null; browseOnly = false; xHandle = null;
+    wallet = null; browseOnly = false; xHandle = null; xUserId = null;
     localStorage.removeItem('bard_holder_wallet');
     document.getElementById('app').style.display = 'none';
     document.getElementById('gate').style.display = 'flex';
@@ -1109,6 +1186,7 @@ h1{
     if(e.target === this) closeXModal();
   });
   document.getElementById('x-oauth').onclick = startXOAuth;
+  document.getElementById('x-unlink').onclick = unlinkX;
   document.getElementById('x-save-handle').onclick = function(){
     var v = document.getElementById('x-handle-input').value;
     var n = normalizeHandle(v);

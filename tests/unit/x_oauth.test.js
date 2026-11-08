@@ -55,7 +55,7 @@ async function bearer(addr, now = NOW) {
 }
 
 function holderWrites(calls) {
-  return calls.filter((call) => call.href === 'http://supabase.test/rest/v1/holders');
+  return calls.filter((call) => call.href === 'http://supabase.test/rest/v1/holders' && call.method === 'POST');
 }
 
 function scriptedFetch(routes) {
@@ -78,8 +78,8 @@ function scriptedFetch(routes) {
   return { env, calls };
 }
 
-function xRoutes({ username = 'real_user', tokenStatus = 200, meStatus = 200, writeStatus = 201 } = {}) {
-  return (u) => {
+function xRoutes({ username = 'real_user', tokenStatus = 200, meStatus = 200, writeStatus = 201, holders = null } = {}) {
+  return (u, opts) => {
     if (u.origin + u.pathname === 'https://api.x.com/2/oauth2/token') {
       if (tokenStatus !== 200) return Response.json({ error: 'bad code' }, { status: tokenStatus });
       return Response.json({ access_token: 'x-access-token', token_type: 'bearer' });
@@ -89,6 +89,7 @@ function xRoutes({ username = 'real_user', tokenStatus = 200, meStatus = 200, wr
       return Response.json({ data: { id: '99', username } });
     }
     if (u.origin + u.pathname === 'http://supabase.test/rest/v1/holders') {
+      if (typeof holders === 'function') return holders(u, opts || {});
       if (writeStatus !== 201) return Response.json({ message: 'write failed' }, { status: writeStatus });
       return Response.json([{ ok: true }], { status: 201 });
     }
@@ -257,10 +258,11 @@ test('the callback does not write, and confirm writes only for the same wallet',
     assert.equal(write[0].headers.apikey, 'service-role-test');
     assert.match(write[0].headers.prefer, /resolution=merge-duplicates/);
     const row = JSON.parse(write[0].body);
-    assert.deepEqual(Object.keys(row).sort(), ['wallet', 'x_handle', 'x_linked_at', 'x_via']);
+    assert.deepEqual(Object.keys(row).sort(), ['wallet', 'x_handle', 'x_linked_at', 'x_user_id', 'x_via']);
     assert.equal(row.wallet, addrA);
     assert.equal(row.x_handle, '@real_user');
     assert.equal(row.x_via, 'oauth');
+    assert.equal(row.x_user_id, '99');
     assert.equal(row.x_linked_at, new Date(when).toISOString());
     assert.equal(JSON.stringify(row).includes('@attacker'), false);
     assert.equal(JSON.stringify(row).includes('x-access-token'), false);
@@ -345,6 +347,103 @@ test('a bad state, a bad username, or a failed X exchange does not write a handl
   }
 });
 
+test('a renamed handle already verified on another wallet writes nothing', async () => {
+  const restore = installFetchGuard();
+  try {
+    const addrA = wallet();
+    const addrB = wallet();
+    const { env, calls } = scriptedFetch(xRoutes({
+      holders(u, opts) {
+        if ((opts.method || 'GET') === 'GET' && u.search.includes('x_user_id=eq.99')) {
+          return Response.json([{ wallet: addrB, x_user_id: '99' }]);
+        }
+        return Response.json([{ ok: true }], { status: 201 });
+      },
+    }));
+    const started = await start(env, addrA);
+    const callback = await runCallback(env, started.data.authUrl, NOW);
+    const linked = xlinkFrom(callback);
+    assert.equal(decodePayload(linked.token).id, '99');
+    assert.equal(decodePayload(linked.token).handle, '@real_user');
+    const confirmed = await confirm(env, addrA, linked.token, NOW);
+    assert.equal(confirmed.res.status, 409);
+    assert.equal(confirmed.data.error, 'this X account is already linked to another wallet; unlink it there first');
+    assert.equal(holderWrites(calls).length, 0);
+  } finally {
+    restore();
+  }
+});
+
+test('unlink keeps the handle text, clears the user id, and refuses an unpaid scored campaign', async () => {
+  const restore = installFetchGuard();
+  try {
+    const addr = wallet();
+    const holders = [{ wallet: addr, x_handle: '@renamed', x_via: 'oauth', x_user_id: '99' }];
+    const audits = [];
+    const routes = (u, opts) => {
+      const path = u.origin + u.pathname;
+      if (path === 'http://supabase.test/rest/v1/holders') {
+        if ((opts.method || 'GET') === 'GET') return Response.json(holders.filter((row) => !u.search.includes('wallet=eq.') || row.wallet === addr));
+        if (opts.method === 'PATCH') {
+          holders[0].x_via = 'unverified';
+          holders[0].x_user_id = null;
+          return Response.json(holders);
+        }
+      }
+      if (path === 'http://supabase.test/rest/v1/campaign_joins') return Response.json([]);
+      if (path === 'http://supabase.test/rest/v1/campaigns') return Response.json([]);
+      if (path === 'http://supabase.test/rest/v1/score_audit' && opts.method === 'POST') {
+        audits.push(JSON.parse(opts.body));
+        return Response.json([{ ok: true }], { status: 201 });
+      }
+      return null;
+    };
+    const { env } = scriptedFetch(routes);
+    const headers = await bearer(addr);
+    headers['content-type'] = 'application/json';
+    const res = await handleXOauth(new Request('http://auth.test/auth/x/unlink', {
+      method: 'POST',
+      headers,
+      body: '{}',
+    }), env, NOW);
+    const data = await res.json();
+    assert.equal(res.status, 200, JSON.stringify(data));
+    assert.equal(data.ok, true);
+    assert.equal(holders[0].x_handle, '@renamed');
+    assert.equal(holders[0].x_via, 'unverified');
+    assert.equal(holders[0].x_user_id, null);
+    assert.equal(audits.length, 1);
+    assert.equal(audits[0].action, 'unlink');
+    assert.equal(audits[0].campaign_id, null);
+    assert.equal(audits[0].subject_handle, 'renamed');
+
+    const busy = scriptedFetch((u, opts) => {
+      const path = u.origin + u.pathname;
+      if (path === 'http://supabase.test/rest/v1/campaign_joins') {
+        return Response.json([{ campaign_id: 'camp', status: 'approved', wallet: addr }]);
+      }
+      if (path === 'http://supabase.test/rest/v1/campaigns') {
+        return Response.json([{ id: 'camp', status: 'active', config: { scoreRule: { version: 'bard-score-v1' } } }]);
+      }
+      if (path === 'http://supabase.test/rest/v1/holders') {
+        return Response.json([{ wallet: addr, x_handle: '@renamed', x_via: 'oauth', x_user_id: '99' }]);
+      }
+      return null;
+    });
+    const blocked = await handleXOauth(new Request('http://auth.test/auth/x/unlink', {
+      method: 'POST',
+      headers,
+      body: '{}',
+    }), busy.env, NOW);
+    const blockedData = await blocked.json();
+    assert.equal(blocked.status, 409);
+    assert.match(blockedData.error, /unpaid|scored campaign/i);
+    assert.equal(busy.calls.some((call) => call.method === 'PATCH'), false);
+  } finally {
+    restore();
+  }
+});
+
 test('the dashboard sends the session token and confirms the fragment', () => {
   const html = readFileSync(new URL('../../dashboard.html', import.meta.url), 'utf8');
   const platform = readFileSync(new URL('../../platform.js', import.meta.url), 'utf8');
@@ -353,6 +452,7 @@ test('the dashboard sends the session token and confirms the fragment', () => {
   assert.match(html, /Authorization: 'Bearer ' \+ token/);
   assert.match(html, /Authorization: 'Bearer ' \+ session/);
   assert.match(html, /\/auth\/x\/confirm/);
+  assert.match(html, /\/auth\/x\/unlink/);
   assert.match(html, /xlinkTokenFromHash/);
   assert.equal(html.includes('bard_cv'), false);
   assert.equal(html.includes('/auth/x/start?wallet='), false);

@@ -50,6 +50,15 @@ import { decodeProposal, decodeVaultTransaction, diffTransfers } from './account
 import { assertJsonSafeRaw, lockNeed, resolvePrizeRaw, settlementCut } from './money.js';
 import { bardSigner, cutSettings, signerConfigProblem } from './config.js';
 import { resolveSolanaConfig } from './network.js';
+import { scoreRuleFromCampaign } from '../scoring.js';
+import {
+  assertFrozenScore,
+  freezeConfig,
+  handleScoreApi,
+  lockScoreSettlement,
+  scoreOpenError,
+  scoredOn,
+} from './score_api.js';
 const CAMPAIGN_PAGE = /^\/c\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i;
 const RECEIPT_PAGE = /^\/c\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/receipt$/i;
 
@@ -165,7 +174,7 @@ async function projectForAdmin(env, projectId, wallet) {
 }
 
 async function campaignForAdmin(env, campaignId, wallet) {
-  const rows = await select(env, 'campaigns', 'id=eq.' + encodeURIComponent(campaignId) + '&select=id,project_id');
+  const rows = await select(env, 'campaigns', 'id=eq.' + encodeURIComponent(campaignId) + '&select=*');
   const campaign = Array.isArray(rows) ? rows[0] : null;
   if (!campaign) return { error: json({ error: 'campaign not found' }, 404) };
   const admin = await projectForAdmin(env, campaign.project_id, wallet);
@@ -345,6 +354,7 @@ async function handleConfig(env) {
     cutBps: Number(cut.cutBps),
     cutWallet: cut.cutWallet,
     solana: await resolveSolanaConfig(env),
+    scoredCampaigns: scoredOn(env),
   });
 }
 
@@ -401,6 +411,9 @@ async function handleCreateCampaign(request, env) {
   } catch (err) {
     return badRequest(err);
   }
+  const days = (body.days === 0 || body.days === '0') ? 0 : (parseInt(body.days, 10) || 7);
+  const frozen = freezeConfig(env, body, days);
+  if (frozen.error) return json({ error: frozen.error }, 400);
   const reserved = await sbRpc(env, 'reserve_vault_raw', {
     p_project_id: project.id,
     p_balance_raw: balance.raw,
@@ -411,7 +424,6 @@ async function handleCreateCampaign(request, env) {
     if (reserved && reserved.reason === 'missing') return json({ error: 'project not found' }, 404);
     return json({ error: 'Vault balance does not cover the prize plus Bard\'s cut' }, 409);
   }
-  const days = (body.days === 0 || body.days === '0') ? 0 : (parseInt(body.days, 10) || 7);
   const now = new Date().toISOString();
   const lockedDecimal = rawToDecimal(lock.lockedRaw, balance.decimals);
   const projectDecimal = rawToDecimal(rpcRaw(reserved.vault_reserved_raw), balance.decimals);
@@ -435,7 +447,7 @@ async function handleCreateCampaign(request, env) {
       post_url: type === 'raid' ? (body.postUrl || null) : null,
       targets: type === 'raid' ? (body.targets || null) : null,
       bonus_handle: type === 'raid' ? (body.bonusHandle || null) : null,
-      config: body.config || {},
+      config: frozen.config,
       prize_raw: lock.prizeRaw.toString(),
       cut_bps: Number(settings.cutBps),
       cut_raw: lock.cutRaw.toString(),
@@ -672,6 +684,7 @@ async function handleJoinProgress(request, env) {
   if (body == null) return json({ error: 'invalid json' }, 400);
   const admin = await campaignForAdmin(env, body.campaignId, session.wallet);
   if (admin.error) return admin.error;
+  if (scoreRuleFromCampaign(admin.campaign)) return json({ error: 'a scored campaign has no hand score' }, 409);
   const progress = Math.max(0, parseInt(body.progress, 10) || 0);
   const row = { progress };
   if (body.note != null) row.note = String(body.note);
@@ -693,6 +706,7 @@ async function handleQualify(request, env) {
   if (body == null) return json({ error: 'invalid json' }, 400);
   const admin = await campaignForAdmin(env, body.campaignId, session.wallet);
   if (admin.error) return admin.error;
+  if (scoreRuleFromCampaign(admin.campaign)) return json({ error: 'a scored campaign has no hand score' }, 409);
   const updated = await patch(
     env,
     'campaign_joins',
@@ -883,6 +897,12 @@ async function handleBardSign(request, env) {
   if (!mint) return signerReject('Vault mint is missing');
   const block = await settlementPayoutBlock(env, current, project);
   if (block) return json({ matches: false, reason: block });
+  const scoredCampaign = await loadCampaign(env, current.campaign_id);
+  const changed = await assertFrozenScore(env, current, scoredCampaign, async () => {
+    const info = await readMint(env, mint);
+    return info.decimals;
+  });
+  if (changed) return json({ matches: false, reason: changed, error: changed }, 409);
   let accountInfo;
   try {
     const transactionPda = await squadsTransactionAddress(multisig, txIndex);
@@ -995,7 +1015,21 @@ async function handlePropose(request, env) {
   const open = await settlementsForCampaign(env, campaign.id);
   if (open.some((row) => row.status !== 'cancelled')) return json({ error: 'campaign already has a settlement' }, 409);
   if (!campaignLocked(campaign, project)) return json({ error: 'campaign has no locked prize' }, 409);
-  const joins = await joinsForCampaign(env, campaign.id);
+  const scored = scoreRuleFromCampaign(campaign);
+  let scoreLock = null;
+  let joins;
+  if (scored) {
+    const early = scoreOpenError(campaign);
+    if (early) return json({ error: early }, 409);
+    try {
+      scoreLock = await lockScoreSettlement(env, campaign);
+    } catch (err) {
+      return badRequest(err);
+    }
+    joins = scoreLock.joins;
+  } else {
+    joins = await joinsForCampaign(env, campaign.id);
+  }
   const mint = project.vault_mint || project.mint || '';
   let decimals = 0;
   try {
@@ -1024,9 +1058,20 @@ async function handlePropose(request, env) {
   } catch (err) {
     return badRequest(err);
   }
+  if (scoreLock) {
+    for (const result of scoreLock.results) {
+      const cached = await patch(
+        env,
+        'campaign_joins',
+        'campaign_id=eq.' + encodeURIComponent(campaign.id) + '&wallet=eq.' + encodeURIComponent(result.wallet),
+        { score_milli: result.score_milli }
+      );
+      if (!firstRow(cached)) throw new Error('score cache was not saved');
+    }
+  }
   let created;
   try {
-    created = await insert(env, 'vault_settlements', {
+    const settlementRow = {
       project_id: project.id,
       campaign_id: campaign.id,
       payouts: built.payouts,
@@ -1042,7 +1087,12 @@ async function handlePropose(request, env) {
       cut_bps: campaign.cut_bps == null || campaign.cut_bps === '' ? null : Number(campaign.cut_bps),
       cut_waived: cut.cutWaived,
       holder_total_raw: cut.holderTotalRaw.toString(),
-    });
+    };
+    if (scoreLock) {
+      settlementRow.score_inputs = scoreLock.inputs;
+      settlementRow.score_hash = scoreLock.hash;
+    }
+    created = await insert(env, 'vault_settlements', settlementRow);
   } catch (err) {
     if (err && err.code === '23505') return json({ error: 'campaign already has a settlement' }, 409);
     throw err;
@@ -1202,6 +1252,15 @@ async function handleExecute(request, env, settlementId) {
   }
   if (current.tx_signature && current.tx_signature !== signature) {
     return json({ error: 'settlement is closed' }, 400);
+  }
+  if (!sameReplay) {
+    const changed = await assertFrozenScore(env, current, campaignGate, async () => {
+      const mint = admin.project.vault_mint || admin.project.mint;
+      if (!mint) return String(campaignGate && campaignGate.reward_unit || '').toUpperCase() === 'SOL' ? 9 : 0;
+      const info = await readMint(env, mint);
+      return info.decimals;
+    });
+    if (changed) return json({ error: changed, reason: changed }, 409);
   }
   // Claim the signature before any bookkeeping. A retry that already holds it
   // resumes at the writes, then the status patch closes the settlement.
@@ -1513,6 +1572,8 @@ export async function handleRequest(request, env) {
     if (stateRoute && method === 'GET') return await handleCampaignState(request, env, decodeURIComponent(stateRoute[1]), readVaultTokenRaw);
     const receiptRoute = path.match(/^\/api\/campaigns\/([^/]+)\/receipt$/);
     if (receiptRoute && method === 'GET') return await handleCampaignReceipt(request, env, decodeURIComponent(receiptRoute[1]));
+    const scoredResponse = await handleScoreApi(request, env);
+    if (scoredResponse) return scoredResponse;
     if (path.startsWith('/api/')) return json({ error: 'not found' }, 404);
     return null;
   } catch (err) {

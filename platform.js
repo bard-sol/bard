@@ -39,6 +39,7 @@
   var sessionToken = null;
   var sessionWallet = null;
   var bardSignerPubkey = '';
+  var scoredCampaignsFlag = false;
   var signerProblem = '';
   var NO_SOLANA_CONFIG = 'Solana network settings did not load from Bard. Reload the page.';
   var solanaConfig = { network: null, rpc: null, explorerCluster: null, error: NO_SOLANA_CONFIG };
@@ -226,6 +227,7 @@
           if (cfg && cfg.cutBps != null && cfg.cutBps !== '') cutBps = Number(cfg.cutBps);
           if (cfg && cfg.cutWallet) cutWallet = String(cfg.cutWallet);
           solanaConfig = readSolanaConfig(cfg && cfg.solana);
+          scoredCampaignsFlag = !!(cfg && cfg.scoredCampaigns);
         }
       } catch (cfgErr) {}
       if (mode === 'local') showLocalBanner();
@@ -444,13 +446,15 @@
     if (!isOfferedCampaignType(input.type)) throw new Error('That campaign type is not offered.');
     if (mode === 'supabase' && sb) {
       if (!sessionToken) throw new Error('Sign in with your wallet first');
-      var createdCamp = await apiPost('/api/campaigns', {
+      var campBody = {
         projectId: projectId, title: input.title, type: input.type, rule: input.rule,
         reward: input.reward || null, prize: input.prize || null, unit: input.unit || 'TOKEN', pool: input.pool || null,
         days: (input.days === 0 || input.days === '0') ? 0 : (parseInt(input.days, 10) || 7),
         accessMode: input.accessMode || 'open', raidMode: input.raidMode || null, rewardMode: input.rewardMode || 'fixed',
         postUrl: input.postUrl || null, targets: input.targets || null, bonusHandle: input.bonusHandle || null, config: input.config || {}
-      });
+      };
+      if (input.bestN != null && input.bestN !== '') campBody.bestN = input.bestN;
+      var createdCamp = await apiPost('/api/campaigns', campBody);
       return mapCampaignRow(createdCamp.campaign);
     }
     var state = localTeam();
@@ -1022,7 +1026,7 @@
     await init();
     if (!wallet) return null;
     if (mode === 'supabase' && sb) {
-      var res = await sb.from('holders').select('wallet, x_handle, x_linked_at, x_via, show_handle').eq('wallet', wallet).maybeSingle();
+      var res = await sb.from('holders').select('wallet, x_handle, x_linked_at, x_via, show_handle, x_user_id').eq('wallet', wallet).maybeSingle();
       if (res.error) throw res.error;
       return res.data || null;
     }
@@ -1036,6 +1040,7 @@
       x_handle: handle || null,
       x_linked_at: null,
       x_via: null,
+      x_user_id: null,
       show_handle: !!h.showHandle
     };
   }
@@ -1049,7 +1054,7 @@
     return href;
   }
 
-  async function joinCampaign(projectId, campaignId, wallet, xHandle, showHandle, evidenceUrl, referrer) {
+  async function joinCampaign(projectId, campaignId, wallet, xHandle, showHandle, evidenceUrl, referrer, consent) {
     await init();
     if (typeof showHandle === 'boolean') await setShowHandle(wallet, showHandle);
     var clean = cleanEvidenceUrl(evidenceUrl);
@@ -1069,6 +1074,12 @@
       if (clean) patch.evidence_url = clean;
       var insertRow = { project_id: projectId, campaign_id: campaignId, wallet: wallet, x_handle: xHandle || null, joined_at: new Date().toISOString() };
       if (clean) insertRow.evidence_url = clean;
+      if (consent && consent.at && consent.version) {
+        patch.handle_consent_at = consent.at;
+        patch.handle_consent_version = consent.version;
+        insertRow.handle_consent_at = consent.at;
+        insertRow.handle_consent_version = consent.version;
+      }
       var write = existingJoin.data
         ? sb.from('campaign_joins').update(patch).eq('campaign_id', campaignId).eq('wallet', wallet)
         : sb.from('campaign_joins').insert(insertRow);
@@ -1532,6 +1543,7 @@
     setFeeTreasury: function (addr) { cutWallet = addr || FEE_TREASURY; },
     getCutBps: getCutBps,
     getCutWallet: getCutWallet,
+    scoredCampaigns: function () { return scoredCampaignsFlag; },
     getMode: function () { return mode; },
     listProjects: listProjects, createProject: createProject, createCampaign: createCampaign,
     updateCampaignStatus: updateCampaignStatus, listLiveCampaigns: listLiveCampaigns,
