@@ -1,13 +1,21 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import { test } from 'node:test';
+import { fileURLToPath } from 'node:url';
+import vm from 'node:vm';
 import nacl from 'tweetnacl';
 import bs58 from 'bs58';
 import { signJwt } from '../../server/auth.js';
 import { handleRequest } from '../../server/api.js';
 import { TOKEN_PROGRAM } from '../../server/chain.js';
 import { freezeConfig, seasonJoinsFromRows } from '../../server/score_api.js';
-import { RULE_V1, canonicalJson, log2Milli, snowflakeId } from '../../scoring.js';
+import { hashScoreInputs, recomputeScoreNote, settlementScoreLine } from '../../receipt_score.js';
+import { RULE_V1, canonicalJson, log2Milli, scoreCampaign, snowflakeId } from '../../scoring.js';
 import { sha256Hex } from '../../server/settlement.js';
+
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 
 const SECRET = 'score-test-secret-score-test-secret';
 const POSTED = '2026-06-02T12:00:00.000Z';
@@ -455,6 +463,222 @@ test('scored entry, the public score, and a payout refuse a changed input', asyn
     const frozen = await call(env, 'POST', '/api/campaigns/' + campaignId + '/score/rule', {}, token);
     assert.equal(frozen.status, 409);
     assert.equal(frozen.data.error, 'score rule is frozen');
+  } finally {
+    restore();
+  }
+});
+
+function loadPlatform() {
+  const code = readFileSync(path.join(root, 'platform.js'), 'utf8');
+  const sandbox = {
+    console, URL, Date, Math, Number, String, parseInt, JSON, Object, Array, Error, Promise,
+    encodeURIComponent, isNaN, BigInt, Uint8Array, Uint32Array, DataView, TextEncoder,
+  };
+  sandbox.window = sandbox;
+  sandbox.globalThis = sandbox;
+  vm.createContext(sandbox);
+  vm.runInContext(code, sandbox, { filename: 'platform.js' });
+  return sandbox.BardPlatform;
+}
+
+function receiptView(body, sha) {
+  const inputHash = hashScoreInputs(body.inputs, canonicalJson, sha);
+  const again = scoreCampaign(body.inputs);
+  return {
+    inputHash,
+    lines: (body.settlements || []).map((item) => settlementScoreLine(item, inputHash)),
+    note: recomputeScoreNote(body, again, inputHash),
+    scoresMatch: (body.results || []).every((row) => {
+      const found = (again.results || []).find((item) => item.wallet === row.wallet);
+      return found && found.score_milli === row.score_milli;
+    }),
+  };
+}
+
+test('the receipt shows when a locked score hash no longer matches the inputs', async () => {
+  const page = readFileSync(path.join(root, 'receipt.html'), 'utf8');
+  const helper = readFileSync(path.join(root, 'receipt_score.js'), 'utf8');
+  assert.equal(page.includes('src="/scoring.js"'), true);
+  assert.equal(page.includes('src="/receipt_score.js"'), true);
+  assert.equal(page.includes('BardScore.canonicalJson'), true);
+  assert.equal(page.includes('BardPlatform.sha256Hex'), true);
+  assert.equal(page.includes('hashScoreInputs'), true);
+  assert.equal(page.includes('settlementScoreLine'), true);
+  assert.equal(page.includes('recomputeScoreNote'), true);
+  assert.equal(page.includes('body.score_hash'), false);
+  assert.equal(helper.includes('body.score_hash'), false);
+
+  const browserSha = loadPlatform().sha256Hex;
+  assert.equal(browserSha('abc'), createHash('sha256').update('abc').digest('hex'));
+  assert.equal(browserSha('abc'), sha256Hex('abc'));
+
+  const fixture = JSON.parse(readFileSync(path.join(root, 'tests/fixtures/scoring/campaign.json'), 'utf8'));
+  const lockedHash = browserSha(canonicalJson(fixture.inputs));
+  assert.equal(lockedHash, sha256Hex(canonicalJson(fixture.inputs)));
+  const scored = scoreCampaign(fixture.inputs);
+  assert.equal(scored.results.length, 8);
+  const hand = { id: 'hand-scored', status: 'executed', payout_hash: 'hand', score_hash: null };
+  const locked = { id: 'locked-1', status: 'proposed', payout_hash: 'pay', score_hash: lockedHash };
+  const untouched = {
+    inputs: fixture.inputs,
+    results: scored.results,
+    score_hash: 'server-said-something-else',
+    settlements: [locked, hand],
+  };
+  const clean = receiptView(untouched, browserSha);
+  assert.equal(clean.scoresMatch, true);
+  assert.equal(clean.note, 'all 8 scores match');
+  assert.equal(clean.lines[0].includes('proposed'), true);
+  assert.equal(clean.lines[0].includes('score inputs match'), true);
+  assert.equal(clean.lines[0].includes('locked score hash does not match'), false);
+  assert.equal(clean.lines[1].includes('score inputs match'), false);
+  assert.equal(clean.lines[1].includes('locked score hash does not match'), false);
+  assert.equal(clean.lines[1], 'executed · payout hand · score ');
+
+  const changedInputs = structuredClone(fixture.inputs);
+  const engager = changedInputs.accounts.find((row) => row.handle === 'e1');
+  engager.followers = 9;
+  const changedHash = browserSha(canonicalJson(changedInputs));
+  assert.notEqual(changedHash, lockedHash);
+  const drifted = {
+    inputs: changedInputs,
+    results: scoreCampaign(changedInputs).results,
+    score_hash: lockedHash,
+    settlements: [locked, hand],
+  };
+  const drift = receiptView(drifted, browserSha);
+  assert.equal(drift.scoresMatch, true);
+  assert.equal(/all \d+ scores match/.test(drift.note), false);
+  assert.equal(drift.note.includes('proposed locked-1'), true);
+  assert.equal(drift.note.includes('locked score hash does not match'), true);
+  assert.equal(drift.lines[0].includes('proposed'), true);
+  assert.equal(drift.lines[0].includes(lockedHash), true);
+  assert.equal(drift.lines[0].includes('locked score hash does not match the current inputs'), true);
+  assert.equal(drift.lines[0].includes('score inputs match'), false);
+  assert.equal(drift.lines[1].includes('score inputs match'), false);
+  assert.equal(drift.lines[1].includes('locked score hash does not match'), false);
+
+  const restore = installFetchGuard();
+  const admin = keypair();
+  const holder = keypair();
+  const signer = keypair();
+  const mint = keypair().publicKey;
+  const vault = keypair().publicKey;
+  const multisig = keypair().publicKey;
+  const { env, tables, rpcLog } = createEnv();
+  env.BARD_SIGNER_PUBKEY = signer.publicKey;
+  env.SCORED_CAMPAIGNS = '1';
+  env.accounts[mint] = mintAccount(0);
+  env.tokenAccounts[vault + '|' + mint] = ownedTokens(mint, 1000, 0);
+  const token = (await signJwt(SECRET, admin.publicKey)).token;
+  const projectId = crypto.randomUUID();
+  const campaignId = crypto.randomUUID();
+  const postRowId = crypto.randomUUID();
+  const postId = snowflakeId(Date.parse(POSTED), 2);
+  tables.projects.push({
+    id: projectId,
+    admin_wallet: admin.publicKey,
+    mint,
+    vault_status: 'linked',
+    vault_address: vault,
+    vault_mint: mint,
+    vault_multisig: multisig,
+    vault_reserved_raw: '0',
+  });
+  tables.campaigns.push({
+    id: campaignId,
+    project_id: projectId,
+    title: 'Scored',
+    type: 'hold',
+    status: 'active',
+    reward_mode: 'fixed',
+    reward: '10',
+    reward_unit: 'TOKEN',
+    duration_days: 14,
+    created_at: CREATED,
+    config: { scoreRule: rule() },
+    prize_raw: '10',
+    locked_raw: '10',
+    cut_bps: 0,
+    cut_raw: '0',
+    cut_wallet: null,
+    prize_mint: mint,
+    vault_reserved: '10',
+  });
+  tables.campaign_joins.push({
+    id: crypto.randomUUID(),
+    campaign_id: campaignId,
+    project_id: projectId,
+    wallet: holder.publicKey,
+    x_handle: '@Honest',
+    status: 'approved',
+    qualified: false,
+    progress: 0,
+    joined_at: CREATED,
+    handle_consent_at: CREATED,
+    handle_consent_version: 'bard-score-v1',
+    score_override: null,
+  });
+  tables.holders.push({ wallet: holder.publicKey, x_handle: '@Honest', x_via: 'oauth', x_user_id: '1001' });
+  tables.score_accounts.push(
+    { campaign_id: campaignId, handle: 'honest', x_created_on: '2025-04-28', followers: 800, following: 300, is_bot: false },
+    { campaign_id: campaignId, handle: 'e1', x_created_on: '2024-01-01', followers: 100, following: 100, is_bot: false },
+  );
+  tables.score_posts.push({
+    id: postRowId,
+    campaign_id: campaignId,
+    wallet: holder.publicKey,
+    handle: 'honest',
+    post_id: postId,
+    text: 'a real post',
+    deleted: false,
+    checked_at: '2026-06-06T12:00:00.000Z',
+    excluded: false,
+  });
+  tables.score_engagements.push({
+    id: crypto.randomUUID(),
+    campaign_id: campaignId,
+    post_row_id: postRowId,
+    engager_handle: 'e1',
+    kind: 'repost',
+  });
+  try {
+    const proposed = await call(env, 'POST', '/api/settlements/propose', { campaignId, projectId }, token);
+    assert.equal(proposed.status, 200, JSON.stringify(proposed.data));
+    const settlement = proposed.data.settlement;
+    const e1 = tables.score_accounts.find((row) => row.handle === 'e1');
+    e1.followers = 9;
+    const live = await call(env, 'GET', '/api/campaigns/' + campaignId + '/score');
+    assert.equal(live.status, 200, JSON.stringify(live.data));
+    assert.notEqual(live.data.score_hash, settlement.score_hash);
+    const shown = receiptView({ ...live.data, score_hash: settlement.score_hash }, browserSha);
+    assert.equal(shown.inputHash, browserSha(canonicalJson(live.data.inputs)));
+    assert.notEqual(shown.inputHash, settlement.score_hash);
+    assert.equal(shown.scoresMatch, true);
+    assert.equal(/all \d+ scores match/.test(shown.note), false);
+    const row = live.data.settlements.find((item) => item.id === settlement.id);
+    assert.equal(row.score_hash, settlement.score_hash);
+    assert.equal(shown.note.includes(row.status + ' ' + row.id), true);
+    assert.equal(shown.note.includes('locked score hash does not match'), true);
+    const line = shown.lines.find((text) => text.includes(row.status) && text.includes(row.score_hash));
+    assert.equal(line.includes(row.status), true);
+    assert.equal(line.includes('locked score hash does not match the current inputs'), true);
+    assert.equal(line.includes('score inputs match'), false);
+
+    tables.vault_settlements[0].status = 'awaiting_bard';
+    tables.vault_settlements[0].team_signed = true;
+    tables.vault_settlements[0].tx_index = '1';
+    tables.vault_settlements[0].vault_multisig = multisig;
+    const before = rpcLog.length;
+    const bard = await call(env, 'POST', '/api/vault/bard-sign', { settlementId: settlement.id }, token);
+    assert.equal(bard.status, 409, JSON.stringify(bard.data));
+    assert.equal(bard.data.reason, 'score_inputs_changed');
+    assert.equal(bard.data.error, 'score_inputs_changed');
+    const executed = await call(env, 'POST', '/api/settlements/' + settlement.id + '/execute', { signature: '6'.repeat(88) }, token);
+    assert.equal(executed.status, 409, JSON.stringify(executed.data));
+    assert.equal(executed.data.error, 'score_inputs_changed');
+    assert.equal(executed.data.reason, 'score_inputs_changed');
+    assert.equal(rpcLog.length, before);
   } finally {
     restore();
   }

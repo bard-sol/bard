@@ -110,6 +110,7 @@ tr.is-you{background:var(--purple-soft)}
 </main>
 <script src="/platform.js"></script>
 <script type="module" src="/scoring.js"></script>
+<script type="module" src="/receipt_score.js"></script>
 <script>
 (function () {
   function campaignId() {
@@ -223,6 +224,29 @@ tr.is-you{background:var(--purple-soft)}
     });
   }
 
+  function scoreToolsReady() {
+    return !!(window.BardReceiptScore && BardReceiptScore.hashScoreInputs && BardReceiptScore.settlementScoreLine && BardReceiptScore.recomputeScoreNote
+      && window.BardScore && BardScore.canonicalJson && BardScore.scoreCampaign
+      && window.BardPlatform && BardPlatform.sha256Hex);
+  }
+
+  function whenScoreTools() {
+    if (scoreToolsReady()) return Promise.resolve();
+    return new Promise(function (resolve) {
+      var left = 100;
+      var timer = setInterval(function () {
+        if (scoreToolsReady() || --left <= 0) {
+          clearInterval(timer);
+          resolve();
+        }
+      }, 20);
+    });
+  }
+
+  function liveInputHash(inputs) {
+    return BardReceiptScore.hashScoreInputs(inputs, BardScore.canonicalJson, BardPlatform.sha256Hex);
+  }
+
   function renderScores(body) {
     if (document.getElementById('scores')) return;
     var main = document.querySelector('.main');
@@ -285,10 +309,14 @@ tr.is-you{background:var(--purple-soft)}
       });
       card.append(block);
     });
+    var inputHash = scoreToolsReady() ? liveInputHash(body.inputs) : null;
     (body.settlements || []).forEach(function (item) {
       var line = document.createElement('p');
       line.className = 'sig';
-      line.textContent = (item.status || 'settlement') + ' · payout ' + (item.payout_hash || '') + ' · score ' + (item.score_hash || '');
+      if (item && item.id) line.setAttribute('data-settlement-id', item.id);
+      line.textContent = inputHash == null
+        ? ((item.status || 'settlement') + ' · payout ' + (item.payout_hash || '') + ' · score ' + (item.score_hash || ''))
+        : BardReceiptScore.settlementScoreLine(item, inputHash);
       card.append(line);
     });
     var button = document.createElement('button');
@@ -298,20 +326,16 @@ tr.is-you{background:var(--purple-soft)}
     var note = document.createElement('p');
     note.id = 'recompute-note';
     button.addEventListener('click', function () {
-      if (!window.BardScore || !BardScore.scoreCampaign) {
+      if (!scoreToolsReady()) {
         note.textContent = 'scoring.js did not load';
         return;
       }
       var again = BardScore.scoreCampaign(body.inputs);
-      var bad = [];
-      body.results.forEach(function (row) {
-        var found = (again.results || []).filter(function (item) { return item.wallet === row.wallet; })[0];
-        if (!found || found.score_milli !== row.score_milli) bad.push(row.handle || row.wallet);
-      });
-      note.textContent = bad.length ? ('mismatch ' + bad.join(', ')) : ('all ' + body.results.length + ' scores match');
+      note.textContent = BardReceiptScore.recomputeScoreNote(body, again, liveInputHash(body.inputs));
     });
     card.append(button, note);
     main.append(card);
+    if (inputHash != null) note.textContent = BardReceiptScore.recomputeScoreNote(body, BardScore.scoreCampaign(body.inputs), inputHash);
   }
 
   function loadScores(id) {
@@ -325,7 +349,8 @@ tr.is-you{background:var(--purple-soft)}
       if (!res || !res.ok) return null;
       return res.json();
     }).then(function (body) {
-      if (body) renderScores(body);
+      if (!body) return null;
+      return whenScoreTools().then(function () { renderScores(body); });
     }).catch(function () {});
   }
 
