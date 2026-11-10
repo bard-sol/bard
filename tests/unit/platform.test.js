@@ -73,17 +73,32 @@ test('growing pool math', () => {
     reward: 3,
     config: { growStart: 10, growAdd: 5, growEvery: 'day', growCap: 20 },
   };
-  assert.equal(BP.growingNow(fresh), 10);
+  assert.equal(BP.growingNow(fresh), '10');
 
   const aged = {
     createdAt: new Date(now - (3 * 86400000 + 1000)).toISOString(),
     config: { growStart: 10, growAdd: 5, growEvery: 'day', growCap: 20 },
   };
-  assert.equal(BP.growingNow(aged), 20);
+  assert.equal(BP.growingNow(aged), '20');
   const meta = BP.growingMeta(aged);
-  assert.equal(meta.now, 20);
+  assert.equal(meta.now, '20');
   assert.match(meta.line, /caps at 20/);
   assert.match(meta.line, /Now 20/);
+});
+
+// TRAA-2319: the launch simulation saw the pot shown as 66.19999999999999 while the payout was 66.2.
+test('growing pool shows exact decimals, the same digits the payout uses', () => {
+  const now = Date.now();
+  const weeks = (n) => new Date(now - (n * 7 * 86400000 + 3600000)).toISOString();
+  const pot = { createdAt: weeks(4), config: { growStart: '12.2', growAdd: '13.5', growEvery: 'week', growCap: '100.4' } };
+  assert.equal(BP.growingNow(pot), '66.2');
+  assert.match(BP.growingMeta(pot).line, /Now 66\.2\b/);
+  assert.equal(BP.growingNow({ createdAt: new Date(now - 86400000 - 1000).toISOString(), config: { growStart: '0.1', growAdd: '0.2', growEvery: 'day', growCap: '9' } }), '0.3');
+  assert.equal(BP.growingNow({ createdAt: weeks(40), config: { growStart: '0.1', growAdd: '0.2', growEvery: 'week', growCap: '1.05' } }), '1.05');
+  const noCap = BP.growingMeta({ createdAt: weeks(2), config: { growStart: '1', growAdd: '0', growEvery: 'week' } });
+  assert.equal(noCap.now, '1');
+  assert.match(noCap.line, /no cap/);
+  assert.doesNotMatch(noCap.line, /adds/);
 });
 
 test('computePayouts fixed, top3, growing, and shared pool', () => {
@@ -245,4 +260,16 @@ test('draw seed waits for the committed slot and skips a missing block', async (
   assert.equal(found.blockhash, 'SeedHashFromNextSlot');
   const campaign = { drawSeed: found.blockhash, drawCount: 0, drawWinners: BP.deriveWinners([{ wallet: 'A', status: 'approved' }], found.blockhash, 0), drawSlot: 1150, drawSeedSlot: found.slot };
   assert.equal(BP.verifyDraw(campaign, [{ wallet: 'A', status: 'approved' }]).ok, true);
+});
+
+// TRAA-2319 (B9): with the cut set to 0 the team settings panel still said 5%, because
+// `getCutBps() || 500` treats 0 as missing.
+test('the team settings show no cut when the cut is 0', () => {
+  const BP = loadPlatform();
+  assert.equal(BP.cutSettingText(0), 'None. Holders get every payout in full.');
+  assert.equal(BP.cutSettingText(500), '5% of each payout');
+  assert.equal(BP.cutSettingText(125), '1.25% of each payout');
+  const admin = readFileSync(path.join(root, 'admin_app.js'), 'utf8');
+  assert.equal(/getCutBps\(\)\)?\s*\|\|\s*500/.test(admin), false, 'admin settings fall back to 500 on a 0 cut');
+  assert.match(admin, /BardPlatform\.cutSettingText\(bps\)/);
 });

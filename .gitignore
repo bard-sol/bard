@@ -4,3 +4,4 @@ test-results/
 blob-report/
 .wrangler/
 vault-src/.litesvm-cache/
+sim-reports/

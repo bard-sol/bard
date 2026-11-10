@@ -648,10 +648,12 @@ async function enterPosts(request, env, campaign, actor, body, now) {
     const other = existingRows.find((row) => row.campaign_id !== campaign.id);
     if (other) return json({ error: 'this post is already used in a campaign' }, 409);
     const existing = existingRows.find((row) => row.campaign_id === campaign.id) || null;
+    // A re-entered post keeps its owner: wallet and handle together, or the post no longer
+    // matches its poster's verified X and scores 0 (TRAA-2319, B11).
     const row = {
       campaign_id: campaign.id,
       wallet: existing ? existing.wallet : wallet,
-      handle,
+      handle: existing ? normalizeHandle(existing.handle) : handle,
       post_id: postId,
       posted_at: postedAt,
       text: input.text == null ? '' : String(input.text),
@@ -687,7 +689,7 @@ async function enterPosts(request, env, campaign, actor, body, now) {
       after: { post_id: postId, text: row.text, deleted: row.deleted },
       actor,
       subject_wallet: row.wallet,
-      subject_handle: handle,
+      subject_handle: row.handle,
     });
     saved.push(savedRow || row);
   }
@@ -847,6 +849,12 @@ export async function handleScoreApi(request, env, now = Date.now()) {
   }
   const admin = await scoredAdmin(request, env, campaignId);
   if (admin.error) return admin.error;
+  // The proposed payout locks a hash of these inputs. An edit after that would make every
+  // signature fail with score_inputs_changed, and nothing can reopen the payout (TRAA-2319, B10).
+  const settlements = rowsOf(await sb(env, 'GET', '/vault_settlements?campaign_id=eq.' + encodeURIComponent(campaignId) + '&select=status'));
+  if (admin.campaign.status === 'paid' || settlements.some((row) => row && row.status !== 'cancelled')) {
+    return json({ error: 'scores are frozen once a payout is proposed' }, 409);
+  }
   const body = await readJson(request);
   if (body == null) return json({ error: 'invalid json' }, 400);
   if (hasTypedScore(body)) return json({ error: 'a score cannot be typed' }, 400);

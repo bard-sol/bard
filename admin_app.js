@@ -221,16 +221,16 @@ async function renderRosterPanel(p){
 
 function renderSettingsPanel(p){
   var setEl=document.getElementById('proj-settings');
-  var bps=(BardPlatform.getCutBps&&BardPlatform.getCutBps())||500;
-  var cutWallet=(BardPlatform.getCutWallet&&BardPlatform.getCutWallet())||'';
-  var pct=(Number(bps)/100);
+  var bps=BardPlatform.getCutBps();
+  var cutWallet=BardPlatform.getCutWallet()||'';
+  var cutText=BardPlatform.cutSettingText(bps)+(Number(bps)>0&&cutWallet?' · '+shortAddr(cutWallet):'');
   setEl.innerHTML=
     '<div class="card"><p class="kicker">Project</p>'+
     '<div class="form"><div class="field"><label>Name</label><div>'+BardPlatform.escapeHtml(p.name)+'</div></div>'+
     '<div class="field"><label>Ticker</label><div>$'+BardPlatform.escapeHtml(p.ticker)+'</div></div>'+
     '<div class="field"><label>Mint</label><div class="num" style="word-break:break-all">'+BardPlatform.escapeHtml(p.mint)+'</div></div>'+
     '<div class="field"><label>Vault</label><div class="num" style="word-break:break-all">'+(p.vaultAddress?BardPlatform.escapeHtml(p.vaultAddress):'Not linked')+'</div></div>'+
-    '<div class="field"><label>Bard cut</label><div>'+BardPlatform.escapeHtml(String(pct))+'% of each payout · '+BardPlatform.escapeHtml(shortAddr(cutWallet))+'</div>'+
+    '<div class="field"><label>Bard cut</label><div>'+BardPlatform.escapeHtml(cutText)+'</div>'+
     '<span class="hint">The percentage freezes on a campaign when it goes live. Changing it later does not change a running campaign.</span></div>'+
     '</div></div>';
 }

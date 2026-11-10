@@ -683,3 +683,49 @@ test('the receipt shows when a locked score hash no longer matches the inputs', 
     restore();
   }
 });
+
+// TRAA-2319 (B10, B11), found by the launch simulation.
+test('score entry stops once a payout is proposed, and re-entering a post keeps its owner', async () => {
+  const restore = installFetchGuard();
+  const admin = keypair();
+  const owner = keypair();
+  const other = keypair();
+  const { env, tables } = createEnv();
+  env.SCORED_CAMPAIGNS = '1';
+  const token = (await signJwt(SECRET, admin.publicKey)).token;
+  const projectId = crypto.randomUUID();
+  const campaignId = crypto.randomUUID();
+  const postId = snowflakeId(Date.parse(POSTED), 7);
+  tables.projects.push({ id: projectId, admin_wallet: admin.publicKey });
+  tables.campaigns.push({
+    id: campaignId, project_id: projectId, title: 'Scored', status: 'active',
+    duration_days: 14, created_at: CREATED, config: { scoreRule: rule() },
+  });
+  tables.score_posts.push({
+    id: crypto.randomUUID(), campaign_id: campaignId, wallet: owner.publicKey, handle: 'owner',
+    post_id: postId, text: 'mine', deleted: false, excluded: false, entered_at: CREATED,
+  });
+  const account = { accounts: [{ handle: 'fan', created_on: '2024-01-01', followers: 100, following: 100 }] };
+  try {
+    const moved = await call(env, 'POST', '/api/campaigns/' + campaignId + '/score/posts', {
+      posts: [{ post_id: postId, wallet: other.publicKey, handle: '@Other', text: 'edited' }],
+    }, token);
+    assert.equal(moved.status, 200, JSON.stringify(moved.data));
+    const stored = tables.score_posts.find((row) => row.post_id === postId);
+    assert.deepEqual([stored.wallet, stored.handle, stored.text], [owner.publicKey, 'owner', 'edited']);
+
+    tables.vault_settlements.push({ id: crypto.randomUUID(), campaign_id: campaignId, status: 'cancelled' });
+    assert.equal((await call(env, 'POST', '/api/campaigns/' + campaignId + '/score/accounts', account, token)).status, 200);
+    for (const status of ['proposed', 'awaiting_bard', 'executed']) {
+      tables.vault_settlements.push({ id: crypto.randomUUID(), campaign_id: campaignId, status });
+      const late = await call(env, 'POST', '/api/campaigns/' + campaignId + '/score/accounts', account, token);
+      assert.equal(late.status, 409, status);
+      assert.equal(late.data.error, 'scores are frozen once a payout is proposed');
+      tables.vault_settlements.pop();
+    }
+    tables.campaigns[0].status = 'paid';
+    assert.equal((await call(env, 'POST', '/api/campaigns/' + campaignId + '/score/overrides', { action: 'bot', handle: 'fan', reason: 'x' }, token)).status, 409);
+  } finally {
+    restore();
+  }
+});

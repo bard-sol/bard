@@ -516,27 +516,40 @@
     return { reserved: plan.projectReserved, added: plan.added, campaignReserved: plan.campaignReserved };
   }
 
+  // Decimal text in, decimal text out: the pot is shown with the same digits the payout uses
+  // (server/settlement.js growingRaw), never through floating point (0.1 + 0.2).
+  function growingAmount(value) {
+    try {
+      var p = scaledParts(value);
+      return formatScaled(p.neg ? 0n : p.n, p.scale);
+    } catch (e) { return '0'; }
+  }
   function growingNow(campaign) {
     var cfg = campaign && campaign.config ? campaign.config : {};
     if (typeof cfg === 'string') { try { cfg = JSON.parse(cfg); } catch (e) { cfg = {}; } }
-    var start = Number(cfg.growStart != null ? cfg.growStart : (campaign && (campaign.pool || campaign.reward)) || 0);
-    var add = Number(cfg.growAdd || 0);
+    var start = growingAmount(cfg.growStart != null && cfg.growStart !== '' ? cfg.growStart : (campaign && (campaign.pool || campaign.reward)) || 0);
+    var add = growingAmount(cfg.growAdd || 0);
     var every = cfg.growEvery || 'week';
-    var cap = Number(cfg.growCap || 0);
+    var cap = growingAmount(cfg.growCap || 0);
     var created = campaign && campaign.createdAt ? new Date(campaign.createdAt).getTime() : Date.now();
     var ms = every === 'day' ? 86400000 : 7 * 86400000;
-    var periods = Math.max(0, Math.floor((Date.now() - created) / ms));
-    var now = start + add * periods;
-    if (cap > 0) now = Math.min(now, cap);
-    return now;
+    var periods = BigInt(Math.max(0, Math.floor((Date.now() - created) / ms)));
+    var sa = alignDecimals(start, add);
+    var now = sa.na + sa.nb * periods;
+    var scale = sa.scale;
+    var capped = alignDecimals(formatScaled(now, scale), cap);
+    if (capped.nb > 0n && capped.na > capped.nb) return cap;
+    return formatScaled(now, scale);
   }
   function growingMeta(campaign) {
     var cfg = campaign && campaign.config ? campaign.config : {};
     if (typeof cfg === 'string') { try { cfg = JSON.parse(cfg); } catch (e) { cfg = {}; } }
     var every = cfg.growEvery || 'week';
-    var add = Number(cfg.growAdd || 0);
-    var start = Number(cfg.growStart != null ? cfg.growStart : (campaign && (campaign.pool || campaign.reward)) || 0);
-    var cap = Number(cfg.growCap || 0);
+    var add = growingAmount(cfg.growAdd || 0);
+    var start = growingAmount(cfg.growStart != null && cfg.growStart !== '' ? cfg.growStart : (campaign && (campaign.pool || campaign.reward)) || 0);
+    var cap = growingAmount(cfg.growCap || 0);
+    if (add === '0') add = 0;
+    if (cap === '0') cap = 0;
     var now = growingNow(campaign);
     var unit = (campaign && campaign.unit) || '';
     return {
@@ -729,9 +742,25 @@
     return BigInt(text);
   }
 
+  // Same rule as server/settlement.js: a campaign with a committed draw pays its draw winners only.
+  function drawWinnerRows(campaign, joins) {
+    var count = Number(campaign.drawCount != null ? campaign.drawCount : campaign.draw_count);
+    if (!(count > 0)) return null;
+    var winners = campaign.drawWinners || campaign.draw_winners || [];
+    if (!winners.length) throw new Error('Finalize the draw before paying');
+    var rows = [];
+    winners.forEach(function (w) {
+      var wallet = typeof w === 'string' ? w : (w && w.wallet);
+      var join = (joins || []).find(function (j) { return j && j.wallet === wallet; });
+      if (join && join.status !== 'rejected') rows.push(join);
+    });
+    if (!rows.length) throw new Error('No draw winner is still eligible');
+    return rows;
+  }
+
   function computePayouts(campaign, joins, decimals) {
     var d = decimals == null ? 0 : decimals;
-    var rows = (joins || []).filter(function (j) {
+    var rows = drawWinnerRows(campaign, joins) || (joins || []).filter(function (j) {
       if (j.status === 'rejected') return false;
       return !!(j.qualified || (j.status === 'approved' && (j.progress || 0) > 0));
     }).slice().sort(function (a, b) {
@@ -1458,6 +1487,13 @@
     return frac ? (whole + '.' + frac) : whole;
   }
 
+  /** The team settings line for Bard's cut. A cut of 0 reads as none, not as the 5% default. */
+  function cutSettingText(bps) {
+    var n = Number(bps);
+    if (!Number.isInteger(n) || n <= 0) return 'None. Holders get every payout in full.';
+    return formatBps(n) + '% of each payout';
+  }
+
   function formatBps(bps) {
     var n = Number(bps);
     if (!Number.isInteger(n) || n < 0) return '0';
@@ -1542,6 +1578,7 @@
     getFeeTreasury: function () { return cutWallet; },
     setFeeTreasury: function (addr) { cutWallet = addr || FEE_TREASURY; },
     getCutBps: getCutBps,
+    cutSettingText: cutSettingText,
     getCutWallet: getCutWallet,
     scoredCampaigns: function () { return scoredCampaignsFlag; },
     getMode: function () { return mode; },

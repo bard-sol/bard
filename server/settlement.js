@@ -382,11 +382,28 @@ function computeScoredPayouts(view, joins, decimals) {
   return { payouts, total: rawToDecimal(totalRaw, d), totalRaw: totalRaw.toString(), unit, hash: payoutHash(payouts) };
 }
 
+// A campaign with a committed draw pays its draw winners, in draw order, and no one else. The
+// public page says so ("draw of N from the qualified"). A winner rejected after the draw drops out.
+function drawWinnerRows(view, joins) {
+  if (!(Number(view.drawCount) > 0)) return null;
+  const winners = Array.isArray(view.drawWinners) ? view.drawWinners : [];
+  if (!winners.length) throw new Error('Finalize the draw before paying');
+  const byWallet = new Map(dedupeJoins(joins).map((j) => [j.wallet, j]));
+  const rows = [];
+  for (const winner of winners) {
+    const wallet = typeof winner === 'string' ? winner : winner && winner.wallet;
+    const join = byWallet.get(wallet);
+    if (join && join.status !== 'rejected') rows.push(join);
+  }
+  if (!rows.length) throw new Error('No draw winner is still eligible');
+  return rows;
+}
+
 export function computePayouts(campaign, joins, decimals) {
   const view = asCampaign(campaign);
   if (view.config && view.config.scoreRule) return computeScoredPayouts(view, joins, decimals);
   const d = decimals == null ? 0 : decimals;
-  const rows = dedupeJoins(joins).filter((j) => {
+  const rows = drawWinnerRows(view, joins) || dedupeJoins(joins).filter((j) => {
     if (j.status === 'rejected') return false;
     return !!(j.qualified || (j.status === 'approved' && (j.progress || 0) > 0));
   }).slice().sort((a, b) => {

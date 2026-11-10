@@ -8,6 +8,7 @@
     "e2e": "playwright install chromium && playwright test",
     "devnet:e2e": "node vault-src/scripts/devnet-e2e.mjs",
     "campaign:devnet": "node vault-src/scripts/devnet-campaign.mjs",
+    "sim": "node vault-src/sim/run.mjs",
     "sim:e2e": "node vault-src/scripts/sim-e2e.mjs",
     "build:vault": "npm --prefix vault-src run build"
   },

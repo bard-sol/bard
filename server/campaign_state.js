@@ -95,7 +95,7 @@ function pickSettlement(rows) {
   if (!list.length) return null;
   const executed = list.filter((row) => row.status === 'executed');
   const pool = executed.length ? executed : list;
-  pool.sort((a, b) => String(b.executed_at || b.created_at || '').localeCompare(String(a.executed_at || a.created_at || '')));
+  pool.sort((a, b) => String(b.executed_at || b.proposed_at || '').localeCompare(String(a.executed_at || a.proposed_at || '')));
   return pool[0];
 }
 
@@ -200,7 +200,7 @@ export async function buildCampaignState(env, campaignId, now = new Date(), read
   const project = projects[0];
   if (!project) notFound();
   const joins = await sbGet(env, '/campaign_joins?campaign_id=eq.' + encodeURIComponent(id) + '&select=wallet,qualified,status,progress');
-  const settlements = await sbGet(env, '/vault_settlements?campaign_id=eq.' + encodeURIComponent(id) + '&select=id,status,tx_signature,executed_at,created_at,payouts');
+  const settlements = await sbGet(env, '/vault_settlements?campaign_id=eq.' + encodeURIComponent(id) + '&select=id,status,tx_signature,executed_at,proposed_at,payouts');
   const settlement = pickSettlement(settlements);
   const clock = clockFor(campaign, settlement, now);
   const executed = settlement && settlement.status === 'executed' ? settlement : null;
