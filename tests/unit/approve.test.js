@@ -18,7 +18,7 @@ import {
   squadsTransactionAddress,
   squadsVaultAddress,
 } from '../../server/chain.js';
-import { payoutHash } from '../../server/settlement.js';
+import { PAYOUT_BATCH_LINES, payoutBatches, payoutHash, settlementBatchLines } from '../../server/settlement.js';
 
 const SYSTEM_PROGRAM = '11111111111111111111111111111111';
 const SECRET = 'test-secret-test-secret-test-secret';
@@ -271,6 +271,78 @@ test('reordered payouts still pass', async () => {
   assert.notDeepEqual(settlement.payouts.map((row) => row.wallet), built.settlement.payouts.map((row) => row.wallet));
   const verdict = await verifyVaultTransactionMessage(built.message, settlement, built.options);
   assert.equal(verdict.ok, true, verdict.reason);
+});
+
+// A payout of `count` holders and a cut, and the vault message for each batch of it.
+async function batchedCase(count) {
+  const multisig = keypair().publicKey;
+  const vault = await squadsVaultAddress(multisig);
+  const mint = keypair().publicKey;
+  const payouts = [];
+  for (let i = 0; i < count; i++) payouts.push({ wallet: keypair().publicKey, amountRaw: String(1000 + i) });
+  const cutWallet = keypair().publicKey;
+  const lines = payouts.concat([{ wallet: cutWallet, amountRaw: '77' }]);
+  const settlement = { payouts, cut_wallet: cutWallet, cut_raw: '77', payout_hash: payoutHash(lines) };
+  const vaultAta = await associatedTokenAddress(vault, mint, TOKEN_PROGRAM);
+  const messageFor = async (batchLines) => {
+    const instructions = [createAta(vault, vaultAta, vault, mint, TOKEN_PROGRAM)];
+    for (const line of batchLines) {
+      const ata = await associatedTokenAddress(line.wallet, mint, TOKEN_PROGRAM);
+      instructions.push(createAta(vault, ata, line.wallet, mint, TOKEN_PROGRAM));
+      instructions.push(transferChecked(vaultAta, mint, ata, vault, line.amountRaw, 6, TOKEN_PROGRAM));
+    }
+    return compile(vault, instructions);
+  };
+  const batches = payoutBatches(lines);
+  const messages = [];
+  for (const batch of batches) messages.push(await messageFor(batch));
+  const options = { multisig, vaultAddress: vault, mint, decimals: 6, tokenProgram: TOKEN_PROGRAM };
+  return { settlement, batches, messages, messageFor, lines, options };
+}
+
+test('payout lines split into wallet-ordered batches of six', () => {
+  const lines = [];
+  for (let i = 0; i < 14; i++) lines.push({ wallet: 'W' + String(13 - i).padStart(2, '0'), amountRaw: String(i + 1) });
+  const batches = payoutBatches(lines);
+  assert.equal(PAYOUT_BATCH_LINES, 6);
+  assert.deepEqual(batches.map((b) => b.length), [6, 6, 2]);
+  assert.deepEqual(batches.flat().map((l) => l.wallet), lines.map((l) => l.wallet).sort());
+  assert.deepEqual(payoutBatches([]), []);
+  const waived = settlementBatchLines({ payouts: lines.slice(0, 6), cut_waived: true, cut_wallet: 'Z', cut_raw: '9' });
+  assert.equal(waived.length, 1, 'a waived cut is not a line');
+  const withCut = settlementBatchLines({ payouts: lines.slice(0, 6), cut_wallet: 'Z', cut_raw: '9' });
+  assert.deepEqual(withCut.map((b) => b.length), [6, 1], 'the cut is a seventh line');
+});
+
+test('each batch passes against its own lines only', async () => {
+  const built = await batchedCase(13);
+  assert.equal(built.batches.length, 3);
+  for (let n = 0; n < built.batches.length; n++) {
+    const verdict = await verifyVaultTransactionMessage(built.messages[n], built.settlement, { ...built.options, batch: n });
+    assert.equal(verdict.ok, true, 'batch ' + n + ': ' + verdict.reason);
+  }
+  const swapped = await verifyVaultTransactionMessage(built.messages[1], built.settlement, { ...built.options, batch: 0 });
+  assert.equal(swapped.ok, false, 'batch 1 accepted as batch 0');
+  const noBatch = await verifyVaultTransactionMessage(built.messages[1], built.settlement, built.options);
+  assert.equal(noBatch.ok, false, 'a batch other than 0 passes without naming it');
+});
+
+test('a batch number outside the payout fails', async () => {
+  const built = await batchedCase(7);
+  for (const batch of [2, -1, 1.5, 'x']) {
+    const verdict = await verifyVaultTransactionMessage(built.messages[0], built.settlement, { ...built.options, batch });
+    assert.deepEqual(verdict, { ok: false, reason: 'batch' }, String(batch));
+  }
+});
+
+test('a batch message that pays the whole payout or drops a line fails', async () => {
+  const built = await batchedCase(7);
+  const whole = await built.messageFor(built.batches.flat());
+  assert.equal((await verifyVaultTransactionMessage(whole, built.settlement, { ...built.options, batch: 0 })).ok, false);
+  const short = await built.messageFor(built.batches[0].slice(0, 5));
+  assert.equal((await verifyVaultTransactionMessage(short, built.settlement, { ...built.options, batch: 0 })).ok, false);
+  const tampered = { ...built.settlement, payout_hash: payoutHash(built.lines.slice(0, 6)) };
+  assert.deepEqual(await verifyVaultTransactionMessage(built.messages[0], tampered, { ...built.options, batch: 0 }), { ok: false, reason: 'payout_hash' });
 });
 
 test('vault transaction account bytes round-trip', async () => {

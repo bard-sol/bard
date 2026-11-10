@@ -6,7 +6,7 @@ import {
   associatedTokenAddress,
   squadsVaultAddress,
 } from './chain.js';
-import { payoutHash } from './settlement.js';
+import { PAYOUT_BATCH_LINES, payoutHash } from './settlement.js';
 
 const SYSTEM_PROGRAM = '11111111111111111111111111111111';
 const VAULT_TX_DISC = Uint8Array.of(168, 250, 162, 100, 81, 14, 162, 207);
@@ -332,6 +332,11 @@ async function verifyInner(decodedMessage, settlement, options) {
     return fail('payout_hash');
   }
   if (!settlement || storedHash !== settlement.payout_hash) return fail('payout_hash');
+  // The hash covers every line; this vault transaction pays one batch of them (settlement.js).
+  const batch = opts.batch == null ? 0 : Number(opts.batch);
+  const batchCount = Math.ceil(payouts.length / PAYOUT_BATCH_LINES);
+  if (!Number.isInteger(batch) || batch < 0 || batch >= batchCount) return fail('batch');
+  payouts = payouts.slice(batch * PAYOUT_BATCH_LINES, (batch + 1) * PAYOUT_BATCH_LINES);
   const vaultAta = await associatedTokenAddress(vaultAddress, mint, tokenProgram);
   const expected = [{
     kind: 'create',

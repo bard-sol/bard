@@ -43,9 +43,9 @@ export default {
         return { list, detail: list.length + ' pending' };
       }).then((v) => v.list);
 
-      // One settlement fits 6 holder transfers (B2), so at most 6 are approved.
+      // At least one holder is left to reject.
       const shuffled = rng.shuffle(holders);
-      const approved = shuffled.slice(0, rng.int(2, 6));
+      const approved = shuffled.slice(0, rng.int(2, shuffled.length - 1));
       const rejected = shuffled.slice(approved.length, approved.length + rng.int(1, Math.max(1, shuffled.length - approved.length - 1)));
       const pending = shuffled.slice(approved.length + rejected.length);
 

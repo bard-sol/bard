@@ -37,6 +37,7 @@ import {
   payoutHash,
   payoutRawAmount,
   rawToDecimal,
+  settlementBatchLines,
   settlementLines,
   subDecimal,
   accountKeysOf,
@@ -726,7 +727,7 @@ async function readSquadsAccount(env, address) {
   return decodeBase64(value.data[0]);
 }
 
-async function vaultMessageVerdict(env, settlement, project) {
+async function vaultMessageVerdict(env, settlement, project, batch = 0) {
   const multisig = pinnedMultisig(settlement, project);
   if (!isBase58Address(multisig)) throw new Error('project vault is not linked');
   if (settlement.tx_index == null || String(settlement.tx_index).trim() === '') {
@@ -754,6 +755,7 @@ async function vaultMessageVerdict(env, settlement, project) {
     mint,
     decimals: mintInfo.decimals,
     tokenProgram: mintInfo.tokenProgram,
+    batch,
   });
   if (!verdict.ok) throw new Error('vault transaction does not match the payout');
   return { multisig, txIndex };
@@ -808,6 +810,10 @@ async function handleMemberSigned(request, env, settlementId, kind) {
       return json({ error: 'invalid tx index' }, 400);
     }
   }
+  const batches = batchCountOf(current);
+  if (batches.error) return batches.error;
+  if (batches.count > 1) return handleBatchSigned(env, session, body, current, project, kind, batches.count, requestedIndex);
+  if (body.batch != null && body.batch !== 0) return json({ error: 'this payout is one vault transaction' }, 400);
   if (boundIndex != null && requestedIndex != null && !sameVaultIndex(boundIndex, requestedIndex)) {
     return json({ error: 'settlement is bound to vault transaction ' + boundIndex }, 409);
   }
@@ -854,6 +860,123 @@ async function handleMemberSigned(request, env, settlementId, kind) {
   return json({ settlement });
 }
 
+// A settlement with more lines than one vault transaction fits is paid in batches (settlement.js).
+// Each batch has a vault_settlement_batches row with its own vault transaction, both approvals and
+// its execute signature. The settlement row carries the totals: signed by a side once that side
+// signed every batch, tx_index of batch 0, and tx_signature of batch 0 once every batch is paid.
+function batchCountOf(settlement) {
+  try {
+    return { count: settlementBatchLines(settlement).length };
+  } catch (err) {
+    return { error: badRequest(err) };
+  }
+}
+
+function batchNumber(body, count) {
+  const batch = body && body.batch;
+  if (typeof batch === 'number' && Number.isInteger(batch) && batch >= 0 && batch < count) return batch;
+  if (typeof batch === 'string' && /^\d+$/.test(batch) && Number(batch) < count) return Number(batch);
+  return null;
+}
+
+function batchRequired(count) {
+  return json({ error: 'this payout is ' + count + ' vault transactions; name the batch (0 to ' + (count - 1) + ')' }, 400);
+}
+
+async function batchRows(env, settlementId) {
+  const rows = await select(env, 'vault_settlement_batches', 'settlement_id=eq.' + encodeURIComponent(settlementId) + '&select=*&order=batch.asc');
+  return Array.isArray(rows) ? rows : [];
+}
+
+function batchTotals(rows, count) {
+  const byBatch = new Map(rows.map((row) => [Number(row.batch), row]));
+  let team = true;
+  let bard = true;
+  let paid = true;
+  for (let n = 0; n < count; n++) {
+    const row = byBatch.get(n);
+    if (!row || row.team_signed !== true) team = false;
+    if (!row || row.bard_signed !== true) bard = false;
+    if (!row || !String(row.tx_signature || '').trim()) paid = false;
+  }
+  return { team, bard, paid, first: byBatch.get(0) || null };
+}
+
+async function handleBatchSigned(env, session, body, current, project, kind, count, requestedIndex) {
+  const batch = batchNumber(body, count);
+  if (batch == null) return batchRequired(count);
+  const pinned = String(current.vault_multisig || '').trim();
+  const projectMultisig = String(project.vault_multisig || '').trim();
+  if (!isBase58Address(projectMultisig)) return json({ error: 'project vault is not linked' }, 400);
+  if (pinned && pinned !== projectMultisig) return json({ error: 'settlement is bound to vault ' + pinned }, 409);
+  const linkedMultisig = pinned || projectMultisig;
+  const rows = await batchRows(env, current.id);
+  const row = rows.find((r) => Number(r.batch) === batch) || null;
+  const boundIndex = row ? String(row.tx_index).trim() : null;
+  if (boundIndex != null && requestedIndex != null && !sameVaultIndex(boundIndex, requestedIndex)) {
+    return json({ error: 'batch ' + batch + ' is bound to vault transaction ' + boundIndex }, 409);
+  }
+  const txIndexText = boundIndex != null ? boundIndex : requestedIndex;
+  if (txIndexText == null) return json({ error: 'batch ' + batch + ' has no vault transaction yet' }, 400);
+  const other = rows.find((r) => Number(r.batch) !== batch && sameVaultIndex(r.tx_index, txIndexText));
+  if (other) return json({ error: 'vault transaction ' + txIndexText + ' is batch ' + other.batch + ' of this payout' }, 409);
+  if (row && String(row.tx_signature || '').trim()) return json({ error: 'batch ' + batch + ' is paid' }, 400);
+  const pending = Object.assign({}, current, { tx_index: txIndexText, vault_multisig: linkedMultisig });
+  let checked;
+  try {
+    checked = await vaultMessageVerdict(env, pending, project, batch);
+  } catch (err) {
+    return badRequest(err);
+  }
+  const proposal = await memberApproved(env, checked.multisig, checked.txIndex, session.wallet);
+  if (!proposal) return json({ error: 'approval is not on the vault proposal' }, 400);
+  const now = new Date().toISOString();
+  const mark = kind === 'team' ? { team_signed: true, team_signed_at: now } : { bard_signed: true, bard_signed_at: now };
+  try {
+    if (row) {
+      const saved = firstRow(await patch(
+        env,
+        'vault_settlement_batches',
+        'id=eq.' + encodeURIComponent(row.id) + '&tx_signature=is.null&tx_index=eq.' + encodeURIComponent(boundIndex),
+        mark
+      ));
+      if (!saved) return json({ error: 'settlement changed while signing; reload and retry' }, 409);
+    } else {
+      await insert(env, 'vault_settlement_batches', Object.assign({
+        settlement_id: current.id,
+        batch,
+        vault_multisig: linkedMultisig,
+        tx_index: String(checked.txIndex),
+      }, mark));
+    }
+  } catch (err) {
+    if (err && err.code === '23505') return json({ error: 'vault transaction ' + txIndexText + ' is already bound; reload and retry' }, 409);
+    throw err;
+  }
+  const totals = batchTotals(await batchRows(env, current.id), count);
+  const settlementRow = {
+    team_signed: totals.team,
+    bard_signed: totals.bard,
+    status: totals.team && totals.bard ? 'both_signed' : (totals.team ? 'awaiting_bard' : 'awaiting_team'),
+    tx_index: totals.first ? String(totals.first.tx_index) : null,
+  };
+  if (!pinned) settlementRow.vault_multisig = linkedMultisig;
+  if (kind === 'team') {
+    if (totals.team) settlementRow.team_signed_at = now;
+    settlementRow.cosigned_wallet = session.wallet;
+  } else if (totals.bard) {
+    settlementRow.bard_signed_at = now;
+  }
+  const settlement = firstRow(await patch(
+    env,
+    'vault_settlements',
+    'id=eq.' + encodeURIComponent(current.id) + '&tx_signature=is.null',
+    settlementRow
+  ));
+  if (!settlement) return json({ error: 'settlement changed while signing; reload and retry' }, 409);
+  return json({ settlement, batch, batches: count });
+}
+
 function signerWaiting() {
   return json({ ok: false, waiting: true, reason: 'bard_signer_not_wired' });
 }
@@ -883,12 +1006,23 @@ async function handleBardSign(request, env) {
     return signerReject('project vault is not linked');
   }
   if (!isBase58Address(bardSigner(env))) return signerWaiting();
-  if (current.tx_index == null || String(current.tx_index).trim() === '') {
+  const batches = batchCountOf(current);
+  if (batches.error) return batches.error;
+  let batch = 0;
+  let indexText = current.tx_index;
+  if (batches.count > 1) {
+    batch = batchNumber(body, batches.count);
+    if (batch == null) return signerReject('name the batch (0 to ' + (batches.count - 1) + ')');
+    const row = (await batchRows(env, current.id)).find((r) => Number(r.batch) === batch);
+    if (!row || row.team_signed !== true) return signerReject('batch ' + batch + ' is not signed by the team');
+    indexText = row.tx_index;
+  }
+  if (indexText == null || String(indexText).trim() === '') {
     return signerReject('settlement has no vault transaction');
   }
   let txIndex;
   try {
-    txIndex = BigInt(String(current.tx_index).trim());
+    txIndex = BigInt(String(indexText).trim());
   } catch {
     return signerReject('settlement has no vault transaction');
   }
@@ -930,6 +1064,7 @@ async function handleBardSign(request, env) {
     mint,
     decimals: mintInfo.decimals,
     tokenProgram: mintInfo.tokenProgram,
+    batch,
   });
   if (!verdict.ok) return signerReject(verdict.reason);
   return signerWaiting();
@@ -1135,10 +1270,14 @@ function parsedTokenProgramOk(transfer, tokenProgram) {
   return tokenProgram === TOKEN_2022_PROGRAM && (program === 'spl-token-2022' || program === 'spl-token2022');
 }
 
-export async function verifyExecutedPayout(env, settlement, project, signature) {
+// target names the batch of a multi-batch settlement and that batch's vault index. Without it the
+// transaction must pay every line from settlement.tx_index.
+export async function verifyExecutedPayout(env, settlement, project, signature, target) {
   const multisig = pinnedMultisig(settlement, project);
   if (!multisig) throw new Error('project vault is not linked');
-  if (settlement.tx_index == null || String(settlement.tx_index).trim() === '') {
+  const batch = target ? target.batch : null;
+  const txIndexText = target ? target.txIndex : settlement.tx_index;
+  if (txIndexText == null || String(txIndexText).trim() === '') {
     throw new Error('settlement has no vault transaction');
   }
   const mint = project.vault_mint || project.mint;
@@ -1154,7 +1293,7 @@ export async function verifyExecutedPayout(env, settlement, project, signature) 
     throw new Error('transaction is not a Squads vault execute');
   }
   const mintInfo = await readMint(env, mint);
-  const index = BigInt(String(settlement.tx_index).trim());
+  const index = BigInt(String(txIndexText).trim());
   const transactionPda = await squadsTransactionAddress(multisig, index);
   const proposalPda = await squadsProposalAddress(multisig, index);
   const keys = new Set(accountKeysOf(tx));
@@ -1163,13 +1302,22 @@ export async function verifyExecutedPayout(env, settlement, project, signature) 
   }
   const vaultAta = await associatedTokenAddress(project.vault_address, mint, mintInfo.tokenProgram);
   const expected = new Map();
-  for (const payout of settlement.payouts || []) {
+  if (batch != null) {
+    const lines = settlementBatchLines(settlement)[batch];
+    if (!lines) throw new Error('settlement has no batch ' + batch);
+    for (const line of lines) {
+      const raw = BigInt(line.amountRaw);
+      const ata = await associatedTokenAddress(line.wallet, mint, mintInfo.tokenProgram);
+      expected.set(ata, (expected.get(ata) || 0n) + raw);
+    }
+  }
+  for (const payout of batch != null ? [] : settlement.payouts || []) {
     const raw = payoutRawAmount(payout, mintInfo.decimals);
     if (raw <= 0n) continue;
     const ata = await associatedTokenAddress(payout.wallet, mint, mintInfo.tokenProgram);
     expected.set(ata, (expected.get(ata) || 0n) + raw);
   }
-  if (settlement.cut_waived !== true) {
+  if (batch == null && settlement.cut_waived !== true) {
     const cutText = String(settlement.cut_raw == null ? '' : settlement.cut_raw).trim();
     if (cutText) {
       if (!/^\d+$/.test(cutText)) throw new Error('Cut amount is invalid');
@@ -1224,6 +1372,10 @@ async function handleExecute(request, env, settlementId) {
   if (!isSignature(signature)) return json({ error: 'invalid signature' }, 400);
   if (!current.payout_hash) return json({ error: 'settlement has no canonical hash' }, 400);
   if (current.status === 'cancelled') return json({ error: 'settlement is closed' }, 400);
+  const batches = batchCountOf(current);
+  if (batches.error) return batches.error;
+  if (batches.count > 1) return handleBatchExecute(env, body, current, admin.project, signature, batches.count);
+  if (body.batch != null && body.batch !== 0) return json({ error: 'this payout is one vault transaction' }, 400);
   const sameReplay = current.status === 'executed' && current.tx_signature === signature;
   if (current.status === 'executed' && !sameReplay) return json({ error: 'settlement is closed' }, 400);
   const pinnedVault = String(current.vault_multisig || '').trim();
@@ -1300,6 +1452,108 @@ async function handleExecute(request, env, settlementId) {
       return badRequest(err);
     }
   }
+  return closeSettlement(env, current, admin.project, signature);
+}
+
+// One batch of a multi-batch settlement was executed. Its signature is checked against that batch's
+// lines and recorded on the batch row. Once every batch is recorded, the settlement takes batch 0's
+// signature and closes. Batches can be recorded in any order; a retry resumes where it stopped.
+async function handleBatchExecute(env, body, current, project, signature, count) {
+  const batch = batchNumber(body, count);
+  if (batch == null) return batchRequired(count);
+  const row = (await batchRows(env, current.id)).find((r) => Number(r.batch) === batch);
+  if (!row || row.team_signed !== true || row.bard_signed !== true) {
+    return json({ error: 'batch ' + batch + ' is not signed by both keys' }, 409);
+  }
+  const recorded = String(row.tx_signature || '').trim();
+  if (recorded && recorded !== signature) return json({ error: 'batch ' + batch + ' is paid' }, 400);
+  if (current.status === 'executed') {
+    if (recorded === signature) return json({ settlement: current, batch, batches: count });
+    return json({ error: 'settlement is closed' }, 400);
+  }
+  const pinnedVault = String(current.vault_multisig || '').trim();
+  const projectVault = String(project.vault_multisig || '').trim();
+  if (pinnedVault && projectVault && pinnedVault !== projectVault) {
+    return json({ error: 'settlement is bound to vault ' + pinnedVault }, 409);
+  }
+  const campaign = await loadCampaign(env, current.campaign_id);
+  if (campaign) {
+    if (campaign.status === 'paid') return json({ error: 'campaign is already paid' }, 409);
+    const rows = await settlementsForCampaign(env, campaign.id);
+    if (rows.some((r) => r.id !== current.id && r.status === 'executed')) return json({ error: 'campaign is already paid' }, 409);
+    try {
+      if (fieldSet(campaign.prize_raw)) assertJsonSafeRaw(campaign.prize_raw, 'prize_raw');
+      if (fieldSet(campaign.locked_raw)) assertJsonSafeRaw(campaign.locked_raw, 'locked_raw');
+      if (fieldSet(campaign.cut_raw)) assertJsonSafeRaw(campaign.cut_raw, 'cut_raw');
+    } catch (err) {
+      return badRequest(err);
+    }
+  }
+  const changed = await assertFrozenScore(env, current, campaign, async () => {
+    const mint = project.vault_mint || project.mint;
+    if (!mint) return String(campaign && campaign.reward_unit || '').toUpperCase() === 'SOL' ? 9 : 0;
+    const info = await readMint(env, mint);
+    return info.decimals;
+  });
+  if (changed) return json({ error: changed, reason: changed }, 409);
+  try {
+    await verifyExecutedPayout(env, current, project, signature, { batch, txIndex: row.tx_index });
+    await vaultMessageVerdict(env, Object.assign({}, current, { tx_index: row.tx_index }), project, batch);
+  } catch (err) {
+    return badRequest(err);
+  }
+  if (!recorded) {
+    const used = await select(env, 'vault_settlements', 'tx_signature=eq.' + encodeURIComponent(signature) + '&select=id');
+    if (Array.isArray(used) && used.some((r) => r.id !== current.id)) return json({ error: 'signature already used' }, 400);
+    let claimed;
+    try {
+      claimed = await patch(
+        env,
+        'vault_settlement_batches',
+        'id=eq.' + encodeURIComponent(row.id) + '&tx_signature=is.null',
+        { tx_signature: signature, executed_at: new Date().toISOString() }
+      );
+    } catch (err) {
+      if (err.code === '23505') return json({ error: 'signature already used' }, 400);
+      throw err;
+    }
+    if (!firstRow(claimed)) {
+      const again = (await batchRows(env, current.id)).find((r) => Number(r.batch) === batch);
+      if (!again || again.tx_signature !== signature) return json({ error: 'batch ' + batch + ' is paid' }, 400);
+    }
+  }
+  const totals = batchTotals(await batchRows(env, current.id), count);
+  if (!totals.paid) return json({ settlement: current, batch, batches: count });
+  const closing = String(totals.first.tx_signature).trim();
+  if (current.tx_signature !== closing) {
+    let claimed;
+    try {
+      claimed = await patch(
+        env,
+        'vault_settlements',
+        'id=eq.' + encodeURIComponent(current.id) + '&status=not.in.(executed,cancelled)&tx_signature=is.null',
+        { tx_signature: closing }
+      );
+    } catch (err) {
+      if (err.code === '23505') return json({ error: 'signature already used' }, 400);
+      throw err;
+    }
+    if (!firstRow(claimed)) {
+      const again = firstRow(await select(env, 'vault_settlements', 'id=eq.' + encodeURIComponent(current.id) + '&select=*'));
+      if (!again || again.tx_signature !== closing || again.status === 'executed' || again.status === 'cancelled') {
+        return json({ error: 'settlement is closed' }, 400);
+      }
+    }
+  }
+  const response = await closeSettlement(env, current, project, closing);
+  if (response.status !== 200) return response;
+  return json(Object.assign(await response.json(), { batch, batches: count }));
+}
+
+// Payout bookkeeping once the settlement holds its closing signature: holders are marked paid,
+// the reservation is released and the campaign is paid. Every write is safe to repeat.
+async function closeSettlement(env, current, project, signature) {
+  const settlementId = current.id;
   const now = new Date().toISOString();
   const payouts = Array.isArray(current.payouts) ? current.payouts : [];
   for (const payout of payouts) {
@@ -1335,7 +1589,7 @@ async function handleExecute(request, env, settlementId) {
       p_campaign_id: campaign.id,
     });
     if (!released || released.ok !== true) return json({ error: 'could not release the reservation' }, 409);
-    const mint = admin.project.vault_mint || admin.project.mint;
+    const mint = project.vault_mint || project.mint;
     const mintInfo = await readMint(env, mint);
     await patch(env, 'projects', 'id=eq.' + encodeURIComponent(current.project_id), {
       vault_reserved: rawToDecimal(rpcRaw(released.vault_reserved_raw), mintInfo.decimals),
@@ -1347,7 +1601,7 @@ async function handleExecute(request, env, settlementId) {
     });
   } else if (current.total != null) {
     await patch(env, 'projects', 'id=eq.' + encodeURIComponent(current.project_id), {
-      vault_reserved: subDecimal(admin.project.vault_reserved || 0, current.total),
+      vault_reserved: subDecimal(project.vault_reserved || 0, current.total),
     });
   }
   const updated = await patch(
@@ -1440,15 +1694,17 @@ async function handleDrawFinalize(request, env, campaignId) {
   return json({ campaign: saved });
 }
 
-async function displayTransferDiff(settlement, mint, tokenProgram, data) {
+async function displayTransferDiff(settlement, mint, tokenProgram, data, batch) {
   const weak = data ? decodeVaultTransaction(data) : null;
   let lines = [];
   try {
-    lines = settlementLines(
-      settlement.payouts,
-      settlement.cut_waived ? null : settlement.cut_wallet,
-      settlement.cut_waived ? 0 : settlement.cut_raw
-    );
+    lines = batch == null
+      ? settlementLines(
+        settlement.payouts,
+        settlement.cut_waived ? null : settlement.cut_wallet,
+        settlement.cut_waived ? 0 : settlement.cut_raw
+      )
+      : settlementBatchLines(settlement)[batch] || [];
   } catch (err) {
     return { matches: false, missing: [], extra: [], reason: err.message || 'payout lines are invalid' };
   }
@@ -1474,29 +1730,51 @@ async function handleSettlementVerify(env, settlementId) {
   const block = await settlementPayoutBlock(env, settlement, project);
   if (block) return json({ matches: false, reason: block, diff: { reason: block } });
   const multisig = project.vault_multisig || settlement.vault_multisig || '';
-  const txIndex = settlement.tx_index;
+  const batches = batchCountOf(settlement);
+  if (batches.error) return batches.error;
+  if (batches.count === 1) return json(await verifyVaultTransaction(env, settlement, project, multisig, settlement.tx_index, null));
+  // A payout in batches matches when every batch's vault transaction matches its lines.
+  const rows = await batchRows(env, settlement.id);
+  const results = [];
+  for (let batch = 0; batch < batches.count; batch++) {
+    const row = rows.find((r) => Number(r.batch) === batch);
+    const result = row
+      ? await verifyVaultTransaction(env, settlement, project, multisig, row.tx_index, batch)
+      : { matches: false, diff: { reason: 'vault transaction is not recorded yet' } };
+    results.push(Object.assign({ batch }, result));
+  }
+  const failed = results.find((r) => !r.matches);
+  return json({
+    matches: !failed,
+    batches: results,
+    diff: failed ? Object.assign({}, failed.diff, { reason: 'batch ' + failed.batch + ': ' + ((failed.diff && failed.diff.reason) || 'does not match') }) : results[0].diff,
+    transaction: results[0].transaction,
+  });
+}
+
+async function verifyVaultTransaction(env, settlement, project, multisig, txIndex, batch) {
   if (!isBase58Address(multisig) || txIndex == null || String(txIndex).trim() === '') {
-    return json({ matches: false, diff: { reason: 'vault transaction is not recorded yet' } });
+    return { matches: false, diff: { reason: 'vault transaction is not recorded yet' } };
   }
   let txAddress;
   try {
     txAddress = await squadsTransactionAddress(multisig, txIndex);
   } catch (err) {
-    return json({ matches: false, diff: { reason: err.message || 'vault transaction is missing' } });
+    return { matches: false, diff: { reason: err.message || 'vault transaction is missing' } };
   }
   const data = await readSquadsAccount(env, txAddress);
   const decoded = data ? decodeVaultTransactionAccount(data) : null;
   let index;
   try { index = BigInt(String(txIndex).trim()); } catch { index = null; }
   if (!decoded || decoded.multisig !== multisig || index == null || decoded.index !== index) {
-    return json({ matches: false, diff: { reason: 'on-chain vault transaction does not match this payout' }, transaction: txAddress });
+    return { matches: false, diff: { reason: 'on-chain vault transaction does not match this payout' }, transaction: txAddress };
   }
   const mint = project.vault_mint || project.mint;
   let mintInfo;
   try {
     mintInfo = await readMint(env, mint);
   } catch (err) {
-    return json({ matches: false, diff: { reason: err.message || 'could not read the mint' }, transaction: txAddress });
+    return { matches: false, diff: { reason: err.message || 'could not read the mint' }, transaction: txAddress };
   }
   const verdict = await verifyVaultTransactionMessage(decoded, settlement, {
     multisig,
@@ -1504,10 +1782,11 @@ async function handleSettlementVerify(env, settlementId) {
     mint,
     decimals: mintInfo.decimals,
     tokenProgram: mintInfo.tokenProgram,
+    batch: batch == null ? 0 : batch,
   });
-  const diff = await displayTransferDiff(settlement, mint, mintInfo.tokenProgram, data);
+  const diff = await displayTransferDiff(settlement, mint, mintInfo.tokenProgram, data, batch);
   if (!verdict.ok) diff.reason = verdict.reason || 'vault transaction does not match the payout';
-  return json({ matches: verdict.ok === true, diff, transaction: txAddress });
+  return { matches: verdict.ok === true, diff, transaction: txAddress };
 }
 
 // Every route that links a vault, freezes a cut onto a campaign, reserves funds or moves a

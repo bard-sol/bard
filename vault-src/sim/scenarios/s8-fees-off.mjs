@@ -118,9 +118,8 @@ export default {
       await step('holders sign in, join both campaigns and are scored, paying nothing', async () => {
         await joinAll(project, fixed, holders);
         await joinAll(project, shared, holders);
-        // One settlement fits 6 holder transfers (B2), so at most 6 qualify per campaign.
         for (const c of [fixed, shared]) {
-          for (const h of rng.sample(holders, Math.min(6, holders.length))) {
+          for (const h of rng.sample(holders, rng.int(1, holders.length))) {
             await team.platform.markQualified(project.id, c.id, h.wallet);
             await team.platform.setJoinProgress(c.id, h.wallet, rng.int(1, 100), null);
           }

@@ -248,6 +248,35 @@ export function settlementLines(payouts, cutWallet, cutRaw) {
   return lines;
 }
 
+// One Squads vault transaction holds an idempotent account create and a transfer per line. On the
+// real program 7 lines execute and 8 do not (the execute transaction is too large), so a settlement
+// pays 6 lines per vault transaction and keeps one line of room.
+export const PAYOUT_BATCH_LINES = 6;
+
+function byWallet(a, b) {
+  const aw = String(a && a.wallet || '');
+  const bw = String(b && b.wallet || '');
+  if (aw < bw) return -1;
+  if (aw > bw) return 1;
+  return 0;
+}
+
+// Split payout lines (holders and the cut) into vault transactions. Lines are in wallet order, the
+// order of payoutHash and of the vault message, and batch n holds lines 6n to 6n+5. The worker, the
+// Bard check and the vault builder all split this way, so batch n means the same lines everywhere.
+export function payoutBatches(lines) {
+  const ordered = (lines || []).slice().sort(byWallet);
+  const out = [];
+  for (let i = 0; i < ordered.length; i += PAYOUT_BATCH_LINES) out.push(ordered.slice(i, i + PAYOUT_BATCH_LINES));
+  return out;
+}
+
+export function settlementBatchLines(settlement) {
+  const s = settlement || {};
+  const waived = s.cut_waived === true;
+  return payoutBatches(settlementLines(s.payouts, waived ? null : s.cut_wallet, waived ? 0 : s.cut_raw));
+}
+
 function scoredEndMs(campaign) {
   if (campaign && campaign.endsAt) {
     const at = new Date(campaign.endsAt).getTime();

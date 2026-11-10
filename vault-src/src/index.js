@@ -31,6 +31,9 @@ import {
   getMint,
 } from '@solana/spl-token';
 import * as multisig from '@sqds/multisig';
+import { PAYOUT_BATCH_LINES, payoutBatches } from '../../server/settlement.js';
+
+export { PAYOUT_BATCH_LINES };
 
 export const PROGRAM_ID = multisig.PROGRAM_ID;
 
@@ -143,7 +146,28 @@ export async function createTwoOfTwo(rpc, signer, wallet, bard) {
   return { vault: vaultPda.toBase58(), multisig: multisigPda.toBase58(), signature: signature };
 }
 
-export async function createPayoutProposal(rpc, signer, wallet, multisigAddress, mintAddress, payouts, cut) {
+// Payout lines (holders and the cut) split into vault transactions, the way the worker and the
+// Bard check split them: wallet order, PAYOUT_BATCH_LINES per transaction.
+function batchLines(payouts, cut, decimals) {
+  var lines = [];
+  (payouts || []).concat(cut && cut.wallet ? [cut] : []).forEach(function (payout) {
+    var raw = payoutRaw(payout, decimals);
+    if (raw > 0n) lines.push({ wallet: String(payout.wallet), amountRaw: raw.toString() });
+  });
+  return payoutBatches(lines);
+}
+
+/** How many vault transactions a payout needs. Amounts must be amountRaw integers. */
+export function payoutBatchCount(payouts, cut) {
+  return batchLines(payouts, cut, 0).length;
+}
+
+/**
+ * Build and propose one batch of a payout as a vault transaction. A payout of up to
+ * PAYOUT_BATCH_LINES lines is batch 0 and needs no batch argument; a larger one needs each batch
+ * proposed on its own (proposePayoutBatches does all of them).
+ */
+export async function createPayoutProposal(rpc, signer, wallet, multisigAddress, mintAddress, payouts, cut, batch) {
   var connection = connectionFrom(rpc);
   var team = pubkeyOf(wallet, signer);
   var multisigPda = new PublicKey(String(multisigAddress));
@@ -160,20 +184,14 @@ export async function createPayoutProposal(rpc, signer, wallet, multisigAddress,
   ];
   // The signer accepts payouts only in wallet order, the same order as payoutHash.
   // The cut is one more transfer in that order, not an instruction after the holders.
-  var ordered = (payouts || []).slice();
-  if (cut && cut.wallet && payoutRaw(cut, decimals) > 0n) {
-    ordered.push({ wallet: String(cut.wallet), amountRaw: String(cut.amountRaw) });
+  var batches = batchLines(payouts, cut, decimals);
+  var number = batch == null ? 0 : Number(batch);
+  if (batch == null && batches.length > 1) {
+    throw new Error('This payout is ' + batches.length + ' vault transactions; propose each batch');
   }
-  ordered.sort(function (a, b) {
-    var aw = String(a && a.wallet || '');
-    var bw = String(b && b.wallet || '');
-    if (aw < bw) return -1;
-    if (aw > bw) return 1;
-    return 0;
-  });
-  ordered.forEach(function (payout) {
-    var raw = payoutRaw(payout, decimals);
-    if (raw <= 0n) return;
+  if (!Number.isInteger(number) || number < 0 || number >= Math.max(batches.length, 1)) throw new Error('No batch ' + batch);
+  (batches[number] || []).forEach(function (payout) {
+    var raw = BigInt(payout.amountRaw);
     var owner = new PublicKey(String(payout.wallet));
     var ata = getAssociatedTokenAddressSync(mint, owner, true, tokenProgram);
     instructions.push(createAssociatedTokenAccountIdempotentInstruction(vaultPda, ata, owner, mint, tokenProgram));
@@ -215,6 +233,8 @@ export async function createPayoutProposal(rpc, signer, wallet, multisigAddress,
     transactionIndex: transactionIndex.toString(),
     tokenProgram: tokenProgram.toBase58(),
     decimals: decimals,
+    batch: number,
+    batches: batches.length,
   };
 }
 
@@ -248,6 +268,32 @@ export async function proposePayouts(rpc, signer, wallet, multisigAddress, mintA
     tokenProgram: created.tokenProgram,
     decimals: created.decimals,
   };
+}
+
+/**
+ * Propose and approve the batches of a payout, one vault transaction each. onBatch(result) runs
+ * after each batch so the caller can record it before the next. `only` limits the batches made.
+ */
+export async function proposePayoutBatches(rpc, signer, wallet, multisigAddress, mintAddress, payouts, cut, opts) {
+  var options = opts || {};
+  var count = payoutBatchCount(payouts, cut);
+  var out = [];
+  for (var n = 0; n < count; n++) {
+    if (options.only && options.only.indexOf(n) < 0) continue;
+    var created = await createPayoutProposal(rpc, signer, wallet, multisigAddress, mintAddress, payouts, cut, n);
+    var signature = await teamApprove(rpc, signer, wallet, multisigAddress, created.transactionIndex);
+    var result = {
+      batch: n,
+      batches: count,
+      signature: signature,
+      transactionIndex: created.transactionIndex,
+      createSignature: created.signature,
+      proposalSignature: created.proposalSignature,
+    };
+    if (options.onBatch) await options.onBatch(result);
+    out.push(result);
+  }
+  return out;
 }
 
 export async function executePayout(rpc, signer, wallet, multisigAddress, transactionIndex) {

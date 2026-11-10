@@ -608,11 +608,39 @@ function verifyLine(report){
   if(diff.reason) return 'Does not match: '+diff.reason;
   try{ return 'Does not match: '+JSON.stringify(diff).slice(0,500); }catch(e){ return 'Does not match this payout.'; }
 }
+// The payout's cut as the vault builder takes it, or null when there is none.
+function cutArgOf(live){
+  if(!live.cut_waived&&live.cut_wallet&&String(live.cut_raw||'0')!=='0') return {wallet:live.cut_wallet,amountRaw:String(live.cut_raw)};
+  return null;
+}
+// How many vault transactions the payout needs (6 lines each, holders and the cut).
+function batchCountOf(live){
+  if(!(window.BardVault&&BardVault.payoutBatchCount)) return 1;
+  try{ return BardVault.payoutBatchCount(live.payouts||[], cutArgOf(live)); }catch(e){ return 1; }
+}
 async function executeCurrent(p,c,live){
   if(!wallet||!provider){ toast('Connect the wallet that will execute','err'); await connectWallet(); return; }
   if(!window.BardVault||!BardVault.executePayout){ toast('Vault toolkit failed to load — refresh','err'); return; }
   var ms=p.vaultMultisig||live.vault_multisig;
   if(!ms||live.tx_index==null){ toast('The vault transaction is not recorded yet','err'); return; }
+  var count=batchCountOf(live);
+  if(count>1){
+    // Each batch is executed and recorded on its own; the payout closes on the last record.
+    var rows=await BardPlatform.listSettlementBatches(live.id);
+    var open=rows.filter(function(r){ return !r.tx_signature; });
+    // Every batch is recorded but the payout did not close (an interrupted close): record batch 0 again.
+    if(!open.length&&rows.length) await BardPlatform.executeSettlement(live.id, rows[0].tx_signature, p.id, Number(rows[0].batch));
+    for(var i=0;i<open.length;i++){
+      toast('Executing transaction '+(Number(open[i].batch)+1)+' of '+count,'ok');
+      var part=await BardVault.executePayout(BardPlatform.getRpc(), provider, wallet, ms, open[i].tx_index);
+      if(!part){ toast('No transaction signature','err'); return; }
+      await BardPlatform.executeSettlement(live.id, part, p.id, Number(open[i].batch));
+    }
+    toast('Payout executed','ok');
+    await refreshState();
+    openCampaign(c.id);
+    return;
+  }
   var sig=await BardVault.executePayout(BardPlatform.getRpc(), provider, wallet, ms, live.tx_index);
   if(!sig){ toast('No transaction signature','err'); return; }
   await BardPlatform.executeSettlement(live.id, sig, p.id);
@@ -640,12 +668,14 @@ function renderSettleBox(p,c,joins,sets){
   }
   var team=!!live.team_signed;
   var bard=!!live.bard_signed;
+  var batches=batchCountOf(live);
   var rows=(live.payouts||[]).map(function(x,i){
     return '<tr><td class="num">'+(i+1)+'</td><td class="num">'+BardPlatform.escapeHtml(shortAddr(x.wallet))+'</td><td class="num">'+BardPlatform.escapeHtml(String(x.amount))+' $'+BardPlatform.escapeHtml(p.ticker)+'</td></tr>';
   }).join('')+cutRowHtml(live, p.ticker);
   var actions='';
   if(!team){
-    actions='<button class="btn btn--solid" type="button" id="btn-cosign">Sign this payout</button>';
+    actions='<button class="btn btn--solid" type="button" id="btn-cosign">Sign this payout</button>'
+      +(batches>1?'<p class="muted" style="margin:6px 0 0;font-size:.88rem">This payout is '+batches+' vault transactions. Your wallet asks you to confirm each one.</p>':'');
   } else if(!bard){
     actions='<p class="muted" style="margin:0;font-size:.88rem">You signed. Waiting for Bard to sign the other key.</p>';
   } else if(!(window.BardVault&&BardVault.executePayout)){
@@ -654,7 +684,7 @@ function renderSettleBox(p,c,joins,sets){
     actions='<button class="btn btn--solid" type="button" id="btn-execute-payout">Execute payout</button>';
   }
   var cutNote=live.cut_waived?'Bard\'s cut is waived.':(live.cut_raw?('Bard\'s cut '+BardPlatform.escapeHtml(String(live.cut_raw))+' raw.'):'');
-  box.innerHTML='<p style="margin:0 0 8px;font-size:.92rem">Payout · <b class="num">'+BardPlatform.escapeHtml(fmtAmt(live.total))+' $'+BardPlatform.escapeHtml(p.ticker)+'</b> to '+(live.payouts||[]).length+' holders. '+cutNote+'</p>'+
+  box.innerHTML='<p style="margin:0 0 8px;font-size:.92rem">Payout · <b class="num">'+BardPlatform.escapeHtml(fmtAmt(live.total))+' $'+BardPlatform.escapeHtml(p.ticker)+'</b> to '+(live.payouts||[]).length+' holders'+(batches>1?(' in '+batches+' vault transactions'):'')+'. '+cutNote+'</p>'+
     '<div class="signers"><div class="signer '+(team?'is-yes':'is-wait')+'"><b>You</b><span>'+(team?'Signed':'Needs your signature')+'</span></div><div class="signer '+(bard?'is-yes':'is-wait')+'"><b>Bard</b><span>'+(bard?'Signed':'Waiting')+'</span></div></div>'+
     '<div style="overflow-x:auto"><table class="table"><thead><tr><th>#</th><th>Wallet</th><th>Amount</th></tr></thead><tbody>'+rows+'</tbody></table></div>'+
     '<div style="margin-top:12px">'+actions+'</div>';
@@ -710,6 +740,21 @@ async function renderBardSigns(p,c,sets){
     var ms=p.vaultMultisig||live.vault_multisig;
     approve.disabled=true;
     try{
+      if(batchCountOf(live)>1){
+        // The check above covered every batch; Bard approves each one still unsigned.
+        var parts=await BardPlatform.listSettlementBatches(live.id);
+        // Every batch carries Bard's approval already: record batch 0 again so the payout catches up.
+        if(parts.length&&parts.every(function(r){ return r.bard_signed; })) await BardPlatform.signSettlement(live.id,'bard',{txIndex:parts[0].tx_index,wallet:wallet,batch:Number(parts[0].batch)});
+        for(var i=0;i<parts.length;i++){
+          if(parts[i].bard_signed) continue;
+          var partSig=await BardVault.bardApprove(BardPlatform.getRpc(), provider, wallet, ms, parts[i].tx_index);
+          await BardPlatform.signSettlement(live.id,'bard',{sig:partSig,txIndex:parts[i].tx_index,wallet:wallet,batch:Number(parts[i].batch)});
+        }
+        toast('Bard signed','ok');
+        await refreshState();
+        openCampaign(c.id);
+        return;
+      }
       var sig=await BardVault.bardApprove(BardPlatform.getRpc(), provider, wallet, ms, live.tx_index);
       await BardPlatform.signSettlement(live.id,'bard',{sig:sig,txIndex:live.tx_index,wallet:wallet});
       toast('Bard signed','ok');
@@ -735,9 +780,28 @@ async function cosignCurrent(p,c,live){
   if(!ms){ toast('Link a vault first','err'); return; }
   try{
     var mint=p.vaultMint||p.mint;
-    var cutArg=null;
-    if(!live.cut_waived&&live.cut_wallet&&String(live.cut_raw||'0')!=='0'){
-      cutArg={wallet:live.cut_wallet,amountRaw:String(live.cut_raw)};
+    var cutArg=cutArgOf(live);
+    var count=batchCountOf(live);
+    if(count>1){
+      if(!BardVault.proposePayoutBatches){ toast('Vault toolkit failed to load — refresh','err'); return; }
+      // One vault transaction per batch; a batch already signed is not proposed again.
+      var have=(await BardPlatform.listSettlementBatches(live.id)).filter(function(r){ return r.team_signed; });
+      var signed=have.map(function(r){ return Number(r.batch); });
+      var todo=[];
+      for(var n=0;n<count;n++) if(signed.indexOf(n)<0) todo.push(n);
+      // Every batch carries the team's approval already: record batch 0 again so the payout catches up.
+      if(!todo.length&&have.length) await BardPlatform.signSettlement(live.id,'team',{txIndex:have[0].tx_index,wallet:wallet,multisig:ms,batch:Number(have[0].batch)});
+      toast('Confirm '+todo.length+' vault transaction'+(todo.length===1?'':'s')+' in your wallet','ok');
+      await BardVault.proposePayoutBatches(BardPlatform.getRpc(), provider, wallet, ms, mint, live.payouts, cutArg, {
+        only: todo,
+        onBatch: function(out){
+          return BardPlatform.signSettlement(live.id,'team',{sig:out.signature,txIndex:out.transactionIndex,wallet:wallet,multisig:ms,batch:out.batch});
+        }
+      });
+      toast('You signed. Waiting for Bard.','ok');
+      await refreshState();
+      openCampaign(c.id);
+      return;
     }
     toast('Confirm the payout in your wallet','ok');
     var out=await BardVault.proposePayouts(BardPlatform.getRpc(), provider, wallet, ms, mint, live.payouts, cutArg);

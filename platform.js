@@ -921,7 +921,8 @@
     var signed = await apiPost('/api/settlements/' + encodeURIComponent(settlementId) + path, {
       sig: extra && extra.sig,
       txIndex: extra && (extra.txIndex != null ? extra.txIndex : extra.tx_index),
-      wallet: extra && extra.wallet
+      wallet: extra && extra.wallet,
+      batch: extra && extra.batch != null ? extra.batch : undefined
     });
     return signed.settlement || signed;
   }
@@ -945,6 +946,17 @@
     return (localTeam().settlements || []).filter(function (s) { return s.campaign_id === campaignId; });
   }
 
+  // The vault transactions of a payout paid in batches (empty for a one-transaction payout).
+  async function listSettlementBatches(settlementId) {
+    await init();
+    if (mode === 'supabase' && sb) {
+      var res = await sb.from('vault_settlement_batches').select('*').eq('settlement_id', settlementId).order('batch', { ascending: true });
+      if (res.error) throw res.error;
+      return res.data || [];
+    }
+    return [];
+  }
+
   async function listExecutedSettlements() {
     await init();
     if (mode === 'supabase' && sb) {
@@ -961,14 +973,15 @@
     return signSettlement(settlementId, 'team', { wallet: wallet, sig: sig || null });
   }
 
-  async function executeSettlement(settlementId, txSignature, projectId) {
+  async function executeSettlement(settlementId, txSignature, projectId, batch) {
     await init();
     refuseLocalTeamWrite();
     if (mode === 'supabase' && sb) {
       if (!sessionToken) throw new Error('Sign in with your wallet first');
       var done = await apiPost('/api/settlements/' + encodeURIComponent(settlementId) + '/executed', {
         signature: txSignature || '',
-        projectId: projectId || null
+        projectId: projectId || null,
+        batch: batch != null ? batch : undefined
       });
       return done.settlement;
     }
@@ -1628,6 +1641,7 @@
     signSettlement: signSettlement,
     cosignSettlement: cosignSettlement,
     executeSettlement: executeSettlement,
+    listSettlementBatches: listSettlementBatches,
     getRpc: getRpc,
     getSolanaConfig: getSolanaConfig,
     getSolanaProblem: getSolanaProblem,

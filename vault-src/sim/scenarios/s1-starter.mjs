@@ -40,8 +40,7 @@ export default {
       }).then((v) => v.t);
 
       const rewardEach = BigInt(rng.int(1, 20)) * unit;
-      // One settlement is one vault transaction, which fits 6 holder transfers plus the cut (B2).
-      const fixedCount = rng.int(1, Math.min(6, holderCount));
+      const fixedCount = rng.int(1, holderCount);
       const top3Prize = BigInt(rng.int(10, 500)) * unit + BigInt(rng.int(0, Number(unit) - 1));
       const cutBps = 500n;
       const holdLock = expectedLock(rewardEach * BigInt(fixedCount), cutBps);
@@ -236,6 +235,7 @@ export default {
         checkEqual(state.links.receipt, '/c/' + hold.id + '/receipt', 'receipt link');
         const receipt = ok(await sim.world.api('GET', '/api/campaigns/' + hold.id + '/receipt'), 'receipt');
         checkEqual(receipt.settlement.tx_signature, holdPaid.signature, 'receipt signature');
+        checkEqual(receipt.settlement.transactions.map((t) => t.tx_signature), holdPaid.signatures, 'receipt transactions, one per vault transaction');
         check(receipt.settlement.hash_recomputed_ok === true, 'receipt is not verified: ' + JSON.stringify(receipt));
         checkEqual(receipt.rows.filter((r) => !r.is_platform_cut).length, holdExpected.length, 'receipt holder rows');
         checkEqual(receipt.rows.some((r) => r.is_platform_cut), BigInt(holdPaid.settlement.cut_raw || 0) > 0n, 'receipt cut row');

@@ -420,6 +420,50 @@ test('RLS isolates two wallets and blocks privileged columns', { timeout: 120000
     assert.equal(Number(totalKept.total), 2);
     assert.equal(totalKept.status, 'proposed');
 
+    // Payout batches (TRAA-2329): written by the worker only, read by the project admin only, and
+    // one vault transaction cannot pay two settlements across the two tables.
+    const other = await one(db, `SELECT id FROM public.vault_settlements WHERE campaign_id = $1 AND status = 'cancelled' LIMIT 1`, [campaign.id]);
+    await withRole(db, 'service_role', '', () => db.query(
+      `INSERT INTO public.vault_settlement_batches (settlement_id, batch, vault_multisig, tx_index, team_signed) VALUES ($1, 0, 'ms-a', '1', true)`,
+      [settlement.id]
+    ));
+    const adminBatches = await withRole(db, 'authenticated', walletA, () => db.query(`SELECT batch FROM public.vault_settlement_batches WHERE settlement_id = $1`, [settlement.id]));
+    assert.equal(adminBatches.rows.length, 1);
+    const strangerBatches = await withRole(db, 'authenticated', walletB, () => db.query(`SELECT batch FROM public.vault_settlement_batches WHERE settlement_id = $1`, [settlement.id]));
+    assert.equal(strangerBatches.rows.length, 0);
+    const anonBatches = await withRole(db, 'anon', '', () => denied(db, `SELECT batch FROM public.vault_settlement_batches`));
+    assert.match(anonBatches, /permission denied/);
+    const adminBatchInsert = await withRole(db, 'authenticated', walletA, () =>
+      denied(db, `INSERT INTO public.vault_settlement_batches (settlement_id, batch, vault_multisig, tx_index, bard_signed) VALUES ($1, 1, 'ms-a', '2', true)`, [settlement.id]));
+    assert.match(adminBatchInsert, /permission denied/);
+    const adminBatchUpdate = await withRole(db, 'authenticated', walletA, () =>
+      denied(db, `UPDATE public.vault_settlement_batches SET bard_signed = true, tx_signature = 'forged' WHERE settlement_id = $1`, [settlement.id]));
+    assert.match(adminBatchUpdate, /permission denied/);
+    const sameBatch = await withRole(db, 'service_role', '', () =>
+      denied(db, `INSERT INTO public.vault_settlement_batches (settlement_id, batch, vault_multisig, tx_index) VALUES ($1, 0, 'ms-a', '3')`, [settlement.id]));
+    assert.match(sameBatch, /one_per_batch|duplicate key|unique/i);
+    const sameTx = await withRole(db, 'service_role', '', () =>
+      denied(db, `INSERT INTO public.vault_settlement_batches (settlement_id, batch, vault_multisig, tx_index) VALUES ($1, 1, 'ms-a', '1')`, [settlement.id]));
+    assert.match(sameTx, /vault_tx_uidx|duplicate key|unique/i);
+    const otherTakesBatchTx = await withRole(db, 'service_role', '', () =>
+      denied(db, `UPDATE public.vault_settlements SET vault_multisig = 'ms-a', tx_index = '1' WHERE id = $1`, [other.id]));
+    assert.match(otherTakesBatchTx, /another settlement/);
+    await withRole(db, 'service_role', '', () => db.query(
+      `UPDATE public.vault_settlements SET vault_multisig = 'ms-a', tx_index = '1' WHERE id = $1`,
+      [settlement.id]
+    ));
+    await withRole(db, 'service_role', '', () => db.query(
+      `UPDATE public.vault_settlements SET vault_multisig = 'ms-c', tx_index = '9' WHERE id = $1`,
+      [other.id]
+    ));
+    const batchTakesOtherTx = await withRole(db, 'service_role', '', () =>
+      denied(db, `INSERT INTO public.vault_settlement_batches (settlement_id, batch, vault_multisig, tx_index) VALUES ($1, 1, 'ms-c', '9')`, [settlement.id]));
+    assert.match(batchTakesOtherTx, /another settlement/);
+    await withRole(db, 'service_role', '', async () => {
+      await db.query(`UPDATE public.vault_settlements SET vault_multisig = NULL, tx_index = NULL WHERE id IN ($1, $2)`, [settlement.id, other.id]);
+      await db.query(`DELETE FROM public.vault_settlement_batches WHERE settlement_id = $1`, [settlement.id]);
+    });
+
     await withRole(db, 'service_role', '', () => db.query(
       `UPDATE public.campaigns SET draw_slot = 100, draw_count = 1, draw_committed_at = now() WHERE id = $1`,
       [campaign.id]

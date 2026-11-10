@@ -11,6 +11,7 @@ import { shortWallet } from './campaign_state.js';
 import {
   canonicalPayoutText,
   rawToDecimal,
+  settlementBatchLines,
   settlementLines,
   sha256Hex,
 } from './settlement.js';
@@ -191,9 +192,8 @@ function amountText(raw, decimals) {
 // The verify route also refuses a campaign that is already paid. That guard
 // stops a second signature. A receipt is read after the campaign is paid, so
 // this uses the same vault-transaction decode and skips that write guard.
-async function vaultDecodeMatches(env, settlement, project) {
+async function vaultDecodeMatches(env, settlement, project, txIndex, batch) {
   const multisig = String((project && project.vault_multisig) || settlement.vault_multisig || '').trim();
-  const txIndex = settlement.tx_index;
   if (!isBase58Address(multisig) || txIndex == null || String(txIndex).trim() === '') {
     return { matches: false };
   }
@@ -224,6 +224,7 @@ async function vaultDecodeMatches(env, settlement, project) {
     mint,
     decimals: mintInfo.decimals,
     tokenProgram: mintInfo.tokenProgram,
+    batch,
   });
   return { matches: verdict.ok === true, decimals: mintInfo.decimals };
 }
@@ -254,6 +255,32 @@ function totalRaw(settlement, holders, waived) {
   const stored = integerText(settlement.holder_total_raw);
   const holder = stored || holders.reduce((sum, row) => sum + BigInt(row.amountRaw), 0n).toString();
   return (BigInt(holder) + BigInt(cut)).toString();
+}
+
+// The vault transactions that paid a settlement: the settlement row itself, or one per batch
+// (settlement.js) with batch 0's signature on the settlement row. A string is the unverified reason.
+async function paidTransactions(env, settlement) {
+  let count;
+  try {
+    count = settlementBatchLines(settlement).length;
+  } catch {
+    return 'hash_mismatch';
+  }
+  const signature = String(settlement.tx_signature).trim();
+  if (count <= 1) return [{ batch: 0, tx_index: settlement.tx_index, tx_signature: signature }];
+  const rows = await sbGet(
+    env,
+    '/vault_settlement_batches?settlement_id=eq.' + encodeURIComponent(settlement.id)
+      + '&select=batch,tx_index,tx_signature&order=batch.asc'
+  );
+  const out = [];
+  for (let batch = 0; batch < count; batch++) {
+    const row = rows.find((r) => r && Number(r.batch) === batch);
+    if (!row || signatureProblem(row.tx_signature)) return 'no_chain_signature';
+    out.push({ batch, tx_index: row.tx_index, tx_signature: String(row.tx_signature).trim() });
+  }
+  if (out[0].tx_signature !== signature) return 'chain_mismatch';
+  return out;
 }
 
 async function buildReceipt(env, campaignId) {
@@ -291,14 +318,31 @@ async function buildReceipt(env, campaignId) {
   );
   const project = projects[0];
   if (!project) return unverified('chain_mismatch');
-  const decoded = await vaultDecodeMatches(env, settlement, project);
-  if (!decoded.matches) return unverified('chain_mismatch');
   const signature = String(settlement.tx_signature).trim();
-  const tx = await rpc(env, 'getTransaction', [signature, { maxSupportedTransactionVersion: 0 }]);
-  if (!tx) return unverified('not_on_chain');
-  if (!tx.meta || tx.meta.err != null) return unverified('failed_on_chain');
+  const paid = await paidTransactions(env, settlement);
+  if (typeof paid === 'string') return unverified(paid);
+  // Every vault transaction of the payout must match its lines and have landed.
+  let decimals = null;
+  let tx = null;
+  const transactions = [];
+  for (const entry of paid) {
+    const decoded = await vaultDecodeMatches(env, settlement, project, entry.tx_index, entry.batch);
+    if (!decoded.matches) return unverified('chain_mismatch');
+    const landed = await rpc(env, 'getTransaction', [entry.tx_signature, { maxSupportedTransactionVersion: 0 }]);
+    if (!landed) return unverified('not_on_chain');
+    if (!landed.meta || landed.meta.err != null) return unverified('failed_on_chain');
+    if (entry.batch === 0) {
+      decimals = decoded.decimals;
+      tx = landed;
+    }
+    transactions.push({
+      batch: entry.batch,
+      tx_signature: entry.tx_signature,
+      explorer_url: explorerTx(entry.tx_signature, env.SOLANA_RPC),
+      slot: landed.slot == null ? null : Number(landed.slot),
+    });
+  }
 
-  const decimals = decoded.decimals;
   const waived = truthy(settlement.cut_waived);
   const holders = positiveHolders(settlement.payouts);
   const people = await holdersByWallet(env, holders.map((row) => row.wallet));
@@ -351,6 +395,7 @@ async function buildReceipt(env, campaignId) {
       block_time: blockTime,
       payout_hash: hash,
       hash_recomputed_ok: true,
+      transactions,
     },
     unit: ticker,
     decimals,

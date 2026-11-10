@@ -5,7 +5,7 @@
  */
 import { Keypair, PublicKey, SystemProgram, Transaction } from '@solana/web3.js';
 import { TOKEN_PROGRAM_ID, getAssociatedTokenAddressSync } from '@solana/spl-token';
-import { createTwoOfTwo, createPayoutProposal, teamApprove, executePayout } from '../../src/index.js';
+import { createTwoOfTwo, createPayoutProposal, teamApprove, executePayout, payoutBatchCount } from '../../src/index.js';
 import { lockNeed } from '../../../server/money.js';
 import { createActor, createWorld } from './world.mjs';
 import { check, checkEqual, ok } from './harness.mjs';
@@ -164,20 +164,40 @@ export async function settle(sim, project, campaignId, opts = {}) {
   const cut = settlement.cut_waived === true || !settlement.cut_wallet || BigInt(settlement.cut_raw || 0) === 0n
     ? null
     : { wallet: settlement.cut_wallet, amountRaw: String(settlement.cut_raw) };
-  const proposal = await createPayoutProposal(sim.chain.connection, team.keypair, team.wallet, project.multisig, project.mint, settlement.payouts, cut);
-  const teamSig = await teamApprove(sim.chain.connection, team.keypair, team.wallet, project.multisig, proposal.transactionIndex);
-  const teamSigned = await team.platform.signSettlement(settlement.id, 'team', { sig: teamSig, txIndex: proposal.transactionIndex });
-  check(teamSigned.team_signed === true, 'team signature was not recorded');
+  // More lines than one vault transaction fits are paid in batches, each signed by both keys.
+  const count = payoutBatchCount(settlement.payouts, cut);
+  const batchArg = (n) => (count > 1 ? n : undefined);
+  const proposals = [];
+  let teamSigned;
+  for (let n = 0; n < count; n++) {
+    const proposal = await createPayoutProposal(sim.chain.connection, team.keypair, team.wallet, project.multisig, project.mint, settlement.payouts, cut, batchArg(n));
+    const teamSig = await teamApprove(sim.chain.connection, team.keypair, team.wallet, project.multisig, proposal.transactionIndex);
+    teamSigned = await team.platform.signSettlement(settlement.id, 'team', { sig: teamSig, txIndex: proposal.transactionIndex, batch: batchArg(n) });
+    check(teamSigned.team_signed === (n === count - 1), 'team signature after batch ' + n + ' of ' + count);
+    proposals.push(proposal);
+  }
+  const proposal = proposals[0];
   if (opts.afterTeamSign) await opts.afterTeamSign(settlement, proposal);
-  await teamApprove(sim.chain.connection, sim.bard, sim.bard.publicKey.toBase58(), project.multisig, proposal.transactionIndex);
-  const bardSigned = await sim.bardActor.platform.signSettlement(settlement.id, 'bard', { txIndex: proposal.transactionIndex });
-  check(bardSigned.bard_signed === true, 'Bard signature was not recorded');
+  let bardSigned;
+  for (let n = 0; n < count; n++) {
+    await teamApprove(sim.chain.connection, sim.bard, sim.bard.publicKey.toBase58(), project.multisig, proposals[n].transactionIndex);
+    bardSigned = await sim.bardActor.platform.signSettlement(settlement.id, 'bard', { txIndex: proposals[n].transactionIndex, batch: batchArg(n) });
+    check(bardSigned.bard_signed === (n === count - 1), 'Bard signature after batch ' + n + ' of ' + count);
+  }
   checkEqual(bardSigned.status, 'both_signed', 'status after both signatures');
   if (opts.afterBothSigned) await opts.afterBothSigned(settlement, proposal);
   const before = await balances(sim, project, settlement);
-  const signature = await executePayout(sim.chain.connection, team.keypair, team.wallet, project.multisig, proposal.transactionIndex);
-  const executed = await team.platform.executeSettlement(settlement.id, signature, project.id);
-  checkEqual(executed.status, 'executed', 'settlement status');
+  // Batches are executed and recorded last to first: the settlement closes on the last record.
+  const signatures = [];
+  let executed;
+  for (let n = count - 1; n >= 0; n--) {
+    const sig = await executePayout(sim.chain.connection, team.keypair, team.wallet, project.multisig, proposals[n].transactionIndex);
+    executed = await team.platform.executeSettlement(settlement.id, sig, project.id, batchArg(n));
+    checkEqual(executed.status, n === 0 ? 'executed' : 'both_signed', 'settlement status after batch ' + n + ' of ' + count);
+    signatures[n] = sig;
+  }
+  const signature = signatures[0];
+  checkEqual(executed.tx_signature, signature, 'closing signature is batch 0');
   const after = await balances(sim, project, settlement);
   for (const payout of settlement.payouts) {
     checkEqual((after.get(payout.wallet) - before.get(payout.wallet)).toString(), String(payout.amountRaw), 'paid to ' + payout.wallet);
@@ -185,7 +205,7 @@ export async function settle(sim, project, campaignId, opts = {}) {
   if (cut) {
     checkEqual((after.get(cut.wallet) - before.get(cut.wallet)).toString(), cut.amountRaw, 'cut paid to the cut wallet');
   }
-  return { settlement, executed, signature, txIndex: proposal.transactionIndex };
+  return { settlement, executed, signature, txIndex: proposal.transactionIndex, batches: count, signatures };
 }
 
 async function balances(sim, project, settlement) {

@@ -2,15 +2,17 @@
  * Scenario 7. Abuse and edge cases: the same wallet joining twice, bad base58 addresses, a
  * holder who drops below the hold amount, zero joiners, a prize smaller than the winner count,
  * rounding remainders, cosigning a settlement twice, executing before both signatures, joining
- * after the end, and a settlement with more holders than one vault transaction can pay.
+ * after the end, and a settlement with more holders than one vault transaction can pay, paid in
+ * batches that cannot be swapped, skipped or recorded twice.
  */
 import { Keypair } from '@solana/web3.js';
+import bs58 from 'bs58';
 import { check, checkEqual, ok, refused } from '../lib/harness.mjs';
 import {
   openSim, closeSim, makeTeam, makeHolders, launchProject, giveTokens, createCampaign,
   expectedLock, joinAll, joinRows, settle, human, labelOf, ageCampaign,
 } from '../lib/journey.mjs';
-import { createPayoutProposal, teamApprove, executePayout } from '../../src/index.js';
+import { PAYOUT_BATCH_LINES, createPayoutProposal, teamApprove, executePayout, payoutBatchCount } from '../../src/index.js';
 import { expectedPool, expectedCut } from '../lib/expect.mjs';
 
 const BAD_ADDRESSES = ['', 'not-a-wallet', '0OIl0OIl0OIl0OIl0OIl0OIl0OIl0OIl', '1111', 'So11111111111111111111111111111111111111112x', '<script>alert(1)</script>', ' '.repeat(44)];
@@ -251,9 +253,95 @@ export default {
         await joinAll(project, c, eight);
         for (const h of eight) await team.platform.markQualified(project.id, c.id, h.wallet);
         await team.platform.updateCampaignStatus(c.id, 'ended');
-        await settle(sim, project, c.id);
-        return 'paid 8';
-      }, { known: 'B2 (TRAA-2329) one settlement is one vault transaction, which fits 6 holder transfers plus the cut' });
+        const paid = await settle(sim, project, c.id);
+        // 8 holders and the cut are 9 lines: two vault transactions of 6 and 3.
+        checkEqual(paid.batches, 2, 'vault transactions');
+        return 'paid 8 holders and the cut in ' + paid.batches + ' vault transactions';
+      });
+
+      await step('paying in batches: every holder is paid, and a batch cannot be swapped, skipped or recorded twice', async () => {
+        const conn = sim.chain.connection;
+        const all = holders.slice();
+        const c = await createCampaign(sim, project, { title: 'Everyone', type: 'custom', rule: 'r', rewardMode: 'fixed', reward: '2', config: { holderCount: String(all.length) }, days: 7 });
+        await joinAll(project, c, all);
+        for (const h of all) await team.platform.markQualified(project.id, c.id, h.wallet);
+        await team.platform.updateCampaignStatus(c.id, 'ended');
+        const settlement = await team.platform.proposeSettlement(project.id, c.id);
+        checkEqual(settlement.payouts.length, all.length, 'holders in the settlement');
+        const cut = { wallet: settlement.cut_wallet, amountRaw: String(settlement.cut_raw) };
+        check(BigInt(cut.amountRaw) > 0n, 'the cut is not waived');
+        const count = payoutBatchCount(settlement.payouts, cut);
+        checkEqual(count, Math.ceil((all.length + 1) / PAYOUT_BATCH_LINES), 'vault transactions');
+        await refused(() => createPayoutProposal(conn, team.keypair, team.wallet, project.multisig, project.mint, settlement.payouts, cut), /vault transactions/, 'building the payout as one vault transaction');
+
+        const proposals = [];
+        for (let n = 0; n < count; n++) {
+          const p = await createPayoutProposal(conn, team.keypair, team.wallet, project.multisig, project.mint, settlement.payouts, cut, n);
+          await teamApprove(conn, team.keypair, team.wallet, project.multisig, p.transactionIndex);
+          proposals.push(p);
+        }
+        const teamSign = (n, txIndex) => team.platform.signSettlement(settlement.id, 'team', { txIndex, batch: n });
+        await refused(() => team.platform.signSettlement(settlement.id, 'team', { txIndex: proposals[0].transactionIndex }), /batch/, 'team-signed without naming the batch');
+        await refused(() => teamSign(0, proposals[1].transactionIndex), /match/, 'batch 1\'s vault transaction recorded as batch 0');
+        await refused(() => teamSign(count, proposals[0].transactionIndex), /batch/, 'a batch past the last');
+        for (let n = 0; n < count; n++) {
+          const row = await teamSign(n, proposals[n].transactionIndex);
+          checkEqual([row.team_signed, row.status], n === count - 1 ? [true, 'awaiting_bard'] : [false, 'awaiting_team'], 'settlement after the team signs batch ' + n);
+        }
+        await refused(() => teamSign(1, proposals[0].transactionIndex), /bound|batch/, 'batch 1 moved to batch 0\'s vault transaction');
+        // Totals that fell behind the batch rows (two records at once) catch up on the next record.
+        await sim.world.sql("UPDATE public.vault_settlements SET team_signed = false, status = 'awaiting_team' WHERE id = $1", [settlement.id]);
+        const caughtUp = await teamSign(0, proposals[0].transactionIndex);
+        checkEqual([caughtUp.team_signed, caughtUp.status], [true, 'awaiting_bard'], 'settlement after batch 0 is recorded again');
+        for (let n = 0; n < count; n++) {
+          await teamApprove(conn, sim.bard, sim.bard.publicKey.toBase58(), project.multisig, proposals[n].transactionIndex);
+          await sim.bardActor.platform.signSettlement(settlement.id, 'bard', { txIndex: proposals[n].transactionIndex, batch: n });
+        }
+        const signed = ok(await sim.world.rest('GET', '/vault_settlements?id=eq.' + settlement.id + '&select=status,tx_index'), 'settlement')[0];
+        checkEqual([signed.status, String(signed.tx_index)], ['both_signed', String(proposals[0].transactionIndex)], 'settlement after both keys signed every batch');
+
+        const before = new Map();
+        for (const w of [...all.map((h) => h.wallet), cut.wallet]) before.set(w, await sim.chain.tokenBalance(w, project.mint));
+        const last = count - 1;
+        const lastSig = await executePayout(conn, team.keypair, team.wallet, project.multisig, proposals[last].transactionIndex);
+        await refused(() => team.platform.executeSettlement(settlement.id, lastSig, project.id, 0), /match|execute/, 'the last batch\'s payout recorded as batch 0');
+        await refused(() => team.platform.executeSettlement(settlement.id, lastSig, project.id), /batch/, 'a payout recorded without naming the batch');
+        const partial = await team.platform.executeSettlement(settlement.id, lastSig, project.id, last);
+        checkEqual(partial.status, 'both_signed', 'settlement after one of ' + count + ' batches is paid');
+        const again = await team.platform.executeSettlement(settlement.id, lastSig, project.id, last);
+        checkEqual(again.status, 'both_signed', 'recording the same batch twice');
+        const campaignRow = ok(await sim.world.rest('GET', '/campaigns?id=eq.' + c.id + '&select=status'), 'campaign')[0];
+        checkEqual(campaignRow.status, 'ended', 'campaign before every batch is paid');
+        const sigs = [];
+        for (let n = last - 1; n >= 0; n--) {
+          sigs[n] = await executePayout(conn, team.keypair, team.wallet, project.multisig, proposals[n].transactionIndex);
+          await refused(() => team.platform.executeSettlement(settlement.id, sigs[n], project.id, last), /paid/, 'batch ' + n + '\'s payout recorded on the paid batch');
+          // The last record stops after claiming its signature: the retry closes the payout.
+          if (n === 0) await sim.world.sql('UPDATE public.vault_settlement_batches SET tx_signature = $1, executed_at = now() WHERE settlement_id = $2 AND batch = 0', [sigs[0], settlement.id]);
+          const row = await team.platform.executeSettlement(settlement.id, sigs[n], project.id, n);
+          checkEqual(row.status, n === 0 ? 'executed' : 'both_signed', 'settlement after batch ' + n + ' is recorded');
+          if (n === 0) checkEqual(row.tx_signature, sigs[0], 'closing signature');
+        }
+        for (const p of settlement.payouts) {
+          checkEqual((await sim.chain.tokenBalance(p.wallet, project.mint) - before.get(p.wallet)).toString(), String(p.amountRaw), 'paid to ' + labelOf(sim, p.wallet));
+        }
+        checkEqual((await sim.chain.tokenBalance(cut.wallet, project.mint) - before.get(cut.wallet)).toString(), cut.amountRaw, 'cut');
+        const paidRow = ok(await sim.world.rest('GET', '/campaigns?id=eq.' + c.id + '&select=status,vault_reserved_raw'), 'campaign')[0];
+        checkEqual([paidRow.status, String(paidRow.vault_reserved_raw)], ['paid', '0'], 'campaign after the last batch');
+        const batchRows = ok(await sim.world.rest('GET', '/vault_settlement_batches?settlement_id=eq.' + settlement.id + '&select=batch,tx_signature&order=batch.asc'), 'batches');
+        checkEqual(batchRows.map((r) => r.tx_signature), [sigs[0], ...sigs.slice(1, last), lastSig], 'recorded batch signatures');
+        await refused(() => team.platform.proposeSettlement(project.id, c.id), /paid|settlement/i, 'paying the campaign again');
+        const receipt = ok(await sim.world.api('GET', '/api/campaigns/' + c.id + '/receipt'), 'receipt');
+        checkEqual(receipt.settlement.transactions.map((t) => t.tx_signature), batchRows.map((r) => r.tx_signature), 'receipt transactions');
+        checkEqual(receipt.rows.length, all.length + 1, 'receipt rows');
+        // A batch whose signature did not land makes the whole receipt unverified.
+        const forged = bs58.encode(Buffer.concat([Buffer.from(rng.seedBytes('forged-1')), Buffer.from(rng.seedBytes('forged-2'))]));
+        await sim.world.sql('UPDATE public.vault_settlement_batches SET tx_signature = $1 WHERE settlement_id = $2 AND batch = 1', [forged, settlement.id]);
+        const broken = await sim.world.api('GET', '/api/campaigns/' + c.id + '/receipt');
+        checkEqual([broken.status, broken.data && broken.data.reason], [409, 'not_on_chain'], 'receipt with a batch that is not on chain');
+        await sim.world.sql('UPDATE public.vault_settlement_batches SET tx_signature = $1 WHERE settlement_id = $2 AND batch = 1', [batchRows[1].tx_signature, settlement.id]);
+        return all.length + ' holders and the cut paid in ' + count + ' vault transactions; swapped, unnamed, duplicate and out-of-order records refused';
+      });
     } finally {
       await closeSim(sim);
     }

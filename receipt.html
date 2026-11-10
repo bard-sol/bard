@@ -172,6 +172,27 @@ tr.is-you{background:var(--purple-soft)}
         link.textContent = 'view on explorer';
         tx.append(link);
       }
+      // A large payout is paid in several vault transactions; link each one.
+      var parts = (body.settlement.transactions || []);
+      if (parts.length > 1) {
+        tx.append(document.createTextNode(' · paid in ' + parts.length + ' transactions:'));
+        parts.forEach(function (part, i) {
+          var partHref = window.BardPlatform && BardPlatform.safeHttpUrl(part.explorer_url);
+          tx.append(document.createTextNode(' '));
+          if (!partHref) {
+            tx.append(document.createTextNode(String(i + 1)));
+            return;
+          }
+          var partLink = document.createElement('a');
+          partLink.className = 'tx-part';
+          partLink.href = partHref;
+          partLink.target = '_blank';
+          partLink.rel = 'noopener';
+          partLink.title = String(part.tx_signature || '');
+          partLink.textContent = String(i + 1);
+          tx.append(partLink);
+        });
+      }
     }
     var rows = document.getElementById('receipt-rows');
     rows.textContent = '';
