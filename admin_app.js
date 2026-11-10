@@ -283,7 +283,7 @@ function evidenceCell(p,c,join,queueRow,decimals){
   var ev=queueRow&&queueRow.evidence;
   if(!ev) return '<span class="muted">—</span>';
   var kind=String(ev.kind||c.type||'');
-  if(kind==='raid'){
+  if(kind==='raid'||kind==='custom'){
     var href=BardPlatform.safeHttpUrl(ev.post_url);
     if(!href) return '<span class="muted">no link submitted</span>';
     return '<a href="'+BardPlatform.escapeHtml(href)+'" target="_blank" rel="noopener">open post</a>';
