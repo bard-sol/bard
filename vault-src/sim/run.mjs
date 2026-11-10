@@ -13,7 +13,9 @@
  * the rest run on a local Solana (LiteSVM with the real Squads and SPL Token programs). The
  * database is always a local Supabase (PGlite with every migration); production is never
  * contacted. Prints PASS, FAIL or KNOWN per step and per scenario and writes a JSON report to
- * sim-reports/. Exits 1 when any step fails or the network guard saw a refused request.
+ * sim-reports/. A devnet run whose team or Bard key cannot pay is REFUSED before anything is
+ * sent, and that report has no step FAIL. Exits 1 when any step fails, a run is refused, or
+ * the network guard saw a refused request.
  */
 import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
@@ -58,6 +60,27 @@ async function runOnce(args, seed, browser) {
   const started = Date.now();
   const selected = scenarios.filter((s) => !args.only || args.only.includes(s.id));
   if (!selected.length) throw new Error('no scenario matches --only ' + args.only.join(','));
+  const devnetIds = selected.filter((scenario) => chainFor(args, scenario) === 'devnet').map((scenario) => scenario.id);
+  if (devnetIds.length) {
+    const { beginDevnetRun, refusedRunReport } = await import('./lib/devnet-afford.mjs');
+    const { readRehearsalBalances } = await import('./lib/chain-devnet.mjs');
+    const decision = await beginDevnetRun({
+      scenarioIds: devnetIds,
+      readBalances: () => readRehearsalBalances(root),
+    });
+    if (decision.refused) {
+      const report = refusedRunReport({
+        seed,
+        chain: args.chain,
+        refusal: decision.refusal,
+        startedAt: new Date(started).toISOString(),
+        ms: Date.now() - started,
+      });
+      console.log('');
+      console.log('REFUSED  ' + report.refusal.message);
+      return finishReport(args, seed, started, report);
+    }
+  }
   const violationsBefore = violations.length;
   console.log('');
   console.log('Bard launch simulation  seed ' + seed + '  chain ' + args.chain + '  ' + selected.length + ' scenarios');
@@ -130,6 +153,10 @@ async function runOnce(args, seed, browser) {
   console.log(report.status + '  seed ' + seed + '  ' + report.summary.passed + '/' + report.summary.scenarios + ' scenarios, '
     + report.summary.steps + ' steps, ' + report.summary.known + ' known bugs, fingerprint ' + report.fingerprint
     + ', ' + (report.ms / 1000).toFixed(1) + 's');
+  return finishReport(args, seed, started, report);
+}
+
+function finishReport(args, seed, started, report) {
   const file = args.report && args.repeat === 1
     ? path.resolve(args.report)
     : path.join(root, 'sim-reports', 'sim-' + seed + '-' + new Date(started).toISOString().replace(/[:.]/g, '-') + '.json');

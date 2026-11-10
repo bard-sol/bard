@@ -3,10 +3,11 @@
  *
  * Only https://api.devnet.solana.com is used, and the genesis hash is checked before anything
  * is sent. The team and Bard keys are the throwaway devnet keys in ~/.bard-devnet-rehearsal
- * (or BARD_REHEARSAL_KEY_DIR), shared with `npm run campaign:devnet`. No faucet is called: a
- * run that would need more devnet SOL than the team key holds stops before it starts. Holder
- * wallets are derived from the seed and never need SOL; the team pays their fees and rent, and
- * gets the token-account rent back when the run closes them.
+ * (or BARD_REHEARSAL_KEY_DIR), shared with `npm run campaign:devnet`. No faucet is called.
+ * run.mjs reads both balances through `readRehearsalBalances` and refuses the run, before
+ * this module sends, when either key cannot pay for that run. Holder wallets are derived
+ * from the seed and never need SOL; the team pays their fees and rent, and gets the
+ * token-account rent back when the run closes them.
  */
 import { randomBytes } from 'node:crypto';
 import { chmodSync, existsSync, readFileSync } from 'node:fs';
@@ -106,6 +107,22 @@ async function devnetFetch(url, init) {
     const pause = Math.min(6000, 500 * 2 ** Math.min(attempt, 4)) + Math.floor(Math.random() * 400);
     methodReadyAt.set(method, Math.max(methodReadyAt.get(method) || 0, Date.now() + pause));
   }
+}
+
+/** Team and Bard balances in lamports. Reads only: nothing is transferred. */
+export async function readRehearsalBalances(rootDir) {
+  assertDevnetUrl(DEVNET_RPC);
+  const connection = new Connection(DEVNET_RPC, { commitment: 'confirmed', fetch: (url, init) => devnetFetch(String(url), init) });
+  const genesis = await connection.getGenesisHash();
+  if (genesis !== DEVNET_GENESIS) throw new Error('genesis ' + genesis + ' is not devnet');
+  const dir = keyDirectory(rootDir);
+  const team = loadKey(dir, 'team');
+  const bard = loadKey(dir, 'bard');
+  const [teamBalance, bardBalance] = await Promise.all([
+    connection.getBalance(team.publicKey, 'confirmed'),
+    connection.getBalance(bard.publicKey, 'confirmed'),
+  ]);
+  return { team: BigInt(teamBalance), bard: BigInt(bardBalance) };
 }
 
 export async function createDevnetChain(opts) {

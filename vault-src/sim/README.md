@@ -42,6 +42,10 @@ stops reproducing, so remove its `known` marker in the same change as the fix.
 - The worker gets a sim Supabase URL and keys. The production project URL in `platform.js`
   is routed to the local shim.
 - The run refuses to start if the Bard signer is the fee treasury or the cut wallet.
+- Before anything is sent on devnet, the run reads the team key and the Bard key. Each
+  `--repeat` checks again. A key below the measured cost of that run (plus a margin) is a
+  REFUSED report, naming the key, the balance and the amount needed. It is not a step FAIL.
+  Use `--chain local`, or top up the key. No faucet is called.
 - No secrets: the JWT secret and service key are random for each run.
 
 `tests/unit/sim_guard.test.js` pins the guards, the seeded randomness and the shim's filter
