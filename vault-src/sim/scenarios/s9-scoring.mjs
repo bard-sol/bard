@@ -71,7 +71,7 @@ export default {
         return [a, b];
       });
 
-      await step('A has no score API; B\'s score API is only for its team and only while the flag is on', async () => {
+      await step('A has no score API; B\'s score API is only for its team and only while the flag is on, and B takes no draw', async () => {
         await refused(() => sim.world.api('POST', '/api/campaigns/' + plain.id + '/score/accounts', { accounts: [{ handle: 'x', created_on: '2020-01-01', followers: 1, following: 1 }] }, team.token), /not scored/, 'score entry on A');
         // An unscored campaign answers like a missing one, so check the status, not the refusal text.
         checkEqual((await sim.world.api('GET', '/api/campaigns/' + plain.id + '/score')).status, 404, 'public score of A');
@@ -81,7 +81,8 @@ export default {
         const stillScored = ok(await sim.world.rest('GET', '/campaigns?id=eq.' + scored.id + '&select=config'), 'campaign')[0];
         check(stillScored.config.scoreRule, 'turning the flag off removed B\'s rule');
         env.SCORED_CAMPAIGNS = 'true';
-        return 'A: not scored; B: entry refused while the flag is off, rule kept';
+        await refused(() => team.platform.commitDraw(scored.id, 0), /scored campaign/, 'a draw on B');
+        return 'A: not scored; B: entry refused while the flag is off, rule kept, draw refused';
       });
 
       const holders = await makeHolders(sim, ctx.holderCount(7, 14));

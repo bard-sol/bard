@@ -290,6 +290,12 @@ test('campaign state matches the public shape for every payout sentence and cloc
     const draw = await build({ draw_count: 4, reward_mode: 'fixed' });
     assert.equal(draw.body.prize.who_gets_paid, 'draw');
     assert.equal(draw.body.prize.who_gets_paid_text, 'draw of 4 from the qualified, seed committed to a Solana slot');
+    // The team button commits draw_count 0: the payout still follows the draw, so the page says so.
+    const button = await build({ draw_count: 0, draw_slot: 1234, reward_mode: 'fixed' });
+    assert.equal(button.body.prize.who_gets_paid, 'draw');
+    assert.equal(button.body.prize.who_gets_paid_text, 'the qualified in draw order, seed committed to a Solana slot');
+    const scoredDraw = await build({ draw_count: 2, reward_mode: 'top3', config: { scoreRule: { version: 1 } } });
+    assert.equal(scoredDraw.body.prize.who_gets_paid, 'top3');
 
     const open = await build({ duration_days: 0 });
     assert.equal(open.body.clock.no_end, true);

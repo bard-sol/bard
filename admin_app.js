@@ -544,7 +544,7 @@ async function loadCampaignOps(p,c){
 }
 function renderDrawBox(p,c,joins){
   var host=document.getElementById('camp-settle');
-  if(!host) return;
+  if(!host||campaignScored(c)) return;
   var wrap=document.createElement('div');
   wrap.style.marginTop='18px';
   wrap.style.paddingTop='14px';

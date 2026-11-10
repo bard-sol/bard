@@ -382,10 +382,23 @@ function computeScoredPayouts(view, joins, decimals) {
   return { payouts, total: rawToDecimal(totalRaw, d), totalRaw: totalRaw.toString(), unit, hash: payoutHash(payouts) };
 }
 
-// A campaign with a committed draw pays its draw winners, in draw order, and no one else. The
-// public page says so ("draw of N from the qualified"). A winner rejected after the draw drops out.
+// A campaign uses a draw once a slot is committed, a count is set, or winners are stored. The team
+// button commits draw_count 0 (the whole roster in draw order), so the count alone is not enough.
+// A scored campaign pays by score and never takes a draw (assertDrawStep refuses one).
+function drawUsed(view) {
+  if (view.config && view.config.scoreRule) return false;
+  const winners = Array.isArray(view.drawWinners) ? view.drawWinners : [];
+  return winners.length > 0 || Number(view.drawCount) > 0 || !!view.drawSlot;
+}
+
+export function drawInUse(campaign) {
+  return drawUsed(asCampaign(campaign));
+}
+
+// A campaign with a draw pays its draw winners, in draw order, and no one else. The public page
+// says so. A winner rejected after the draw drops out.
 function drawWinnerRows(view, joins) {
-  if (!(Number(view.drawCount) > 0)) return null;
+  if (!drawUsed(view)) return null;
   const winners = Array.isArray(view.drawWinners) ? view.drawWinners : [];
   if (!winners.length) throw new Error('Finalize the draw before paying');
   const byWallet = new Map(dedupeJoins(joins).map((j) => [j.wallet, j]));
@@ -504,6 +517,7 @@ export function deriveWinners(joins, seed, topN) {
 
 export function assertDrawStep(campaign, step) {
   const view = asCampaign(campaign);
+  if (view.config && view.config.scoreRule) throw new Error('A scored campaign pays by score, not by a draw');
   const winners = view.drawWinners;
   if ((winners && winners.length) || view.drawSeed) throw new Error('Draw already finalized');
   if (step === 'commit' && view.drawSlot) throw new Error('Draw slot already committed');

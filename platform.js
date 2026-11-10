@@ -742,10 +742,18 @@
     return BigInt(text);
   }
 
-  // Same rule as server/settlement.js: a campaign with a committed draw pays its draw winners only.
-  function drawWinnerRows(campaign, joins) {
+  // Same rule as server/settlement.js: a committed slot, a count or stored winners means a draw,
+  // because the team button commits draw_count 0. A scored campaign never takes a draw.
+  function drawInUse(campaign) {
+    if (!campaign || campaignConfig(campaign).scoreRule) return false;
     var count = Number(campaign.drawCount != null ? campaign.drawCount : campaign.draw_count);
-    if (!(count > 0)) return null;
+    var winners = campaign.drawWinners || campaign.draw_winners || [];
+    return winners.length > 0 || count > 0 || !!(campaign.drawSlot || campaign.draw_slot);
+  }
+
+  // A campaign with a draw pays its draw winners only, in draw order.
+  function drawWinnerRows(campaign, joins) {
+    if (!drawInUse(campaign)) return null;
     var winners = campaign.drawWinners || campaign.draw_winners || [];
     if (!winners.length) throw new Error('Finalize the draw before paying');
     var rows = [];
@@ -1311,6 +1319,7 @@
   }
 
   function assertDrawStep(campaign, step) {
+    if (campaign && campaignConfig(campaign).scoreRule) throw new Error('A scored campaign pays by score, not by a draw');
     var winners = campaign && campaign.drawWinners;
     if ((winners && winners.length) || (campaign && campaign.drawSeed)) throw new Error('Draw already finalized');
     if (step === 'commit' && campaign && campaign.drawSlot) throw new Error('Draw slot already committed');

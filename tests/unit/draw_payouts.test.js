@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { computePayouts } from '../../server/settlement.js';
+import { assertDrawStep, computePayouts, drawInUse } from '../../server/settlement.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 
@@ -61,10 +61,37 @@ test('without a draw, payouts still follow rank', () => {
   assert.deepEqual(out.payouts.map((p) => p.wallet), ['Aaaa', 'Dddd']);
 });
 
+// TRAA-2335: the team's draw button commits draw_count 0, which keeps the whole roster in draw
+// order. The payout ignored the stored winners and paid the qualified by rank instead.
+test('the draw button (draw_count 0) pays the stored winners in draw order', () => {
+  const out = computePayouts(drawn({ draw_count: 0, draw_slot: 1234, prize_raw: '4', draw_winners: [{ wallet: 'Cccc' }, { wallet: 'Bbbb' }, { wallet: 'Aaaa' }] }), joins, 0);
+  assert.deepEqual(out.payouts.map((p) => [p.wallet, p.amountRaw]), [['Cccc', '2'], ['Bbbb', '2']]);
+  const noSlot = computePayouts(drawn({ draw_count: 0, draw_winners: [{ wallet: 'Cccc' }, { wallet: 'Bbbb' }] }), joins, 0);
+  assert.deepEqual(noSlot.payouts.map((p) => p.wallet), ['Cccc', 'Bbbb']);
+});
+
+test('a slot committed by the draw button cannot be paid before the reveal', () => {
+  assert.throws(() => computePayouts(drawn({ draw_count: 0, draw_slot: 1234, draw_seed: null, draw_winners: null }), joins, 0), /Finalize the draw/);
+});
+
+test('a scored campaign refuses a draw and pays by score', () => {
+  const scored = { reward_mode: 'fixed', reward: '2', prize_raw: '4', config: { scoreRule: { version: 1 } } };
+  assert.throws(() => assertDrawStep(scored, 'commit'), /scored campaign/);
+  assert.throws(() => loadPlatform().assertDrawStep({ config: scored.config }, 'commit'), /scored campaign/);
+  assert.equal(drawInUse({ ...scored, draw_count: 2, draw_winners: [{ wallet: 'Cccc' }] }), false);
+  const out = computePayouts({ ...scored, draw_count: 2, draw_winners: [{ wallet: 'Cccc' }, { wallet: 'Bbbb' }] }, joins, 0);
+  assert.deepEqual(out.payouts.map((p) => p.wallet), ['Aaaa', 'Dddd']);
+});
+
 test('the browser copy of computePayouts applies the same draw rule', () => {
   const BP = loadPlatform();
   const camp = { rewardMode: 'fixed', reward: '2', prizeRaw: '6', drawCount: 3, drawWinners: drawn().draw_winners };
   const out = BP.computePayouts(camp, joins, 0);
   assert.deepEqual(JSON.parse(JSON.stringify(out.payouts.map((p) => [p.wallet, p.amountRaw]))), [['Cccc', '2'], ['Bbbb', '2']]);
   assert.throws(() => BP.computePayouts({ ...camp, drawWinners: null }, joins, 0), /Finalize the draw/);
+  const button = BP.computePayouts({ ...camp, drawCount: 0, drawSlot: 1234, prizeRaw: '4', drawWinners: [{ wallet: 'Cccc' }, { wallet: 'Bbbb' }, { wallet: 'Aaaa' }] }, joins, 0);
+  assert.deepEqual(JSON.parse(JSON.stringify(button.payouts.map((p) => p.wallet))), ['Cccc', 'Bbbb']);
+  assert.throws(() => BP.computePayouts({ ...camp, drawCount: 0, drawSlot: 1234, drawWinners: null }, joins, 0), /Finalize the draw/);
+  const plain = BP.computePayouts({ ...camp, drawCount: 0, drawWinners: null }, joins, 0);
+  assert.deepEqual(JSON.parse(JSON.stringify(plain.payouts.map((p) => p.wallet))), ['Aaaa', 'Dddd']);
 });

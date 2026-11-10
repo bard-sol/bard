@@ -1,4 +1,4 @@
-import { sha256Hex } from './settlement.js';
+import { drawInUse, sha256Hex } from './settlement.js';
 import { resolveSolanaConfig } from './network.js';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -125,11 +125,12 @@ function clockFor(campaign, settlement, now) {
 }
 
 function whoGetsPaid(campaign, ticker) {
-  const count = Number(campaign.draw_count);
-  if (Number.isFinite(count) && count > 0) {
+  if (drawInUse(campaign)) {
+    const count = Number(campaign.draw_count);
     return {
       who: 'draw',
-      text: 'draw of ' + String(count) + ' from the qualified, seed committed to a Solana slot',
+      text: (Number.isFinite(count) && count > 0 ? 'draw of ' + String(count) + ' from the qualified' : 'the qualified in draw order')
+        + ', seed committed to a Solana slot',
     };
   }
   const mode = campaign.reward_mode || 'fixed';

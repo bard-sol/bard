@@ -3,13 +3,15 @@
  * are approved on join, blocked wallets cannot join), commits a draw to a future Solana slot,
  * and finalizes it from that slot's blockhash. Anyone can recompute the winners from the stored
  * seed; the same seed always gives the same winners. The winners are who gets paid.
+ * The draw is committed the way the team button does it: draw_count 0, the whole roster in draw
+ * order. The locked prize then pays the first winners in that order (TRAA-2335).
  */
 import { check, checkEqual, ok, refused } from '../lib/harness.mjs';
 import {
   openSim, closeSim, makeTeam, makeHolders, launchProject, createCampaign,
   expectedLock, joinRows, settle, human, labelOf,
 } from '../lib/journey.mjs';
-import { deriveWinners as serverWinners, DRAW_SLOT_OFFSET } from '../../../server/settlement.js';
+import { computePayouts, deriveWinners as serverWinners, DRAW_SLOT_OFFSET } from '../../../server/settlement.js';
 
 export default {
   id: 's5',
@@ -93,13 +95,19 @@ export default {
       });
 
       let committed;
-      await step('the team commits the draw to a future slot', async () => {
+      await step('the team commits the draw to a future slot with the draw button', async () => {
         const before = await sim.chain.slot();
-        committed = await team.platform.commitDraw(campaign.id, winnersWanted);
+        committed = await team.platform.commitDraw(campaign.id, 0);
         check(Number(committed.drawSlot) >= before + DRAW_SLOT_OFFSET, 'draw slot is not in the future');
+        checkEqual(Number(committed.drawCount), 0, 'draw count from the button');
         await refused(() => team.platform.finalizeDraw(campaign.id), /not final/i, 'finalize before the slot');
-        await refused(() => team.platform.commitDraw(campaign.id, winnersWanted), null, 'second commit');
-        return 'slot ' + committed.drawSlot + ' (now ' + before + '); early finalize and a second commit refused';
+        await refused(() => team.platform.commitDraw(campaign.id, 0), null, 'second commit');
+        const early = ok(await sim.world.rest('GET', '/campaigns?id=eq.' + campaign.id + '&select=*'), 'campaign')[0];
+        const joins = await joinRows(sim, campaign.id);
+        let payError = null;
+        try { computePayouts(early, joins, decimals); } catch (err) { payError = err; }
+        check(payError && /Finalize the draw/.test(payError.message), 'a committed draw could be paid before the reveal');
+        return 'slot ' + committed.drawSlot + ' (now ' + before + '); early finalize, a second commit and an early payout refused';
       });
 
       let drawn;
@@ -109,7 +117,7 @@ export default {
         check(drawn.drawSeed && Number(drawn.drawSeedSlot) >= Number(committed.drawSlot), 'no seed');
         const rows = await joinRows(sim, campaign.id);
         const eligible = rows.filter((r) => r.status === 'approved');
-        checkEqual(drawn.drawWinners.length, Math.min(winnersWanted, eligible.length), 'winner count');
+        checkEqual(drawn.drawWinners.length, eligible.length, 'winner count (the whole roster in draw order)');
         for (const w of drawn.drawWinners) check(eligible.some((r) => r.wallet === w.wallet), 'a winner was not approved');
         await refused(() => team.platform.finalizeDraw(campaign.id), null, 'second finalize');
         ctx.note('drawSeed', drawn.drawSeed);
@@ -134,9 +142,9 @@ export default {
 
       await step('the draw winners are the ones paid', async () => {
         await team.platform.updateCampaignStatus(campaign.id, 'ended');
-        const winners = drawn.drawWinners.map((w) => w.wallet);
+        const winners = drawn.drawWinners.map((w) => w.wallet).slice(0, winnersWanted);
         await settle(sim, project, campaign.id, {
-          afterPropose: async (s) => checkEqual(s.payouts.map((p) => p.wallet).sort(), winners.slice().sort(), 'paid wallets vs draw winners'),
+          afterPropose: async (s) => checkEqual(s.payouts.map((p) => p.wallet), winners, 'paid wallets vs the first draw winners, in order'),
         });
         return winners.length + ' winners paid ' + human(each, decimals) + ' each';
       });
