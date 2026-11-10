@@ -226,7 +226,11 @@ export default {
 
       // --- join after the end ---
       await step('a holder cannot join a campaign that has ended, been paid, or run past its end date', async () => {
-        const late = holders[holders.length - 2];
+        // A holder in neither earlier campaign: which holders joined sig depends on the seeded count.
+        const joined = new Set();
+        for (const c of [hold, sig]) for (const r of await joinRows(sim, c.id)) joined.add(r.wallet);
+        const late = holders.find((h) => !joined.has(h.wallet));
+        check(late, 'every holder already joined');
         const outcomes = [];
         const overdue = await createCampaign(sim, project, { title: 'Overdue', type: 'custom', rule: 'r', rewardMode: 'pool', pool: '1', days: 3 });
         await ageCampaign(sim, overdue.id, 4);
