@@ -1147,6 +1147,7 @@ async function handlePropose(request, env) {
   if (admin.error) return admin.error;
   const project = admin.project;
   if (campaign.status === 'paid') return json({ error: 'campaign is already paid' }, 409);
+  if (campaign.status === 'cancelled') return json({ error: 'campaign is cancelled' }, 409);
   const open = await settlementsForCampaign(env, campaign.id);
   if (open.some((row) => row.status !== 'cancelled')) return json({ error: 'campaign already has a settlement' }, 409);
   if (!campaignLocked(campaign, project)) return json({ error: 'campaign has no locked prize' }, 409);
@@ -1618,6 +1619,111 @@ async function closeSettlement(env, current, project, signature) {
   return json({ settlement });
 }
 
+// Squads ProposalStatus variants, in program order.
+const PROPOSAL_STATES = ['draft', 'active', 'rejected', 'approved', 'executing', 'executed', 'cancelled'];
+
+// What the proposal of one vault transaction allows: 'none' (no proposal, so it cannot execute),
+// 'closed' (rejected or cancelled), 'paid' (executing or executed), or an open state.
+async function vaultProposalState(env, multisig, txIndex) {
+  const data = await readSquadsAccount(env, await squadsProposalAddress(multisig, txIndex));
+  if (!data) return 'none';
+  const proposal = await parseSquadsProposal(data);
+  if (!proposal || proposal.multisig !== multisig || proposal.transactionIndex !== BigInt(txIndex)) {
+    throw new Error('vault proposal ' + txIndex + ' could not be read');
+  }
+  const state = PROPOSAL_STATES[proposal.status];
+  if (!state) throw new Error('vault proposal ' + txIndex + ' could not be read');
+  if (state === 'rejected' || state === 'cancelled') return 'closed';
+  if (state === 'executing' || state === 'executed') return 'paid';
+  return state;
+}
+
+// The team cancels a campaign that is not paid: nobody joined, or its payout cannot go out. Every
+// vault transaction bound to an open settlement must first be closed on chain (the team rejects
+// one that is not fully approved; an approved one needs a cancel vote from both keys), so nothing
+// can pay out after the reservation is released. Then the campaign and its open settlements are
+// cancelled and the locked prize is released in one database transaction.
+async function handleCancelCampaign(request, env, campaignId) {
+  const session = await sessionWallet(request, env);
+  if (session.error) return session.error;
+  const admin = await campaignForAdmin(env, campaignId, session.wallet);
+  if (admin.error) return admin.error;
+  const { campaign, project } = admin;
+  if (campaign.status === 'paid') return json({ error: 'campaign is already paid' }, 409);
+  const settlements = await select(env, 'vault_settlements', 'campaign_id=eq.' + encodeURIComponent(campaign.id) + '&select=*');
+  const rows = Array.isArray(settlements) ? settlements : [];
+  if (rows.some((row) => row.status === 'executed')) return json({ error: 'campaign is already paid' }, 409);
+  const open = rows.filter((row) => row.status !== 'cancelled');
+  const proposals = [];
+  for (const settlement of open) {
+    if (String(settlement.tx_signature || '').trim()) return json({ error: 'campaign is already paid' }, 409);
+    const multisig = pinnedMultisig(settlement, project);
+    const txs = new Map();
+    if (fieldSet(settlement.tx_index)) txs.set(String(settlement.tx_index).trim(), { batch: 0, multisig });
+    for (const row of await batchRows(env, settlement.id)) {
+      if (String(row.tx_signature || '').trim()) {
+        return json({ error: 'batch ' + row.batch + ' of the payout is paid; pay the rest instead', reason: 'partly_paid' }, 409);
+      }
+      txs.set(String(row.tx_index).trim(), { batch: Number(row.batch), multisig: String(row.vault_multisig || multisig).trim() });
+    }
+    for (const [txIndex, where] of txs) {
+      if (!isBase58Address(where.multisig) || !/^\d+$/.test(txIndex)) return json({ error: 'settlement vault transaction is invalid' }, 409);
+      let state;
+      try {
+        state = await vaultProposalState(env, where.multisig, BigInt(txIndex));
+      } catch (err) {
+        return badRequest(err);
+      }
+      if (state === 'paid') {
+        return json({ error: 'vault transaction ' + txIndex + ' paid out on chain; record the payout instead', reason: 'paid_on_chain' }, 409);
+      }
+      if (state === 'none' || state === 'closed') continue;
+      proposals.push({
+        settlementId: settlement.id,
+        batch: where.batch,
+        multisig: where.multisig,
+        txIndex,
+        state,
+        action: state === 'approved' ? 'both keys cancel' : 'team rejects',
+      });
+    }
+  }
+  if (proposals.length) {
+    return json({ error: 'close the open vault proposals first', reason: 'open_proposals', proposals }, 409);
+  }
+  const mint = projectVaultMint(project);
+  let decimals = null;
+  if (mint) {
+    try {
+      decimals = (await readMint(env, mint)).decimals;
+    } catch (err) {
+      return badRequest(err);
+    }
+  }
+  const result = await sbRpc(env, 'cancel_campaign_vault', {
+    p_project_id: project.id,
+    p_campaign_id: campaign.id,
+  });
+  if (!result || result.ok !== true) {
+    const reason = result && result.reason;
+    if (reason === 'missing') return json({ error: 'campaign not found' }, 404);
+    if (reason === 'partly_paid') return json({ error: 'part of the payout is paid; pay the rest instead', reason }, 409);
+    if (reason === 'paid') return json({ error: 'campaign is already paid' }, 409);
+    return json({ error: 'could not cancel the campaign' }, 409);
+  }
+  if (decimals != null && result.already !== true) {
+    await patch(env, 'projects', 'id=eq.' + encodeURIComponent(project.id), {
+      vault_reserved: rawToDecimal(rpcRaw(result.vault_reserved_raw), decimals),
+    });
+  }
+  return json({
+    campaign: await loadCampaign(env, campaign.id),
+    releasedRaw: rpcRaw(result.released_raw),
+    vaultReservedRaw: rpcRaw(result.vault_reserved_raw),
+    settlementsCancelled: Number(result.settlements_cancelled) || 0,
+  });
+}
+
 async function handleDrawCommit(request, env, campaignId) {
   const session = await sessionWallet(request, env);
   if (session.error) return session.error;
@@ -1837,6 +1943,8 @@ export async function handleRequest(request, env) {
     if (executed && method === 'POST') return await handleExecute(request, env, decodeURIComponent(executed[1]));
     const execute = path.match(/^\/api\/settlements\/([^/]+)\/execute$/);
     if (execute && method === 'POST') return await handleExecute(request, env, decodeURIComponent(execute[1]));
+    const cancelRoute = path.match(/^\/api\/campaigns\/([^/]+)\/cancel$/);
+    if (cancelRoute && method === 'POST') return await handleCancelCampaign(request, env, decodeURIComponent(cancelRoute[1]));
     const drawCommit = path.match(/^\/api\/campaigns\/([^/]+)\/draw\/commit$/);
     if (drawCommit && method === 'POST') return await handleDrawCommit(request, env, decodeURIComponent(drawCommit[1]));
     const drawFinal = path.match(/^\/api\/campaigns\/([^/]+)\/draw\/finalize$/);

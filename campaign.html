@@ -237,7 +237,8 @@ h1{
       var why = {
         upcoming: 'This campaign has not started.',
         ended: 'This campaign has ended.',
-        paid: 'This campaign is already paid.'
+        paid: 'This campaign is already paid.',
+        cancelled: 'This campaign was cancelled.'
       };
       setReason(why[state.clock.state] || 'Joining is closed.');
       return;

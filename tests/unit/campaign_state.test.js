@@ -306,6 +306,9 @@ test('campaign state matches the public shape for every payout sentence and cloc
     assert.equal(growing.body.clock.ends_at, null);
     const ended = await build({ status: 'ended' });
     assert.equal(ended.body.clock.state, 'ended');
+    // TRAA-2331: a cancelled campaign reads cancelled, even past its end date.
+    const cancelled = await build({ status: 'cancelled' }, { now: new Date('2027-01-01T00:00:00.000Z') });
+    assert.equal(cancelled.body.clock.state, 'cancelled');
     const upcoming = await build({}, { now: new Date('2025-12-01T00:00:00.000Z') });
     assert.equal(upcoming.body.clock.state, 'upcoming');
 
@@ -569,6 +572,7 @@ test('public copy and the page file follow the no-wallet rules', () => {
   assert.equal(BP.clockText({ state: 'live', no_end: true, ends_at: null }), 'no end set');
   assert.equal(BP.clockText({ state: 'ended', ends_at: '2026-01-08T00:00:00.000Z' }), 'ended 8 Jan 2026, the team is reviewing');
   assert.equal(BP.clockText({ state: 'paid' }), 'paid');
+  assert.equal(BP.clockText({ state: 'cancelled' }), 'cancelled');
 
   const locked = BP.campaignPublicCopy({
     prize: { locked: true, prize_raw: '1500000', locked_raw: '2000000', decimals: 6, symbol: 'BARD', cut_bps: 250, who_gets_paid_text: 'pool split among the qualified' },

@@ -252,7 +252,8 @@ function openCampaign(cid){var c=findCampaign(currentProjectId,cid);var p=findPr
       } else { badge.innerHTML=''; badge.style.display='none'; }
     }
     loadCampaignOps(p, c);
-    document.getElementById('btn-end-campaign').style.display=c.status==='active'?'':'none';show('campaign');}
+    document.getElementById('btn-end-campaign').style.display=c.status==='active'?'':'none';
+    document.getElementById('btn-cancel-campaign').style.display=(c.status==='active'||c.status==='ended')?'':'none';show('campaign');}
 function numericHoldMin(c){
   if(!c||String(c.type||'')!=='hold') return null;
   var cfg=c.config;
@@ -731,7 +732,26 @@ async function renderBardSigns(p,c,sets){
     html+='<button type="button" class="btn btn--solid btn--sm" id="btn-bard-execute"'+(report.matches&&sdkReady?'':' disabled')+'>Execute</button>';
     if(!sdkReady) html+='<p class="muted">Vault toolkit failed to load — refresh</p>';
   }
+  html+=' <button type="button" class="btn btn--ghost btn--sm" id="btn-bard-cancel-vote">Vote to cancel</button>';
   actions.innerHTML=html;
+  var cancelVote=document.getElementById('btn-bard-cancel-vote');
+  if(cancelVote) cancelVote.onclick=async function(){
+    if(!window.BardVault||!BardVault.cancelPayoutProposal){ toast('Vault toolkit failed to load — refresh','err'); return; }
+    if(!provider){ toast('Connect the Bard signer wallet','err'); await connectWallet(); return; }
+    if(!confirm('Vote to cancel this payout? The team can then cancel the campaign and release its prize.')) return;
+    var ms=p.vaultMultisig||live.vault_multisig;
+    cancelVote.disabled=true;
+    try{
+      var txs=batchCountOf(live)>1?(await BardPlatform.listSettlementBatches(live.id)).map(function(r){ return r.tx_index; }):[live.tx_index];
+      for(var i=0;i<txs.length;i++){
+        if(txs[i]==null||String(txs[i])==='') continue;
+        await BardVault.cancelPayoutProposal(BardPlatform.getRpc(), provider, wallet, ms, txs[i]);
+      }
+      toast('Bard voted to cancel','ok');
+    }catch(e){
+      toast((e&&e.message)||'Cancel vote failed','err');
+    }finally{ cancelVote.disabled=false; }
+  };
   var approve=document.getElementById('btn-bard-approve');
   if(approve) approve.onclick=async function(){
     if(!report.matches){ toast('The vault transaction does not match this payout','err'); return; }
@@ -1147,6 +1167,27 @@ document.getElementById('form-campaign').addEventListener('submit',async functio
     btn.textContent='Create campaign';
   }
 });
+// Cancel a campaign that is not paid (TRAA-2331). The worker refuses while a payout proposal can
+// still execute: the team closes each one with its wallet, then asks again. An approved proposal
+// also needs Bard's cancel vote, cast from the Bard signs panel.
+async function cancelCampaignFlow(c){
+  try{ return await BardPlatform.cancelCampaign(c.id); }
+  catch(err){
+    if(!err||err.reason!=='open_proposals') throw err;
+    if(!window.BardVault||!BardVault.cancelPayoutProposal){ toast('Vault toolkit failed to load — refresh','err'); return null; }
+    if(!provider){ toast('Connect the team wallet','err'); await connectWallet(); return null; }
+    for(var i=0;i<err.proposals.length;i++){
+      var open=err.proposals[i];
+      await BardVault.cancelPayoutProposal(BardPlatform.getRpc(), provider, wallet, open.multisig, open.txIndex);
+    }
+  }
+  try{ return await BardPlatform.cancelCampaign(c.id); }
+  catch(err){
+    if(err&&err.reason==='open_proposals'){ toast('Your cancel vote is in. Bard must cancel the approved payout too, then cancel again.','err'); return null; }
+    throw err;
+  }
+}
+document.getElementById('btn-cancel-campaign').onclick=async function(){var c=findCampaign(currentProjectId,currentCampaignId);if(!c)return;if(!confirm('Cancel this campaign? Nobody is paid, and its locked prize is released for new campaigns.'))return;var btn=this;btn.disabled=true;try{var out=await cancelCampaignFlow(c);if(out){await refreshState();toast('Campaign cancelled; the locked prize is released','ok');openCampaign(c.id);}}catch(err){console.error(err);toast((err&&err.message)||'Failed to cancel campaign','err');}finally{btn.disabled=false;}};
 document.getElementById('btn-end-campaign').onclick=async function(){var c=findCampaign(currentProjectId,currentCampaignId);if(!c)return;if(!confirm('End this campaign? New claims will stop.'))return;try{await BardPlatform.updateCampaignStatus(c.id,'ended');await refreshState();toast('Campaign ended','ok');openCampaign(c.id);}catch(err){console.error(err);toast('Failed to end campaign','err');}};
 document.getElementById('btn-propose-settle').onclick=async function(){
   var p=findProject(currentProjectId); var c=findCampaign(currentProjectId,currentCampaignId);

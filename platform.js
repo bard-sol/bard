@@ -1008,6 +1008,26 @@
     saveLocalTeam(state);
   }
 
+  // Cancel a campaign that is not paid and release its locked prize (worker route). A refusal
+  // because a payout proposal is still open carries err.reason 'open_proposals' and
+  // err.proposals: [{ settlementId, batch, multisig, txIndex, state, action }] to close on chain.
+  async function cancelCampaign(campaignId) {
+    await init();
+    refuseLocalTeamWrite();
+    if (!sessionToken) throw new Error('Sign in with your wallet first');
+    var res = await fetch('/api/campaigns/' + encodeURIComponent(campaignId) + '/cancel', { method: 'POST', headers: apiHeaders(), body: '{}' });
+    var data = {};
+    try { data = await res.json(); } catch (e) { data = {}; }
+    if (!res.ok) {
+      var err = new Error((data && data.error) || 'request failed');
+      err.reason = data && data.reason;
+      err.proposals = (data && data.proposals) || [];
+      throw err;
+    }
+    if (data.campaign) data.campaign = mapCampaignRow(data.campaign);
+    return data;
+  }
+
   async function listLiveCampaigns() {
     var projects = await listProjects(); var out = [];
     projects.forEach(function (p) { (p.campaigns || []).forEach(function (c) {
@@ -1478,6 +1498,7 @@
   function clockText(clock) {
     if (!clock) return '—';
     if (clock.state === 'paid') return 'paid';
+    if (clock.state === 'cancelled') return 'cancelled';
     if (clock.state === 'ended') {
       return clock.ends_at ? ('ended ' + clockDate(clock.ends_at) + ', the team is reviewing') : 'ended, the team is reviewing';
     }
@@ -1605,7 +1626,7 @@
     scoredCampaigns: function () { return scoredCampaignsFlag; },
     getMode: function () { return mode; },
     listProjects: listProjects, createProject: createProject, createCampaign: createCampaign,
-    updateCampaignStatus: updateCampaignStatus, listLiveCampaigns: listLiveCampaigns,
+    updateCampaignStatus: updateCampaignStatus, cancelCampaign: cancelCampaign, listLiveCampaigns: listLiveCampaigns,
     needsX: needsX,
     OFFERED_CAMPAIGN_TYPES: Object.freeze(OFFERED_CAMPAIGN_TYPES.slice()),
     isOfferedCampaignType: isOfferedCampaignType,

@@ -296,6 +296,64 @@ export async function proposePayoutBatches(rpc, signer, wallet, multisigAddress,
   return out;
 }
 
+/**
+ * Close a payout proposal so its vault transaction can never execute: the worker's campaign
+ * cancel refuses while one is still open. In a 2-of-2 one reject closes a proposal that is not
+ * fully approved, so the member rejects it (a draft is activated first). An approved proposal
+ * needs a cancel vote from both keys: each member calls this once. Returns what this member did:
+ * 'rejected', 'cancel_voted' or 'closed' (already rejected or cancelled; nothing sent).
+ */
+export async function cancelPayoutProposal(rpc, signer, wallet, multisigAddress, transactionIndex) {
+  var connection = connectionFrom(rpc);
+  var member = pubkeyOf(wallet, signer);
+  var multisigPda = new PublicKey(String(multisigAddress));
+  var index = BigInt(transactionIndex);
+  var proposalPda = multisig.getProposalPda({ multisigPda: multisigPda, transactionIndex: index })[0];
+  var info = await connection.getAccountInfo(proposalPda, 'confirmed');
+  // No proposal: the vault transaction cannot execute, and the worker accepts it as closed.
+  if (!info) return 'closed';
+  var proposal = multisig.accounts.Proposal.fromAccountInfo(info)[0];
+  var kind = proposal.status.__kind;
+  if (kind === 'Rejected' || kind === 'Cancelled') return 'closed';
+  if (kind === 'Executed' || kind === 'Executing') throw new Error('vault transaction ' + index + ' already paid out');
+  var block;
+  if (kind === 'Draft') {
+    block = await connection.getLatestBlockhash('confirmed');
+    await signAndSend(connection, multisig.transactions.proposalActivate({
+      blockhash: block.blockhash,
+      feePayer: member,
+      multisigPda: multisigPda,
+      transactionIndex: index,
+      member: member,
+    }), signer, block);
+    kind = 'Active';
+  }
+  if (kind === 'Approved') {
+    if (proposal.cancelled.some(function (key) { return key.equals(member); })) return 'cancel_voted';
+    block = await connection.getLatestBlockhash('confirmed');
+    await signAndSend(connection, multisig.transactions.proposalCancel({
+      blockhash: block.blockhash,
+      feePayer: member,
+      multisigPda: multisigPda,
+      transactionIndex: index,
+      member: member,
+      memo: 'bard cancel',
+    }), signer, block);
+    return 'cancel_voted';
+  }
+  if (kind !== 'Active') throw new Error('vault proposal ' + index + ' is ' + kind);
+  block = await connection.getLatestBlockhash('confirmed');
+  await signAndSend(connection, multisig.transactions.proposalReject({
+    blockhash: block.blockhash,
+    feePayer: member,
+    multisigPda: multisigPda,
+    transactionIndex: index,
+    member: member,
+    memo: 'bard cancel',
+  }), signer, block);
+  return 'rejected';
+}
+
 export async function executePayout(rpc, signer, wallet, multisigAddress, transactionIndex) {
   var connection = connectionFrom(rpc);
   var member = pubkeyOf(wallet, signer);

@@ -9,5 +9,6 @@ export {
   teamApprove,
   bardApprove,
   executePayout,
+  cancelPayoutProposal,
   vaultPdaFor,
 } from './index.js';

@@ -1,6 +1,7 @@
 /**
  * Scenario 7. Abuse and edge cases: the same wallet joining twice, bad base58 addresses, a
- * holder who drops below the hold amount, zero joiners, a prize smaller than the winner count,
+ * holder who drops below the hold amount, zero joiners, cancelling a campaign (nobody joined, a
+ * stuck payout, a partly paid one) to release its locked prize, a prize smaller than the winner count,
  * rounding remainders, cosigning a settlement twice, executing before both signatures, joining
  * after the end, and a settlement with more holders than one vault transaction can pay, paid in
  * batches that cannot be swapped, skipped or recorded twice.
@@ -12,7 +13,7 @@ import {
   openSim, closeSim, makeTeam, makeHolders, launchProject, giveTokens, createCampaign,
   expectedLock, joinAll, joinRows, settle, human, labelOf, ageCampaign,
 } from '../lib/journey.mjs';
-import { PAYOUT_BATCH_LINES, createPayoutProposal, teamApprove, executePayout, payoutBatchCount } from '../../src/index.js';
+import { PAYOUT_BATCH_LINES, createPayoutProposal, teamApprove, executePayout, payoutBatchCount, cancelPayoutProposal } from '../../src/index.js';
 import { expectedPool, expectedCut } from '../lib/expect.mjs';
 
 const BAD_ADDRESSES = ['', 'not-a-wallet', '0OIl0OIl0OIl0OIl0OIl0OIl0OIl0OIl', '1111', 'So11111111111111111111111111111111111111112x', '<script>alert(1)</script>', ' '.repeat(44)];
@@ -175,14 +176,130 @@ export default {
         return 'refused cleanly';
       });
 
-      await step('the locked prize of a campaign nobody joined can be released back to the team', async () => {
-        const c = ok(await sim.world.rest('GET', '/campaigns?project_id=eq.' + project.id + '&title=eq.Empty&select=id,locked_raw'), 'empty')[0];
-        await team.platform.updateCampaignStatus(c.id, 'cancelled').catch(() => {});
-        const row = ok(await sim.world.rest('GET', '/campaigns?id=eq.' + c.id + '&select=status,vault_reserved_raw'), 'campaign')[0];
-        const project1 = ok(await sim.world.rest('GET', '/projects?id=eq.' + project.id + '&select=vault_reserved_raw'), 'project')[0];
-        check(String(row.vault_reserved_raw) === '0', 'campaign still reserves ' + row.vault_reserved_raw + ' (status ' + row.status + '; project reserves ' + project1.vault_reserved_raw + ')');
-        return 'released';
-      }, { known: 'B7 (TRAA-2331) no way to cancel a campaign and release its locked prize (zero joiners, or a settlement that cannot be built)' });
+      // --- cancel: the locked prize goes back to the team ---
+      const campaignRow = async (id) => ok(await sim.world.rest('GET', '/campaigns?id=eq.' + id + '&select=status,vault_reserved,vault_reserved_raw'), 'campaign')[0];
+      const projectReserved = async () => ok(await sim.world.rest('GET', '/projects?id=eq.' + project.id + '&select=vault_reserved,vault_reserved_raw'), 'project')[0];
+      // The project reserves exactly what its campaigns still reserve.
+      const reservationsAddUp = async () => {
+        const rows = ok(await sim.world.rest('GET', '/campaigns?project_id=eq.' + project.id + '&select=vault_reserved_raw'), 'campaigns');
+        const sum = rows.reduce((x, r) => x + BigInt(r.vault_reserved_raw), 0n);
+        checkEqual(String((await projectReserved()).vault_reserved_raw), sum.toString(), 'project reservation against its campaigns');
+      };
+      const cancelRefusal = (id) => team.platform.cancelCampaign(id).then(() => null, (err) => err);
+
+      await step('the team cancels a campaign nobody joined and its locked prize is released', async () => {
+        const c = ok(await sim.world.rest('GET', '/campaigns?project_id=eq.' + project.id + '&title=eq.Empty&select=id,locked_raw,vault_reserved_raw'), 'empty')[0];
+        check(BigInt(c.vault_reserved_raw) > 0n, 'the empty campaign reserves nothing');
+        const before = await projectReserved();
+        const direct = await team.platform.updateCampaignStatus(c.id, 'cancelled').catch((err) => ({ status: 'refused: ' + err.message }));
+        check(direct.status !== 'cancelled', 'the team marked the campaign cancelled without releasing it');
+        checkEqual((await campaignRow(c.id)).status, 'ended', 'status after a direct write');
+        await refused(() => holders[0].platform.cancelCampaign(c.id), /admin/, 'a holder cancels the campaign');
+        const done = await team.platform.cancelCampaign(c.id);
+        checkEqual([done.campaign.status, done.releasedRaw, done.settlementsCancelled], ['cancelled', String(c.vault_reserved_raw), 0], 'cancel result');
+        const row = await campaignRow(c.id);
+        checkEqual([row.status, String(row.vault_reserved_raw)], ['cancelled', '0'], 'campaign after cancel');
+        const after = await projectReserved();
+        checkEqual(String(after.vault_reserved_raw), (BigInt(before.vault_reserved_raw) - BigInt(c.vault_reserved_raw)).toString(), 'project reservation after cancel');
+        checkEqual(String(after.vault_reserved), human(after.vault_reserved_raw, decimals), 'project reservation in tokens');
+        const reservations = ok(await sim.world.rest('GET', '/vault_reservations?campaign_id=eq.' + c.id + '&select=status'), 'reservations');
+        check(reservations.length > 0 && reservations.every((r) => r.status === 'released'), 'reservation rows ' + JSON.stringify(reservations));
+        const again = await team.platform.cancelCampaign(c.id);
+        checkEqual([again.releasedRaw, String((await projectReserved()).vault_reserved_raw)], ['0', String(after.vault_reserved_raw)], 'cancelling twice');
+        await team.platform.updateCampaignStatus(c.id, 'active').catch(() => {});
+        checkEqual((await campaignRow(c.id)).status, 'cancelled', 'status after the team reopens it directly');
+        await refused(() => holders[0].platform.joinCampaign(project.id, c.id, holders[0].wallet, null, false, null, null, null), /not open for joins/, 'joining a cancelled campaign');
+        await refused(() => team.platform.proposeSettlement(project.id, c.id), /cancelled/, 'paying a cancelled campaign');
+        await reservationsAddUp();
+        return 'released ' + human(c.vault_reserved_raw, decimals) + '; direct status writes ignored; joins and payouts refused';
+      });
+
+      await step('a campaign whose payout is stuck is cancelled once both keys close its vault proposals', async () => {
+        const conn = sim.chain.connection;
+        const bardWallet = sim.bard.publicKey.toBase58();
+        const c = await createCampaign(sim, project, { title: 'Stuck', type: 'custom', rule: 'r', rewardMode: 'fixed', reward: '1', config: { holderCount: '8' }, days: 7 });
+        const eight = holders.slice(0, 8);
+        await joinAll(project, c, eight);
+        for (const h of eight) await team.platform.markQualified(project.id, c.id, h.wallet);
+        await team.platform.updateCampaignStatus(c.id, 'ended');
+        const settlement = await team.platform.proposeSettlement(project.id, c.id);
+        const cut = { wallet: settlement.cut_wallet, amountRaw: String(settlement.cut_raw) };
+        checkEqual(payoutBatchCount(settlement.payouts, cut), 2, 'vault transactions');
+        // Batch 0 is approved by both keys; batch 1 only by the team.
+        const p = [];
+        for (let n = 0; n < 2; n++) {
+          p[n] = await createPayoutProposal(conn, team.keypair, team.wallet, project.multisig, project.mint, settlement.payouts, cut, n);
+          await teamApprove(conn, team.keypair, team.wallet, project.multisig, p[n].transactionIndex);
+          await team.platform.signSettlement(settlement.id, 'team', { txIndex: p[n].transactionIndex, batch: n });
+        }
+        await teamApprove(conn, sim.bard, bardWallet, project.multisig, p[0].transactionIndex);
+        await sim.bardActor.platform.signSettlement(settlement.id, 'bard', { txIndex: p[0].transactionIndex, batch: 0 });
+        const states = (err) => (err && err.proposals || []).map((x) => [x.batch, x.txIndex, x.state]);
+
+        const first = await cancelRefusal(c.id);
+        check(first && first.reason === 'open_proposals', 'cancel with open proposals: ' + (first ? first.message : 'accepted'));
+        checkEqual(states(first), [[0, p[0].transactionIndex, 'approved'], [1, p[1].transactionIndex, 'active']], 'open proposals');
+        checkEqual(await cancelPayoutProposal(conn, team.keypair, team.wallet, project.multisig, p[1].transactionIndex), 'rejected', 'team closes batch 1');
+        checkEqual(await cancelPayoutProposal(conn, team.keypair, team.wallet, project.multisig, p[0].transactionIndex), 'cancel_voted', 'team votes to cancel batch 0');
+        checkEqual(await cancelPayoutProposal(conn, team.keypair, team.wallet, project.multisig, p[0].transactionIndex), 'cancel_voted', 'team votes twice');
+        const second = await cancelRefusal(c.id);
+        checkEqual(states(second), [[0, p[0].transactionIndex, 'approved']], 'open proposals after the team alone');
+        checkEqual(await cancelPayoutProposal(conn, sim.bard, bardWallet, project.multisig, p[0].transactionIndex), 'cancel_voted', 'Bard votes to cancel batch 0');
+        checkEqual(await cancelPayoutProposal(conn, team.keypair, team.wallet, project.multisig, p[0].transactionIndex), 'closed', 'batch 0 after both votes');
+
+        const before = await projectReserved();
+        const reserved = (await campaignRow(c.id)).vault_reserved_raw;
+        const vaultBefore = await sim.chain.tokenBalance(project.vault, project.mint);
+        const done = await team.platform.cancelCampaign(c.id);
+        checkEqual([done.campaign.status, done.releasedRaw, done.settlementsCancelled], ['cancelled', String(reserved), 1], 'cancel result');
+        checkEqual(String((await projectReserved()).vault_reserved_raw), (BigInt(before.vault_reserved_raw) - BigInt(reserved)).toString(), 'project reservation after cancel');
+        const s = ok(await sim.world.rest('GET', '/vault_settlements?id=eq.' + settlement.id + '&select=status'), 'settlement')[0];
+        checkEqual(s.status, 'cancelled', 'settlement after cancel');
+        for (let n = 0; n < 2; n++) {
+          await refused(() => executePayout(conn, team.keypair, team.wallet, project.multisig, p[n].transactionIndex), null, 'executing closed batch ' + n + ' on chain');
+        }
+        checkEqual(await sim.chain.tokenBalance(project.vault, project.mint), vaultBefore, 'vault balance');
+        await refused(() => sim.bardActor.platform.signSettlement(settlement.id, 'bard', { txIndex: p[1].transactionIndex, batch: 1 }), /closed/, 'Bard signs the cancelled payout');
+        await refused(() => team.platform.proposeSettlement(project.id, c.id), /cancelled/, 'paying the cancelled campaign again');
+        await reservationsAddUp();
+        return 'refused while batch 0 was approved and batch 1 open; team rejected 1, both keys cancelled 0; released ' + human(reserved, decimals) + '; vault unchanged';
+      });
+
+      await step('a campaign with a batch paid on chain cannot be cancelled, and is paid instead', async () => {
+        const conn = sim.chain.connection;
+        const c = await createCampaign(sim, project, { title: 'Half paid', type: 'custom', rule: 'r', rewardMode: 'fixed', reward: '1', config: { holderCount: '8' }, days: 7 });
+        const eight = holders.slice(0, 8);
+        await joinAll(project, c, eight);
+        for (const h of eight) await team.platform.markQualified(project.id, c.id, h.wallet);
+        await team.platform.updateCampaignStatus(c.id, 'ended');
+        const settlement = await team.platform.proposeSettlement(project.id, c.id);
+        const cut = { wallet: settlement.cut_wallet, amountRaw: String(settlement.cut_raw) };
+        const p = [];
+        for (let n = 0; n < 2; n++) {
+          p[n] = await createPayoutProposal(conn, team.keypair, team.wallet, project.multisig, project.mint, settlement.payouts, cut, n);
+          await teamApprove(conn, team.keypair, team.wallet, project.multisig, p[n].transactionIndex);
+          await team.platform.signSettlement(settlement.id, 'team', { txIndex: p[n].transactionIndex, batch: n });
+        }
+        for (let n = 0; n < 2; n++) {
+          await teamApprove(conn, sim.bard, sim.bard.publicKey.toBase58(), project.multisig, p[n].transactionIndex);
+          await sim.bardActor.platform.signSettlement(settlement.id, 'bard', { txIndex: p[n].transactionIndex, batch: n });
+        }
+        const sig1 = await executePayout(conn, team.keypair, team.wallet, project.multisig, p[1].transactionIndex);
+        const onChain = await cancelRefusal(c.id);
+        check(onChain && onChain.reason === 'paid_on_chain', 'cancel after a batch paid on chain: ' + (onChain ? onChain.message : 'accepted'));
+        await refused(() => cancelPayoutProposal(conn, team.keypair, team.wallet, project.multisig, p[1].transactionIndex), /paid out/, 'closing a paid batch');
+        await team.platform.executeSettlement(settlement.id, sig1, project.id, 1);
+        const recorded = await cancelRefusal(c.id);
+        check(recorded && recorded.reason === 'partly_paid', 'cancel after a batch is recorded: ' + (recorded ? recorded.message : 'accepted'));
+        const sig0 = await executePayout(conn, team.keypair, team.wallet, project.multisig, p[0].transactionIndex);
+        const done = await team.platform.executeSettlement(settlement.id, sig0, project.id, 0);
+        checkEqual(done.status, 'executed', 'settlement after the last batch');
+        await refused(() => team.platform.cancelCampaign(c.id), /already paid/, 'cancelling a paid campaign');
+        const row = await campaignRow(c.id);
+        checkEqual([row.status, String(row.vault_reserved_raw)], ['paid', '0'], 'campaign after payout');
+        await reservationsAddUp();
+        return 'refused with batch 1 paid but unrecorded, then recorded; paid in full; cancel of the paid campaign refused';
+      });
 
       // --- signatures: cosign twice, wrong signer, execute early ---
       const sig = await createCampaign(sim, project, { title: 'Signatures', type: 'custom', rule: 'r', rewardMode: 'pool', pool: '3', days: 7 });

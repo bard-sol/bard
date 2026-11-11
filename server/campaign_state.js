@@ -112,6 +112,7 @@ function clockFor(campaign, settlement, now) {
   );
   let state = 'live';
   if (paid) state = 'paid';
+  else if (campaign.status === 'cancelled') state = 'cancelled';
   else if (campaign.status === 'ended' || (endsAt && t >= new Date(endsAt).getTime())) state = 'ended';
   else if (Number.isFinite(created.getTime()) && t < created.getTime()) state = 'upcoming';
   return {

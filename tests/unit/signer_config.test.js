@@ -69,6 +69,8 @@ const OPEN_POST_ROUTES = [
   // Qualification and a referrer do not move vault funds. The payout routes stay guarded.
   '/api/campaigns/x1/qualify-matching',
   '/api/campaigns/x1/referred-by',
+  // Cancel only releases a reservation once no payout proposal can execute; it never signs.
+  '/api/campaigns/x1/cancel',
 ];
 
 function blockedEnv(extra) {
