@@ -5,8 +5,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import nacl from 'tweetnacl';
 import bs58 from 'bs58';
-import { TOKEN_PROGRAM } from '../../server/chain.js';
-import { handleRequest } from '../../server/api.js';
+import { TOKEN_PROGRAM, associatedTokenAddress } from '../../server/chain.js';
+import { HOLDER_BATCH, handleRequest, setRpcPause } from '../../server/api.js';
 import { signJwt } from '../../server/auth.js';
 import { clearHolderBalanceCache, setQueueClock } from '../../server/queue.js';
 
@@ -36,6 +36,14 @@ function ownedTokens(mint, amount, decimals) {
       },
     }],
   };
+}
+
+function tokenAccount(mint, owner, amount) {
+  const data = new Uint8Array(165);
+  data.set(bs58.decode(mint), 0);
+  data.set(bs58.decode(owner), 32);
+  new DataView(data.buffer).setBigUint64(64, BigInt(amount), true);
+  return { owner: TOKEN_PROGRAM, lamports: 2039280, data: [Buffer.from(data).toString('base64'), 'base64'] };
 }
 
 function matches(row, params) {
@@ -77,6 +85,18 @@ function world(spec = {}) {
   };
   const balances = spec.balances || {};
   const fail = spec.fail || {};
+  const limits = { left: spec.rateLimit || 0, status: spec.rateLimitStatus || false };
+  const ataOwners = new Map();
+  async function ownerOfAta(ata, mint) {
+    if (!ataOwners.has(mint + '|' + ata)) {
+      const owners = new Set(tables.campaign_joins.map((row) => row.wallet));
+      for (const key of [...Object.keys(balances), ...Object.keys(fail)]) owners.add(key.split('|')[0]);
+      for (const owner of owners) {
+        try { ataOwners.set(mint + '|' + await associatedTokenAddress(owner, mint, TOKEN_PROGRAM), owner); } catch {}
+      }
+    }
+    return ataOwners.get(mint + '|' + ata) || null;
+  }
   const rpcLog = [];
   const fetchLog = [];
   const decimals = spec.decimals == null ? 6 : spec.decimals;
@@ -94,6 +114,25 @@ function world(spec = {}) {
         if (body.method === 'getAccountInfo') {
           if (spec.mintMissing) return Response.json({ jsonrpc: '2.0', id: body.id, result: { value: null } });
           return Response.json({ jsonrpc: '2.0', id: body.id, result: mintAccount(decimals) });
+        }
+        if (body.method === 'getMultipleAccounts') {
+          if (limits.left > 0) {
+            limits.left -= 1;
+            if (limits.status) return new Response('Too Many Requests', { status: 429 });
+            return Response.json({ jsonrpc: '2.0', id: body.id, error: { code: 429, message: 'Too many requests for a specific RPC call' } });
+          }
+          if (body.params[0].length > 100) {
+            return Response.json({ jsonrpc: '2.0', id: body.id, error: { code: -32602, message: 'Too many inputs provided; max 100' } });
+          }
+          const value = [];
+          for (const ata of body.params[0]) {
+            const owner = await ownerOfAta(ata, MINT);
+            const key = owner + '|' + MINT;
+            if (owner && fail[key]) value.push(tokenAccount(MINT, wallet(), 1));
+            else if (owner && Object.prototype.hasOwnProperty.call(balances, key) && balances[key] != null) value.push(tokenAccount(MINT, owner, balances[key]));
+            else value.push(null);
+          }
+          return Response.json({ jsonrpc: '2.0', id: body.id, result: { context: { slot: 1 }, value } });
         }
         if (body.method === 'getTokenAccountsByOwner') {
           const owner = body.params[0];
@@ -125,7 +164,7 @@ function world(spec = {}) {
       throw new Error('unexpected fetch ' + href);
     },
   };
-  return { tables, balances, rpcLog, fetchLog, env };
+  return { tables, balances, limits, rpcLog, fetchLog, env };
 }
 
 function join(id, owner, extra = {}) {
@@ -162,8 +201,13 @@ async function call(env, method, path, body, token) {
   return { status: res.status, data, cache: res.headers.get('cache-control') };
 }
 
-function tokenReads(rpcLog, owner) {
-  return rpcLog.filter((row) => row.method === 'getTokenAccountsByOwner' && (!owner || row.params[0] === owner)).length;
+// Holder balance reads: getMultipleAccounts calls, or only the calls that asked for this token account.
+function tokenReads(rpcLog, ata) {
+  return rpcLog.filter((row) => row.method === 'getMultipleAccounts' && (!ata || row.params[0].includes(ata))).length;
+}
+
+async function ataOf(owner) {
+  return associatedTokenAddress(owner, MINT, TOKEN_PROGRAM);
 }
 
 function installFetchGuard() {
@@ -223,7 +267,7 @@ describe('team review queue', { concurrency: 1 }, () => {
     assert.equal(top.status, 'approved');
     assert.equal(top.qualified, false);
     assert.deepEqual(Object.keys(top.evidence).sort(), [
-      'balance_as_of', 'balance_raw', 'kind', 'meets_min', 'min_balance_raw', 'post_url', 'referral_count',
+      'balance_as_of', 'balance_error', 'balance_raw', 'kind', 'meets_min', 'min_balance_raw', 'post_url', 'referral_count',
     ]);
     assert.equal(top.evidence.kind, 'hold');
     assert.equal(top.evidence.balance_raw, '2000000');
@@ -237,10 +281,13 @@ describe('team review queue', { concurrency: 1 }, () => {
     assert.equal(res.data.joins[1].evidence.balance_raw, '1000000');
     assert.equal(res.data.joins[2].x_handle, null);
     assert.equal(res.data.joins[2].evidence.meets_min, false);
+    assert.equal(top.evidence.balance_error, null);
     assert.equal(res.data.joins[3].evidence.balance_raw, null);
+    assert.equal(res.data.joins[3].evidence.balance_error, 'could not read');
     assert.equal(res.data.joins[3].evidence.meets_min, null);
     assert.equal(tables.campaign_joins.every((row) => row.qualified === false), true);
-    assert.ok(tokenReads(rpcLog) >= 4);
+    assert.equal(tokenReads(rpcLog), 1);
+    assert.equal(rpcLog.length, 2);
   });
 
   test('a cached read is reused for 60s and qualify uses a fresh balance', async () => {
@@ -249,6 +296,7 @@ describe('team review queue', { concurrency: 1 }, () => {
     setQueueClock(() => now);
     const admin = wallet();
     const holder = wallet();
+    const holderAta = await ataOf(holder);
     const balances = { [holder + '|' + MINT]: '999999' };
     const { env, rpcLog, tables } = world({
       admin,
@@ -259,25 +307,25 @@ describe('team review queue', { concurrency: 1 }, () => {
     const first = await call(env, 'GET', '/api/campaigns/' + CAMP + '/queue', undefined, token);
     assert.equal(first.data.joins[0].evidence.meets_min, false);
     assert.equal(first.data.joins[0].evidence.balance_as_of, '2026-10-27T00:00:00.000Z');
-    assert.equal(tokenReads(rpcLog, holder), 1);
+    assert.equal(tokenReads(rpcLog, holderAta), 1);
     balances[holder + '|' + MINT] = '2000000';
     const second = await call(env, 'GET', '/api/campaigns/' + CAMP + '/queue', undefined, token);
     assert.equal(second.data.joins[0].evidence.balance_raw, '999999');
-    assert.equal(tokenReads(rpcLog, holder), 1);
+    assert.equal(tokenReads(rpcLog, holderAta), 1);
     const qualified = await call(env, 'POST', '/api/campaigns/' + CAMP + '/qualify-matching', {}, token);
     assert.equal(qualified.status, 200, JSON.stringify(qualified.data));
-    assert.deepEqual(qualified.data, { qualified: 1, skipped: 0 });
+    assert.deepEqual(qualified.data, { qualified: 1, skipped: 0, unread: 0 });
     assert.equal(qualified.cache, 'no-store');
     assert.equal(tables.campaign_joins[0].qualified, true);
     assert.equal(tables.campaign_joins[0].status, 'approved');
-    assert.equal(tokenReads(rpcLog, holder), 2);
+    assert.equal(tokenReads(rpcLog, holderAta), 2);
     const third = await call(env, 'GET', '/api/campaigns/' + CAMP + '/queue', undefined, token);
     assert.equal(third.data.joins[0].evidence.balance_raw, '2000000');
     assert.equal(third.data.joins[0].qualified, true);
-    assert.equal(tokenReads(rpcLog, holder), 2);
+    assert.equal(tokenReads(rpcLog, holderAta), 2);
     now += 61000;
     await call(env, 'GET', '/api/campaigns/' + CAMP + '/queue', undefined, token);
-    assert.equal(tokenReads(rpcLog, holder), 3);
+    assert.equal(tokenReads(rpcLog, holderAta), 3);
     setQueueClock(null);
   });
 
@@ -308,7 +356,7 @@ describe('team review queue', { concurrency: 1 }, () => {
     });
     const token = await tokenFor(admin);
     const res = await call(env, 'POST', '/api/campaigns/' + CAMP + '/qualify-matching', { qualified: true }, token);
-    assert.deepEqual(res.data, { qualified: 2, skipped: 2 });
+    assert.deepEqual(res.data, { qualified: 2, skipped: 2, unread: 0 });
     const byWallet = Object.fromEntries(tables.campaign_joins.map((row) => [row.wallet, row]));
     assert.equal(byWallet[high].qualified, true);
     assert.equal(byWallet[high].status, 'approved');
@@ -318,8 +366,8 @@ describe('team review queue', { concurrency: 1 }, () => {
     assert.equal(byWallet[rejected].qualified, false);
     assert.equal(byWallet[rejected].status, 'rejected');
     const again = await call(env, 'POST', '/api/campaigns/' + CAMP + '/qualify-matching', undefined, token);
-    assert.deepEqual(again.data, { qualified: 0, skipped: 4 });
-    assert.ok(tokenReads(rpcLog, rejected) === 0);
+    assert.deepEqual(again.data, { qualified: 0, skipped: 4, unread: 0 });
+    assert.equal(tokenReads(rpcLog, await ataOf(rejected)), 0);
   });
 
   test('raid, refer, and custom never qualify from the button and do not read balances', async () => {
@@ -417,7 +465,7 @@ describe('team review queue', { concurrency: 1 }, () => {
     const holder = wallet();
     const empty = world({ admin, joins: [] });
     const none = await call(empty.env, 'POST', '/api/campaigns/' + CAMP + '/qualify-matching', undefined, await tokenFor(admin));
-    assert.deepEqual(none.data, { qualified: 0, skipped: 0 });
+    assert.deepEqual(none.data, { qualified: 0, skipped: 0, unread: 0 });
     assert.equal(empty.rpcLog.length, 0);
 
     const missingMint = world({
@@ -473,9 +521,118 @@ describe('team review queue', { concurrency: 1 }, () => {
       ],
     });
     const res = await call(env, 'POST', '/api/campaigns/' + CAMP + '/qualify-matching', undefined, await tokenFor(admin));
-    assert.deepEqual(res.data, { qualified: 1, skipped: 1 });
+    assert.deepEqual(res.data, { qualified: 1, skipped: 1, unread: 1 });
     assert.equal(tables.campaign_joins.find((row) => row.wallet === good).qualified, true);
     assert.equal(tables.campaign_joins.find((row) => row.wallet === bad).qualified, false);
+  });
+
+  test('60 holders cost one mint read and one batched balance read, not two calls each', async () => {
+    clearHolderBalanceCache();
+    const admin = wallet();
+    const holders = Array.from({ length: 60 }, () => wallet());
+    const balances = {};
+    holders.forEach((owner, i) => {
+      if (i % 3 !== 2) balances[owner + '|' + MINT] = String(i % 3 === 0 ? 2000000 : 500000);
+    });
+    const { env, rpcLog, fetchLog, tables } = world({
+      admin,
+      balances,
+      joins: holders.map((owner, i) => join('20000000-0000-4000-8000-' + String(i).padStart(12, '0'), owner)),
+    });
+    const token = await tokenFor(admin);
+    const res = await call(env, 'GET', '/api/campaigns/' + CAMP + '/queue', undefined, token);
+    assert.equal(res.status, 200, JSON.stringify(res.data));
+    assert.deepEqual(rpcLog.map((row) => row.method), ['getAccountInfo', 'getMultipleAccounts']);
+    assert.equal(rpcLog[1].params[0].length, 60);
+    assert.ok(fetchLog.length < 50, 'subrequests ' + fetchLog.length);
+    const byWallet = Object.fromEntries(res.data.joins.map((row) => [row.wallet, row.evidence]));
+    holders.forEach((owner, i) => {
+      const ev = byWallet[owner];
+      const want = i % 3 === 0 ? '2000000' : (i % 3 === 1 ? '500000' : '0');
+      assert.equal(ev.balance_raw, want, 'holder ' + i);
+      assert.equal(ev.balance_error, null);
+      assert.equal(ev.meets_min, i % 3 === 0);
+    });
+    const qualified = await call(env, 'POST', '/api/campaigns/' + CAMP + '/qualify-matching', undefined, token);
+    assert.deepEqual(qualified.data, { qualified: 20, skipped: 40, unread: 0 });
+    assert.equal(rpcLog.length, 4);
+    assert.equal(tables.campaign_joins.filter((row) => row.qualified === true).length, 20);
+  });
+
+  test('250 holders are read 100 accounts per call', async () => {
+    clearHolderBalanceCache();
+    const admin = wallet();
+    const holders = Array.from({ length: 250 }, () => wallet());
+    const balances = Object.fromEntries(holders.map((owner, i) => [owner + '|' + MINT, String(i + 1)]));
+    const { env, rpcLog } = world({
+      admin,
+      balances,
+      joins: holders.map((owner, i) => join('30000000-0000-4000-8000-' + String(i).padStart(12, '0'), owner)),
+    });
+    const res = await call(env, 'GET', '/api/campaigns/' + CAMP + '/queue', undefined, await tokenFor(admin));
+    assert.equal(res.status, 200, JSON.stringify(res.data));
+    assert.equal(HOLDER_BATCH, 100);
+    assert.deepEqual(rpcLog.map((row) => row.method), ['getAccountInfo', 'getMultipleAccounts', 'getMultipleAccounts', 'getMultipleAccounts']);
+    assert.deepEqual(rpcLog.slice(1).map((row) => row.params[0].length), [100, 100, 50]);
+    const byWallet = Object.fromEntries(res.data.joins.map((row) => [row.wallet, row.evidence.balance_raw]));
+    holders.forEach((owner, i) => assert.equal(byWallet[owner], String(i + 1)));
+  });
+
+  test('a rate-limited read is retried once, then shown as could not read and never cached', async () => {
+    clearHolderBalanceCache();
+    const pauses = [];
+    setRpcPause(async (ms) => { pauses.push(ms); });
+    try {
+      const admin = wallet();
+      const a = wallet();
+      const b = wallet();
+      const { env, rpcLog, limits, tables } = world({
+        admin,
+        rateLimit: 1,
+        balances: { [a + '|' + MINT]: '3000000', [b + '|' + MINT]: '4000000' },
+        joins: [
+          join('10000000-0000-4000-8000-000000000081', a),
+          join('10000000-0000-4000-8000-000000000082', b),
+          join('10000000-0000-4000-8000-000000000083', 'not-a-wallet'),
+        ],
+      });
+      const token = await tokenFor(admin);
+      const once = await call(env, 'GET', '/api/campaigns/' + CAMP + '/queue', undefined, token);
+      assert.deepEqual(pauses, [500]);
+      assert.equal(tokenReads(rpcLog), 2);
+      const first = Object.fromEntries(once.data.joins.map((row) => [row.wallet, row.evidence]));
+      assert.equal(first[a].balance_raw, '3000000');
+      assert.equal(first[b].balance_raw, '4000000');
+      assert.equal(first['not-a-wallet'].balance_raw, null);
+      assert.equal(first['not-a-wallet'].balance_error, 'not a wallet address');
+
+      clearHolderBalanceCache();
+      limits.left = 2;
+      limits.status = true;
+      const limited = await call(env, 'GET', '/api/campaigns/' + CAMP + '/queue', undefined, token);
+      assert.equal(limited.status, 200, JSON.stringify(limited.data));
+      assert.equal(limited.data.decimals, 6);
+      for (const row of limited.data.joins.filter((item) => item.wallet !== 'not-a-wallet')) {
+        assert.equal(row.evidence.balance_raw, null);
+        assert.equal(row.evidence.balance_as_of, null);
+        assert.equal(row.evidence.balance_error, 'could not read');
+        assert.equal(row.evidence.meets_min, null);
+      }
+      const retried = await call(env, 'GET', '/api/campaigns/' + CAMP + '/queue', undefined, token);
+      const second = Object.fromEntries(retried.data.joins.map((row) => [row.wallet, row.evidence]));
+      assert.equal(second[a].balance_raw, '3000000');
+      assert.equal(second[a].balance_error, null);
+
+      limits.left = 2;
+      limits.status = false;
+      const skipped = await call(env, 'POST', '/api/campaigns/' + CAMP + '/qualify-matching', undefined, token);
+      assert.deepEqual(skipped.data, { qualified: 0, skipped: 3, unread: 3 });
+      assert.equal(tables.campaign_joins.every((row) => row.qualified === false), true);
+      const done = await call(env, 'POST', '/api/campaigns/' + CAMP + '/qualify-matching', undefined, token);
+      assert.deepEqual(done.data, { qualified: 2, skipped: 1, unread: 1 });
+    } finally {
+      setRpcPause(null);
+    }
   });
 
   test('a holder can set a referrer only when that wallet already joined', async () => {

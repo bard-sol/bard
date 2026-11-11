@@ -294,6 +294,7 @@ function evidenceCell(p,c,join,queueRow,decimals){
     return BardPlatform.escapeHtml(String(count))+' referrals';
   }
   if(kind==='hold'){
+    if(ev.balance_error) return '<span class="muted">'+BardPlatform.escapeHtml(ev.balance_error)+'</span> <button class="btn btn--ghost btn--sm" type="button" data-js="retry" data-w="'+BardPlatform.escapeHtml(join.wallet||'')+'">Retry</button>';
     if(ev.balance_raw==null||decimals==null) return '<span class="muted">balance unavailable</span>';
     var amount=BardPlatform.formatRaw(ev.balance_raw, decimals);
     if(amount==='—') return '<span class="muted">balance unavailable</span>';
@@ -356,7 +357,8 @@ function renderQualifyMatching(p,c,queue){
   confirm.addEventListener('click', async function(){
     confirm.disabled=true;
     try{
-      await BardPlatform.qualifyMatching(c.id);
+      var done=await BardPlatform.qualifyMatching(c.id);
+      if(done&&Number(done.unread)>0) toast('Could not read '+done.unread+' holder balance'+(Number(done.unread)===1?'':'s')+'. They were skipped; try again.','err');
       await refreshState();
       openCampaign(c.id);
     }catch(err){
@@ -519,6 +521,7 @@ async function loadCampaignOps(p,c){
     tbody.querySelectorAll('[data-js]').forEach(function(btn){
       btn.addEventListener('click', async function(){
         var w=btn.getAttribute('data-w'); var act=btn.getAttribute('data-js'); var prog=parseInt(btn.getAttribute('data-p')||'0',10);
+        if(act==='retry'){ openCampaign(c.id); return; }
         try{
           if(act==='approve') await BardPlatform.setJoinStatus(c.id,w,'approved');
           if(act==='reject') await BardPlatform.setJoinStatus(c.id,w,'rejected');
