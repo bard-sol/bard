@@ -87,7 +87,7 @@ export default {
         const sent = holders.filter((h) => h.proof.url && /^https?:\/\//.test(h.proof.url)).length;
         checkEqual(shown, sent, 'proof links in the team queue');
         return shown + ' links shown';
-      }, { known: 'B6 (TRAA-2330) proof links are shown to the team only on raid campaigns, and raid is not offered' });
+      });
 
       const valid = holders.filter((h) => h.proof.valid && h.proof.url && TWEET.test(h.proof.url));
       const approved = valid.slice(0, slots);

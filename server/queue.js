@@ -222,6 +222,20 @@ function blankEvidence(kind) {
   };
 }
 
+// Only an http(s) link is a proof the team can open. A script URL stays stored
+// and is not returned as post_url.
+function proofLink(value) {
+  const text = value == null ? '' : String(value).trim();
+  if (!text) return null;
+  try {
+    const parsed = new URL(text);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null;
+    return parsed.href;
+  } catch {
+    return null;
+  }
+}
+
 function viewJoin(row) {
   return {
     wallet: row.wallet,
@@ -277,9 +291,8 @@ async function buildQueue(env, reader, campaign, project, joins, fresh) {
       evidence.balance_as_of = read ? read.at : null;
       evidence.min_balance_raw = minRaw;
       evidence.meets_min = meetsHold(evidence.balance_raw, minRaw);
-    } else if (kind === 'raid') {
-      const url = row.evidence_url == null ? '' : String(row.evidence_url).trim();
-      evidence.post_url = url || null;
+    } else if (kind === 'raid' || kind === 'custom') {
+      evidence.post_url = proofLink(row.evidence_url);
       evidence.meets_min = null;
     } else if (kind === 'refer') {
       evidence.referral_count = referralCount(joins, row.wallet);

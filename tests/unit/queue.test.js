@@ -359,7 +359,7 @@ describe('team review queue', { concurrency: 1 }, () => {
         assert.equal(row.evidence.kind, 'custom');
         assert.equal(row.evidence.meets_min, null);
         assert.equal(row.evidence.balance_raw, null);
-        assert.equal(row.evidence.post_url, null);
+        assert.equal(row.evidence.post_url, 'https://example.com/p');
         assert.equal(row.evidence.referral_count, null);
       }
       const denied = await call(env, 'POST', '/api/campaigns/' + CAMP + '/qualify-matching', undefined, token);
@@ -367,6 +367,31 @@ describe('team review queue', { concurrency: 1 }, () => {
       assert.equal(denied.data.error, 'qualify matching is only for a hold campaign');
       assert.equal(tokenReads(rpcLog), 0, type);
       assert.equal(tables.campaign_joins.every((item) => item.qualified === false), true);
+    }
+  });
+
+  test('custom and raid queues open only an http link, and hold ignores a proof link', async () => {
+    clearHolderBalanceCache();
+    const admin = wallet();
+    const holder = wallet();
+    const cases = [
+      ['custom', 'javascript:alert(1)', null],
+      ['custom', 'look at my tweet', null],
+      ['custom', '   ', null],
+      ['raid', 'javascript:alert(1)', null],
+      ['raid', ' https://example.com/p ', 'https://example.com/p'],
+      ['hold', 'https://example.com/p', null],
+    ];
+    for (const [type, evidence, expected] of cases) {
+      const { env } = world({
+        admin,
+        type,
+        config: type === 'hold' ? { minBalance: '1' } : {},
+        joins: [join('10000000-0000-4000-8000-000000000034', holder, { evidence_url: evidence })],
+      });
+      const queue = await call(env, 'GET', '/api/campaigns/' + CAMP + '/queue', undefined, await tokenFor(admin));
+      assert.equal(queue.status, 200, type + ' ' + JSON.stringify(queue.data));
+      assert.equal(queue.data.joins[0].evidence.post_url, expected, type + ' ' + JSON.stringify(evidence));
     }
   });
 

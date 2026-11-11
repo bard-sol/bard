@@ -358,12 +358,17 @@ h1{
     paintStatus();
   }
 
+  function wantsPostLink(campaign) {
+    var type = campaign && campaign.type;
+    return type === 'raid' || type === 'custom';
+  }
+
   function paintPostLink() {
     var field = document.getElementById('post-link');
     var label = document.getElementById('post-link-label');
-    var raid = !!(state && state.campaign && state.campaign.type === 'raid');
-    if (field) field.hidden = !raid;
-    if (label) label.hidden = !raid;
+    var show = wantsPostLink(state && state.campaign);
+    if (field) field.hidden = !show;
+    if (label) label.hidden = !show;
   }
 
   async function loadScoreFlag(id) {
@@ -421,7 +426,7 @@ h1{
     if (!state || !state.clock || state.clock.state !== 'live' || joined) return;
     if (BardPlatform.needsX(state.campaign && state.campaign.type) && !linkedHandle) return;
     var evidenceUrl = null;
-    if (state.campaign && state.campaign.type === 'raid') {
+    if (wantsPostLink(state.campaign)) {
       var field = document.getElementById('post-link');
       var raw = field ? String(field.value || '').trim() : '';
       if (raw) {

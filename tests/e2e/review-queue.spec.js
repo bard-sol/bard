@@ -136,7 +136,7 @@ test('the bulk button is absent for refer and custom', async ({ page }) => {
       contentType: 'application/json',
       body: JSON.stringify({
         decimals: null,
-        joins: [{ wallet: HOLDER, x_handle: '@j1', status: 'approved', progress: 1, qualified: false, evidence: { kind: 'custom', balance_raw: null, balance_as_of: null, min_balance_raw: null, meets_min: null, post_url: null, referral_count: null } }],
+        joins: [{ wallet: HOLDER, x_handle: '@j1', status: 'approved', progress: 1, qualified: false, evidence: { kind: 'custom', balance_raw: null, balance_as_of: null, min_balance_raw: null, meets_min: null, post_url: 'https://example.com/post/1', referral_count: null } }],
       }),
     });
   });
@@ -145,6 +145,9 @@ test('the bulk button is absent for refer and custom', async ({ page }) => {
   await page.locator('[data-open-project]').click();
   await page.locator('[data-open-camp]').click();
   await expect(page.locator('#camp-lb tr').first()).toBeVisible();
+  const custom = page.locator('#camp-lb tr', { hasText: '@j1' });
+  await expect(custom.locator('a')).toHaveAttribute('href', 'https://example.com/post/1');
+  await expect(custom.locator('a')).toHaveText('open post');
   await expect(page.locator('#btn-qualify-matching')).toHaveCount(0);
 });
 
@@ -261,5 +264,18 @@ test('the raid join form asks for a post link and keeps it as a url', async ({ p
   await expect(page.locator('img[src="x"]')).toHaveCount(0);
 
   await openCampaign(page, 'hold');
+  await expect(page.locator('#post-link')).toBeHidden();
+
+  await openCampaign(page, 'custom');
+  await expect(page.locator('#post-link')).toBeVisible();
+  await page.locator('#join-btn').click();
+  await expect(page.locator('#join-btn')).toHaveText('Join');
+  await page.locator('#post-link').fill('https://x.com/holder0/status/1800000000000000001');
+  await page.locator('#join-btn').click();
+  await expect(page.locator('#join-reason')).toHaveText('You already joined.');
+  const customSaved = await page.evaluate(() => JSON.parse(localStorage.getItem('bard_holder_v1')));
+  expect(customSaved.joined['proj-local::' + CAMP].evidenceUrl).toBe('https://x.com/holder0/status/1800000000000000001');
+
+  await openCampaign(page, 'refer');
   await expect(page.locator('#post-link')).toBeHidden();
 });
