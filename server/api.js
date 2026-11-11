@@ -190,6 +190,11 @@ async function rpc(env, method, params) {
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }),
   });
+  if (res.status === 429) {
+    const err = new Error('rpc rate limited');
+    err.code = 429;
+    throw err;
+  }
   const data = await res.json();
   if (data.error) {
     const err = new Error(data.error.message || 'rpc failed');
@@ -211,8 +216,8 @@ function isSignature(value) {
   return /^[1-9A-HJ-NP-Za-km-z]{64,128}$/.test(String(value || '').trim());
 }
 
-async function readMint(env, mint) {
-  const result = await rpc(env, 'getAccountInfo', [mint, { encoding: 'base64', commitment: 'confirmed' }]);
+async function readMint(env, mint, call = rpc) {
+  const result = await call(env, 'getAccountInfo', [mint, { encoding: 'base64', commitment: 'confirmed' }]);
   const value = result && result.value;
   if (!value || !value.data || !value.data[0]) throw new Error('Mint account not found');
   if (value.owner !== TOKEN_PROGRAM && value.owner !== TOKEN_2022_PROGRAM) {
@@ -239,6 +244,102 @@ export async function readVaultTokenRaw(env, address, mint) {
     if (info.tokenAmount.decimals != null) decimals = Number(info.tokenAmount.decimals);
   }
   return { raw: raw.toString(), decimals, tokenProgram: mintInfo.tokenProgram };
+}
+
+// Holder balances for a hold campaign: the mint is read once, then each holder's associated
+// token account is read with getMultipleAccounts, 100 per call. 60 holders cost 2 RPC calls,
+// not 120, which keeps a queue under the Worker subrequest cap and out of per-method rate limits.
+// Only the associated token account counts; tokens parked in another account are not seen.
+export const HOLDER_BATCH = 100;
+const HOLDER_RETRY_MS = 500;
+let rpcPause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+export function setRpcPause(fn) {
+  rpcPause = typeof fn === 'function' ? fn : (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function rateLimited(err) {
+  if (!err) return false;
+  if (err.code === 429 || err.code === -32429) return true;
+  return /too many requests|rate limit/i.test(String(err.message || ''));
+}
+
+async function rpcOnceMore(env, method, params) {
+  try {
+    return await rpc(env, method, params);
+  } catch (err) {
+    if (!rateLimited(err)) throw err;
+    await rpcPause(HOLDER_RETRY_MS);
+    return rpc(env, method, params);
+  }
+}
+
+function sameKey(bytes, address) {
+  try {
+    const want = bs58.decode(address);
+    if (want.length !== 32 || bytes.length !== 32) return false;
+    for (let i = 0; i < 32; i++) if (bytes[i] !== want[i]) return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function holderAmount(account, wallet, mint, tokenProgram) {
+  if (account == null) return '0';
+  if (account.owner !== tokenProgram || !account.data || !account.data[0]) throw new Error('not a token account');
+  const data = decodeBase64(account.data[0]);
+  if (data.length < 72) throw new Error('token account is too small');
+  if (!sameKey(data.subarray(0, 32), mint) || !sameKey(data.subarray(32, 64), wallet)) {
+    throw new Error('token account does not match');
+  }
+  return new DataView(data.buffer, data.byteOffset + 64, 8).getBigUint64(0, true).toString();
+}
+
+export async function readHolderBalances(env, wallets, mint) {
+  const unique = [...new Set((wallets || []).filter(Boolean))];
+  const balances = new Map();
+  if (!unique.length) return { decimals: null, balances };
+  let mintInfo;
+  try {
+    mintInfo = await readMint(env, mint, rpcOnceMore);
+  } catch {
+    for (const wallet of unique) balances.set(wallet, { error: 'could not read the reward token' });
+    return { decimals: null, balances };
+  }
+  const targets = [];
+  for (const wallet of unique) {
+    try {
+      targets.push({ wallet, ata: await associatedTokenAddress(wallet, mint, mintInfo.tokenProgram) });
+    } catch {
+      balances.set(wallet, { error: 'not a wallet address' });
+    }
+  }
+  for (let start = 0; start < targets.length; start += HOLDER_BATCH) {
+    const chunk = targets.slice(start, start + HOLDER_BATCH);
+    let values = null;
+    try {
+      const result = await rpcOnceMore(env, 'getMultipleAccounts', [
+        chunk.map((item) => item.ata),
+        { encoding: 'base64', commitment: 'confirmed' },
+      ]);
+      values = result && Array.isArray(result.value) && result.value.length === chunk.length ? result.value : null;
+    } catch {
+      values = null;
+    }
+    chunk.forEach((item, i) => {
+      if (!values) {
+        balances.set(item.wallet, { error: 'could not read' });
+        return;
+      }
+      try {
+        balances.set(item.wallet, { raw: holderAmount(values[i], item.wallet, mint, mintInfo.tokenProgram) });
+      } catch {
+        balances.set(item.wallet, { error: 'could not read' });
+      }
+    });
+  }
+  return { decimals: mintInfo.decimals, balances };
 }
 
 async function loadCampaign(env, campaignId) {
@@ -1984,9 +2085,9 @@ export async function handleRequest(request, env) {
     const drawFinal = path.match(/^\/api\/campaigns\/([^/]+)\/draw\/finalize$/);
     if (drawFinal && method === 'POST') return await handleDrawFinalize(request, env, decodeURIComponent(drawFinal[1]));
     const queueRoute = path.match(/^\/api\/campaigns\/([^/]+)\/queue$/);
-    if (queueRoute && method === 'GET') return await handleJoinQueue(request, env, decodeURIComponent(queueRoute[1]), readVaultTokenRaw);
+    if (queueRoute && method === 'GET') return await handleJoinQueue(request, env, decodeURIComponent(queueRoute[1]), readHolderBalances);
     const qualifyMatching = path.match(/^\/api\/campaigns\/([^/]+)\/qualify-matching$/);
-    if (qualifyMatching && method === 'POST') return await handleQualifyMatching(request, env, decodeURIComponent(qualifyMatching[1]), readVaultTokenRaw);
+    if (qualifyMatching && method === 'POST') return await handleQualifyMatching(request, env, decodeURIComponent(qualifyMatching[1]), readHolderBalances);
     const referredBy = path.match(/^\/api\/campaigns\/([^/]+)\/referred-by$/);
     if (referredBy && method === 'POST') return await handleSetReferrer(request, env, decodeURIComponent(referredBy[1]));
     const stateRoute = path.match(/^\/api\/campaigns\/([^/]+)\/state$/);

@@ -159,34 +159,52 @@ function referralCount(joins, wallet) {
   return n;
 }
 
-async function readCached(env, reader, wallet, mint, fresh) {
-  const key = wallet + '|' + mint;
-  const now = nowMs();
-  if (!fresh) {
-    const hit = balanceCache.get(key);
-    if (hit && now - hit.at < BALANCE_TTL_MS) return hit.value;
-  }
-  let value;
-  try {
-    value = await reader(env, wallet, mint);
-  } catch {
-    return null;
-  }
-  const raw = value && value.raw != null ? String(value.raw).trim() : '';
-  const decimals = value && value.decimals != null ? Number(value.decimals) : null;
-  if (!/^\d+$/.test(raw) || !Number.isInteger(decimals) || decimals < 0 || decimals > 18) return null;
-  const stored = { raw, decimals, at: new Date(now).toISOString() };
-  balanceCache.set(key, { at: now, value: stored });
-  return stored;
+const UNREAD = 'could not read';
+
+function tokenDecimals(value) {
+  const n = value == null ? null : Number(value);
+  return Number.isInteger(n) && n >= 0 && n <= 18 ? n : null;
 }
 
+// One batched read for every holder not already cached. A holder whose balance cannot be read
+// carries an error instead of a null, so the team sees "could not read" and can retry.
 async function balancesFor(env, reader, wallets, mint, fresh) {
   const unique = [...new Set((wallets || []).filter(Boolean))];
-  const out = new Map();
-  await Promise.all(unique.map(async (wallet) => {
-    out.set(wallet, await readCached(env, reader, wallet, mint, fresh));
-  }));
-  return out;
+  const now = nowMs();
+  const reads = new Map();
+  let decimals = null;
+  const missing = [];
+  for (const wallet of unique) {
+    const hit = fresh ? null : balanceCache.get(wallet + '|' + mint);
+    if (hit && now - hit.at < BALANCE_TTL_MS) {
+      reads.set(wallet, hit.value);
+      if (decimals == null) decimals = hit.value.decimals;
+    } else {
+      missing.push(wallet);
+    }
+  }
+  if (!missing.length) return { decimals, reads };
+  let found = null;
+  try {
+    found = await reader(env, missing, mint);
+  } catch {
+    found = null;
+  }
+  const readDecimals = tokenDecimals(found && found.decimals);
+  if (readDecimals != null) decimals = readDecimals;
+  const stamp = new Date(now).toISOString();
+  for (const wallet of missing) {
+    const got = found && found.balances instanceof Map ? found.balances.get(wallet) : null;
+    const raw = got && got.raw != null ? String(got.raw).trim() : '';
+    if (readDecimals == null || !/^\d+$/.test(raw)) {
+      reads.set(wallet, { error: got && typeof got.error === 'string' ? got.error : UNREAD });
+      continue;
+    }
+    const stored = { raw, decimals: readDecimals, at: stamp };
+    balanceCache.set(wallet + '|' + mint, { at: now, value: stored });
+    reads.set(wallet, stored);
+  }
+  return { decimals, reads };
 }
 
 function meetsHold(raw, minRaw) {
@@ -215,6 +233,7 @@ function blankEvidence(kind) {
     kind,
     balance_raw: null,
     balance_as_of: null,
+    balance_error: null,
     min_balance_raw: null,
     meets_min: null,
     post_url: null,
@@ -270,13 +289,8 @@ async function buildQueue(env, reader, campaign, project, joins, fresh) {
     const mint = prizeMint(campaign, project);
     if (mint && rows.length && typeof reader === 'function') {
       const found = await balancesFor(env, reader, rows.map((row) => row.wallet), mint, fresh);
-      for (const [wallet, value] of found) reads.set(wallet, value);
-      for (const value of reads.values()) {
-        if (value && Number.isInteger(value.decimals)) {
-          decimals = value.decimals;
-          break;
-        }
-      }
+      for (const [wallet, value] of found.reads) reads.set(wallet, value);
+      decimals = found.decimals;
     }
     if (human != null && decimals != null) {
       const converted = holdMinRaw(human, decimals);
@@ -287,8 +301,9 @@ async function buildQueue(env, reader, campaign, project, joins, fresh) {
     const evidence = blankEvidence(kind);
     if (kind === 'hold') {
       const read = reads.get(row.wallet);
-      evidence.balance_raw = read ? read.raw : null;
-      evidence.balance_as_of = read ? read.at : null;
+      evidence.balance_raw = read && read.raw != null ? read.raw : null;
+      evidence.balance_as_of = read && read.at ? read.at : null;
+      evidence.balance_error = read && read.error ? read.error : null;
       evidence.min_balance_raw = minRaw;
       evidence.meets_min = meetsHold(evidence.balance_raw, minRaw);
     } else if (kind === 'raid' || kind === 'custom') {
@@ -303,17 +318,17 @@ async function buildQueue(env, reader, campaign, project, joins, fresh) {
   return { decimals, joins: built };
 }
 
-export async function handleJoinQueue(request, env, campaignId, readVaultTokenRaw) {
+export async function handleJoinQueue(request, env, campaignId, readHolderBalances) {
   const session = await sessionWallet(request, env);
   if (session.error) return session.error;
   const admin = await adminCampaign(env, campaignId, session.wallet);
   if (admin.error) return admin.error;
   const joins = await joinsFor(env, admin.campaign.id);
-  const built = await buildQueue(env, readVaultTokenRaw, admin.campaign, admin.project, joins, false);
+  const built = await buildQueue(env, readHolderBalances, admin.campaign, admin.project, joins, false);
   return json({ decimals: built.decimals, joins: built.joins });
 }
 
-export async function handleQualifyMatching(request, env, campaignId, readVaultTokenRaw) {
+export async function handleQualifyMatching(request, env, campaignId, readHolderBalances) {
   const session = await sessionWallet(request, env);
   if (session.error) return session.error;
   const admin = await adminCampaign(env, campaignId, session.wallet);
@@ -328,26 +343,21 @@ export async function handleQualifyMatching(request, env, campaignId, readVaultT
   if (human == null) return json({ error: 'hold campaign needs a numeric minimum' }, 400);
   const joins = await joinsFor(env, admin.campaign.id);
   const rows = visible(joins);
-  if (!rows.length) return json({ qualified: 0, skipped: 0 });
+  if (!rows.length) return json({ qualified: 0, skipped: 0, unread: 0 });
   const mint = prizeMint(admin.campaign, admin.project);
   if (!mint) return json({ error: 'could not read the reward token' }, 400);
-  const reads = await balancesFor(env, readVaultTokenRaw, rows.map((row) => row.wallet), mint, true);
-  let decimals = null;
-  for (const value of reads.values()) {
-    if (value && Number.isInteger(value.decimals)) {
-      decimals = value.decimals;
-      break;
-    }
-  }
+  const { decimals, reads } = await balancesFor(env, readHolderBalances, rows.map((row) => row.wallet), mint, true);
   if (decimals == null) return json({ error: 'could not read the reward token' }, 400);
   const converted = holdMinRaw(human, decimals);
   if (converted.error) return json({ error: converted.error }, 400);
   const minRaw = BigInt(converted.raw);
   const ids = [];
   let skipped = 0;
+  let unread = 0;
   for (const row of rows) {
     const read = reads.get(row.wallet);
     const already = row.qualified === true || row.qualified === 'true';
+    if (!already && (!read || read.raw == null)) unread += 1;
     let pass = false;
     if (!already && read && read.raw != null) {
       try { pass = BigInt(read.raw) >= minRaw; } catch { pass = false; }
@@ -365,7 +375,7 @@ export async function handleQualifyMatching(request, env, campaignId, readVaultT
       'return=representation'
     );
   }
-  return json({ qualified: ids.length, skipped });
+  return json({ qualified: ids.length, skipped, unread });
 }
 
 export async function handleSetReferrer(request, env, campaignId) {
