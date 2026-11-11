@@ -40,7 +40,9 @@ function activeCount(p){return(p.campaigns||[]).filter(function(c){return c.stat
 function updateWalletUI(){var btn=document.getElementById('btn-wallet');if(wallet){btn.textContent=shortAddr(wallet);btn.classList.add('is-on');}else{btn.textContent='Connect wallet';btn.classList.remove('is-on');}var hint=document.getElementById('onboard-wallet-hint');if(hint){hint.textContent=wallet?'Connected '+shortAddr(wallet)+' is the team key on the vault.':'Connect the wallet that will be the team key on the vault.';}}
 async function connectWallet(){try{var p=(window.phantom&&window.phantom.solana)||window.solflare||window.solana;if(!p){toast('No Solana wallet found. Install Phantom or Solflare.','err');return;}var resp=await p.connect();wallet=(resp.publicKey&&resp.publicKey.toString())||(p.publicKey&&p.publicKey.toString());if(!wallet){toast('Could not read wallet address','err');return;}provider=p;localStorage.setItem('bard_team_wallet',wallet);if(window.BardPlatform&&BardPlatform.signIn)await BardPlatform.signIn(p);updateWalletUI();toast('Wallet connected','ok');await refreshState();renderHome();}catch(e){console.error(e);toast((e&&e.message)||'Connection cancelled or failed','err');}}
 function disconnectWallet(){wallet=null;provider=null;localStorage.removeItem('bard_team_wallet');if(window.BardPlatform&&BardPlatform.signOut)BardPlatform.signOut();updateWalletUI();}
-async function refreshState(){if(window.BardPlatform){await BardPlatform.init();dataMode=BardPlatform.getMode();state.projects=await BardPlatform.listProjects({admin:true});var badge=document.getElementById('data-mode');if(badge)badge.textContent=dataMode==='supabase'?'· Live DB':'· Local only';}}
+// The Bard signer is the second key on every vault, so it sees every project and its payouts.
+function signedInAsBard(){var me=BardPlatform.getSessionWallet&&BardPlatform.getSessionWallet();var bard=BardPlatform.getVaultBardMember&&BardPlatform.getVaultBardMember();return !!(me&&bard&&me===bard);}
+async function refreshState(){if(window.BardPlatform){await BardPlatform.init();dataMode=BardPlatform.getMode();state.projects=await BardPlatform.listProjects({admin:!signedInAsBard()});var badge=document.getElementById('data-mode');if(badge)badge.textContent=dataMode==='supabase'?'· Live DB':'· Local only';}}
 function renderHome(){var list=document.getElementById('project-list');var totalCamps=0;state.projects.forEach(function(p){totalCamps+=activeCount(p);});document.getElementById('stat-projects').textContent=state.projects.length;document.getElementById('stat-campaigns').textContent=totalCamps;renderInbox();if(!state.projects.length){list.innerHTML='<div class="empty"><h3>No projects yet</h3><p>Onboard your first token to start running campaigns.</p><button class="btn btn--solid" id="empty-onboard">Onboard a project</button></div>';document.getElementById('empty-onboard').onclick=function(){show('onboard');};return;}list.innerHTML=state.projects.map(function(p){var n=(p.campaigns||[]).length;var a=activeCount(p);var vaultPill=p.vaultAddress?'<span class="pill pill--paid">Vault linked</span>':'';return'<div class="card card--hover" data-open-project="'+BardPlatform.escapeHtml(p.id)+'"><div class="item" style="padding:0;border:none"><span class="item__ava">'+BardPlatform.escapeHtml(initials(p.ticker||p.name))+'</span><div class="item__body"><div class="item__title">'+BardPlatform.escapeHtml(p.name)+' <span class="muted">· $'+BardPlatform.escapeHtml(p.ticker)+'</span></div><div class="item__sub">'+BardPlatform.escapeHtml(shortMint(p.mint))+' · '+n+' campaign'+(n===1?'':'s')+'</div></div><div class="item__right" style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">'+(a?'<span class="pill pill--live">'+a+' active</span>':'<span class="pill pill--draft">No live</span>')+vaultPill+'</div></div></div>';}).join('');list.querySelectorAll('[data-open-project]').forEach(function(el){el.addEventListener('click',function(){openProject(el.getAttribute('data-open-project'));});});}
 async function renderInbox(){
   var box=document.getElementById('home-inbox');
@@ -539,7 +541,7 @@ async function loadCampaignOps(p,c){
   else renderQualifyMatching(p,c,queue);
   var sets=[];
   try{ sets = await BardPlatform.listSettlements(c.id); }catch(e){ console.error(e); }
-  renderSettleBox(p,c,rows,sets);
+  await renderSettleBox(p,c,rows,sets);
   renderBardSigns(p,c,sets);
   renderDrawBox(p,c,rows);
 }
@@ -619,15 +621,40 @@ function batchCountOf(live){
   if(!(window.BardVault&&BardVault.payoutBatchCount)) return 1;
   try{ return BardVault.payoutBatchCount(live.payouts||[], cutArgOf(live)); }catch(e){ return 1; }
 }
+// Where each batch of a payout stands: signed by each key, paid.
+function batchStates(rows,count){
+  var out=[];
+  for(var n=0;n<count;n++){
+    var row=(rows||[]).filter(function(r){ return Number(r.batch)===n; })[0]||null;
+    out.push({n:n,row:row,team:!!(row&&row.team_signed),bard:!!(row&&row.bard_signed),paid:!!(row&&String(row.tx_signature||'').trim())});
+  }
+  return out;
+}
+function batchStatusText(b){
+  if(b.paid) return 'Paid';
+  if(b.team&&b.bard) return 'Ready to pay';
+  if(b.team) return 'Waiting for Bard';
+  return 'Needs your signature';
+}
+// Paying needs both keys on the vault transaction: name the missing one instead of sending it.
+function payRefusal(team,bard,label){
+  if(team&&bard) return '';
+  var missing=!team&&!bard?'your signature and Bard\'s':(!team?'your signature':'Bard\'s signature');
+  return label+' cannot be paid yet: both keys must sign first. Missing '+missing+'.';
+}
 async function executeCurrent(p,c,live){
+  var count=batchCountOf(live);
+  var rows=count>1?await BardPlatform.listSettlementBatches(live.id):[];
+  var why=count>1
+    ? batchStates(rows,count).filter(function(b){ return !b.paid; }).map(function(b){ return payRefusal(b.team,b.bard,'Batch '+(b.n+1)); }).filter(Boolean)[0]
+    : payRefusal(!!live.team_signed,!!live.bard_signed,'This payout');
+  if(why){ toast(why,'err'); return; }
   if(!wallet||!provider){ toast('Connect the wallet that will execute','err'); await connectWallet(); return; }
   if(!window.BardVault||!BardVault.executePayout){ toast('Vault toolkit failed to load — refresh','err'); return; }
   var ms=p.vaultMultisig||live.vault_multisig;
   if(!ms||live.tx_index==null){ toast('The vault transaction is not recorded yet','err'); return; }
-  var count=batchCountOf(live);
   if(count>1){
     // Each batch is executed and recorded on its own; the payout closes on the last record.
-    var rows=await BardPlatform.listSettlementBatches(live.id);
     var open=rows.filter(function(r){ return !r.tx_signature; });
     // Every batch is recorded but the payout did not close (an interrupted close): record batch 0 again.
     if(!open.length&&rows.length) await BardPlatform.executeSettlement(live.id, rows[0].tx_signature, p.id, Number(rows[0].batch));
@@ -649,7 +676,7 @@ async function executeCurrent(p,c,live){
   await refreshState();
   openCampaign(c.id);
 }
-function renderSettleBox(p,c,joins,sets){
+async function renderSettleBox(p,c,joins,sets){
   var box=document.getElementById('camp-settle');
   if(!box) return;
   var live=sets.filter(function(s){ return s.status!=='cancelled' && s.status!=='executed'; })[0];
@@ -673,21 +700,40 @@ function renderSettleBox(p,c,joins,sets){
   var rows=(live.payouts||[]).map(function(x,i){
     return '<tr><td class="num">'+(i+1)+'</td><td class="num">'+BardPlatform.escapeHtml(shortAddr(x.wallet))+'</td><td class="num">'+BardPlatform.escapeHtml(String(x.amount))+' $'+BardPlatform.escapeHtml(p.ticker)+'</td></tr>';
   }).join('')+cutRowHtml(live, p.ticker);
+  var sdkReady=!!(window.BardVault&&BardVault.executePayout);
   var actions='';
   if(!team){
-    actions='<button class="btn btn--solid" type="button" id="btn-cosign">Sign this payout</button>'
-      +(batches>1?'<p class="muted" style="margin:6px 0 0;font-size:.88rem">This payout is '+batches+' vault transactions. Your wallet asks you to confirm each one.</p>':'');
+    actions='<button class="btn btn--solid" type="button" id="btn-cosign">Sign this payout</button> '
+      +(batches>1?'<p class="muted" style="margin:6px 0 0;font-size:.88rem">This payout is '+batches+' vault transactions. Your wallet asks you to confirm each one, or sign them one at a time below.</p>':'');
   } else if(!bard){
-    actions='<p class="muted" style="margin:0;font-size:.88rem">You signed. Waiting for Bard to sign the other key.</p>';
-  } else if(!(window.BardVault&&BardVault.executePayout)){
-    actions='<button class="btn btn--solid" type="button" id="btn-execute-payout" disabled>Execute payout</button><p class="muted" id="execute-sdk-reason">Vault toolkit failed to load — refresh</p>';
+    actions='<p class="muted" style="margin:0 0 8px;font-size:.88rem">You signed. Waiting for Bard to sign the other key.</p>';
+  }
+  // Execute stays on screen before both signatures so pressing it explains what is missing.
+  if(!sdkReady){
+    actions+='<button class="btn btn--solid" type="button" id="btn-execute-payout" disabled>Execute payout</button><p class="muted" id="execute-sdk-reason">Vault toolkit failed to load — refresh</p>';
   } else {
-    actions='<button class="btn btn--solid" type="button" id="btn-execute-payout">Execute payout</button>';
+    actions+='<button class="btn '+(team&&bard?'btn--solid':'btn--ghost')+'" type="button" id="btn-execute-payout">Execute payout</button>';
+  }
+  var batchTable='';
+  if(batches>1){
+    var states=[];
+    try{ states=batchStates(await BardPlatform.listSettlementBatches(live.id),batches); }
+    catch(e){ console.error(e); states=batchStates([],batches); }
+    if(currentCampaignId!==c.id) return;
+    batchTable='<div style="overflow-x:auto;margin-top:12px"><table class="table" id="batch-table"><thead><tr><th>Batch</th><th>You</th><th>Bard</th><th>Status</th><th></th></tr></thead><tbody>'+
+      states.map(function(b){
+        return '<tr data-batch="'+b.n+'"><td class="num">'+(b.n+1)+' of '+batches+'</td><td>'+(b.team?'Signed':'—')+'</td><td>'+(b.bard?'Signed':'—')+'</td>'
+          +'<td class="batch-status">'+batchStatusText(b)+'</td><td style="white-space:nowrap;text-align:right">'
+          +(b.team?'':'<button class="btn btn--ghost btn--sm" type="button" data-sign-batch="'+b.n+'">Sign</button> ')
+          +(b.paid?'':'<button class="btn '+(b.team&&b.bard?'btn--solid':'btn--ghost')+' btn--sm" type="button" data-pay-batch="'+b.n+'"'+(sdkReady?'':' disabled')+'>Pay</button>')
+          +'</td></tr>';
+      }).join('')+'</tbody></table></div>';
   }
   var cutNote=live.cut_waived?'Bard\'s cut is waived.':(live.cut_raw?('Bard\'s cut '+BardPlatform.escapeHtml(String(live.cut_raw))+' raw.'):'');
   box.innerHTML='<p style="margin:0 0 8px;font-size:.92rem">Payout · <b class="num">'+BardPlatform.escapeHtml(fmtAmt(live.total))+' $'+BardPlatform.escapeHtml(p.ticker)+'</b> to '+(live.payouts||[]).length+' holders'+(batches>1?(' in '+batches+' vault transactions'):'')+'. '+cutNote+'</p>'+
     '<div class="signers"><div class="signer '+(team?'is-yes':'is-wait')+'"><b>You</b><span>'+(team?'Signed':'Needs your signature')+'</span></div><div class="signer '+(bard?'is-yes':'is-wait')+'"><b>Bard</b><span>'+(bard?'Signed':'Waiting')+'</span></div></div>'+
-    '<div style="overflow-x:auto"><table class="table"><thead><tr><th>#</th><th>Wallet</th><th>Amount</th></tr></thead><tbody>'+rows+'</tbody></table></div>'+
+    '<div style="overflow-x:auto"><table class="table" id="payout-table"><thead><tr><th>#</th><th>Wallet</th><th>Amount</th></tr></thead><tbody>'+rows+'</tbody></table></div>'+
+    batchTable+
     '<div style="margin-top:12px">'+actions+'</div>';
   var cs=document.getElementById('btn-cosign');
   if(cs) cs.onclick=function(){ cosignCurrent(p,c,live); };
@@ -695,8 +741,68 @@ function renderSettleBox(p,c,joins,sets){
   if(ex) ex.onclick=async function(){
     ex.disabled=true;
     try{ await executeCurrent(p,c,live); }
-    catch(e){ toast((e&&e.message)||'Execute failed','err'); ex.disabled=false; }
+    catch(e){ toast((e&&e.message)||'Execute failed','err'); }
+    finally{ ex.disabled=false; }
   };
+  box.querySelectorAll('[data-sign-batch]').forEach(function(btn){
+    btn.onclick=async function(){
+      btn.disabled=true;
+      try{ await signBatch(p,c,live,Number(btn.getAttribute('data-sign-batch'))); }
+      finally{ btn.disabled=false; }
+    };
+  });
+  box.querySelectorAll('[data-pay-batch]').forEach(function(btn){
+    btn.onclick=async function(){
+      btn.disabled=true;
+      try{ await payBatch(p,c,live,Number(btn.getAttribute('data-pay-batch'))); }
+      catch(e){ toast((e&&e.message)||'Pay failed','err'); }
+      finally{ btn.disabled=false; }
+    };
+  });
+}
+// Sign one batch with the team key: propose its vault transaction, approve it, record it.
+async function signBatch(p,c,live,n){
+  if(!wallet||!provider){ toast('Connect the team wallet first','err'); await connectWallet(); return; }
+  if(!window.BardVault||!BardVault.proposePayoutBatches){ toast('Vault toolkit failed to load — refresh','err'); return; }
+  var ms=p.vaultMultisig||live.vault_multisig;
+  if(!ms){ toast('Link a vault first','err'); return; }
+  try{
+    var b=batchStates(await BardPlatform.listSettlementBatches(live.id),batchCountOf(live))[n];
+    if(b.team){ toast('Batch '+(n+1)+' is already signed','ok'); }
+    else{
+      toast('Confirm batch '+(n+1)+' in your wallet','ok');
+      await BardVault.proposePayoutBatches(BardPlatform.getRpc(), provider, wallet, ms, p.vaultMint||p.mint, live.payouts, cutArgOf(live), {
+        only: [n],
+        onBatch: function(out){
+          return BardPlatform.signSettlement(live.id,'team',{sig:out.signature,txIndex:out.transactionIndex,wallet:wallet,multisig:ms,batch:out.batch});
+        }
+      });
+      toast('Batch '+(n+1)+' signed. Waiting for Bard.','ok');
+    }
+    await refreshState();
+    openCampaign(c.id);
+  }catch(e){
+    if(/rejected|denied|cancel/i.test(String(e&&e.message))) toast('Signature cancelled','err');
+    else toast((e&&e.message)||'Sign failed','err');
+  }
+}
+// Pay one batch: refused on screen until both keys signed it.
+async function payBatch(p,c,live,n){
+  var count=batchCountOf(live);
+  var b=batchStates(await BardPlatform.listSettlementBatches(live.id),count)[n];
+  if(b.paid){ toast('Batch '+(n+1)+' is already paid','ok'); return; }
+  var why=payRefusal(b.team,b.bard,'Batch '+(n+1));
+  if(why){ toast(why,'err'); return; }
+  if(!wallet||!provider){ toast('Connect the wallet that will execute','err'); await connectWallet(); return; }
+  if(!window.BardVault||!BardVault.executePayout){ toast('Vault toolkit failed to load — refresh','err'); return; }
+  var ms=p.vaultMultisig||live.vault_multisig;
+  toast('Executing batch '+(n+1)+' of '+count,'ok');
+  var sig=await BardVault.executePayout(BardPlatform.getRpc(), provider, wallet, ms, b.row.tx_index);
+  if(!sig){ toast('No transaction signature','err'); return; }
+  await BardPlatform.executeSettlement(live.id, sig, p.id, n);
+  toast('Batch '+(n+1)+' of '+count+' paid','ok');
+  await refreshState();
+  openCampaign(c.id);
 }
 async function renderBardSigns(p,c,sets){
   var host=document.getElementById('bard-signs');
@@ -733,7 +839,48 @@ async function renderBardSigns(p,c,sets){
     if(!sdkReady) html+='<p class="muted">Vault toolkit failed to load — refresh</p>';
   }
   html+=' <button type="button" class="btn btn--ghost btn--sm" id="btn-bard-cancel-vote">Vote to cancel</button>';
+  var count=batchCountOf(live);
+  if(count>1){
+    // Each batch is checked against its own lines and approved on its own once the team signed it.
+    var states=batchStates([],count);
+    try{ states=batchStates(await BardPlatform.listSettlementBatches(live.id),count); }catch(e){ console.error(e); }
+    if(currentCampaignId!==c.id) return;
+    var checks=(report&&report.batches)||[];
+    html+='<div style="overflow-x:auto;margin-top:12px"><table class="table" id="bard-batch-table"><thead><tr><th>Batch</th><th>Vault transaction</th><th>Team</th><th>Bard</th><th></th></tr></thead><tbody>'+
+      states.map(function(b){
+        var check=checks.filter(function(r){ return Number(r.batch)===b.n; })[0]||null;
+        var matches=!!(check&&check.matches);
+        var line=!b.row?'Not proposed yet':(matches?'Matches':('Does not match'+(check&&check.diff&&check.diff.reason?': '+check.diff.reason:'')));
+        var can=b.team&&matches&&!b.paid;
+        return '<tr data-batch="'+b.n+'"><td class="num">'+(b.n+1)+' of '+count+'</td><td>'+BardPlatform.escapeHtml(line)+'</td><td>'+(b.team?'Signed':'—')+'</td>'
+          +'<td class="batch-status">'+(b.paid?'Paid':(b.bard?'Signed':'—'))+'</td><td style="text-align:right">'
+          +(b.bard?'':'<button type="button" class="btn btn--solid btn--sm" data-bard-approve-batch="'+b.n+'"'+(can?'':' disabled')+'>Approve</button>')
+          +'</td></tr>';
+      }).join('')+'</tbody></table></div>';
+  }
   actions.innerHTML=html;
+  actions.querySelectorAll('[data-bard-approve-batch]').forEach(function(btn){
+    btn.onclick=async function(){
+      var n=Number(btn.getAttribute('data-bard-approve-batch'));
+      if(!window.BardVault||!BardVault.bardApprove){ toast('Vault toolkit failed to load — refresh','err'); return; }
+      if(!provider){ toast('Connect the Bard signer wallet','err'); await connectWallet(); return; }
+      btn.disabled=true;
+      try{
+        // Read the batch again: approve only the vault transaction the check above matched.
+        var b=batchStates(await BardPlatform.listSettlementBatches(live.id),count)[n];
+        var check=((await BardPlatform.verifySettlement(live.id)).batches||[]).filter(function(r){ return Number(r.batch)===n; })[0];
+        if(!b.team){ toast('Batch '+(n+1)+' is not signed by the team yet','err'); return; }
+        if(!(check&&check.matches)){ toast('Batch '+(n+1)+' does not match this payout','err'); return; }
+        var sig=await BardVault.bardApprove(BardPlatform.getRpc(), provider, wallet, p.vaultMultisig||live.vault_multisig, b.row.tx_index);
+        await BardPlatform.signSettlement(live.id,'bard',{sig:sig,txIndex:b.row.tx_index,wallet:wallet,batch:n});
+        toast('Bard signed batch '+(n+1),'ok');
+        await refreshState();
+        openCampaign(c.id);
+      }catch(e){
+        toast((e&&e.message)||'Approve failed','err');
+      }finally{ btn.disabled=false; }
+    };
+  });
   var cancelVote=document.getElementById('btn-bard-cancel-vote');
   if(cancelVote) cancelVote.onclick=async function(){
     if(!window.BardVault||!BardVault.cancelPayoutProposal){ toast('Vault toolkit failed to load — refresh','err'); return; }

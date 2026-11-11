@@ -1858,6 +1858,37 @@ async function handleSettlementVerify(env, settlementId) {
   });
 }
 
+// The batch rows of a payout, for the project admin and the Bard signer. RLS lets only the admin
+// read vault_settlement_batches, and the Bard signer approves and cancels each batch by its row.
+async function handleSettlementBatches(request, env, settlementId) {
+  const session = await sessionWallet(request, env);
+  if (session.error) return session.error;
+  const settlement = firstRow(await select(env, 'vault_settlements', 'id=eq.' + encodeURIComponent(settlementId) + '&select=id,project_id'));
+  if (!settlement) return json({ error: 'settlement not found' }, 404);
+  const signer = bardSigner(env);
+  if (!(isBase58Address(signer) && session.wallet === signer)) {
+    const admin = await projectForAdmin(env, settlement.project_id, session.wallet);
+    if (admin.error) return admin.error;
+  }
+  return json({ batches: await batchRows(env, settlement.id) });
+}
+
+// The payouts the Bard signer co-signs. RLS lets only a project's admin read vault_settlements;
+// the Bard signer reads one campaign's payouts (?campaignId=) or every open one (?open=1) here.
+async function handleBardSettlements(request, env, url) {
+  const session = await sessionWallet(request, env);
+  if (session.error) return session.error;
+  const signer = bardSigner(env);
+  if (!isBase58Address(signer) || session.wallet !== signer) return json({ error: 'not the Bard signer' }, 403);
+  const campaignId = url.searchParams.get('campaignId');
+  let query;
+  if (campaignId) query = 'campaign_id=eq.' + encodeURIComponent(campaignId);
+  else if (url.searchParams.get('open') === '1') query = 'status=in.(proposed,awaiting_bard,awaiting_team,both_signed,cosigned)';
+  else return json({ error: 'name a campaignId or open=1' }, 400);
+  const rows = await select(env, 'vault_settlements', query + '&select=*&order=proposed_at.desc');
+  return json({ settlements: Array.isArray(rows) ? rows : [] });
+}
+
 async function verifyVaultTransaction(env, settlement, project, multisig, txIndex, batch) {
   if (!isBase58Address(multisig) || txIndex == null || String(txIndex).trim() === '') {
     return { matches: false, diff: { reason: 'vault transaction is not recorded yet' } };
@@ -1929,10 +1960,13 @@ export async function handleRequest(request, env) {
     if (path === '/api/vault/bard-sign' && method === 'POST') return await handleBardSign(request, env);
     if (path === '/api/vault/reserve' && method === 'POST') return await handleReserve(request, env);
     if (path === '/api/settlements/propose' && method === 'POST') return await handlePropose(request, env);
+    if (path === '/api/bard/settlements' && method === 'GET') return await handleBardSettlements(request, env, url);
     const vault = path.match(/^\/api\/projects\/([^/]+)\/vault$/);
     if (vault && method === 'POST') return await handleLinkVault(request, env, decodeURIComponent(vault[1]));
     const verify = path.match(/^\/api\/settlements\/([^/]+)\/verify$/);
     if (verify && method === 'GET') return await handleSettlementVerify(env, decodeURIComponent(verify[1]));
+    const batchList = path.match(/^\/api\/settlements\/([^/]+)\/batches$/);
+    if (batchList && method === 'GET') return await handleSettlementBatches(request, env, decodeURIComponent(batchList[1]));
     const teamSigned = path.match(/^\/api\/settlements\/([^/]+)\/team-signed$/);
     if (teamSigned && method === 'POST') return await handleMemberSigned(request, env, decodeURIComponent(teamSigned[1]), 'team');
     const team = path.match(/^\/api\/settlements\/([^/]+)\/team-sign$/);

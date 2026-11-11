@@ -904,8 +904,23 @@
     return row;
   }
 
+  // RLS lets only a project's admin read vault_settlements; the Bard signer reads them through
+  // the worker, which checks its session.
+  function signedInAsBardSigner() {
+    return !!(sessionToken && sessionWallet && bardSignerPubkey && sessionWallet === bardSignerPubkey);
+  }
+
+  async function bardSettlements(query) {
+    var res = await authedFetch('/api/bard/settlements?' + query);
+    var data = {};
+    try { data = await res.json(); } catch (e) { data = {}; }
+    if (!res.ok) throw new Error((data && data.error) || 'Could not read the payouts');
+    return data.settlements || [];
+  }
+
   async function listOpenSettlements() {
     await init();
+    if (mode === 'supabase' && sb && signedInAsBardSigner()) return bardSettlements('open=1');
     if (mode === 'supabase' && sb) {
       var res = await sb.from('vault_settlements').select('*').in('status', ['proposed', 'awaiting_bard', 'awaiting_team', 'both_signed', 'cosigned']).order('proposed_at', { ascending: false });
       if (res.error) throw res.error;
@@ -938,6 +953,7 @@
 
   async function listSettlements(campaignId) {
     await init();
+    if (mode === 'supabase' && sb && signedInAsBardSigner()) return bardSettlements('campaignId=' + encodeURIComponent(campaignId));
     if (mode === 'supabase' && sb) {
       var res = await sb.from('vault_settlements').select('*').eq('campaign_id', campaignId).order('proposed_at', { ascending: false });
       if (res.error) throw res.error;
@@ -947,12 +963,16 @@
   }
 
   // The vault transactions of a payout paid in batches (empty for a one-transaction payout).
+  // Read through the worker: the project admin and the Bard signer may read them, and RLS lets
+  // only the admin read the table.
   async function listSettlementBatches(settlementId) {
     await init();
     if (mode === 'supabase' && sb) {
-      var res = await sb.from('vault_settlement_batches').select('*').eq('settlement_id', settlementId).order('batch', { ascending: true });
-      if (res.error) throw res.error;
-      return res.data || [];
+      var res = await authedFetch('/api/settlements/' + encodeURIComponent(settlementId) + '/batches');
+      var data = {};
+      try { data = await res.json(); } catch (e) { data = {}; }
+      if (!res.ok) throw new Error((data && data.error) || 'Could not read the payout batches');
+      return data.batches || [];
     }
     return [];
   }

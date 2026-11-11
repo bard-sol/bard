@@ -7,5 +7,6 @@ import s6 from './s6-two-projects.mjs';
 import s7 from './s7-abuse.mjs';
 import s8 from './s8-fees-off.mjs';
 import s9 from './s9-scoring.mjs';
+import s10 from './s10-payout-screens.mjs';
 
-export const scenarios = [s1, s2, s3, s4, s5, s6, s7, s8, s9];
+export const scenarios = [s1, s2, s3, s4, s5, s6, s7, s8, s9, s10];

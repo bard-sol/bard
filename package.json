@@ -10,6 +10,7 @@
     "campaign:devnet": "node vault-src/scripts/devnet-campaign.mjs",
     "sim": "node vault-src/sim/run.mjs",
     "sim:e2e": "node vault-src/scripts/sim-e2e.mjs",
+    "e2e:payouts": "node vault-src/sim/run.mjs --only s10 --chain local",
     "build:vault": "npm --prefix vault-src run build"
   },
   "dependencies": {

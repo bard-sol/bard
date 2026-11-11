@@ -15,6 +15,47 @@ const CORS = {
   'access-control-expose-headers': '*',
 };
 
+/**
+ * web3.js confirms a transaction over the RPC websocket (the http port plus one). The local chain
+ * has no websocket, so the page's socket is answered here: a signature subscription is notified as
+ * soon as the local chain knows the signature (it runs a transaction when it is sent), and any
+ * other subscription is acknowledged and never fires.
+ */
+async function routeSignatureSocket(page, world) {
+  await page.routeWebSocket((url) => url.pathname === '/__sim_rpc' && url.hostname === '127.0.0.1', (ws) => {
+    let next = 1;
+    ws.onMessage(async (raw) => {
+      let msg;
+      try { msg = JSON.parse(String(raw)); } catch { return; }
+      const reply = (body) => ws.send(JSON.stringify({ jsonrpc: '2.0', id: msg.id, ...body }));
+      if (/Unsubscribe$/.test(msg.method || '')) { reply({ result: true }); return; }
+      if (!/Subscribe$/.test(msg.method || '')) { reply({ error: { code: -32601, message: 'Method not found' } }); return; }
+      const subscription = next++;
+      reply({ result: subscription });
+      if (msg.method !== 'signatureSubscribe') return;
+      const signature = msg.params && msg.params[0];
+      const deadline = Date.now() + 10000;
+      while (Date.now() < deadline) {
+        const res = await world.chain.rpcFetch(new Request(world.base + '/__sim_rpc', {
+          method: 'POST',
+          body: JSON.stringify({ jsonrpc: '2.0', id: 'ws', method: 'getSignatureStatuses', params: [[signature]] }),
+        }));
+        const out = await res.json();
+        const status = out.result && out.result.value && out.result.value[0];
+        if (status) {
+          ws.send(JSON.stringify({
+            jsonrpc: '2.0',
+            method: 'signatureNotification',
+            params: { subscription, result: { context: { slot: status.slot }, value: { err: status.err } } },
+          }));
+          return;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      }
+    });
+  });
+}
+
 export async function createBrowser() {
   // BARD_SIM_CHROMIUM points at a Chromium (or a wrapper that sets its library path) on machines
   // where Playwright's own build cannot start.
@@ -36,6 +77,7 @@ export async function createBrowser() {
       const page = await context.newPage();
       const errors = [];
       page.on('pageerror', (err) => errors.push(err.message));
+      if (world.chain.name === 'local') await routeSignatureSocket(page, world);
       await page.route('**/*', async (route) => {
         const req = route.request();
         let url;
@@ -76,6 +118,24 @@ export async function createBrowser() {
             async signMessage(bytes) {
               const sig = await window.__simSign(Array.from(bytes));
               return { signature: Uint8Array.from(sig), publicKey };
+            },
+            // As Phantom does: sign the message bytes with this wallet and return the same transaction.
+            async signTransaction(tx) {
+              if (tx.version !== undefined) {
+                const at = tx.message.staticAccountKeys.findIndex((k) => k.toBase58() === w);
+                if (at < 0 || at >= tx.message.header.numRequiredSignatures) throw new Error('wallet is not a signer of this transaction');
+                tx.signatures[at] = Uint8Array.from(await window.__simSign(Array.from(tx.message.serialize())));
+                return tx;
+              }
+              const entry = tx.signatures.find((s) => s.publicKey.toBase58() === w);
+              if (!entry) throw new Error('wallet is not a signer of this transaction');
+              tx.addSignature(entry.publicKey, Uint8Array.from(await window.__simSign(Array.from(tx.serializeMessage()))));
+              return tx;
+            },
+            async signAllTransactions(txs) {
+              const out = [];
+              for (const tx of txs) out.push(await this.signTransaction(tx));
+              return out;
             },
             on() {},
             off() {},

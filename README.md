@@ -21,3 +21,15 @@ npm run check:signer -- --url https://bard.is --require-signer --expect-network 
 ```
 
 `check:signer` prints public keys only and never reads `SOLANA_RPC`.
+
+## Payout screens test
+
+`npm run e2e:payouts` clicks through the team payout screens in Chromium (sim scenario `s10`) on a local chain and a local database: never production, never devnet or mainnet. A campaign with 13 qualified holders is paid in three vault transactions (6, 6 and 1). For each batch the team presses Sign, the Bard signer presses Approve in its panel and the team presses Pay. Pay before both signatures is refused on screen. The receipt then lists all 13 holders with their amounts, and Cancel on a second, unpaid campaign releases its prize.
+
+```
+npm run e2e:payouts
+BARD_SIM_CHROMIUM=/path/to/chromium npm run e2e:payouts      # when Playwright's own Chromium cannot start
+npm run e2e:payouts -- --seed t1                              # replay a run
+```
+
+It also runs in `npm run sim`. See `vault-src/sim/README.md`.

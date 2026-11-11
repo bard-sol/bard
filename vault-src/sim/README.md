@@ -33,6 +33,10 @@ stops reproducing, so remove its `known` marker in the same change as the fix.
 - **Time:** campaigns and joins are backdated with SQL. Nothing waits on the clock.
 - **Browser:** Playwright Chromium. Set `BARD_SIM_CHROMIUM` to a binary, or
   `PLAYWRIGHT_BROWSERS_PATH`. Use `--no-ui` to skip the browser.
+  A page's wallet signs messages and transactions with the actor's key, as Phantom does. On the
+  local chain the page sends transactions to the JSON-RPC shim (`sendTransaction`), and its
+  confirmation websocket is answered in `lib/ui.mjs`. Scenario `s10` (`npm run e2e:payouts`) pays
+  13 holders in 3 batches by clicking the team and Bard screens; it runs on the local chain only.
 
 ## Guards
 

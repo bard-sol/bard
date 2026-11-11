@@ -35,12 +35,13 @@ export const LOCAL_GENESIS = bs58.encode(createHash('sha256').update('bard-sim-l
 const TOKEN_PROGRAMS = new Set([TOKEN_PROGRAM_ID.toBase58(), TOKEN_2022_PROGRAM_ID.toBase58()]);
 const SYSTEM = SystemProgram.programId.toBase58();
 
-function rpcOk(result) {
-  return Response.json({ jsonrpc: '2.0', id: 1, result });
+// The reply echoes the request id: web3.js in the browser refuses a reply whose id is not its own.
+function rpcOk(result, id = 1) {
+  return Response.json({ jsonrpc: '2.0', id, result });
 }
 
-function rpcErr(code, message) {
-  return Response.json({ jsonrpc: '2.0', id: 1, error: { code, message } });
+function rpcErr(code, message, id = 1) {
+  return Response.json({ jsonrpc: '2.0', id, error: { code, message } });
 }
 
 function u64(data, offset) {
@@ -304,6 +305,16 @@ export async function createLocalChain(opts = {}) {
     getBlockHeight: () => slotNow(),
     getLatestBlockhash: () => ({ context: { slot: slotNow() }, value: { blockhash: svm.latestBlockhash(), lastValidBlockHeight: slotNow() + 150 } }),
     getBalance: ([address]) => ({ context: { slot: slotNow() }, value: Number(svm.getBalance(String(address)) || 0n) }),
+    // What a browser wallet sends: the signed transaction runs at once, so it is final on return.
+    sendTransaction: async ([encoded, cfg]) => {
+      const bytes = cfg && cfg.encoding === 'base64' ? Buffer.from(String(encoded), 'base64') : bs58.decode(String(encoded));
+      try {
+        return await connection.sendRawTransaction(Uint8Array.from(bytes));
+      } catch (err) {
+        const message = err && err.message ? err.message : String(err);
+        throw Object.assign(new Error('Transaction simulation failed: ' + message), { code: -32002 });
+      }
+    },
     getAccountInfo: ([address, cfg]) => {
       const acc = accountRaw(address);
       return { context: { slot: slotNow() }, value: acc ? encodeAccount(acc, cfg && cfg.encoding) : null };
@@ -354,16 +365,17 @@ export async function createLocalChain(opts = {}) {
     const text = init.body != null ? String(init.body) : (input instanceof Request ? await input.text() : '');
     let payload;
     try { payload = JSON.parse(text); } catch { return rpcErr(-32700, 'parse error'); }
+    const id = payload.id == null ? 1 : payload.id;
     const fn = methods[payload.method];
     if (!fn) {
       unknownMethods.add(payload.method);
-      return rpcErr(-32601, 'Method not found: ' + payload.method);
+      return rpcErr(-32601, 'Method not found: ' + payload.method, id);
     }
     try {
-      return rpcOk(fn(payload.params || []));
+      return rpcOk(await fn(payload.params || []), id);
     } catch (err) {
-      if (err && typeof err.code === 'number') return rpcErr(err.code, err.message);
-      return rpcErr(-32603, err && err.message ? err.message : String(err));
+      if (err && typeof err.code === 'number') return rpcErr(err.code, err.message, id);
+      return rpcErr(-32603, err && err.message ? err.message : String(err), id);
     }
   }
 
